@@ -62,10 +62,6 @@ export const insertUserParagraphAfterSystem: Command = (state, dispatch) => {
   return true;
 };
 
-export const wrapInBulletList = outsideSystemParagraph(
-  wrapInList(editorSchema.nodes.bullet_list!),
-);
-
 export const wrapInOrderedList = outsideSystemParagraph(
   wrapInList(editorSchema.nodes.ordered_list!),
 );

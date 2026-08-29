@@ -1,44 +1,40 @@
-import { Schema } from "prosemirror-model";
-import { schema } from "prosemirror-schema-basic";
-import { addListNodes } from "prosemirror-schema-list";
+import { type MarkSpec, type NodeSpec, Schema } from "prosemirror-model";
+import {
+  marks as basicMarks,
+  nodes as basicNodes,
+} from "prosemirror-schema-basic";
+import {
+  listItem,
+  orderedList,
+} from "prosemirror-schema-list";
 
-const allowedNodeNames = ["doc", "paragraph", "heading", "text"];
-const allowedMarkNames = ["em", "strong"];
-
-const allowedSchema = new Schema({
-  nodes: Object.fromEntries(
-    allowedNodeNames.map((name) => [name, schema.spec.nodes.get(name)!]),
-  ),
-  marks: Object.fromEntries(
-    allowedMarkNames.map((name) => [name, schema.spec.marks.get(name)!]),
-  ),
-});
-
-const paragraphSpec = allowedSchema.spec.nodes.get("paragraph")!;
-const nodesWithParagraphClauseId = allowedSchema.spec.nodes.update("paragraph", {
-  ...paragraphSpec,
-  attrs: {
-    ...paragraphSpec.attrs,
-    clause_id: { default: null },
+const nodes = {
+  doc: basicNodes.doc,
+  paragraph: {
+    ...basicNodes.paragraph,
+    attrs: {
+      clause_id: { default: null },
+    },
   },
-});
-
-const nodesWithLists = addListNodes(
-  nodesWithParagraphClauseId,
-  "paragraph block*",
-  "block",
-);
-
-const listItemSpec = nodesWithLists.get("list_item")!;
-const nodesWithListItemClauseId = nodesWithLists.update("list_item", {
-  ...listItemSpec,
-  attrs: {
-    ...listItemSpec.attrs,
-    clause_id: { default: null },
+  heading: basicNodes.heading,
+  text: basicNodes.text,
+  ordered_list: {
+    ...orderedList,
+    content: "list_item+",
+    group: "block",
   },
-});
+  list_item: {
+    ...listItem,
+    attrs: {
+      clause_id: { default: null },
+    },
+    content: "paragraph ordered_list?",
+  },
+} satisfies Record<string, NodeSpec>;
 
-export const editorSchema = new Schema({
-  nodes: nodesWithListItemClauseId,
-  marks: allowedSchema.spec.marks,
-});
+const marks = {
+  em: basicMarks.em,
+  strong: basicMarks.strong,
+} satisfies Record<string, MarkSpec>;
+
+export const editorSchema = new Schema({ nodes, marks });

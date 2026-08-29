@@ -19,7 +19,6 @@ import {Decoration, DecorationSet, EditorView} from "prosemirror-view";
 
 import {
   insertUserParagraphAfterSystem,
-  wrapInBulletList,
   wrapInOrderedList,
 } from "./commands.js";
 import { editorSchema } from "./schema.js";
@@ -86,11 +85,9 @@ function useCommand(item: MenuItem | undefined, command: Command): void {
   item.spec.enable = (state) => command(state);
 }
 
-useCommand(menuItems.wrapBulletList, wrapInBulletList);
 useCommand(menuItems.wrapOrderedList, wrapInOrderedList);
 
 const generatedKeymap = buildKeymap(editorSchema, {
-  "Shift-Ctrl-8": false,
   "Shift-Ctrl-9": false,
 });
 
@@ -101,7 +98,6 @@ function createEditorState(): EditorState {
     buildInputRules(editorSchema),
     keymap({ Enter: insertUserParagraphAfterSystem }),
     keymap({
-      "Shift-Ctrl-8": wrapInBulletList,
       "Shift-Ctrl-9": wrapInOrderedList,
     }),
     keymap(generatedKeymap),
