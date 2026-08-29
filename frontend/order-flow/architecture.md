@@ -22,8 +22,12 @@ controller.render(buildOrder(inputs));
 
 It is a pure function that builds a ProseMirror target node based on inputs.
 
-Stable, unique clause IDs identify the same logical clause.
-User authored nodes are inserted by prosemirror and will lack IDs.
+### Generated node identity
+
+Generated clauses and containers share one globally unique `id` attribute so
+the same reconciliation algorithm can handle both. Values are namespaced, for
+example `clause:order-text` and `container:order-clauses`. User-authored nodes
+have no ID and are preserved.
 
 In v1, existing reference clauses retain their relative order. Targets may add or remove clauses, but may not reorder existing clauses.
 

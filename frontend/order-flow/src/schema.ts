@@ -13,20 +13,24 @@ const nodes = {
   paragraph: {
     ...basicNodes.paragraph,
     attrs: {
-      clause_id: { default: null },
+      id: { default: null },
     },
   },
   heading: basicNodes.heading,
   text: basicNodes.text,
   ordered_list: {
     ...orderedList,
+    attrs: {
+      ...orderedList.attrs,
+      id: { default: null },
+    },
     content: "list_item+",
     group: "block",
   },
   list_item: {
     ...listItem,
     attrs: {
-      clause_id: { default: null },
+      id: { default: null },
     },
     content: "paragraph ordered_list?",
   },

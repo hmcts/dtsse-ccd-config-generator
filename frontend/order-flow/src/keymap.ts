@@ -27,7 +27,7 @@ const protectClausesFromSplittingOnEnter: Command = (state, dispatch) => {
   const isListItem = parentNode.type === listItemType;
   const clauseNode = isListItem ? parentNode : $cursor.parent;
 
-  if (typeof clauseNode.attrs.clause_id !== "string") return false;
+  if (typeof clauseNode.attrs.id !== "string") return false;
 
   if (!dispatch) return true;
 

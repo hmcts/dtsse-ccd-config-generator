@@ -96,28 +96,22 @@ export function createOrderEditor(
 
   const controller: OrderController = {
     render(target: ProseMirrorNode): void {
-      const reconciled = hasRendered
-        ? reconcileOrderDocument(view.state.doc, target)
-        : target;
+      let transaction = view.state.tr;
+
+      if (hasRendered) {
+        transaction = reconcileOrderDocument(transaction, target);
+      } else {
+        transaction.replaceWith(
+          0,
+          transaction.doc.content.size,
+          target.content,
+        );
+      }
       hasRendered = true;
 
-      const start = view.state.doc.content.findDiffStart(reconciled.content);
-      if (start === null) return;
-
-      const end = view.state.doc.content.findDiffEnd(reconciled.content);
-      if (end === null) return;
-
-      const overlap = start - Math.min(end.a, end.b);
-      if (overlap > 0) {
-        end.a += overlap;
-        end.b += overlap;
+      if (transaction.docChanged) {
+        view.dispatch(transaction.setMeta("addToHistory", false));
       }
-
-      view.dispatch(
-        view.state.tr
-          .replace(start, end.a, reconciled.slice(start, end.b))
-          .setMeta("addToHistory", false),
-      );
     }
   };
 
