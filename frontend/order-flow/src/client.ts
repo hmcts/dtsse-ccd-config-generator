@@ -158,8 +158,11 @@ export function createOrderEditor(
   htmlDebugElement.textContent = formatHtml(view.dom.outerHTML);
 
   const controller: OrderController = {
-    render(_target: ProseMirrorNode): void {
-      // TODO: reconcile the target with view.state.doc.
+    render(target: ProseMirrorNode): void {
+      view.updateState(EditorState.create({
+        doc: target,
+        plugins: view.state.plugins,
+      }));
     }
   };
 
