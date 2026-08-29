@@ -1,5 +1,5 @@
 import {
-  baseKeymap,
+  baseKeymap, chainCommands,
   toggleMark,
 } from "prosemirror-commands";
 import { redo, undo } from "prosemirror-history";
@@ -28,13 +28,16 @@ function buildKeymap(): Record<string, Command> {
   bind("Mod-i", toggleMark(editorSchema.marks.em!));
   bind("Mod-I", toggleMark(editorSchema.marks.em!));
 
-  // Clause id must be unique and must not be inherited on split.
   const splitListItemOnEnter = splitListItem(
     editorSchema.nodes.list_item!,
-    { clause_id: null },
   );
 
-  bind("Enter", splitListItemOnEnter);
+  bind("Enter",
+    chainCommands(
+      // insertUserContentAfterIdentifiedClause,
+      splitListItemOnEnter,
+    ),
+    );
 
   return bindings;
 }
