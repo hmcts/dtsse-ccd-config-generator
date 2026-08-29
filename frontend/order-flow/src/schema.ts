@@ -18,6 +18,16 @@ const nodes = {
   },
   heading: basicNodes.heading,
   text: basicNodes.text,
+  form_date: {
+    inline: true,
+    group: "inline",
+    atom: true,
+    attrs: {
+      id: {},
+      value: {},
+      display: {},
+    },
+  },
   ordered_list: {
     ...orderedList,
     attrs: {
