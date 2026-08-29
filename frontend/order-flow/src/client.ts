@@ -8,19 +8,14 @@ import {
 import { gapCursor } from "prosemirror-gapcursor";
 import { history } from "prosemirror-history";
 import { keymap } from "prosemirror-keymap";
-import { menuBar, type MenuItem } from "prosemirror-menu";
+import { menuBar } from "prosemirror-menu";
 import { type Node as ProseMirrorNode } from "prosemirror-model";
 import {
   EditorState,
   Plugin,
-  type Command,
 } from "prosemirror-state";
-import {Decoration, DecorationSet, EditorView} from "prosemirror-view";
+import { EditorView } from "prosemirror-view";
 
-import {
-  insertUserParagraphAfterSystem,
-  wrapInOrderedList,
-} from "./commands.js";
 import { editorSchema } from "./schema.js";
 
 import "prosemirror-view/style/prosemirror.css";
@@ -63,43 +58,15 @@ function formatHtml(html: string): string {
   }).join("\n");
 }
 
-let debugPlugin = new Plugin({
-  props: {
-    decorations(state) {
-
-      state.doc.descendants((node, pos) => {
-        console.log(node.type.name, node.toString())
-      });
-
-      return DecorationSet.create(state.doc, []);
-    }
-  }
-});
-
 const menuItems = buildMenuItems(editorSchema);
 
-function useCommand(item: MenuItem | undefined, command: Command): void {
-  if (!item) return;
-
-  item.spec.run = command;
-  item.spec.enable = (state) => command(state);
-}
-
-useCommand(menuItems.wrapOrderedList, wrapInOrderedList);
-
-const generatedKeymap = buildKeymap(editorSchema, {
-  "Shift-Ctrl-9": false,
-});
+const generatedKeymap = buildKeymap(editorSchema);
 
 function createEditorState(): EditorState {
   return EditorState.create({
     schema: editorSchema,
     plugins: [
     buildInputRules(editorSchema),
-    keymap({ Enter: insertUserParagraphAfterSystem }),
-    keymap({
-      "Shift-Ctrl-9": wrapInOrderedList,
-    }),
     keymap(generatedKeymap),
     keymap(baseKeymap),
     dropCursor(),
