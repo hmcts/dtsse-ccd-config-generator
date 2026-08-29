@@ -1,4 +1,4 @@
-import { splitListItem, wrapInList } from "prosemirror-schema-list";
+import { wrapInList } from "prosemirror-schema-list";
 import {
   type Command,
   type EditorState,
@@ -61,11 +61,6 @@ export const insertUserParagraphAfterSystem: Command = (state, dispatch) => {
 
   return true;
 };
-
-export const splitUserListItem = splitListItem(
-  editorSchema.nodes.list_item!,
-  { id: null },
-);
 
 export const wrapInBulletList = outsideSystemParagraph(
   wrapInList(editorSchema.nodes.bullet_list!),
