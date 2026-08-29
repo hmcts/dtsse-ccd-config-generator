@@ -128,26 +128,6 @@ export interface OrderController {
   render(target: ProseMirrorNode): void;
 }
 
-interface TopLevelClause {
-  node: ProseMirrorNode;
-  position: number;
-}
-
-function findTopLevelClause(
-  document: ProseMirrorNode,
-  id: string,
-): TopLevelClause | undefined {
-  let result: TopLevelClause | undefined;
-
-  document.descendants((node, pos) => {
-    if (node.attrs.id === id) {
-      result = { node, position: pos}
-    }
-  });
-
-  return result;
-}
-
 export function createOrderEditor(
   selector: string
 ): OrderController {
