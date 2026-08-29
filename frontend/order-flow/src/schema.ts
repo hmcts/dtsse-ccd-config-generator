@@ -18,14 +18,23 @@ const nodes = {
   },
   heading: basicNodes.heading,
   text: basicNodes.text,
-  form_date: {
+  form_value: {
     inline: true,
     group: "inline",
     atom: true,
     attrs: {
       id: {},
-      value: {},
-      display: {},
+      text: {},
+    },
+    toDOM(node) {
+      return [
+        "span",
+        {
+          "data-form-value": node.attrs.id,
+          contenteditable: "false",
+        },
+        node.attrs.text,
+      ];
     },
   },
   ordered_list: {
