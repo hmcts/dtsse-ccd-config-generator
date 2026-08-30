@@ -1,15 +1,21 @@
 import { dropCursor } from "prosemirror-dropcursor";
 import { gapCursor } from "prosemirror-gapcursor";
-import { history } from "prosemirror-history";
+import { toggleMark } from "prosemirror-commands";
+import { history, redo, undo } from "prosemirror-history";
 import { type Node as ProseMirrorNode } from "prosemirror-model";
-import { EditorState } from "prosemirror-state";
+import { wrapInList } from "prosemirror-schema-list";
+import { type Command, EditorState } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 
 import {
   createDiffStylingPlugin,
   setGeneratedDocument,
 } from "./diff-styling.js";
-import { createKeymapPlugins } from "./keymap.js";
+import {
+  createKeymapPlugins,
+  indentListItem,
+  outdentListItem,
+} from "./keymap.js";
 import { reconcileOrderDocument } from "./reconciliation.js";
 import { editorSchema } from "./schema.js";
 
@@ -68,19 +74,101 @@ export interface OrderController {
   render(target: ProseMirrorNode): void;
 }
 
+const wrapInOrderedList = wrapInList(editorSchema.nodes.ordered_list!);
+
+const createNumberedClause: Command = (state, dispatch, view) => {
+  const selectionTouchesManagedContent = [
+    state.selection.$from,
+    state.selection.$to,
+  ].some(($position) =>
+    $position.depth > 0 &&
+    typeof $position.node(1).attrs.id === "string"
+  );
+
+  return !selectionTouchesManagedContent &&
+    wrapInOrderedList(state, dispatch, view);
+};
+
+const editorCommands = {
+  undo,
+  redo,
+  bold: toggleMark(editorSchema.marks.strong!),
+  italic: toggleMark(editorSchema.marks.em!),
+  numbered: createNumberedClause,
+  outdent: outdentListItem,
+  indent: indentListItem,
+} satisfies Record<string, Command>;
+
+type EditorCommandName = keyof typeof editorCommands;
+
+function isEditorCommandName(value: string): value is EditorCommandName {
+  return Object.hasOwn(editorCommands, value);
+}
+
+function connectToolbar(
+  toolbar: HTMLElement,
+  view: EditorView,
+): () => void {
+  const buttons = toolbar.querySelectorAll<HTMLButtonElement>(
+    "[data-editor-command]",
+  );
+
+  function update(): void {
+    for (const button of buttons) {
+      const commandName = button.dataset.editorCommand;
+      const enabled = commandName !== undefined &&
+        isEditorCommandName(commandName) &&
+        editorCommands[commandName](view.state);
+
+      button.disabled = !enabled;
+      button.setAttribute("aria-disabled", String(!enabled));
+    }
+  }
+
+  toolbar.addEventListener("mousedown", (event) => {
+    if (event.target instanceof Element &&
+      event.target.closest("[data-editor-command]")) {
+      event.preventDefault();
+    }
+  });
+
+  toolbar.addEventListener("click", (event) => {
+    if (!(event.target instanceof Element)) return;
+
+    const button = event.target.closest<HTMLButtonElement>(
+      "[data-editor-command]",
+    );
+    const commandName = button?.dataset.editorCommand;
+    if (!button || button.disabled || commandName === undefined ||
+      !isEditorCommandName(commandName)) return;
+
+    view.focus();
+    editorCommands[commandName](view.state, view.dispatch, view);
+  });
+
+  update();
+  return update;
+}
+
 export function createOrderEditor(
   selector: string
 ): OrderController {
   const editor = document.querySelector<HTMLElement>(selector);
-  if (!editor) {
-    throw new Error(`Editor element not found: ${selector}`);
+  const toolbar = document.querySelector<HTMLElement>(
+    "#order-editor-toolbar",
+  );
+  if (!editor || !toolbar) {
+    throw new Error(`Editor or toolbar element not found: ${selector}`);
   }
+
+  let updateToolbar = (): void => {};
 
   const view = new EditorView(editor, {
     state: createEditorState(),
     dispatchTransaction(transaction) {
       const nextState = view.state.apply(transaction);
       view.updateState(nextState);
+      updateToolbar();
       documentDebugElement.textContent = JSON.stringify(
         nextState.doc.toJSON(),
         null,
@@ -89,6 +177,8 @@ export function createOrderEditor(
       htmlDebugElement.textContent = formatHtml(view.dom.outerHTML);
     },
   });
+
+  updateToolbar = connectToolbar(toolbar, view);
 
   documentDebugElement.textContent = JSON.stringify(
     view.state.doc.toJSON(),

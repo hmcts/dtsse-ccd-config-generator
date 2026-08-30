@@ -31,6 +31,17 @@ describe("order flow page", () => {
     assert.match(response.text, /\sSubpara 2\s/);
     assert.match(response.text, /value="subpara-3"/);
     assert.match(response.text, /\sSubpara 3\s/);
+    assert.match(response.text, /id="order-editor-toolbar"/);
+    assert.match(response.text, /aria-label="Order editor formatting"/);
+    assert.match(response.text, /data-editor-command="undo"/);
+    assert.match(response.text, /data-editor-command="redo"/);
+    assert.match(response.text, /data-editor-command="bold"/);
+    assert.match(response.text, /data-editor-command="italic"/);
+    assert.match(response.text, /data-editor-command="numbered"/);
+    assert.match(response.text, /data-editor-command="outdent"/);
+    assert.match(response.text, /data-editor-command="indent"/);
+    assert.doesNotMatch(response.text, /data-editor-command="underline"/);
+    assert.doesNotMatch(response.text, /Insert template/);
     assert.match(response.text, /id="editor"/);
     assert.match(response.text, /\/assets\/application\.css/);
     assert.match(response.text, /\/assets\/application\.js/);
