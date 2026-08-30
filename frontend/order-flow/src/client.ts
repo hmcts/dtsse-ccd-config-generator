@@ -5,7 +5,10 @@ import { type Node as ProseMirrorNode } from "prosemirror-model";
 import { EditorState } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 
-import { createDiffStylingPlugin } from "./diff-styling.js";
+import {
+  createDiffStylingPlugin,
+  setGeneratedDocument,
+} from "./diff-styling.js";
 import { createKeymapPlugins } from "./keymap.js";
 import { reconcileOrderDocument } from "./reconciliation.js";
 import { editorSchema } from "./schema.js";
@@ -111,9 +114,8 @@ export function createOrderEditor(
       }
       hasRendered = true;
 
-      if (transaction.docChanged) {
-        view.dispatch(transaction.setMeta("addToHistory", false));
-      }
+      transaction = setGeneratedDocument(transaction, target);
+      view.dispatch(transaction.setMeta("addToHistory", false));
     }
   };
 

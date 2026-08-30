@@ -160,13 +160,21 @@
   vertical-align: middle;
 }
 
-.user-authored-paragraph {
+.diff-clause {
   box-sizing: border-box;
+}
+
+.diff-clause--inserted {
   border-left: 4px solid govuk-colour("green");
   background: govuk-colour("green", $variant: "tint-80");
 }
 
-li.user-authored-paragraph {
+.diff-clause--modified {
+  border-left: 4px solid govuk-colour("blue");
+  background: govuk-colour("blue", $variant: "tint-80");
+}
+
+li.diff-clause {
   position: static;
 }
 
