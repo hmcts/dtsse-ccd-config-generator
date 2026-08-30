@@ -5,7 +5,11 @@ import {
 } from "prosemirror-commands";
 import { redo, undo } from "prosemirror-history";
 import { keymap } from "prosemirror-keymap";
-import { splitListItem } from "prosemirror-schema-list";
+import {
+  liftListItem,
+  sinkListItem,
+  splitListItem,
+} from "prosemirror-schema-list";
 import {
   type Command,
   type Plugin,
@@ -16,6 +20,14 @@ import { editorSchema } from "./schema.js";
 
 const mac = typeof navigator !== "undefined" &&
   /Mac|iP(hone|[oa]d)/.test(navigator.platform);
+
+export const indentListItem = sinkListItem(
+  editorSchema.nodes.list_item!,
+);
+
+export const outdentListItem = liftListItem(
+  editorSchema.nodes.list_item!,
+);
 
 export const protectClausesFromSplittingOnEnter: Command = (
   state,
@@ -69,6 +81,9 @@ function buildKeymap(): Record<string, Command> {
   bind("Mod-B", toggleMark(editorSchema.marks.strong!));
   bind("Mod-i", toggleMark(editorSchema.marks.em!));
   bind("Mod-I", toggleMark(editorSchema.marks.em!));
+
+  bind("Tab", indentListItem);
+  bind("Shift-Tab", outdentListItem);
 
   const splitListItemOnEnter = splitListItem(
     editorSchema.nodes.list_item!,

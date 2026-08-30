@@ -186,6 +186,10 @@ li.modified-clause {
   @include govuk-font($size: 19, $weight: bold);
 }
 
+.ProseMirror ol ol {
+  list-style-type: lower-alpha;
+}
+
 .ProseMirror > :first-child {
   margin-top: 0;
 }
