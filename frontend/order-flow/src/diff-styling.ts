@@ -9,6 +9,22 @@ import {
   DecorationSet,
 } from "prosemirror-view";
 
+interface DiffStylingState {
+  decorations: DecorationSet;
+  generatedDocument?: ProseMirrorNode;
+}
+
+const generatedDocumentMeta = "diff-styling-generated-document";
+
+function isClauseNode(
+  node: ProseMirrorNode,
+  parent: ProseMirrorNode | null,
+  doc: ProseMirrorNode,
+): boolean {
+  return (parent === doc && node.type.name !== "ordered_list") ||
+    parent?.type.name === "ordered_list";
+}
+
 function createUndoIcon(): HTMLImageElement {
   const icon = document.createElement("img");
 
@@ -25,40 +41,132 @@ export function deleteUserAuthoredNode(
   const node = state.doc.nodeAt(position);
   if (!node || node.attrs.id !== null) return undefined;
 
+  const $position = state.doc.resolve(position);
+  const parent = $position.parent;
+  const isOnlyItemInUserAuthoredList = node.type.name === "list_item" &&
+    parent.type.name === "ordered_list" &&
+    parent.attrs.id === null &&
+    parent.childCount === 1;
+  const deleteFrom = isOnlyItemInUserAuthoredList
+    ? $position.before($position.depth)
+    : position;
+  const deleteTo = deleteFrom +
+    (isOnlyItemInUserAuthoredList ? parent.nodeSize : node.nodeSize);
+
   return state.tr
-    .delete(position, position + node.nodeSize)
+    .delete(deleteFrom, deleteTo)
     .scrollIntoView();
 }
 
-function createRevertButton(): HTMLButtonElement {
+export function restoreGeneratedNode(
+  state: EditorState,
+  position: number,
+  generatedNode: ProseMirrorNode,
+): Transaction | undefined {
+  const node = state.doc.nodeAt(position);
+  const nodeId = node?.attrs.id;
+
+  if (
+    !node ||
+    typeof nodeId !== "string" ||
+    nodeId !== generatedNode.attrs.id
+  ) {
+    return undefined;
+  }
+
+  return state.tr
+    .replaceWith(position, position + node.nodeSize, generatedNode)
+    .scrollIntoView();
+}
+
+export function setGeneratedDocument(
+  transaction: Transaction,
+  generatedDocument: ProseMirrorNode,
+): Transaction {
+  return transaction.setMeta(generatedDocumentMeta, generatedDocument);
+}
+
+function createRevertButton(label: string): HTMLButtonElement {
   const button = document.createElement("button");
 
   button.type = "button";
   button.className = "revert-node-button";
   button.contentEditable = "false";
-  button.setAttribute("aria-label", "Undo inserted paragraph");
-  button.title = "Undo inserted paragraph";
+  button.setAttribute("aria-label", label);
+  button.title = label;
   button.append(createUndoIcon());
 
   return button;
 }
 
-function createDiffDecorations(doc: ProseMirrorNode): DecorationSet {
+function clauseNodesById(doc: ProseMirrorNode): Map<string, ProseMirrorNode> {
+  const clauses = new Map<string, ProseMirrorNode>();
+
+  doc.descendants((node, _position, parent) => {
+    const id = node.attrs.id;
+
+    if (isClauseNode(node, parent, doc) && typeof id === "string") {
+      clauses.set(id, node);
+    }
+  });
+
+  return clauses;
+}
+
+function createDiffDecorations(
+  doc: ProseMirrorNode,
+  generatedDocument?: ProseMirrorNode,
+): DecorationSet {
   const decorations: Decoration[] = [];
+  const generatedClauses = generatedDocument
+    ? clauseNodesById(generatedDocument)
+    : new Map<string, ProseMirrorNode>();
 
   doc.descendants((node, position, parent) => {
-    const isClause = parent === doc ||
-      parent?.type.name === "ordered_list";
+    const isClause = isClauseNode(node, parent, doc);
 
     if (isClause && node.attrs.id === null) {
       decorations.push(
         Decoration.node(position, position + node.nodeSize, {
           class: "user-authored-paragraph",
+        }, {
+          diffKind: "inserted",
         }),
-        Decoration.widget(position + 1, createRevertButton, {
-          revertNodeFrom: position,
-          side: -1,
+        Decoration.widget(
+          position + 1,
+          () => createRevertButton("Undo inserted paragraph"),
+          {
+            revertNodeFrom: position,
+            revertKind: "delete",
+            side: -1,
+          },
+        ),
+      );
+      return;
+    }
+
+    const id = node.attrs.id;
+    const generatedNode = typeof id === "string"
+      ? generatedClauses.get(id)
+      : undefined;
+
+    if (isClause && generatedNode && !node.eq(generatedNode)) {
+      decorations.push(
+        Decoration.node(position, position + node.nodeSize, {
+          class: "modified-clause",
+        }, {
+          diffKind: "modified",
         }),
+        Decoration.widget(
+          position + 1,
+          () => createRevertButton("Undo changes to clause"),
+          {
+            generatedNode,
+            revertNodeFrom: position,
+            revertKind: "restore",
+            side: -1,
+          },
+        ),
       );
     }
   });
@@ -66,21 +174,30 @@ function createDiffDecorations(doc: ProseMirrorNode): DecorationSet {
   return DecorationSet.create(doc, decorations);
 }
 
-export function createDiffStylingPlugin(): Plugin<DecorationSet> {
-  return new Plugin<DecorationSet>({
+export function createDiffStylingPlugin(): Plugin<DiffStylingState> {
+  return new Plugin<DiffStylingState>({
     state: {
       init(_config, state) {
-        return createDiffDecorations(state.doc);
+        return {
+          decorations: createDiffDecorations(state.doc),
+        };
       },
-      apply(transaction, decorations) {
-        return transaction.docChanged
-          ? createDiffDecorations(transaction.doc)
-          : decorations;
+      apply(transaction, pluginState) {
+        const generatedDocument = transaction.getMeta(generatedDocumentMeta) as
+          ProseMirrorNode | undefined ?? pluginState.generatedDocument;
+
+        return {
+          generatedDocument,
+          decorations: transaction.docChanged ||
+              generatedDocument !== pluginState.generatedDocument
+            ? createDiffDecorations(transaction.doc, generatedDocument)
+            : pluginState.decorations,
+        };
       },
     },
     props: {
       decorations(state) {
-        return this.getState(state);
+        return this.getState(state)?.decorations;
       },
       handleClick(view, _position, event) {
         if (!(event.target instanceof Element)) return false;
@@ -91,7 +208,7 @@ export function createDiffStylingPlugin(): Plugin<DecorationSet> {
         if (!button || !view.dom.contains(button)) return false;
 
         const widgetPosition = view.posAtDOM(button, 0);
-        const decoration = this.getState(view.state)?.find(
+        const decoration = this.getState(view.state)?.decorations.find(
           widgetPosition,
           widgetPosition,
           (spec) => typeof spec.revertNodeFrom === "number",
@@ -99,10 +216,13 @@ export function createDiffStylingPlugin(): Plugin<DecorationSet> {
         const nodePosition = decoration?.spec.revertNodeFrom;
         if (typeof nodePosition !== "number") return false;
 
-        const transaction = deleteUserAuthoredNode(
-          view.state,
-          nodePosition,
-        );
+        const transaction = decoration?.spec.revertKind === "restore"
+          ? restoreGeneratedNode(
+            view.state,
+            nodePosition,
+            decoration.spec.generatedNode as ProseMirrorNode,
+          )
+          : deleteUserAuthoredNode(view.state, nodePosition);
         if (!transaction) return false;
 
         view.dispatch(transaction);

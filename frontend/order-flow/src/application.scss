@@ -166,7 +166,14 @@
   background: govuk-colour("green", $variant: "tint-80");
 }
 
-li.user-authored-paragraph {
+.modified-clause {
+  box-sizing: border-box;
+  border-left: 4px solid govuk-colour("blue");
+  background: govuk-colour("blue", $variant: "tint-80");
+}
+
+li.user-authored-paragraph,
+li.modified-clause {
   position: static;
 }
 
