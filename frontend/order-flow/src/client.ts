@@ -9,6 +9,7 @@ import { EditorView } from "prosemirror-view";
 
 import {
   createDiffStylingPlugin,
+  getGeneratedDocument,
   setGeneratedDocument,
 } from "./diff-styling.js";
 import {
@@ -187,14 +188,17 @@ export function createOrderEditor(
   );
   htmlDebugElement.textContent = formatHtml(view.dom.outerHTML);
 
-  let hasRendered = false;
-
   const controller: OrderController = {
     render(target: ProseMirrorNode): void {
       let transaction = view.state.tr;
+      const previousTarget = getGeneratedDocument(view.state);
 
-      if (hasRendered) {
-        transaction = reconcileOrderDocument(transaction, target);
+      if (previousTarget) {
+        transaction = reconcileOrderDocument(
+          transaction,
+          previousTarget,
+          target,
+        );
       } else {
         transaction.replaceWith(
           0,
@@ -202,7 +206,6 @@ export function createOrderEditor(
           target.content,
         );
       }
-      hasRendered = true;
 
       setGeneratedDocument(transaction, target);
 

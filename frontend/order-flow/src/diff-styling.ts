@@ -109,6 +109,12 @@ export function setGeneratedDocument(
   return transaction.setMeta(diffStylingKey, generatedDocument);
 }
 
+export function getGeneratedDocument(
+  state: EditorState,
+): ProseMirrorNode | undefined {
+  return diffStylingKey.getState(state)?.generatedDocument;
+}
+
 function createRevertButton(label: string): HTMLButtonElement {
   const button = document.createElement("button");
 

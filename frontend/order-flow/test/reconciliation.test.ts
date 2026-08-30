@@ -22,6 +22,10 @@ function buildOrder(text: string, formValue: string) {
 
 describe("order document reconciliation", () => {
   it("updates a form value without replacing edited clause text", () => {
+    const previousTarget = buildOrder(
+      "The defendants must give up possession on or before ",
+      "29 August 2026",
+    );
     const liveDocument = buildOrder(
       "The defendants must leave the property before ",
       "29 August 2026",
@@ -32,6 +36,7 @@ describe("order document reconciliation", () => {
     );
     const transaction = reconcileOrderDocument(
       EditorState.create({ schema: editorSchema, doc: liveDocument }).tr,
+      previousTarget,
       targetDocument,
     );
     const paragraph = transaction.doc.firstChild!.firstChild!.firstChild!;
@@ -44,9 +49,100 @@ describe("order document reconciliation", () => {
     assert.equal(paragraph.lastChild!.text, ".");
   });
 
-  it("replaces an ordinary generated clause that changed", () => {
+  it("replaces edited clause text when its generated text changed", () => {
+    const previousTarget = buildOrder(
+      "The defendants must leave the property before ",
+      "29 August 2026",
+    );
+    const liveDocument = buildOrder(
+      "The defendants must leave immediately before ",
+      "29 August 2026",
+    );
+    const targetDocument = buildOrder(
+      "The defendants must give up possession on or before ",
+      "12 September 2026",
+    );
+
+    const transaction = reconcileOrderDocument(
+      EditorState.create({ schema: editorSchema, doc: liveDocument }).tr,
+      previousTarget,
+      targetDocument,
+    );
+    const paragraph = transaction.doc.firstChild!.firstChild!.firstChild!;
+
+    assert.equal(
+      paragraph.firstChild!.text,
+      "The defendants must give up possession on or before ",
+    );
+    assert.equal(paragraph.child(1).attrs.text, "12 September 2026");
+  });
+
+  it("preserves an edited clause when its generated content is unchanged", () => {
+    const previousBuilder = createOrderBuilder();
+    previousBuilder.setClause("heading", "Generated heading");
     const liveBuilder = createOrderBuilder();
-    liveBuilder.setClause("heading", "Old heading");
+    liveBuilder.setClause("heading", "Edited heading");
+    const targetBuilder = createOrderBuilder();
+    targetBuilder.setClause("heading", "Generated heading");
+
+    const transaction = reconcileOrderDocument(
+      EditorState.create({
+        schema: editorSchema,
+        doc: liveBuilder.build(),
+      }).tr,
+      previousBuilder.build(),
+      targetBuilder.build(),
+    );
+
+    assert.equal(transaction.doc.firstChild!.textContent, "Edited heading");
+  });
+
+  it("preserves an unchanged edited clause when another clause changes", () => {
+    const previousBuilder = createOrderBuilder();
+    previousBuilder.setClause("heading", "Generated heading");
+    previousBuilder.buildList("order-clauses")
+      .listItem("give-possession")
+      .text("Possession by ")
+      .formValue("deadline", "29 August 2026")
+      .build();
+    const liveBuilder = createOrderBuilder();
+    liveBuilder.setClause("heading", "Edited heading");
+    liveBuilder.buildList("order-clauses")
+      .listItem("give-possession")
+      .text("Possession by ")
+      .formValue("deadline", "29 August 2026")
+      .build();
+    const targetBuilder = createOrderBuilder();
+    targetBuilder.setClause("heading", "Generated heading");
+    targetBuilder.buildList("order-clauses")
+      .listItem("give-possession")
+      .text("Possession by ")
+      .formValue("deadline", "12 September 2026")
+      .build();
+
+    const transaction = reconcileOrderDocument(
+      EditorState.create({
+        schema: editorSchema,
+        doc: liveBuilder.build(),
+      }).tr,
+      previousBuilder.build(),
+      targetBuilder.build(),
+    );
+    const possessionParagraph = transaction.doc.child(1).firstChild!
+      .firstChild!;
+
+    assert.equal(transaction.doc.firstChild!.textContent, "Edited heading");
+    assert.equal(
+      possessionParagraph.lastChild!.attrs.text,
+      "12 September 2026",
+    );
+  });
+
+  it("replaces an edited clause when its generated content changed", () => {
+    const previousBuilder = createOrderBuilder();
+    previousBuilder.setClause("heading", "Old heading");
+    const liveBuilder = createOrderBuilder();
+    liveBuilder.setClause("heading", "Edited heading");
     const targetBuilder = createOrderBuilder();
     targetBuilder.setClause("heading", "New heading");
 
@@ -55,6 +151,7 @@ describe("order document reconciliation", () => {
         schema: editorSchema,
         doc: liveBuilder.build(),
       }).tr,
+      previousBuilder.build(),
       targetBuilder.build(),
     );
 
@@ -78,6 +175,7 @@ describe("order document reconciliation", () => {
         schema: editorSchema,
         doc: liveBuilder.build(),
       }).tr,
+      liveBuilder.build(),
       targetBuilder.build(),
     );
     const list = transaction.doc.firstChild!;

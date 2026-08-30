@@ -35,8 +35,12 @@ In v1, existing reference clauses retain their relative order. Targets may add o
 
 When the inputs change the buildOrder function is invoked to derive an updated target node.
 
-The reconciliation process then runs to update the view, diffing the existing view state with the new target node:
+The reconciliation process then runs to update the view, comparing the existing
+view state, the previous target and the new target:
 
-- Insert newly present or replace differing - reference is authoritative in v1
+- Preserve edited clauses whose generated content has not changed.
+- Replace an existing clause when its generated content has changed - reference is authoritative in v1.
+- Update changed nested managed values without replacing unchanged surrounding content.
+- Insert newly present clauses.
 - Remove clauses no longer present.
 - Preserve ID-less user-authored content.

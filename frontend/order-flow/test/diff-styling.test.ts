@@ -7,12 +7,38 @@ import { DecorationSet } from "prosemirror-view";
 import {
   createDiffStylingPlugin,
   deleteUserAuthoredNode,
+  getGeneratedDocument,
   restoreGeneratedNode,
   setGeneratedDocument,
 } from "../src/diff-styling.js";
 import { editorSchema } from "../src/schema.js";
 
 describe("diff styling", () => {
+  it("retains the latest generated document as reconciliation baseline", () => {
+    const generatedDocument = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node(
+        "paragraph",
+        { id: "clause:generated" },
+        editorSchema.text("Generated"),
+      ),
+    );
+    const state = EditorState.create({
+      schema: editorSchema,
+      plugins: [createDiffStylingPlugin()],
+    });
+    const stateWithBaseline = state.apply(
+      setGeneratedDocument(state.tr, generatedDocument),
+    );
+    const stateAfterEdit = stateWithBaseline.apply(
+      stateWithBaseline.tr.insertText("Edited", 1),
+    );
+
+    assert.ok(getGeneratedDocument(stateWithBaseline)?.eq(generatedDocument));
+    assert.ok(getGeneratedDocument(stateAfterEdit)?.eq(generatedDocument));
+  });
+
   it("rejects deletion of a generated clause", () => {
     const generatedClause = editorSchema.node(
       "paragraph",

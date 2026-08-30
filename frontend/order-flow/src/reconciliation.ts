@@ -1,4 +1,7 @@
-import { type Node as ProseMirrorNode } from "prosemirror-model";
+import {
+  Fragment,
+  type Node as ProseMirrorNode,
+} from "prosemirror-model";
 import { type Transaction } from "prosemirror-state";
 
 interface ManagedNode {
@@ -81,6 +84,56 @@ function sameKeys(
     [...left.keys()].every((id) => right.has(id));
 }
 
+function sameUnmanagedContent(
+  left: ProseMirrorNode,
+  right: ProseMirrorNode,
+  isRoot = true,
+): boolean {
+  if (!isRoot) {
+    const leftId = managedId(left);
+    const rightId = managedId(right);
+
+    if (leftId !== undefined || rightId !== undefined) {
+      return leftId === rightId;
+    }
+  }
+
+  if (!left.sameMarkup(right)) return false;
+  if (left.isText) return left.text === right.text;
+  if (left.childCount !== right.childCount) return false;
+
+  for (let index = 0; index < left.childCount; index++) {
+    if (!sameUnmanagedContent(left.child(index), right.child(index), false)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function preserveManagedChildren(
+  target: ProseMirrorNode,
+  liveChildrenById: ReadonlyMap<string, ManagedNode>,
+  isRoot = true,
+): ProseMirrorNode {
+  if (!isRoot) {
+    const id = managedId(target);
+    const liveChild = id === undefined ? undefined : liveChildrenById.get(id);
+
+    if (liveChild) return liveChild.node;
+  }
+
+  if (target.isLeaf) return target;
+
+  return target.copy(
+    Fragment.fromArray(
+      target.children.map((child) =>
+        preserveManagedChildren(child, liveChildrenById, false)
+      ),
+    ),
+  );
+}
+
 function insertMissingManagedNodes(
   transaction: Transaction,
   parentPosition: number | null,
@@ -136,6 +189,7 @@ function deleteRemovedManagedNodes(
 function reconcileManagedChildren(
   transaction: Transaction,
   parentPosition: number | null,
+  previousParent: ProseMirrorNode | undefined,
   targetParent: ProseMirrorNode,
 ): void {
   const liveChildren = managedChildrenById(
@@ -143,6 +197,9 @@ function reconcileManagedChildren(
   );
   const targetChildren = managedChildren(targetParent);
   const targetChildrenById = managedChildrenById(targetParent);
+  const previousChildrenById = previousParent
+    ? managedChildrenById(previousParent)
+    : new Map<string, ManagedNode>();
   const liveIds = new Set(liveChildren.keys());
   const targetIds = new Set(targetChildrenById.keys());
   const insertIds = new Set(
@@ -172,6 +229,7 @@ function reconcileManagedChildren(
       reconcileManagedNode(
         transaction,
         liveChild.position,
+        previousChildrenById.get(id)?.node,
         targetChild.node,
       );
     }
@@ -181,9 +239,12 @@ function reconcileManagedChildren(
 function reconcileManagedNode(
   transaction: Transaction,
   position: number | null,
+  previous: ProseMirrorNode | undefined,
   target: ProseMirrorNode,
 ): void {
   const live = liveNode(transaction, position);
+
+  if (previous?.eq(target)) return;
 
   if (position !== null && (live.isLeaf || target.isLeaf)) {
     if (!live.eq(target)) {
@@ -207,7 +268,7 @@ function reconcileManagedNode(
   }
 
   if (hasOnlyManagedChildren(target)) {
-    reconcileManagedChildren(transaction, position, target);
+    reconcileManagedChildren(transaction, position, previous, target);
     return;
   }
 
@@ -215,12 +276,32 @@ function reconcileManagedNode(
   const targetChildren = managedChildrenById(target);
 
   if (targetChildren.size > 0 && sameKeys(liveChildren, targetChildren)) {
+    if (
+      position !== null &&
+      (!previous || !sameUnmanagedContent(previous, target))
+    ) {
+      const replacement = preserveManagedChildren(target, liveChildren);
+
+      if (!live.eq(replacement)) {
+        transaction.replaceWith(
+          position,
+          position + live.nodeSize,
+          replacement,
+        );
+      }
+    }
+
+    const previousChildren = previous
+      ? managedChildrenById(previous)
+      : new Map<string, ManagedNode>();
+
     for (const [id, targetChild] of targetChildren) {
       const liveChild = findManagedChildById(transaction, position, id);
       if (liveChild) {
         reconcileManagedNode(
           transaction,
           liveChild.position,
+          previousChildren.get(id)?.node,
           targetChild.node,
         );
       }
@@ -235,8 +316,9 @@ function reconcileManagedNode(
 
 export function reconcileOrderDocument(
   transaction: Transaction,
+  previousTarget: ProseMirrorNode,
   target: ProseMirrorNode,
 ): Transaction {
-  reconcileManagedNode(transaction, null, target);
+  reconcileManagedNode(transaction, null, previousTarget, target);
   return transaction;
 }
