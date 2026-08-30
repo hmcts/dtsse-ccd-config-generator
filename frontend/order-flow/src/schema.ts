@@ -51,7 +51,7 @@ const nodes = {
     attrs: {
       id: { default: null },
     },
-    content: "paragraph ordered_list?",
+    content: "paragraph+ ordered_list?",
   },
 } satisfies Record<string, NodeSpec>;
 
