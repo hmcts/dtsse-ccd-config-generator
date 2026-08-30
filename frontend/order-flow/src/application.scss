@@ -154,10 +154,15 @@
   outline-offset: 0;
 }
 
+.revert-node-button__icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  vertical-align: middle;
+}
+
 .user-authored-paragraph {
   box-sizing: border-box;
   border-left: 4px solid govuk-colour("green");
-  background: govuk-tint(govuk-colour("green"), 30);
   background: govuk-colour("green", $variant: "tint-80");
 }
 

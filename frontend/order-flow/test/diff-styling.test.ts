@@ -4,7 +4,10 @@ import { describe, it } from "node:test";
 import { EditorState } from "prosemirror-state";
 import { DecorationSet } from "prosemirror-view";
 
-import { createDiffStylingPlugin } from "../src/diff-styling.js";
+import {
+  createDiffStylingPlugin,
+  deleteUserAuthoredNode,
+} from "../src/diff-styling.js";
 import { editorSchema } from "../src/schema.js";
 
 describe("diff styling", () => {
@@ -47,11 +50,34 @@ describe("diff styling", () => {
     });
 
     assert.notEqual(userAuthoredPosition, undefined);
-    assert.equal(decorations.length, 1);
-    assert.equal(decorations[0]!.from, userAuthoredPosition);
+    const nodeDecorations = decorations.filter(
+      (decoration) => decoration.from < decoration.to,
+    );
+    const widgetDecorations = decorations.filter(
+      (decoration) => decoration.from === decoration.to,
+    );
+
+    assert.equal(nodeDecorations.length, 1);
+    assert.equal(widgetDecorations.length, 1);
+    assert.equal(nodeDecorations[0]!.from, userAuthoredPosition);
     assert.equal(
-      decorations[0]!.to,
+      nodeDecorations[0]!.to,
       userAuthoredPosition! + userAuthoredItem.nodeSize,
+    );
+    assert.equal(widgetDecorations[0]!.from, userAuthoredPosition);
+    assert.equal(
+      widgetDecorations[0]!.spec.revertNodeFrom,
+      userAuthoredPosition,
+    );
+
+    const transaction = deleteUserAuthoredNode(
+      state,
+      userAuthoredPosition!,
+    );
+    assert.ok(transaction);
+    assert.deepEqual(
+      transaction.doc.child(1).children.map((item) => item.attrs.id),
+      ["clause:generated"],
     );
   });
 });
