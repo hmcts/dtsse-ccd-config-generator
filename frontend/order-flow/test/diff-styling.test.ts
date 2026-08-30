@@ -34,6 +34,29 @@ describe("diff styling", () => {
     assert.ok(result.state.doc.firstChild!.eq(generatedClause));
   });
 
+  it("rejects deletion of a form value", () => {
+    const formValue = editorSchema.node("form_value", {
+      id: "fact:generated:date",
+      text: "30 August 2026",
+    });
+    const generatedClause = editorSchema.node(
+      "paragraph",
+      { id: "clause:generated" },
+      [editorSchema.text("By "), formValue],
+    );
+    const plugin = createDiffStylingPlugin();
+    const state = EditorState.create({
+      schema: editorSchema,
+      doc: editorSchema.node("doc", null, generatedClause),
+      plugins: [plugin],
+    });
+
+    const result = state.applyTransaction(state.tr.delete(4, 5));
+
+    assert.equal(result.transactions.length, 0);
+    assert.ok(result.state.doc.firstChild!.lastChild!.eq(formValue));
+  });
+
   it("allows a generated clause to be edited blank", () => {
     const generatedClause = editorSchema.node(
       "paragraph",

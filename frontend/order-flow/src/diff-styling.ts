@@ -136,6 +136,20 @@ function clauseNodesById(doc: ProseMirrorNode): Map<string, ProseMirrorNode> {
   return clauses;
 }
 
+function formValueIds(doc: ProseMirrorNode): Set<string> {
+  const ids = new Set<string>();
+
+  doc.descendants((node) => {
+    const id = node.attrs.id;
+
+    if (node.type.name === "form_value" && typeof id === "string") {
+      ids.add(id);
+    }
+  });
+
+  return ids;
+}
+
 function clauseMatchesGenerated(
   node: ProseMirrorNode,
   generatedNode: ProseMirrorNode,
@@ -223,14 +237,17 @@ function createDiffDecorations(
 export function createDiffStylingPlugin(): Plugin<DiffStylingState> {
   return new Plugin<DiffStylingState>({
     key: diffStylingKey,
-    // Block any transaction that would delete a clause completely.
+    // Block any transaction that would delete a clause or form value completely.
     filterTransaction(transaction, state) {
       if (transaction.getMeta(diffStylingKey)) return true;
 
       const clausesAfterTransaction = clauseNodesById(transaction.doc);
+      const formValuesAfterTransaction = formValueIds(transaction.doc);
 
       return [...clauseNodesById(state.doc).keys()].every((id) =>
         clausesAfterTransaction.has(id)
+      ) && [...formValueIds(state.doc)].every((id) =>
+        formValuesAfterTransaction.has(id)
       );
     },
     state: {
