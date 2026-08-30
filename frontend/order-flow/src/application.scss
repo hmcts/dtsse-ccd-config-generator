@@ -166,6 +166,10 @@
   background: govuk-colour("green", $variant: "tint-80");
 }
 
+li.user-authored-paragraph {
+  position: static;
+}
+
 .ProseMirror-focused {
   outline: $govuk-focus-width solid $govuk-focus-colour;
   outline-offset: -$govuk-focus-width;
