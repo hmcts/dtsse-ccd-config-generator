@@ -13,6 +13,80 @@ import {
 import { editorSchema } from "../src/schema.js";
 
 describe("diff styling", () => {
+  it("rejects deletion of a generated clause", () => {
+    const generatedClause = editorSchema.node(
+      "paragraph",
+      { id: "clause:generated" },
+      editorSchema.text("Generated"),
+    );
+    const plugin = createDiffStylingPlugin();
+    const state = EditorState.create({
+      schema: editorSchema,
+      doc: editorSchema.node("doc", null, generatedClause),
+      plugins: [plugin],
+    });
+
+    const result = state.applyTransaction(
+      state.tr.delete(0, generatedClause.nodeSize),
+    );
+
+    assert.equal(result.transactions.length, 0);
+    assert.ok(result.state.doc.firstChild!.eq(generatedClause));
+  });
+
+  it("allows a generated clause to be edited blank", () => {
+    const generatedClause = editorSchema.node(
+      "paragraph",
+      { id: "clause:generated" },
+      editorSchema.text("Generated"),
+    );
+    const plugin = createDiffStylingPlugin();
+    const state = EditorState.create({
+      schema: editorSchema,
+      doc: editorSchema.node("doc", null, generatedClause),
+      plugins: [plugin],
+    });
+
+    const result = state.applyTransaction(
+      state.tr.delete(1, generatedClause.content.size + 1),
+    );
+
+    assert.equal(result.transactions.length, 1);
+    assert.equal(result.state.doc.firstChild!.attrs.id, "clause:generated");
+    assert.equal(result.state.doc.firstChild!.textContent, "");
+  });
+
+  it("allows reconciliation to remove a generated clause", () => {
+    const keptClause = editorSchema.node(
+      "paragraph",
+      { id: "clause:keep" },
+      editorSchema.text("Keep"),
+    );
+    const removedClause = editorSchema.node(
+      "paragraph",
+      { id: "clause:remove" },
+      editorSchema.text("Remove"),
+    );
+    const target = editorSchema.node("doc", null, keptClause);
+    const plugin = createDiffStylingPlugin();
+    const state = EditorState.create({
+      schema: editorSchema,
+      doc: editorSchema.node("doc", null, [keptClause, removedClause]),
+      plugins: [plugin],
+    });
+    const transaction = state.tr.delete(
+      keptClause.nodeSize,
+      keptClause.nodeSize + removedClause.nodeSize,
+    );
+
+    const result = state.applyTransaction(
+      setGeneratedDocument(transaction, target),
+    );
+
+    assert.equal(result.transactions.length, 1);
+    assert.ok(result.state.doc.eq(target));
+  });
+
   it("decorates user-authored clauses and not generated clauses", () => {
     const generatedItem = editorSchema.node(
       "list_item",
@@ -67,10 +141,7 @@ describe("diff styling", () => {
       userAuthoredPosition! + userAuthoredItem.nodeSize,
     );
     assert.equal(widgetDecorations[0]!.from, userAuthoredPosition! + 1);
-    assert.equal(
-      widgetDecorations[0]!.spec.revertNodeFrom,
-      userAuthoredPosition,
-    );
+    assert.equal(typeof widgetDecorations[0]!.spec.revert, "function");
 
     const transaction = deleteUserAuthoredNode(
       state,
@@ -118,7 +189,7 @@ describe("diff styling", () => {
     const revertDecorations = decorationSet.find(
       undefined,
       undefined,
-      (spec) => spec.revertKind === "restore",
+      (spec) => typeof spec.revert === "function",
     );
 
     assert.equal(modifiedDecorations.length, 1);

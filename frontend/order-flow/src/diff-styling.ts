@@ -2,6 +2,7 @@ import { type Node as ProseMirrorNode } from "prosemirror-model";
 import {
   type EditorState,
   Plugin,
+  PluginKey,
   type Transaction,
 } from "prosemirror-state";
 import {
@@ -14,7 +15,9 @@ interface DiffStylingState {
   generatedDocument?: ProseMirrorNode;
 }
 
-const generatedDocumentMeta = "diff-styling-generated-document";
+type Revert = (state: EditorState) => Transaction | undefined;
+
+const diffStylingKey = new PluginKey<DiffStylingState>("diff-styling");
 
 function isClauseNode(
   node: ProseMirrorNode,
@@ -83,7 +86,7 @@ export function setGeneratedDocument(
   transaction: Transaction,
   generatedDocument: ProseMirrorNode,
 ): Transaction {
-  return transaction.setMeta(generatedDocumentMeta, generatedDocument);
+  return transaction.setMeta(diffStylingKey, generatedDocument);
 }
 
 function createRevertButton(label: string): HTMLButtonElement {
@@ -136,9 +139,9 @@ function createDiffDecorations(
           position + 1,
           () => createRevertButton("Undo inserted paragraph"),
           {
-            revertNodeFrom: position,
-            revertKind: "delete",
             side: -1,
+            revert: (state: EditorState) =>
+              deleteUserAuthoredNode(state, position),
           },
         ),
       );
@@ -161,10 +164,9 @@ function createDiffDecorations(
           position + 1,
           () => createRevertButton("Undo changes to clause"),
           {
-            generatedNode,
-            revertNodeFrom: position,
-            revertKind: "restore",
             side: -1,
+            revert: (state: EditorState) =>
+              restoreGeneratedNode(state, position, generatedNode),
           },
         ),
       );
@@ -176,6 +178,17 @@ function createDiffDecorations(
 
 export function createDiffStylingPlugin(): Plugin<DiffStylingState> {
   return new Plugin<DiffStylingState>({
+    key: diffStylingKey,
+    // Block any transaction that would delete a clause completely.
+    filterTransaction(transaction, state) {
+      if (transaction.getMeta(diffStylingKey)) return true;
+
+      const clausesAfterTransaction = clauseNodesById(transaction.doc);
+
+      return [...clauseNodesById(state.doc).keys()].every((id) =>
+        clausesAfterTransaction.has(id)
+      );
+    },
     state: {
       init(_config, state) {
         return {
@@ -183,7 +196,7 @@ export function createDiffStylingPlugin(): Plugin<DiffStylingState> {
         };
       },
       apply(transaction, pluginState) {
-        const generatedDocument = transaction.getMeta(generatedDocumentMeta) as
+        const generatedDocument = transaction.getMeta(diffStylingKey) as
           ProseMirrorNode | undefined ?? pluginState.generatedDocument;
 
         return {
@@ -197,7 +210,7 @@ export function createDiffStylingPlugin(): Plugin<DiffStylingState> {
     },
     props: {
       decorations(state) {
-        return this.getState(state)?.decorations;
+        return diffStylingKey.getState(state)?.decorations;
       },
       handleClick(view, _position, event) {
         if (!(event.target instanceof Element)) return false;
@@ -208,21 +221,14 @@ export function createDiffStylingPlugin(): Plugin<DiffStylingState> {
         if (!button || !view.dom.contains(button)) return false;
 
         const widgetPosition = view.posAtDOM(button, 0);
-        const decoration = this.getState(view.state)?.decorations.find(
+        const decoration = diffStylingKey.getState(view.state)?.decorations.find(
           widgetPosition,
           widgetPosition,
-          (spec) => typeof spec.revertNodeFrom === "number",
+          (spec) => typeof spec.revert === "function",
         )[0];
-        const nodePosition = decoration?.spec.revertNodeFrom;
-        if (typeof nodePosition !== "number") return false;
+        const revert = decoration?.spec.revert as Revert | undefined;
+        const transaction = revert?.(view.state);
 
-        const transaction = decoration?.spec.revertKind === "restore"
-          ? restoreGeneratedNode(
-            view.state,
-            nodePosition,
-            decoration.spec.generatedNode as ProseMirrorNode,
-          )
-          : deleteUserAuthoredNode(view.state, nodePosition);
         if (!transaction) return false;
 
         view.dispatch(transaction);
