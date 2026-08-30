@@ -17,7 +17,10 @@ import { editorSchema } from "./schema.js";
 const mac = typeof navigator !== "undefined" &&
   /Mac|iP(hone|[oa]d)/.test(navigator.platform);
 
-const protectClausesFromSplittingOnEnter: Command = (state, dispatch) => {
+export const protectClausesFromSplittingOnEnter: Command = (
+  state,
+  dispatch,
+) => {
   const { $cursor } = state.selection as TextSelection;
   if (!$cursor) return false;
 
@@ -32,7 +35,9 @@ const protectClausesFromSplittingOnEnter: Command = (state, dispatch) => {
   if (!dispatch) return true;
 
   const clauseDepth = isListItem ? $cursor.depth - 1 : $cursor.depth;
-  const insertPosition = $cursor.after(clauseDepth);
+  const insertPosition = $cursor.parentOffset === 0
+    ? $cursor.before(clauseDepth)
+    : $cursor.after(clauseDepth);
   const node = isListItem
     ? listItemType.create(null, paragraphType.create())
     : paragraphType.create();
