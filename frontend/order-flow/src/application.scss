@@ -172,6 +172,32 @@
   background: govuk-colour("blue", $variant: "tint-80");
 }
 
+p.user-authored-paragraph,
+p.modified-clause,
+li.user-authored-paragraph > p,
+li.modified-clause > p {
+  width: fit-content;
+  max-width: 100%;
+}
+
+li.user-authored-paragraph,
+li.modified-clause {
+  border-left: 0;
+  background: transparent;
+}
+
+li.user-authored-paragraph > p {
+  box-sizing: border-box;
+  border-left: 4px solid govuk-colour("green");
+  background: govuk-colour("green", $variant: "tint-80");
+}
+
+li.modified-clause > p {
+  box-sizing: border-box;
+  border-left: 4px solid govuk-colour("blue");
+  background: govuk-colour("blue", $variant: "tint-80");
+}
+
 .ProseMirror li:has(.revert-node-button) {
   position: static;
 }
