@@ -285,6 +285,80 @@ describe("diff styling", () => {
     assert.equal(modifiedDecorations[0]!.to, 1 + editedItem.nodeSize);
   });
 
+  it("does not mark a generated item changed when it gains a user-authored child", () => {
+    const generatedItem = editorSchema.node(
+      "list_item",
+      { id: "clause:possession" },
+      editorSchema.node(
+        "paragraph",
+        null,
+        editorSchema.text("Give up possession"),
+      ),
+    );
+    const userAuthoredItem = editorSchema.node(
+      "list_item",
+      null,
+      editorSchema.node(
+        "paragraph",
+        null,
+        editorSchema.text("And another thing"),
+      ),
+    );
+    const generatedDocument = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node(
+        "ordered_list",
+        { id: "container:clauses" },
+        generatedItem,
+      ),
+    );
+    const liveItem = editorSchema.node(
+      "list_item",
+      { id: "clause:possession" },
+      [
+        generatedItem.firstChild!,
+        editorSchema.node("ordered_list", null, userAuthoredItem),
+      ],
+    );
+    const liveDocument = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node(
+        "ordered_list",
+        { id: "container:clauses" },
+        liveItem,
+      ),
+    );
+    const plugin = createDiffStylingPlugin();
+    let state = EditorState.create({
+      schema: editorSchema,
+      doc: liveDocument,
+      plugins: [plugin],
+    });
+
+    state = state.apply(setGeneratedDocument(state.tr, generatedDocument));
+
+    const decorationSet = plugin.props.decorations?.call(plugin, state);
+    assert.ok(decorationSet instanceof DecorationSet);
+    assert.equal(
+      decorationSet.find(
+        undefined,
+        undefined,
+        (spec) => spec.diffKind === "modified",
+      ).length,
+      0,
+    );
+    assert.equal(
+      decorationSet.find(
+        undefined,
+        undefined,
+        (spec) => spec.diffKind === "inserted",
+      ).length,
+      1,
+    );
+  });
+
   it("deletes an ID-less list when undoing its only item", () => {
     const generatedClause = editorSchema.node(
       "paragraph",

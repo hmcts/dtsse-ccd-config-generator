@@ -116,6 +116,26 @@ function clauseNodesById(doc: ProseMirrorNode): Map<string, ProseMirrorNode> {
   return clauses;
 }
 
+function clauseMatchesGenerated(
+  node: ProseMirrorNode,
+  generatedNode: ProseMirrorNode,
+): boolean {
+  if (!node.sameMarkup(generatedNode)) return false;
+  if (node.type.name !== "list_item") return node.eq(generatedNode);
+
+  const ownContent = node.children.filter(
+    (child) => child.type.name !== "ordered_list",
+  );
+  const generatedOwnContent = generatedNode.children.filter(
+    (child) => child.type.name !== "ordered_list",
+  );
+
+  return ownContent.length === generatedOwnContent.length &&
+    ownContent.every((child, index) =>
+      child.eq(generatedOwnContent[index]!)
+    );
+}
+
 function createDiffDecorations(
   doc: ProseMirrorNode,
   generatedDocument?: ProseMirrorNode,
@@ -153,7 +173,11 @@ function createDiffDecorations(
       ? generatedClauses.get(id)
       : undefined;
 
-    if (isClause && generatedNode && !node.eq(generatedNode)) {
+    if (
+      isClause &&
+      generatedNode &&
+      !clauseMatchesGenerated(node, generatedNode)
+    ) {
       decorations.push(
         Decoration.node(position, position + node.nodeSize, {
           class: "modified-clause",

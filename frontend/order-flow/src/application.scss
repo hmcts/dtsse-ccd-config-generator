@@ -172,8 +172,7 @@
   background: govuk-colour("blue", $variant: "tint-80");
 }
 
-li.user-authored-paragraph,
-li.modified-clause {
+.ProseMirror li:has(.revert-node-button) {
   position: static;
 }
 
