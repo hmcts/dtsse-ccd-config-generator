@@ -64,7 +64,7 @@ describe("diff styling", () => {
       nodeDecorations[0]!.to,
       userAuthoredPosition! + userAuthoredItem.nodeSize,
     );
-    assert.equal(widgetDecorations[0]!.from, userAuthoredPosition);
+    assert.equal(widgetDecorations[0]!.from, userAuthoredPosition! + 1);
     assert.equal(
       widgetDecorations[0]!.spec.revertNodeFrom,
       userAuthoredPosition,

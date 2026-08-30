@@ -55,7 +55,7 @@ function createDiffDecorations(doc: ProseMirrorNode): DecorationSet {
         Decoration.node(position, position + node.nodeSize, {
           class: "user-authored-paragraph",
         }),
-        Decoration.widget(position, createRevertButton, {
+        Decoration.widget(position + 1, createRevertButton, {
           revertNodeFrom: position,
           side: -1,
         }),
