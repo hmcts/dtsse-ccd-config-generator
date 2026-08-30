@@ -77,6 +77,26 @@ export function restoreGeneratedNode(
     return undefined;
   }
 
+  if (
+    node.type.name === "list_item" &&
+    generatedNode.type === node.type
+  ) {
+    const ownContentSize = node.children
+      .filter((child) => child.type.name !== "ordered_list")
+      .reduce((size, child) => size + child.nodeSize, 0);
+    const generatedOwnContent = generatedNode.children.filter(
+      (child) => child.type.name !== "ordered_list",
+    );
+
+    return state.tr
+      .replaceWith(
+        position + 1,
+        position + 1 + ownContentSize,
+        generatedOwnContent,
+      )
+      .scrollIntoView();
+  }
+
   return state.tr
     .replaceWith(position, position + node.nodeSize, generatedNode)
     .scrollIntoView();

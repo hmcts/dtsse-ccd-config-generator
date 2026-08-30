@@ -201,6 +201,63 @@ describe("diff styling", () => {
     assert.ok(transaction.doc.firstChild!.eq(generatedClause));
   });
 
+  it("restores a list item's own content without removing its children", () => {
+    const generatedItem = editorSchema.node(
+      "list_item",
+      { id: "clause:possession" },
+      editorSchema.node(
+        "paragraph",
+        null,
+        editorSchema.text("Give up possession"),
+      ),
+    );
+    const firstChild = editorSchema.node(
+      "list_item",
+      null,
+      editorSchema.node("paragraph", null, editorSchema.text("Unless x")),
+    );
+    const secondChild = editorSchema.node(
+      "list_item",
+      null,
+      editorSchema.node("paragraph", null, editorSchema.text("And y")),
+    );
+    const nestedList = editorSchema.node(
+      "ordered_list",
+      null,
+      [firstChild, secondChild],
+    );
+    const editedItem = editorSchema.node(
+      "list_item",
+      { id: "clause:possession" },
+      [
+        editorSchema.node(
+          "paragraph",
+          null,
+          editorSchema.text("Give up possession caveat x"),
+        ),
+        nestedList,
+      ],
+    );
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node(
+        "ordered_list",
+        { id: "container:clauses" },
+        editedItem,
+      ),
+    );
+    const state = EditorState.create({ schema: editorSchema, doc });
+
+    const transaction = restoreGeneratedNode(state, 1, generatedItem);
+
+    assert.ok(transaction);
+    const restoredItem = transaction.doc.firstChild!.firstChild!;
+    assert.ok(restoredItem.firstChild!.eq(generatedItem.firstChild!));
+    assert.ok(restoredItem.lastChild!.eq(nestedList));
+    assert.equal(restoredItem.childCount, 2);
+  });
+
   it("does not decorate an unchanged generated clause", () => {
     const generatedClause = editorSchema.node(
       "paragraph",
