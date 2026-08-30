@@ -5,6 +5,7 @@ import { type Node as ProseMirrorNode } from "prosemirror-model";
 import { EditorState } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 
+import { createDiffStylingPlugin } from "./diff-styling.js";
 import { createKeymapPlugins } from "./keymap.js";
 import { reconcileOrderDocument } from "./reconciliation.js";
 import { editorSchema } from "./schema.js";
@@ -51,6 +52,7 @@ function createEditorState(): EditorState {
   return EditorState.create({
     schema: editorSchema,
     plugins: [
+      createDiffStylingPlugin(),
       ...createKeymapPlugins(),
       dropCursor(),
       gapCursor(),
