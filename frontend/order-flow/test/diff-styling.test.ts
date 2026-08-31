@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { EditorState } from "prosemirror-state";
+import {
+  type Command,
+  EditorState,
+  TextSelection,
+  type Transaction,
+} from "prosemirror-state";
 import { DecorationSet } from "prosemirror-view";
 
 import {
@@ -11,7 +16,59 @@ import {
   restoreGeneratedNode,
   setGeneratedDocument,
 } from "../src/diff-styling.js";
+import { indentListItem, outdentListItem } from "../src/keymap.js";
 import { editorSchema } from "../src/schema.js";
+
+function listItem(id: string | null, text: string) {
+  return editorSchema.node(
+    "list_item",
+    { id },
+    editorSchema.node("paragraph", null, editorSchema.text(text)),
+  );
+}
+
+function positionInsideClause(
+  doc: ReturnType<typeof editorSchema.node>,
+  text: string,
+): number {
+  let position: number | undefined;
+
+  doc.descendants((node, nodePosition) => {
+    if (node.type.name === "list_item" && node.textContent === text) {
+      position = nodePosition + 2;
+      return false;
+    }
+    return true;
+  });
+
+  if (position === undefined) throw new Error(`Clause not found: ${text}`);
+  return position;
+}
+
+function listCommandTransaction(
+  state: EditorState,
+  command: Command,
+  clauseText: string,
+): Transaction {
+  const stateWithSelection = state.apply(
+    state.tr.setSelection(
+      TextSelection.create(
+        state.doc,
+        positionInsideClause(state.doc, clauseText),
+      ),
+    ),
+  );
+  let transaction: Transaction | undefined;
+
+  assert.equal(
+    command(stateWithSelection, (dispatched) => {
+      transaction = dispatched;
+    }),
+    true,
+  );
+  assert.ok(transaction);
+  return transaction;
+}
 
 describe("diff styling", () => {
   it("retains the latest generated document as reconciliation baseline", () => {
@@ -58,6 +115,265 @@ describe("diff styling", () => {
 
     assert.equal(result.transactions.length, 0);
     assert.ok(result.state.doc.firstChild!.eq(generatedClause));
+  });
+
+  it("rejects indenting a generated clause", () => {
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node("ordered_list", { id: "container:clauses" }, [
+        listItem("clause:first", "First"),
+        listItem("clause:second", "Second"),
+      ]),
+    );
+    const state = EditorState.create({
+      schema: editorSchema,
+      doc,
+      plugins: [createDiffStylingPlugin()],
+    });
+    const transaction = listCommandTransaction(
+      state,
+      indentListItem,
+      "Second",
+    );
+
+    const result = state.applyTransaction(transaction);
+
+    assert.equal(result.transactions.length, 0);
+    assert.ok(result.state.doc.eq(doc));
+  });
+
+  it("rejects outdenting a generated clause", () => {
+    const nested = listItem("clause:second", "Second");
+    const parent = editorSchema.node(
+      "list_item",
+      { id: "clause:first" },
+      [
+        editorSchema.node("paragraph", null, editorSchema.text("First")),
+        editorSchema.node("ordered_list", null, nested),
+      ],
+    );
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node(
+        "ordered_list",
+        { id: "container:clauses" },
+        parent,
+      ),
+    );
+    const state = EditorState.create({
+      schema: editorSchema,
+      doc,
+      plugins: [createDiffStylingPlugin()],
+    });
+    const transaction = listCommandTransaction(
+      state,
+      outdentListItem,
+      "Second",
+    );
+
+    const result = state.applyTransaction(transaction);
+
+    assert.equal(result.transactions.length, 0);
+    assert.ok(result.state.doc.eq(doc));
+  });
+
+  it("rejects moving a generated clause between generated parents", () => {
+    const second = listItem("clause:second", "Second");
+    const first = editorSchema.node(
+      "list_item",
+      { id: "clause:first" },
+      [
+        editorSchema.node("paragraph", null, editorSchema.text("First")),
+        editorSchema.node("ordered_list", null, second),
+      ],
+    );
+    const third = listItem("clause:third", "Third");
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node(
+        "ordered_list",
+        { id: "container:clauses" },
+        [first, third],
+      ),
+    );
+    const movedFirst = listItem("clause:first", "First");
+    const movedThird = editorSchema.node(
+      "list_item",
+      { id: "clause:third" },
+      [
+        editorSchema.node("paragraph", null, editorSchema.text("Third")),
+        editorSchema.node("ordered_list", null, second),
+      ],
+    );
+    const target = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node(
+        "ordered_list",
+        { id: "container:clauses" },
+        [movedFirst, movedThird],
+      ),
+    );
+    const state = EditorState.create({
+      schema: editorSchema,
+      doc,
+      plugins: [createDiffStylingPlugin()],
+    });
+
+    const result = state.applyTransaction(
+      state.tr.replaceWith(0, state.doc.content.size, target.content),
+    );
+
+    assert.equal(result.transactions.length, 0);
+    assert.ok(result.state.doc.eq(doc));
+  });
+
+  it("allows generated clauses to be reordered within their parent", () => {
+    const first = listItem("clause:first", "First");
+    const second = listItem("clause:second", "Second");
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node(
+        "ordered_list",
+        { id: "container:clauses" },
+        [first, second],
+      ),
+    );
+    const reordered = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node(
+        "ordered_list",
+        { id: "container:clauses" },
+        [second, first],
+      ),
+    );
+    const state = EditorState.create({
+      schema: editorSchema,
+      doc,
+      plugins: [createDiffStylingPlugin()],
+    });
+
+    const result = state.applyTransaction(
+      state.tr.replaceWith(0, state.doc.content.size, reordered.content),
+    );
+
+    assert.equal(result.transactions.length, 1);
+    assert.ok(result.state.doc.eq(reordered));
+  });
+
+  it("allows indenting a user-authored clause", () => {
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node("ordered_list", { id: "container:clauses" }, [
+        listItem("clause:generated", "Generated"),
+        listItem(null, "User authored"),
+      ]),
+    );
+    const state = EditorState.create({
+      schema: editorSchema,
+      doc,
+      plugins: [createDiffStylingPlugin()],
+    });
+    const transaction = listCommandTransaction(
+      state,
+      indentListItem,
+      "User authored",
+    );
+
+    const result = state.applyTransaction(transaction);
+
+    assert.equal(result.transactions.length, 1);
+    assert.equal(result.state.doc.firstChild!.childCount, 1);
+  });
+
+  it("allows outdenting a user-authored clause", () => {
+    const userAuthored = listItem(null, "User authored");
+    const generated = editorSchema.node(
+      "list_item",
+      { id: "clause:generated" },
+      [
+        editorSchema.node("paragraph", null, editorSchema.text("Generated")),
+        editorSchema.node("ordered_list", null, userAuthored),
+      ],
+    );
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node(
+        "ordered_list",
+        { id: "container:clauses" },
+        generated,
+      ),
+    );
+    const state = EditorState.create({
+      schema: editorSchema,
+      doc,
+      plugins: [createDiffStylingPlugin()],
+    });
+    const transaction = listCommandTransaction(
+      state,
+      outdentListItem,
+      "User authored",
+    );
+
+    const result = state.applyTransaction(transaction);
+
+    assert.equal(result.transactions.length, 1);
+    assert.equal(result.state.doc.firstChild!.childCount, 2);
+  });
+
+  it("allows reconciliation to reparent a generated clause", () => {
+    const first = listItem("clause:first", "First");
+    const second = listItem("clause:second", "Second");
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node(
+        "ordered_list",
+        { id: "container:clauses" },
+        [first, second],
+      ),
+    );
+    const nestedFirst = editorSchema.node(
+      "list_item",
+      { id: "clause:first" },
+      [
+        editorSchema.node("paragraph", null, editorSchema.text("First")),
+        editorSchema.node("ordered_list", null, second),
+      ],
+    );
+    const target = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node(
+        "ordered_list",
+        { id: "container:clauses" },
+        nestedFirst,
+      ),
+    );
+    const state = EditorState.create({
+      schema: editorSchema,
+      doc,
+      plugins: [createDiffStylingPlugin()],
+    });
+    const transaction = state.tr.replaceWith(
+      0,
+      state.doc.content.size,
+      target.content,
+    );
+
+    const result = state.applyTransaction(
+      setGeneratedDocument(transaction, target),
+    );
+
+    assert.equal(result.transactions.length, 1);
+    assert.ok(result.state.doc.eq(target));
   });
 
   it("rejects deletion of a form value", () => {

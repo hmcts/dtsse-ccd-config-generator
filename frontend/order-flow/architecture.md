@@ -31,6 +31,22 @@ have no ID and are preserved.
 
 In v1, existing reference clauses retain their relative order. Targets may add or remove clauses, but may not reorder existing clauses.
 
+### Editing generated clauses
+
+Users may edit the content of generated clauses
+but may not delete a generated clause or move it to a different parent. This
+keeps the generated document structure authoritative while allowing wording to
+be tailored. ID-less user-authored clauses may still be indented and outdented.
+
+These rules are enforced by a transaction filter rather than individual editor
+commands, so they also apply to structural changes attempted through keyboard,
+toolbar, paste or drag interactions. A transaction that would remove a managed
+form value is rejected for the same reason.
+
+Reconciliation transactions are explicitly exempt from this protection because
+the newly generated target is authoritative and may legitimately add, remove or
+reparent generated clauses.
+
 ## Reconciliation
 
 When the inputs change the buildOrder function is invoked to derive an updated target node.

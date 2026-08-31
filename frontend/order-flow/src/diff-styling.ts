@@ -15,9 +15,16 @@ interface DiffStylingState {
   generatedDocument?: ProseMirrorNode;
 }
 
+interface ClauseSnapshot {
+  node: ProseMirrorNode;
+  parent: string | symbol;
+}
+
 type Revert = (state: EditorState) => Transaction | undefined;
 
 const diffStylingKey = new PluginKey<DiffStylingState>("diff-styling");
+const documentParent = Symbol("document-parent");
+const userAuthoredParent = Symbol("user-authored-parent");
 
 function isClauseNode(
   node: ProseMirrorNode,
@@ -128,18 +135,38 @@ function createRevertButton(label: string): HTMLButtonElement {
   return button;
 }
 
-function clauseNodesById(doc: ProseMirrorNode): Map<string, ProseMirrorNode> {
-  const clauses = new Map<string, ProseMirrorNode>();
+function clauseSnapshotsById(
+  doc: ProseMirrorNode,
+): Map<string, ClauseSnapshot> {
+  const clauses = new Map<string, ClauseSnapshot>();
 
-  doc.descendants((node, _position, parent) => {
-    const id = node.attrs.id;
+  function visit(node: ProseMirrorNode, parent: string | symbol): void {
+    node.forEach((child) => {
+      const id = child.attrs.id;
 
-    if (isClauseNode(node, parent, doc) && typeof id === "string") {
-      clauses.set(id, node);
-    }
-  });
+      if (isClauseNode(child, node, doc) && typeof id === "string") {
+        clauses.set(id, { node: child, parent });
+      }
 
+      let childParent = parent;
+      if (child.type.name === "ordered_list" && typeof id === "string") {
+        childParent = id;
+      } else if (child.type.name === "list_item") {
+        childParent = typeof id === "string" ? id : userAuthoredParent;
+      }
+
+      visit(child, childParent);
+    });
+  }
+
+  visit(doc, documentParent);
   return clauses;
+}
+
+function clauseNodesById(doc: ProseMirrorNode): Map<string, ProseMirrorNode> {
+  return new Map(
+    [...clauseSnapshotsById(doc)].map(([id, clause]) => [id, clause.node]),
+  );
 }
 
 function formValueIds(doc: ProseMirrorNode): Set<string> {
@@ -243,15 +270,16 @@ function createDiffDecorations(
 export function createDiffStylingPlugin(): Plugin<DiffStylingState> {
   return new Plugin<DiffStylingState>({
     key: diffStylingKey,
-    // Block any transaction that would delete a clause or form value completely.
+    // Block ordinary transactions that remove managed content or reparent a clause.
     filterTransaction(transaction, state) {
       if (transaction.getMeta(diffStylingKey)) return true;
 
-      const clausesAfterTransaction = clauseNodesById(transaction.doc);
+      const clausesBeforeTransaction = clauseSnapshotsById(state.doc);
+      const clausesAfterTransaction = clauseSnapshotsById(transaction.doc);
       const formValuesAfterTransaction = formValueIds(transaction.doc);
 
-      return [...clauseNodesById(state.doc).keys()].every((id) =>
-        clausesAfterTransaction.has(id)
+      return [...clausesBeforeTransaction].every(([id, clause]) =>
+        clausesAfterTransaction.get(id)?.parent === clause.parent
       ) && [...formValueIds(state.doc)].every((id) =>
         formValuesAfterTransaction.has(id)
       );
