@@ -77,7 +77,7 @@ describe("diff styling", () => {
       null,
       editorSchema.node(
         "paragraph",
-        { id: "clause:generated" },
+        { id: "paragraph:generated" },
         editorSchema.text("Generated"),
       ),
     );
@@ -99,7 +99,7 @@ describe("diff styling", () => {
   it("rejects deletion of a generated clause", () => {
     const generatedClause = editorSchema.node(
       "paragraph",
-      { id: "clause:generated" },
+      { id: "paragraph:generated" },
       editorSchema.text("Generated"),
     );
     const plugin = createDiffStylingPlugin();
@@ -121,9 +121,9 @@ describe("diff styling", () => {
     const doc = editorSchema.node(
       "doc",
       null,
-      editorSchema.node("ordered_list", { id: "container:clauses" }, [
-        listItem("clause:first", "First"),
-        listItem("clause:second", "Second"),
+      editorSchema.node("ordered_list", { id: "ordered-list:clauses" }, [
+        listItem("item:first", "First"),
+        listItem("item:second", "Second"),
       ]),
     );
     const state = EditorState.create({
@@ -144,10 +144,10 @@ describe("diff styling", () => {
   });
 
   it("rejects outdenting a generated clause", () => {
-    const nested = listItem("clause:second", "Second");
+    const nested = listItem("item:second", "Second");
     const parent = editorSchema.node(
       "list_item",
-      { id: "clause:first" },
+      { id: "item:first" },
       [
         editorSchema.node("paragraph", null, editorSchema.text("First")),
         editorSchema.node("ordered_list", null, nested),
@@ -158,7 +158,7 @@ describe("diff styling", () => {
       null,
       editorSchema.node(
         "ordered_list",
-        { id: "container:clauses" },
+        { id: "ordered-list:clauses" },
         parent,
       ),
     );
@@ -180,29 +180,29 @@ describe("diff styling", () => {
   });
 
   it("rejects moving a generated clause between generated parents", () => {
-    const second = listItem("clause:second", "Second");
+    const second = listItem("item:second", "Second");
     const first = editorSchema.node(
       "list_item",
-      { id: "clause:first" },
+      { id: "item:first" },
       [
         editorSchema.node("paragraph", null, editorSchema.text("First")),
         editorSchema.node("ordered_list", null, second),
       ],
     );
-    const third = listItem("clause:third", "Third");
+    const third = listItem("item:third", "Third");
     const doc = editorSchema.node(
       "doc",
       null,
       editorSchema.node(
         "ordered_list",
-        { id: "container:clauses" },
+        { id: "ordered-list:clauses" },
         [first, third],
       ),
     );
-    const movedFirst = listItem("clause:first", "First");
+    const movedFirst = listItem("item:first", "First");
     const movedThird = editorSchema.node(
       "list_item",
-      { id: "clause:third" },
+      { id: "item:third" },
       [
         editorSchema.node("paragraph", null, editorSchema.text("Third")),
         editorSchema.node("ordered_list", null, second),
@@ -213,7 +213,7 @@ describe("diff styling", () => {
       null,
       editorSchema.node(
         "ordered_list",
-        { id: "container:clauses" },
+        { id: "ordered-list:clauses" },
         [movedFirst, movedThird],
       ),
     );
@@ -232,14 +232,14 @@ describe("diff styling", () => {
   });
 
   it("rejects reordering generated clauses within their parent", () => {
-    const first = listItem("clause:first", "First");
-    const second = listItem("clause:second", "Second");
+    const first = listItem("item:first", "First");
+    const second = listItem("item:second", "Second");
     const doc = editorSchema.node(
       "doc",
       null,
       editorSchema.node(
         "ordered_list",
-        { id: "container:clauses" },
+        { id: "ordered-list:clauses" },
         [first, second],
       ),
     );
@@ -248,7 +248,7 @@ describe("diff styling", () => {
       null,
       editorSchema.node(
         "ordered_list",
-        { id: "container:clauses" },
+        { id: "ordered-list:clauses" },
         [second, first],
       ),
     );
@@ -270,8 +270,8 @@ describe("diff styling", () => {
     const doc = editorSchema.node(
       "doc",
       null,
-      editorSchema.node("ordered_list", { id: "container:clauses" }, [
-        listItem("clause:generated", "Generated"),
+      editorSchema.node("ordered_list", { id: "ordered-list:clauses" }, [
+        listItem("item:generated", "Generated"),
         listItem(null, "User authored"),
       ]),
     );
@@ -296,7 +296,7 @@ describe("diff styling", () => {
     const userAuthored = listItem(null, "User authored");
     const generated = editorSchema.node(
       "list_item",
-      { id: "clause:generated" },
+      { id: "item:generated" },
       [
         editorSchema.node("paragraph", null, editorSchema.text("Generated")),
         editorSchema.node("ordered_list", null, userAuthored),
@@ -307,7 +307,7 @@ describe("diff styling", () => {
       null,
       editorSchema.node(
         "ordered_list",
-        { id: "container:clauses" },
+        { id: "ordered-list:clauses" },
         generated,
       ),
     );
@@ -328,15 +328,15 @@ describe("diff styling", () => {
     assert.equal(result.state.doc.firstChild!.childCount, 2);
   });
 
-  it("rejects deletion of a form value", () => {
-    const formValue = editorSchema.node("form_value", {
-      id: "fact:generated:date",
+  it("rejects deletion of generated text", () => {
+    const generatedText = editorSchema.node("generated_text", {
+      id: "generated-text:paragraph:generated:date",
       text: "30 August 2026",
     });
     const generatedClause = editorSchema.node(
       "paragraph",
-      { id: "clause:generated" },
-      [editorSchema.text("By "), formValue],
+      { id: "paragraph:generated" },
+      [editorSchema.text("By "), generatedText],
     );
     const plugin = createDiffStylingPlugin();
     const state = EditorState.create({
@@ -348,13 +348,13 @@ describe("diff styling", () => {
     const result = state.applyTransaction(state.tr.delete(4, 5));
 
     assert.equal(result.transactions.length, 0);
-    assert.ok(result.state.doc.firstChild!.lastChild!.eq(formValue));
+    assert.ok(result.state.doc.firstChild!.lastChild!.eq(generatedText));
   });
 
   it("allows a generated clause to be edited blank", () => {
     const generatedClause = editorSchema.node(
       "paragraph",
-      { id: "clause:generated" },
+      { id: "paragraph:generated" },
       editorSchema.text("Generated"),
     );
     const plugin = createDiffStylingPlugin();
@@ -369,19 +369,19 @@ describe("diff styling", () => {
     );
 
     assert.equal(result.transactions.length, 1);
-    assert.equal(result.state.doc.firstChild!.attrs.id, "clause:generated");
+    assert.equal(result.state.doc.firstChild!.attrs.id, "paragraph:generated");
     assert.equal(result.state.doc.firstChild!.textContent, "");
   });
 
   it("allows reconciliation to remove a generated clause", () => {
     const keptClause = editorSchema.node(
       "paragraph",
-      { id: "clause:keep" },
+      { id: "paragraph:keep" },
       editorSchema.text("Keep"),
     );
     const removedClause = editorSchema.node(
       "paragraph",
-      { id: "clause:remove" },
+      { id: "paragraph:remove" },
       editorSchema.text("Remove"),
     );
     const target = editorSchema.node("doc", null, keptClause);
@@ -407,7 +407,7 @@ describe("diff styling", () => {
   it("decorates user-authored clauses and not generated clauses", () => {
     const generatedItem = editorSchema.node(
       "list_item",
-      { id: "clause:generated" },
+      { id: "item:generated" },
       editorSchema.node("paragraph", null, editorSchema.text("Generated")),
     );
     const userAuthoredItem = editorSchema.node(
@@ -418,12 +418,12 @@ describe("diff styling", () => {
     const doc = editorSchema.node("doc", null, [
       editorSchema.node(
         "paragraph",
-        { id: "clause:introduction" },
+        { id: "paragraph:introduction" },
         editorSchema.text("Introduction"),
       ),
       editorSchema.node(
         "ordered_list",
-        { id: "container:clauses" },
+        { id: "ordered-list:clauses" },
         [generatedItem, userAuthoredItem],
       ),
     ]);
@@ -467,19 +467,19 @@ describe("diff styling", () => {
     assert.ok(transaction);
     assert.deepEqual(
       transaction.doc.child(1).children.map((item) => item.attrs.id),
-      ["clause:generated"],
+      ["item:generated"],
     );
   });
 
   it("decorates a generated clause changed by the user and restores it", () => {
     const generatedClause = editorSchema.node(
       "paragraph",
-      { id: "clause:possession" },
+      { id: "paragraph:possession" },
       editorSchema.text("Give up possession"),
     );
     const editedClause = editorSchema.node(
       "paragraph",
-      { id: "clause:possession" },
+      { id: "paragraph:possession" },
       editorSchema.text("Leave the property"),
     );
     const generatedDocument = editorSchema.node(
@@ -521,7 +521,7 @@ describe("diff styling", () => {
   it("restores a list item's own content without removing its children", () => {
     const generatedItem = editorSchema.node(
       "list_item",
-      { id: "clause:possession" },
+      { id: "item:possession" },
       editorSchema.node(
         "paragraph",
         null,
@@ -545,7 +545,7 @@ describe("diff styling", () => {
     );
     const editedItem = editorSchema.node(
       "list_item",
-      { id: "clause:possession" },
+      { id: "item:possession" },
       [
         editorSchema.node(
           "paragraph",
@@ -560,7 +560,7 @@ describe("diff styling", () => {
       null,
       editorSchema.node(
         "ordered_list",
-        { id: "container:clauses" },
+        { id: "ordered-list:clauses" },
         editedItem,
       ),
     );
@@ -578,7 +578,7 @@ describe("diff styling", () => {
   it("does not decorate an unchanged generated clause", () => {
     const generatedClause = editorSchema.node(
       "paragraph",
-      { id: "clause:possession" },
+      { id: "paragraph:possession" },
       editorSchema.text("Give up possession"),
     );
     const generatedDocument = editorSchema.node(
@@ -603,7 +603,7 @@ describe("diff styling", () => {
   it("decorates a changed list item without decorating its list container", () => {
     const generatedItem = editorSchema.node(
       "list_item",
-      { id: "clause:possession" },
+      { id: "item:possession" },
       editorSchema.node(
         "paragraph",
         null,
@@ -612,7 +612,7 @@ describe("diff styling", () => {
     );
     const editedItem = editorSchema.node(
       "list_item",
-      { id: "clause:possession" },
+      { id: "item:possession" },
       editorSchema.node(
         "paragraph",
         null,
@@ -624,7 +624,7 @@ describe("diff styling", () => {
       null,
       editorSchema.node(
         "ordered_list",
-        { id: "container:clauses" },
+        { id: "ordered-list:clauses" },
         generatedItem,
       ),
     );
@@ -633,7 +633,7 @@ describe("diff styling", () => {
       null,
       editorSchema.node(
         "ordered_list",
-        { id: "container:clauses" },
+        { id: "ordered-list:clauses" },
         editedItem,
       ),
     );
@@ -662,7 +662,7 @@ describe("diff styling", () => {
   it("does not mark a generated item changed when it gains a user-authored child", () => {
     const generatedItem = editorSchema.node(
       "list_item",
-      { id: "clause:possession" },
+      { id: "item:possession" },
       editorSchema.node(
         "paragraph",
         null,
@@ -683,13 +683,13 @@ describe("diff styling", () => {
       null,
       editorSchema.node(
         "ordered_list",
-        { id: "container:clauses" },
+        { id: "ordered-list:clauses" },
         generatedItem,
       ),
     );
     const liveItem = editorSchema.node(
       "list_item",
-      { id: "clause:possession" },
+      { id: "item:possession" },
       [
         generatedItem.firstChild!,
         editorSchema.node("ordered_list", null, userAuthoredItem),
@@ -700,7 +700,7 @@ describe("diff styling", () => {
       null,
       editorSchema.node(
         "ordered_list",
-        { id: "container:clauses" },
+        { id: "ordered-list:clauses" },
         liveItem,
       ),
     );
@@ -736,7 +736,7 @@ describe("diff styling", () => {
   it("deletes an ID-less list when undoing its only item", () => {
     const generatedClause = editorSchema.node(
       "paragraph",
-      { id: "clause:introduction" },
+      { id: "paragraph:introduction" },
       editorSchema.text("Introduction"),
     );
     const userAuthoredItem = editorSchema.node(

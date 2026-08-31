@@ -5,29 +5,29 @@
 Business rules will declaratively build the complete target reference document from the current inputs:
 
 ```ts
-function buildOrder(inputs: OrderInputs): ProseMirrorNode {
-  const order = createOrderBuilder();
+function buildCurrentOrder(inputs: OrderInputs): ProseMirrorNode {
+  return buildOrder((order) => {
+    order.paragraph("heading", "IT IS ORDERED THAT:");
 
-  order.clause("heading", "IT IS ORDERED THAT:");
-
-  if (inputs.includeFoo) {
-    order.clause("foo", buildRichText(inputs));
-  }
-
-  return order.build();
+    if (inputs.includeFoo) {
+      order.paragraph("foo", buildRichText(inputs));
+    }
+  });
 }
 
-controller.render(buildOrder(inputs));
+controller.render(buildCurrentOrder(inputs));
 ```
 
 It is a pure function that builds a ProseMirror target node based on inputs.
 
 ### Generated node identity
 
-Generated clauses and containers share one globally unique `id` attribute so
-the same reconciliation algorithm can handle both. Values are namespaced, for
-example `clause:order-text` and `container:order-clauses`. User-authored nodes
-have no ID and are preserved.
+Generated paragraphs, list items, ordered lists and generated text share one
+globally unique `id` attribute so the same reconciliation algorithm can handle
+them. Values use node-specific namespaces, for example `paragraph:order-text`,
+`ordered-list:order-clauses`, `item:give-possession` and
+`generated-text:item:give-possession:deadline`. User-authored nodes have no ID
+and are preserved.
 
 Generated documents obey these invariants:
 
@@ -48,8 +48,8 @@ indented and outdented.
 
 These rules are enforced by a transaction filter rather than individual editor
 commands, so they also apply to structural changes attempted through keyboard,
-toolbar, paste or drag interactions. A transaction that would remove a managed
-form value is rejected for the same reason.
+toolbar, paste or drag interactions. A transaction that would remove managed
+generated text is rejected for the same reason.
 
 Reconciliation transactions are explicitly exempt from this protection because
 the newly generated target may legitimately add or remove managed children at

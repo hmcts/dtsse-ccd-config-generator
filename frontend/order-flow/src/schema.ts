@@ -18,10 +18,13 @@ const nodes = {
   },
   heading: basicNodes.heading,
   text: basicNodes.text,
-  form_value: {
+  generated_text: {
     inline: true,
     group: "inline",
     atom: true,
+    leafText(node) {
+      return node.attrs.text as string;
+    },
     attrs: {
       id: {},
       text: {},
@@ -30,7 +33,7 @@ const nodes = {
       return [
         "span",
         {
-          "data-form-value": node.attrs.id,
+          "data-generated-text": node.attrs.id,
           contenteditable: "false",
         },
         node.attrs.text,

@@ -38,7 +38,7 @@ describe("protected clause Enter handling", () => {
   it("inserts before a generated paragraph when the cursor is at its start", () => {
     const generated = editorSchema.node(
       "paragraph",
-      { id: "clause:generated" },
+      { id: "paragraph:generated" },
       editorSchema.text("Generated"),
     );
     const doc = editorSchema.node("doc", null, generated);
@@ -46,14 +46,14 @@ describe("protected clause Enter handling", () => {
 
     assert.deepEqual(
       transaction.doc.children.map((node) => node.attrs.id),
-      [null, "clause:generated"],
+      [null, "paragraph:generated"],
     );
   });
 
   it("inserts after a generated paragraph when the cursor is within it", () => {
     const generated = editorSchema.node(
       "paragraph",
-      { id: "clause:generated" },
+      { id: "paragraph:generated" },
       editorSchema.text("Generated"),
     );
     const doc = editorSchema.node("doc", null, generated);
@@ -61,19 +61,19 @@ describe("protected clause Enter handling", () => {
 
     assert.deepEqual(
       transaction.doc.children.map((node) => node.attrs.id),
-      ["clause:generated", null],
+      ["paragraph:generated", null],
     );
   });
 
   it("inserts before a generated list item at the start of its clause", () => {
     const generated = editorSchema.node(
       "list_item",
-      { id: "clause:generated" },
+      { id: "item:generated" },
       editorSchema.node("paragraph", null, editorSchema.text("Generated")),
     );
     const list = editorSchema.node(
       "ordered_list",
-      { id: "container:clauses" },
+      { id: "ordered-list:clauses" },
       generated,
     );
     const doc = editorSchema.node("doc", null, list);
@@ -81,19 +81,19 @@ describe("protected clause Enter handling", () => {
 
     assert.deepEqual(
       transaction.doc.firstChild!.children.map((node) => node.attrs.id),
-      [null, "clause:generated"],
+      [null, "item:generated"],
     );
   });
 
   it("inserts after a generated list item at the end of its clause", () => {
     const generated = editorSchema.node(
       "list_item",
-      { id: "clause:generated" },
+      { id: "item:generated" },
       editorSchema.node("paragraph", null, editorSchema.text("Generated")),
     );
     const list = editorSchema.node(
       "ordered_list",
-      { id: "container:clauses" },
+      { id: "ordered-list:clauses" },
       generated,
     );
     const doc = editorSchema.node("doc", null, list);
@@ -101,7 +101,7 @@ describe("protected clause Enter handling", () => {
 
     assert.deepEqual(
       transaction.doc.firstChild!.children.map((node) => node.attrs.id),
-      ["clause:generated", null],
+      ["item:generated", null],
     );
   });
 });
@@ -163,16 +163,16 @@ describe("list indentation", () => {
     const doc = editorSchema.node(
       "doc",
       null,
-      editorSchema.node("ordered_list", { id: "container:clauses" }, [
-        listItem("clause:first", "One"),
-        listItem("clause:second", "Two"),
+      editorSchema.node("ordered_list", { id: "ordered-list:clauses" }, [
+        listItem("item:first", "One"),
+        listItem("item:second", "Two"),
       ]),
     );
 
     const indented = runListCommand(
       indentListItem,
       doc,
-      "clause:second",
+      "item:second",
     );
     const topLevelList = indented.firstChild!;
     const firstItem = topLevelList.firstChild!;
@@ -180,14 +180,14 @@ describe("list indentation", () => {
 
     assert.equal(topLevelList.childCount, 1);
     assert.equal(nestedList.type.name, "ordered_list");
-    assert.equal(nestedList.firstChild!.attrs.id, "clause:second");
+    assert.equal(nestedList.firstChild!.attrs.id, "item:second");
   });
 
   it("outdents a nested item to its parent's level", () => {
-    const secondItem = listItem("clause:second", "Two");
+    const secondItem = listItem("item:second", "Two");
     const firstItem = editorSchema.node(
       "list_item",
-      { id: "clause:first" },
+      { id: "item:first" },
       [
         editorSchema.node("paragraph", null, editorSchema.text("One")),
         editorSchema.node("ordered_list", null, secondItem),
@@ -198,7 +198,7 @@ describe("list indentation", () => {
       null,
       editorSchema.node(
         "ordered_list",
-        { id: "container:clauses" },
+        { id: "ordered-list:clauses" },
         firstItem,
       ),
     );
@@ -206,12 +206,12 @@ describe("list indentation", () => {
     const outdented = runListCommand(
       outdentListItem,
       doc,
-      "clause:second",
+      "item:second",
     );
     const topLevelList = outdented.firstChild!;
 
     assert.equal(topLevelList.childCount, 2);
-    assert.equal(topLevelList.lastChild!.attrs.id, "clause:second");
+    assert.equal(topLevelList.lastChild!.attrs.id, "item:second");
     assert.equal(topLevelList.firstChild!.childCount, 1);
   });
 });

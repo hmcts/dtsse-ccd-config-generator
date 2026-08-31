@@ -1,7 +1,7 @@
 import { initAll } from "govuk-frontend";
 import { type Node as ProseMirrorNode } from "prosemirror-model";
 
-import { createOrderBuilder } from "./builder.js";
+import { buildOrder } from "./builder.js";
 import { createOrderEditor } from "./client.js";
 import "./application.scss";
 
@@ -69,7 +69,7 @@ function attendanceDescription(attendance: Attendance): string | undefined {
   }
 }
 
-function buildAttendanceClause(
+function buildAttendanceRegister(
   attendances: readonly Attendance[],
 ): string | undefined {
   const descriptions = attendances.flatMap((attendance) => {
@@ -82,10 +82,9 @@ function buildAttendanceClause(
 
   if (descriptions.length === 0) return undefined;
 
-  const attendees = descriptions.length === 1
+  return descriptions.length === 1
     ? descriptions[0]
     : `${descriptions.slice(0, -1).join(", ")} and ${descriptions.at(-1)}`;
-  return `The Court heard from ${attendees}.`;
 }
 
 const orderTextCheckbox = document.querySelector<HTMLInputElement>(
@@ -180,38 +179,44 @@ function readOrderDate(): string {
   }).format(date);
 }
 
-function buildOrder(): ProseMirrorNode {
-  const builder = createOrderBuilder();
+function buildCurrentOrder(): ProseMirrorNode {
+  return buildOrder((order) => {
+    const attendance = buildAttendanceRegister(readAttendances());
+    if (attendance) {
+      order.paragraph("attendance", (content) => {
+        content
+          .text("The Court heard from ")
+          .generatedText("register", attendance)
+          .text(".");
+      });
+    }
 
-  const attendanceClause = buildAttendanceClause(readAttendances());
-  if (attendanceClause) {
-    builder.setClause("attendance", attendanceClause);
-  }
+    if (orderTextControl.checked) {
+      order.paragraph("order-text", "IT IS ORDERED THAT:");
+    }
 
-  if (orderTextControl.checked) {
-    builder.setClause("order-text", "IT IS ORDERED THAT:");
-  }
+    order.orderedList("order-clauses", (list) => {
+      list.item("give-possession", (content) => {
+        content
+          .text("The defendants must give up possession on or before ")
+          .generatedText("deadline", readOrderDate())
+          .text(".");
+      });
 
-  const list = builder.buildList("order-clauses")
-    .listItem("give-possession")
-    .text("The defendants must give up possession on or before ")
-    .formValue("deadline", readOrderDate())
-    .text(".");
+      if (secondSubparagraphControl.checked) {
+        list.item("li-2", "bar");
+      }
+      if (thirdSubparagraphControl.checked) {
+        list.item("li-3", "baz");
+      }
+    });
 
-  if (secondSubparagraphControl.checked) {
-    list.listItem("li-2", "bar");
-  }
-  if (thirdSubparagraphControl.checked) {
-    list.listItem("li-3", "baz");
-  }
-
-  list.build();
-  builder.setClause("outro", "that's all folks");
-  return builder.build();
+    order.paragraph("outro", "that's all folks");
+  });
 }
 
 function updateStructure(): void {
-  controller.render(buildOrder());
+  controller.render(buildCurrentOrder());
 }
 
 orderTextControl.addEventListener("change", updateStructure);

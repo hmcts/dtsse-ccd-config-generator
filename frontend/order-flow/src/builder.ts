@@ -2,152 +2,106 @@ import { type Node as ProseMirrorNode } from "prosemirror-model";
 
 import { editorSchema } from "./schema.js";
 
-export interface ClauseBuilder {
-  text(text: string): ClauseBuilder;
-  formValue(slotId: string, text: string): ClauseBuilder;
+export interface InlineBuilder {
+  text(value: string): this;
+  generatedText(id: string, value: string): this;
 }
 
-type ClauseContent = string | ((clause: ClauseBuilder) => void);
+type ClauseContent = string | ((content: InlineBuilder) => void);
 
-export interface ListBuilder {
-  listItem(clauseId: string, text?: string): ListItemBuilder;
-}
-
-export interface ListItemBuilder {
-  text(text: string): ListItemBuilder;
-  formValue(slotId: string, text: string): ListItemBuilder;
-  listItem(clauseId: string, text?: string): ListItemBuilder;
-  build(): OrderBuilder;
+export interface OrderedListBuilder {
+  item(id: string, content: ClauseContent): void;
 }
 
 export interface OrderBuilder {
-  setClause(clauseId: string, content: ClauseContent): void;
-  buildList(containerId: string): ListBuilder;
-  build(): ProseMirrorNode;
+  paragraph(id: string, content: ClauseContent): void;
+  orderedList(
+    id: string,
+    define: (list: OrderedListBuilder) => void,
+  ): void;
 }
 
-export function createOrderBuilder(): OrderBuilder {
-  const clauses: ProseMirrorNode[] = [];
+export function buildOrder(
+  define: (order: OrderBuilder) => void,
+): ProseMirrorNode {
+  const nodes: ProseMirrorNode[] = [];
 
-  function buildClauseContent(
-    clauseId: string,
+  function buildContent(
+    ownerId: string,
     content: ClauseContent,
   ): ProseMirrorNode[] {
     if (typeof content === "string") return [editorSchema.text(content)];
 
-    const nodes: ProseMirrorNode[] = [];
-    const clauseBuilder: ClauseBuilder = {
-      text(text: string): ClauseBuilder {
-        if (text) nodes.push(editorSchema.text(text));
-        return clauseBuilder;
+    const inlineNodes: ProseMirrorNode[] = [];
+    const inlineBuilder: InlineBuilder = {
+      text(value: string): InlineBuilder {
+        if (value) inlineNodes.push(editorSchema.text(value));
+        return inlineBuilder;
       },
-      formValue(slotId: string, text: string): ClauseBuilder {
-        nodes.push(
-          editorSchema.node("form_value", {
-            id: `fact:${clauseId}:${slotId}`,
-            text,
+      generatedText(id: string, value: string): InlineBuilder {
+        inlineNodes.push(
+          editorSchema.node("generated_text", {
+            id: `generated-text:${ownerId}:${id}`,
+            text: value,
           }),
         );
-        return clauseBuilder;
+        return inlineBuilder;
       },
     };
 
-    content(clauseBuilder);
-    return nodes;
-  }
-
-  function setClause(clauseId: string, content: ClauseContent): void {
-    clauses.push(
-      editorSchema.node(
-        "paragraph",
-        { id: `clause:${clauseId}` },
-        buildClauseContent(clauseId, content),
-      ),
-    );
-  }
-
-  function buildList(containerId: string): ListBuilder {
-    const listItems: ProseMirrorNode[] = [];
-    let currentClauseId: string | undefined;
-    let currentContent: ProseMirrorNode[] = [];
-
-    function finishListItem(): void {
-      if (!currentClauseId) return;
-
-      const paragraph = editorSchema.node(
-        "paragraph",
-        null,
-        currentContent,
-      );
-
-      listItems.push(
-        editorSchema.node(
-          "list_item",
-          { id: `clause:${currentClauseId}` },
-          paragraph,
-        ),
-      );
-      currentClauseId = undefined;
-      currentContent = [];
-    }
-
-    function startListItem(
-      clauseId: string,
-      text?: string,
-    ): ListItemBuilder {
-      finishListItem();
-      currentClauseId = clauseId;
-      currentContent = text ? [editorSchema.text(text)] : [];
-      return listItemBuilder;
-    }
-
-    const listItemBuilder: ListItemBuilder = {
-      text(text: string): ListItemBuilder {
-        if (text) currentContent.push(editorSchema.text(text));
-        return listItemBuilder;
-      },
-      formValue(slotId: string, text: string): ListItemBuilder {
-        currentContent.push(
-          editorSchema.node(
-            "form_value",
-            {
-              id: `fact:${currentClauseId}:${slotId}`,
-              text,
-            },
-          ),
-        );
-        return listItemBuilder;
-      },
-      listItem: startListItem,
-      build(): OrderBuilder {
-        finishListItem();
-        clauses.push(
-          editorSchema.node(
-            "ordered_list",
-            { id: `container:${containerId}` },
-            listItems,
-          ),
-        );
-        return orderBuilder;
-      },
-    };
-
-    const listBuilder: ListBuilder = {
-      listItem: startListItem,
-    };
-
-    return listBuilder;
-  }
-
-  function build(): ProseMirrorNode {
-    return editorSchema.node("doc", null, [...clauses]);
+    content(inlineBuilder);
+    return inlineNodes;
   }
 
   const orderBuilder: OrderBuilder = {
-    setClause,
-    buildList,
-    build,
+    paragraph(id: string, content: ClauseContent): void {
+      const paragraphId = `paragraph:${id}`;
+      nodes.push(
+        editorSchema.node(
+          "paragraph",
+          { id: paragraphId },
+          buildContent(paragraphId, content),
+        ),
+      );
+    },
+    orderedList(
+      id: string,
+      defineList: (list: OrderedListBuilder) => void,
+    ): void {
+      const items: ProseMirrorNode[] = [];
+      const listBuilder: OrderedListBuilder = {
+        item(itemId: string, content: ClauseContent): void {
+          const managedItemId = `item:${itemId}`;
+          const paragraph = editorSchema.node(
+            "paragraph",
+            null,
+            buildContent(managedItemId, content),
+          );
+          items.push(
+            editorSchema.node(
+              "list_item",
+              { id: managedItemId },
+              paragraph,
+            ),
+          );
+        },
+      };
+
+      defineList(listBuilder);
+      if (items.length === 0) {
+        throw new Error(`Ordered list "${id}" must contain at least one item`);
+      }
+
+      nodes.push(
+        editorSchema.node(
+          "ordered_list",
+          { id: `ordered-list:${id}` },
+          items,
+        ),
+      );
+    },
   };
 
-  return orderBuilder;
+  define(orderBuilder);
+  return editorSchema.node("doc", null, nodes);
 }

@@ -3,27 +3,30 @@ import { describe, it } from "node:test";
 
 import { EditorState } from "prosemirror-state";
 
-import { createOrderBuilder } from "../src/builder.js";
+import { buildOrder } from "../src/builder.js";
 import { reconcileOrderDocument } from "../src/reconciliation.js";
 import { editorSchema } from "../src/schema.js";
 
 describe("order document reconciliation", () => {
   it("is a no-op", () => {
-    const liveBuilder = createOrderBuilder();
-    liveBuilder.setClause("heading", "Edited heading");
-    const previousTargetBuilder = createOrderBuilder();
-    previousTargetBuilder.setClause("heading", "Old heading");
-    const targetBuilder = createOrderBuilder();
-    targetBuilder.setClause("heading", "New heading");
+    const live = buildOrder((order) => {
+      order.paragraph("heading", "Edited heading");
+    });
+    const previousTarget = buildOrder((order) => {
+      order.paragraph("heading", "Old heading");
+    });
+    const target = buildOrder((order) => {
+      order.paragraph("heading", "New heading");
+    });
     const transaction = EditorState.create({
       schema: editorSchema,
-      doc: liveBuilder.build(),
+      doc: live,
     }).tr;
 
     const result = reconcileOrderDocument(
       transaction,
-      previousTargetBuilder.build(),
-      targetBuilder.build(),
+      previousTarget,
+      target,
     );
 
     assert.equal(result, transaction);
@@ -31,10 +34,37 @@ describe("order document reconciliation", () => {
     assert.equal(result.doc.firstChild!.textContent, "Edited heading");
   });
 
+  it("updates generated text while preserving edited surrounding text", () => {
+    const orderWithDate = (prefix: string, date: string) =>
+      buildOrder((order) => {
+        order.paragraph("deadline", (content) => {
+          content.text(prefix).generatedText("date", date).text(".");
+        });
+      });
+    const previousTarget = orderWithDate("Payment is due by ", "1 September");
+    const live = orderWithDate("Please pay by ", "1 September");
+    const target = orderWithDate("Payment is due by ", "8 September");
+    const transaction = EditorState.create({
+      schema: editorSchema,
+      doc: live,
+    }).tr;
+
+    reconcileOrderDocument(transaction, previousTarget, target);
+
+    const paragraph = transaction.doc.firstChild!;
+    assert.equal(paragraph.firstChild!.text, "Please pay by ");
+    assert.equal(paragraph.child(1).type.name, "generated_text");
+    assert.equal(paragraph.child(1).attrs.text, "8 September");
+    assert.equal(
+      paragraph.child(1).attrs.id,
+      "generated-text:paragraph:deadline:date",
+    );
+  });
+
   it("updates managed container markup without removing user content", () => {
     const generatedItem = editorSchema.node(
       "list_item",
-      { id: "clause:generated" },
+      { id: "item:generated" },
       editorSchema.node("paragraph", null, editorSchema.text("Generated")),
     );
     const userItem = editorSchema.node(
@@ -44,17 +74,17 @@ describe("order document reconciliation", () => {
     );
     const previousList = editorSchema.node(
       "ordered_list",
-      { id: "container:clauses", order: 1 },
+      { id: "ordered-list:clauses", order: 1 },
       generatedItem,
     );
     const targetList = editorSchema.node(
       "ordered_list",
-      { id: "container:clauses", order: 3 },
+      { id: "ordered-list:clauses", order: 3 },
       generatedItem,
     );
     const liveList = editorSchema.node(
       "ordered_list",
-      { id: "container:clauses", order: 1 },
+      { id: "ordered-list:clauses", order: 1 },
       [generatedItem, userItem],
     );
     const previous = editorSchema.node("doc", null, previousList);
