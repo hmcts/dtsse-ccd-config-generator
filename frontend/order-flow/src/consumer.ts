@@ -96,6 +96,15 @@ const secondSubparagraphCheckbox = document.querySelector<HTMLInputElement>(
 const thirdSubparagraphCheckbox = document.querySelector<HTMLInputElement>(
   '[name="structure-choice"][value="subpara-3"]',
 );
+const suspendedOrderCheckbox = document.querySelector<HTMLInputElement>(
+  '[name="suspended-order-choice"][value="clause"]',
+);
+const paymentByDateCheckbox = document.querySelector<HTMLInputElement>(
+  '[name="suspended-order-choice"][value="payment-by-date"]',
+);
+const monthlyPaymentsCheckbox = document.querySelector<HTMLInputElement>(
+  '[name="suspended-order-choice"][value="monthly-payments"]',
+);
 const orderDateDay = document.querySelector<HTMLInputElement>(
   '[name="order-date-day"]',
 );
@@ -113,6 +122,9 @@ if (
   !orderTextCheckbox ||
   !secondSubparagraphCheckbox ||
   !thirdSubparagraphCheckbox ||
+  !suspendedOrderCheckbox ||
+  !paymentByDateCheckbox ||
+  !monthlyPaymentsCheckbox ||
   !orderDateDay ||
   !orderDateMonth ||
   !orderDateYear ||
@@ -124,6 +136,9 @@ if (
 const orderTextControl = orderTextCheckbox;
 const secondSubparagraphControl = secondSubparagraphCheckbox;
 const thirdSubparagraphControl = thirdSubparagraphCheckbox;
+const suspendedOrderControl = suspendedOrderCheckbox;
+const paymentByDateControl = paymentByDateCheckbox;
+const monthlyPaymentsControl = monthlyPaymentsCheckbox;
 const orderDateControls = {
   day: orderDateDay,
   month: orderDateMonth,
@@ -209,6 +224,36 @@ function buildCurrentOrder(): ProseMirrorNode {
       if (thirdSubparagraphControl.checked) {
         list.item("li-3", "baz");
       }
+
+      if (suspendedOrderControl.checked) {
+        list.item(
+          "suspended-possession",
+          "Execution of the order for possession and enforcement of the money judgment are suspended as long as the defendant pays (i) the rent as it falls due plus (ii) the arrears of £2342.00 by:",
+          (item) => {
+            if (
+              !paymentByDateControl.checked &&
+              !monthlyPaymentsControl.checked
+            ) {
+              return;
+            }
+
+            item.orderedList("suspended-possession-subclauses", (subclauses) => {
+              if (paymentByDateControl.checked) {
+                subclauses.item(
+                  "payment-by-date",
+                  "payment of £213.00 to the claimant by 14 September 2026;",
+                );
+              }
+              if (monthlyPaymentsControl.checked) {
+                subclauses.item(
+                  "monthly-payments",
+                  "payments of £655.00 to the claimant every month, the first instalment to be paid on or before 28 September 2026;",
+                );
+              }
+            });
+          },
+        );
+      }
     });
 
     order.paragraph("outro", "that's all folks");
@@ -222,6 +267,9 @@ function updateStructure(): void {
 orderTextControl.addEventListener("change", updateStructure);
 secondSubparagraphControl.addEventListener("change", updateStructure);
 thirdSubparagraphControl.addEventListener("change", updateStructure);
+suspendedOrderControl.addEventListener("change", updateStructure);
+paymentByDateControl.addEventListener("change", updateStructure);
+monthlyPaymentsControl.addEventListener("change", updateStructure);
 for (const input of Object.values(orderDateControls)) {
   input.addEventListener("input", updateStructure);
 }

@@ -31,6 +31,13 @@ describe("order flow page", () => {
     assert.match(response.text, /\sSubpara 2\s/);
     assert.match(response.text, /value="subpara-3"/);
     assert.match(response.text, /\sSubpara 3\s/);
+    assert.match(response.text, /Suspended possession clause/);
+    assert.match(response.text, /name="suspended-order-choice"/);
+    assert.match(response.text, /value="clause" checked/);
+    assert.match(response.text, /value="payment-by-date" checked/);
+    assert.match(response.text, /\sSubclause a\s/);
+    assert.match(response.text, /value="monthly-payments" checked/);
+    assert.match(response.text, /\sSubclause b\s/);
     assert.match(response.text, /id="order-editor-toolbar"/);
     assert.match(response.text, /aria-label="Order editor formatting"/);
     assert.match(response.text, /data-editor-command="undo"/);

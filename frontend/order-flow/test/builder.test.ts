@@ -106,9 +106,47 @@ describe("order builder", () => {
     assert.equal(document.firstChild!.firstChild!.attrs.id, "item:first");
   });
 
+  it("builds managed nested ordered lists", () => {
+    const document = buildOrder((order) => {
+      order.orderedList("clauses", (list) => {
+        list.item("parent", "Parent clause", (item) => {
+          item.orderedList("subclauses", (subclauses) => {
+            subclauses.item("subclause-a", "First subclause");
+            subclauses.item("subclause-b", "Second subclause");
+          });
+        });
+      });
+    });
+
+    const parent = document.firstChild!.firstChild!;
+    const nestedList = parent.lastChild!;
+
+    assert.equal(parent.attrs.id, "item:parent");
+    assert.equal(nestedList.type.name, "ordered_list");
+    assert.equal(nestedList.attrs.id, "ordered-list:subclauses");
+    assert.deepEqual(
+      nestedList.children.map((item) => item.attrs.id),
+      ["item:subclause-a", "item:subclause-b"],
+    );
+  });
+
   it("rejects an ordered list with no items", () => {
     assert.throws(
       () => buildOrder((order) => order.orderedList("empty", () => {})),
+      { message: 'Ordered list "empty" must contain at least one item' },
+    );
+  });
+
+  it("rejects an empty nested ordered list", () => {
+    assert.throws(
+      () =>
+        buildOrder((order) => {
+          order.orderedList("clauses", (list) => {
+            list.item("parent", "Parent", (item) => {
+              item.orderedList("empty", () => {});
+            });
+          });
+        }),
       { message: 'Ordered list "empty" must contain at least one item' },
     );
   });

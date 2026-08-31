@@ -12,6 +12,14 @@ function buildCurrentOrder(inputs: OrderInputs): ProseMirrorNode {
     if (inputs.includeFoo) {
       order.paragraph("foo", buildRichText(inputs));
     }
+
+    order.orderedList("clauses", (list) => {
+      list.item("parent", "Parent clause", (item) => {
+        item.orderedList("subclauses", (subclauses) => {
+          subclauses.item("first-subclause", "First subclause");
+        });
+      });
+    });
   });
 }
 
@@ -34,8 +42,8 @@ Generated documents obey these invariants:
 - Managed IDs are globally unique.
 - An existing managed ID retains its node type and managed parent.
 - Existing managed siblings retain their relative order.
-- Only the document root and managed containers may gain or lose direct managed
-  children.
+- Only the document root, managed lists and managed list items may gain or lose
+  direct managed children.
 - The managed descendants of an existing non-container are structurally stable;
   they may be modified, but may not be added or removed.
 

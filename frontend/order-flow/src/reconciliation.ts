@@ -55,7 +55,91 @@ function insertionPosition(
 }
 
 function isManagedContainer(node: ProseMirrorNode): boolean {
-  return node.type.name === "ordered_list";
+  return node.type.name === "ordered_list" || node.type.name === "list_item";
+}
+
+function findDirectNestedList(
+  transaction: Transaction,
+  parentPosition: number,
+): PositionedNode | undefined {
+  const parent = transaction.doc.nodeAt(parentPosition);
+  if (!parent) throw new Error("Managed list item missing");
+
+  let offset = 0;
+  for (const child of parent.children) {
+    if (child.type.name === "ordered_list") {
+      return { node: child, position: parentPosition + 1 + offset };
+    }
+    offset += child.nodeSize;
+  }
+  return undefined;
+}
+
+function addNestedList(
+  transaction: Transaction,
+  parentPosition: number,
+  target: ProseMirrorNode,
+): void {
+  const existing = findDirectNestedList(transaction, parentPosition);
+  if (!existing) {
+    const parent = transaction.doc.nodeAt(parentPosition);
+    if (!parent) throw new Error("Managed list item missing");
+    transaction.insert(parentPosition + parent.nodeSize - 1, target);
+    return;
+  }
+
+  transaction.setNodeMarkup(
+    existing.position,
+    target.type,
+    target.attrs,
+    target.marks,
+  );
+  for (const child of managedChildren(target)) {
+    const position = insertionPosition(
+      transaction,
+      existing.position,
+      target,
+      child.id,
+    );
+    transaction.insert(position, child.node);
+  }
+}
+
+function removeNestedList(
+  transaction: Transaction,
+  previous: ProseMirrorNode,
+): void {
+  const liveList = requireManagedNode(transaction, previous.attrs.id as string);
+  const hasUserAuthoredChildren = liveList.node.children.some(
+    (child) => typeof child.attrs.id !== "string",
+  );
+
+  if (!hasUserAuthoredChildren) {
+    transaction.delete(
+      liveList.position,
+      liveList.position + liveList.node.nodeSize,
+    );
+    return;
+  }
+
+  for (const child of managedChildren(previous)) {
+    const liveChild = requireManagedNode(transaction, child.id);
+    transaction.delete(
+      liveChild.position,
+      liveChild.position + liveChild.node.nodeSize,
+    );
+  }
+
+  const remainingList = requireManagedNode(
+    transaction,
+    previous.attrs.id as string,
+  );
+  transaction.setNodeMarkup(
+    remainingList.position,
+    remainingList.node.type,
+    { ...remainingList.node.attrs, id: null },
+    remainingList.node.marks,
+  );
 }
 
 function reconcileNestedModifications(
@@ -120,6 +204,14 @@ function reconcileParent(
   for (const change of changes) {
     switch (change.kind) {
       case "added": {
+        if (
+          targetParent.type.name === "list_item" &&
+          change.target.type.name === "ordered_list" &&
+          parentPosition !== null
+        ) {
+          addNestedList(transaction, parentPosition, change.target);
+          break;
+        }
         const position = insertionPosition(
           transaction,
           parentPosition,
@@ -133,6 +225,13 @@ function reconcileParent(
         reconcileModified(transaction, change);
         break;
       case "removed": {
+        if (
+          previousParent.type.name === "list_item" &&
+          change.previous.type.name === "ordered_list"
+        ) {
+          removeNestedList(transaction, change.previous);
+          break;
+        }
         const live = requireManagedNode(transaction, change.id);
         transaction.delete(
           live.position,

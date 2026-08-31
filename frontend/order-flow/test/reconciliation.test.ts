@@ -100,4 +100,167 @@ describe("order document reconciliation", () => {
     assert.equal(transaction.doc.firstChild!.childCount, 2);
     assert.equal(transaction.doc.firstChild!.lastChild!.textContent, "User");
   });
+
+  it("adds a nested generated list without replacing edited parent content", () => {
+    const paragraph = (text: string) =>
+      editorSchema.node("paragraph", null, editorSchema.text(text));
+    const generatedSubclause = editorSchema.node(
+      "list_item",
+      { id: "item:subclause-a" },
+      paragraph("Generated subclause"),
+    );
+    const userSubclause = editorSchema.node(
+      "list_item",
+      null,
+      paragraph("User subclause"),
+    );
+    const previousItem = editorSchema.node(
+      "list_item",
+      { id: "item:parent" },
+      paragraph("Parent clause"),
+    );
+    const targetItem = editorSchema.node(
+      "list_item",
+      { id: "item:parent" },
+      [
+        paragraph("Parent clause"),
+        editorSchema.node(
+          "ordered_list",
+          { id: "ordered-list:subclauses" },
+          generatedSubclause,
+        ),
+      ],
+    );
+    const liveItem = editorSchema.node(
+      "list_item",
+      { id: "item:parent" },
+      [
+        paragraph("Edited parent clause"),
+        editorSchema.node("ordered_list", null, userSubclause),
+      ],
+    );
+    const documentWith = (item: typeof previousItem) =>
+      editorSchema.node(
+        "doc",
+        null,
+        editorSchema.node(
+          "ordered_list",
+          { id: "ordered-list:clauses" },
+          item,
+        ),
+      );
+    const transaction = EditorState.create({
+      schema: editorSchema,
+      doc: documentWith(liveItem),
+    }).tr;
+
+    reconcileOrderDocument(
+      transaction,
+      documentWith(previousItem),
+      documentWith(targetItem),
+    );
+
+    const reconciledItem = transaction.doc.firstChild!.firstChild!;
+    const reconciledList = reconciledItem.lastChild!;
+    assert.equal(reconciledItem.firstChild!.textContent, "Edited parent clause");
+    assert.equal(reconciledList.attrs.id, "ordered-list:subclauses");
+    assert.deepEqual(
+      reconciledList.children.map((item) => item.attrs.id),
+      ["item:subclause-a", null],
+    );
+  });
+
+  it("removes a nested generated list without removing user subclauses", () => {
+    const paragraph = (text: string) =>
+      editorSchema.node("paragraph", null, editorSchema.text(text));
+    const generatedSubclause = editorSchema.node(
+      "list_item",
+      { id: "item:subclause-a" },
+      paragraph("Generated subclause"),
+    );
+    const userSubclause = editorSchema.node(
+      "list_item",
+      null,
+      paragraph("User subclause"),
+    );
+    const nestedList = (children: typeof generatedSubclause[]) =>
+      editorSchema.node(
+        "ordered_list",
+        { id: "ordered-list:subclauses" },
+        children,
+      );
+    const previousItem = editorSchema.node(
+      "list_item",
+      { id: "item:parent" },
+      [paragraph("Parent clause"), nestedList([generatedSubclause])],
+    );
+    const targetItem = editorSchema.node(
+      "list_item",
+      { id: "item:parent" },
+      paragraph("Parent clause"),
+    );
+    const liveItem = editorSchema.node(
+      "list_item",
+      { id: "item:parent" },
+      [
+        paragraph("Edited parent clause"),
+        nestedList([generatedSubclause, userSubclause]),
+      ],
+    );
+    const documentWith = (item: typeof previousItem) =>
+      editorSchema.node(
+        "doc",
+        null,
+        editorSchema.node(
+          "ordered_list",
+          { id: "ordered-list:clauses" },
+          item,
+        ),
+      );
+    const transaction = EditorState.create({
+      schema: editorSchema,
+      doc: documentWith(liveItem),
+    }).tr;
+
+    reconcileOrderDocument(
+      transaction,
+      documentWith(previousItem),
+      documentWith(targetItem),
+    );
+
+    const reconciledItem = transaction.doc.firstChild!.firstChild!;
+    const reconciledList = reconciledItem.lastChild!;
+    assert.equal(reconciledItem.firstChild!.textContent, "Edited parent clause");
+    assert.equal(reconciledList.type.name, "ordered_list");
+    assert.equal(reconciledList.attrs.id, null);
+    assert.equal(reconciledList.childCount, 1);
+    assert.equal(reconciledList.firstChild!.textContent, "User subclause");
+  });
+
+  it("removes the nested list when its final generated subclause is removed", () => {
+    const withSubclause = (includeSubclause: boolean) =>
+      buildOrder((order) => {
+        order.orderedList("clauses", (list) => {
+          list.item("parent", "Parent clause", (item) => {
+            if (includeSubclause) {
+              item.orderedList("subclauses", (subclauses) => {
+                subclauses.item("subclause-a", "Generated subclause");
+              });
+            }
+          });
+        });
+      });
+    const previous = withSubclause(true);
+    const target = withSubclause(false);
+    const transaction = EditorState.create({
+      schema: editorSchema,
+      doc: previous,
+    }).tr;
+
+    reconcileOrderDocument(transaction, previous, target);
+
+    const reconciledItem = transaction.doc.firstChild!.firstChild!;
+    assert.equal(reconciledItem.childCount, 1);
+    assert.equal(reconciledItem.firstChild!.textContent, "Parent clause");
+  });
 });

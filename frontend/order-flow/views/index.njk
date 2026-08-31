@@ -104,6 +104,34 @@
           ]
         }) }}
 
+        {{ govukCheckboxes({
+          name: "suspended-order-choice",
+          classes: "structure-checkboxes",
+          fieldset: {
+            legend: {
+              text: "Suspended possession clause",
+              classes: "govuk-fieldset__legend--m"
+            }
+          },
+          items: [
+            {
+              value: "clause",
+              text: "Clause",
+              checked: true
+            },
+            {
+              value: "payment-by-date",
+              text: "Subclause a",
+              checked: true
+            },
+            {
+              value: "monthly-payments",
+              text: "Subclause b",
+              checked: true
+            }
+          ]
+        }) }}
+
         <div class="order-editor-toolbar"
              id="order-editor-toolbar"
              aria-label="Order editor formatting">

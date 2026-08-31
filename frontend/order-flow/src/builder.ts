@@ -10,7 +10,18 @@ export interface InlineBuilder {
 type ClauseContent = string | ((content: InlineBuilder) => void);
 
 export interface OrderedListBuilder {
-  item(id: string, content: ClauseContent): void;
+  item(
+    id: string,
+    content: ClauseContent,
+    define?: (item: ListItemBuilder) => void,
+  ): void;
+}
+
+export interface ListItemBuilder {
+  orderedList(
+    id: string,
+    define: (list: OrderedListBuilder) => void,
+  ): void;
 }
 
 export interface OrderBuilder {
@@ -53,6 +64,62 @@ export function buildOrder(
     return inlineNodes;
   }
 
+  function buildOrderedList(
+    id: string,
+    defineList: (list: OrderedListBuilder) => void,
+  ): ProseMirrorNode {
+    const items: ProseMirrorNode[] = [];
+    const listBuilder: OrderedListBuilder = {
+      item(
+        itemId: string,
+        content: ClauseContent,
+        defineItem?: (item: ListItemBuilder) => void,
+      ): void {
+        const managedItemId = `item:${itemId}`;
+        const children = [
+          editorSchema.node(
+            "paragraph",
+            null,
+            buildContent(managedItemId, content),
+          ),
+        ];
+        const itemBuilder: ListItemBuilder = {
+          orderedList(
+            nestedListId: string,
+            defineNestedList: (list: OrderedListBuilder) => void,
+          ): void {
+            if (children.length > 1) {
+              throw new Error(
+                `List item "${itemId}" may contain only one nested ordered list`,
+              );
+            }
+            children.push(buildOrderedList(nestedListId, defineNestedList));
+          },
+        };
+
+        defineItem?.(itemBuilder);
+        items.push(
+          editorSchema.node(
+            "list_item",
+            { id: managedItemId },
+            children,
+          ),
+        );
+      },
+    };
+
+    defineList(listBuilder);
+    if (items.length === 0) {
+      throw new Error(`Ordered list "${id}" must contain at least one item`);
+    }
+
+    return editorSchema.node(
+      "ordered_list",
+      { id: `ordered-list:${id}` },
+      items,
+    );
+  }
+
   const orderBuilder: OrderBuilder = {
     paragraph(id: string, content: ClauseContent): void {
       const paragraphId = `paragraph:${id}`;
@@ -68,37 +135,7 @@ export function buildOrder(
       id: string,
       defineList: (list: OrderedListBuilder) => void,
     ): void {
-      const items: ProseMirrorNode[] = [];
-      const listBuilder: OrderedListBuilder = {
-        item(itemId: string, content: ClauseContent): void {
-          const managedItemId = `item:${itemId}`;
-          const paragraph = editorSchema.node(
-            "paragraph",
-            null,
-            buildContent(managedItemId, content),
-          );
-          items.push(
-            editorSchema.node(
-              "list_item",
-              { id: managedItemId },
-              paragraph,
-            ),
-          );
-        },
-      };
-
-      defineList(listBuilder);
-      if (items.length === 0) {
-        throw new Error(`Ordered list "${id}" must contain at least one item`);
-      }
-
-      nodes.push(
-        editorSchema.node(
-          "ordered_list",
-          { id: `ordered-list:${id}` },
-          items,
-        ),
-      );
+      nodes.push(buildOrderedList(id, defineList));
     },
   };
 

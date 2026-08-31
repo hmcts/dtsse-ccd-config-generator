@@ -104,6 +104,10 @@
   margin-bottom: 0;
 }
 
+.ProseMirror ol ol {
+  list-style-type: lower-alpha;
+}
+
 .order-editor-toolbar {
   display: flex;
   flex-wrap: wrap;
