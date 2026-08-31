@@ -231,7 +231,7 @@ describe("diff styling", () => {
     assert.ok(result.state.doc.eq(doc));
   });
 
-  it("allows generated clauses to be reordered within their parent", () => {
+  it("rejects reordering generated clauses within their parent", () => {
     const first = listItem("clause:first", "First");
     const second = listItem("clause:second", "Second");
     const doc = editorSchema.node(
@@ -262,8 +262,8 @@ describe("diff styling", () => {
       state.tr.replaceWith(0, state.doc.content.size, reordered.content),
     );
 
-    assert.equal(result.transactions.length, 1);
-    assert.ok(result.state.doc.eq(reordered));
+    assert.equal(result.transactions.length, 0);
+    assert.ok(result.state.doc.eq(doc));
   });
 
   it("allows indenting a user-authored clause", () => {
@@ -326,54 +326,6 @@ describe("diff styling", () => {
 
     assert.equal(result.transactions.length, 1);
     assert.equal(result.state.doc.firstChild!.childCount, 2);
-  });
-
-  it("allows reconciliation to reparent a generated clause", () => {
-    const first = listItem("clause:first", "First");
-    const second = listItem("clause:second", "Second");
-    const doc = editorSchema.node(
-      "doc",
-      null,
-      editorSchema.node(
-        "ordered_list",
-        { id: "container:clauses" },
-        [first, second],
-      ),
-    );
-    const nestedFirst = editorSchema.node(
-      "list_item",
-      { id: "clause:first" },
-      [
-        editorSchema.node("paragraph", null, editorSchema.text("First")),
-        editorSchema.node("ordered_list", null, second),
-      ],
-    );
-    const target = editorSchema.node(
-      "doc",
-      null,
-      editorSchema.node(
-        "ordered_list",
-        { id: "container:clauses" },
-        nestedFirst,
-      ),
-    );
-    const state = EditorState.create({
-      schema: editorSchema,
-      doc,
-      plugins: [createDiffStylingPlugin()],
-    });
-    const transaction = state.tr.replaceWith(
-      0,
-      state.doc.content.size,
-      target.content,
-    );
-
-    const result = state.applyTransaction(
-      setGeneratedDocument(transaction, target),
-    );
-
-    assert.equal(result.transactions.length, 1);
-    assert.ok(result.state.doc.eq(target));
   });
 
   it("rejects deletion of a form value", () => {

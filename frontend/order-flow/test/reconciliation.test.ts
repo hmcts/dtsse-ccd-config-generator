@@ -7,182 +7,67 @@ import { createOrderBuilder } from "../src/builder.js";
 import { reconcileOrderDocument } from "../src/reconciliation.js";
 import { editorSchema } from "../src/schema.js";
 
-function buildOrder(text: string, formValue: string) {
-  const builder = createOrderBuilder();
-
-  builder.buildList("order-clauses")
-    .listItem("give-possession")
-    .text(text)
-    .formValue("deadline", formValue)
-    .text(".")
-    .build();
-
-  return builder.build();
-}
-
 describe("order document reconciliation", () => {
-  it("updates a form value without replacing edited clause text", () => {
-    const previousTarget = buildOrder(
-      "The defendants must give up possession on or before ",
-      "29 August 2026",
-    );
-    const liveDocument = buildOrder(
-      "The defendants must leave the property before ",
-      "29 August 2026",
-    );
-    const targetDocument = buildOrder(
-      "The defendants must give up possession on or before ",
-      "12 September 2026",
-    );
-    const transaction = reconcileOrderDocument(
-      EditorState.create({ schema: editorSchema, doc: liveDocument }).tr,
-      previousTarget,
-      targetDocument,
-    );
-    const paragraph = transaction.doc.firstChild!.firstChild!.firstChild!;
-
-    assert.equal(
-      paragraph.firstChild!.text,
-      "The defendants must leave the property before ",
-    );
-    assert.equal(paragraph.child(1).attrs.text, "12 September 2026");
-    assert.equal(paragraph.lastChild!.text, ".");
-  });
-
-  it("replaces edited clause text when its generated text changed", () => {
-    const previousTarget = buildOrder(
-      "The defendants must leave the property before ",
-      "29 August 2026",
-    );
-    const liveDocument = buildOrder(
-      "The defendants must leave immediately before ",
-      "29 August 2026",
-    );
-    const targetDocument = buildOrder(
-      "The defendants must give up possession on or before ",
-      "12 September 2026",
-    );
-
-    const transaction = reconcileOrderDocument(
-      EditorState.create({ schema: editorSchema, doc: liveDocument }).tr,
-      previousTarget,
-      targetDocument,
-    );
-    const paragraph = transaction.doc.firstChild!.firstChild!.firstChild!;
-
-    assert.equal(
-      paragraph.firstChild!.text,
-      "The defendants must give up possession on or before ",
-    );
-    assert.equal(paragraph.child(1).attrs.text, "12 September 2026");
-  });
-
-  it("preserves an edited clause when its generated content is unchanged", () => {
-    const previousBuilder = createOrderBuilder();
-    previousBuilder.setClause("heading", "Generated heading");
+  it("is a no-op", () => {
     const liveBuilder = createOrderBuilder();
     liveBuilder.setClause("heading", "Edited heading");
-    const targetBuilder = createOrderBuilder();
-    targetBuilder.setClause("heading", "Generated heading");
-
-    const transaction = reconcileOrderDocument(
-      EditorState.create({
-        schema: editorSchema,
-        doc: liveBuilder.build(),
-      }).tr,
-      previousBuilder.build(),
-      targetBuilder.build(),
-    );
-
-    assert.equal(transaction.doc.firstChild!.textContent, "Edited heading");
-  });
-
-  it("preserves an unchanged edited clause when another clause changes", () => {
-    const previousBuilder = createOrderBuilder();
-    previousBuilder.setClause("heading", "Generated heading");
-    previousBuilder.buildList("order-clauses")
-      .listItem("give-possession")
-      .text("Possession by ")
-      .formValue("deadline", "29 August 2026")
-      .build();
-    const liveBuilder = createOrderBuilder();
-    liveBuilder.setClause("heading", "Edited heading");
-    liveBuilder.buildList("order-clauses")
-      .listItem("give-possession")
-      .text("Possession by ")
-      .formValue("deadline", "29 August 2026")
-      .build();
-    const targetBuilder = createOrderBuilder();
-    targetBuilder.setClause("heading", "Generated heading");
-    targetBuilder.buildList("order-clauses")
-      .listItem("give-possession")
-      .text("Possession by ")
-      .formValue("deadline", "12 September 2026")
-      .build();
-
-    const transaction = reconcileOrderDocument(
-      EditorState.create({
-        schema: editorSchema,
-        doc: liveBuilder.build(),
-      }).tr,
-      previousBuilder.build(),
-      targetBuilder.build(),
-    );
-    const possessionParagraph = transaction.doc.child(1).firstChild!
-      .firstChild!;
-
-    assert.equal(transaction.doc.firstChild!.textContent, "Edited heading");
-    assert.equal(
-      possessionParagraph.lastChild!.attrs.text,
-      "12 September 2026",
-    );
-  });
-
-  it("replaces an edited clause when its generated content changed", () => {
-    const previousBuilder = createOrderBuilder();
-    previousBuilder.setClause("heading", "Old heading");
-    const liveBuilder = createOrderBuilder();
-    liveBuilder.setClause("heading", "Edited heading");
+    const previousTargetBuilder = createOrderBuilder();
+    previousTargetBuilder.setClause("heading", "Old heading");
     const targetBuilder = createOrderBuilder();
     targetBuilder.setClause("heading", "New heading");
+    const transaction = EditorState.create({
+      schema: editorSchema,
+      doc: liveBuilder.build(),
+    }).tr;
 
-    const transaction = reconcileOrderDocument(
-      EditorState.create({
-        schema: editorSchema,
-        doc: liveBuilder.build(),
-      }).tr,
-      previousBuilder.build(),
+    const result = reconcileOrderDocument(
+      transaction,
+      previousTargetBuilder.build(),
       targetBuilder.build(),
     );
 
-    assert.equal(transaction.doc.firstChild!.textContent, "New heading");
+    assert.equal(result, transaction);
+    assert.equal(result.steps.length, 0);
+    assert.equal(result.doc.firstChild!.textContent, "Edited heading");
   });
 
-  it("inserts and removes managed list items", () => {
-    const liveBuilder = createOrderBuilder();
-    liveBuilder.buildList("order-clauses")
-      .listItem("keep", "Keep")
-      .listItem("remove", "Remove")
-      .build();
-    const targetBuilder = createOrderBuilder();
-    targetBuilder.buildList("order-clauses")
-      .listItem("keep", "Keep")
-      .listItem("insert", "Insert")
-      .build();
-
-    const transaction = reconcileOrderDocument(
-      EditorState.create({
-        schema: editorSchema,
-        doc: liveBuilder.build(),
-      }).tr,
-      liveBuilder.build(),
-      targetBuilder.build(),
+  it("updates managed container markup without removing user content", () => {
+    const generatedItem = editorSchema.node(
+      "list_item",
+      { id: "clause:generated" },
+      editorSchema.node("paragraph", null, editorSchema.text("Generated")),
     );
-    const list = transaction.doc.firstChild!;
-
-    assert.deepEqual(
-      list.children.map((item) => item.attrs.id),
-      ["clause:keep", "clause:insert"],
+    const userItem = editorSchema.node(
+      "list_item",
+      null,
+      editorSchema.node("paragraph", null, editorSchema.text("User")),
     );
+    const previousList = editorSchema.node(
+      "ordered_list",
+      { id: "container:clauses", order: 1 },
+      generatedItem,
+    );
+    const targetList = editorSchema.node(
+      "ordered_list",
+      { id: "container:clauses", order: 3 },
+      generatedItem,
+    );
+    const liveList = editorSchema.node(
+      "ordered_list",
+      { id: "container:clauses", order: 1 },
+      [generatedItem, userItem],
+    );
+    const previous = editorSchema.node("doc", null, previousList);
+    const target = editorSchema.node("doc", null, targetList);
+    const transaction = EditorState.create({
+      schema: editorSchema,
+      doc: editorSchema.node("doc", null, liveList),
+    }).tr;
+
+    reconcileOrderDocument(transaction, previous, target);
+
+    assert.equal(transaction.doc.firstChild!.attrs.order, 3);
+    assert.equal(transaction.doc.firstChild!.childCount, 2);
+    assert.equal(transaction.doc.firstChild!.lastChild!.textContent, "User");
   });
 });

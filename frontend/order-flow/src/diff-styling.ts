@@ -17,14 +17,17 @@ interface DiffStylingState {
 
 interface ClauseSnapshot {
   node: ProseMirrorNode;
+}
+
+interface ManagedNodeSnapshot {
   parent: string | symbol;
+  index: number;
 }
 
 type Revert = (state: EditorState) => Transaction | undefined;
 
 const diffStylingKey = new PluginKey<DiffStylingState>("diff-styling");
 const documentParent = Symbol("document-parent");
-const userAuthoredParent = Symbol("user-authored-parent");
 
 function isClauseNode(
   node: ProseMirrorNode,
@@ -140,26 +143,12 @@ function clauseSnapshotsById(
 ): Map<string, ClauseSnapshot> {
   const clauses = new Map<string, ClauseSnapshot>();
 
-  function visit(node: ProseMirrorNode, parent: string | symbol): void {
-    node.forEach((child) => {
-      const id = child.attrs.id;
-
-      if (isClauseNode(child, node, doc) && typeof id === "string") {
-        clauses.set(id, { node: child, parent });
-      }
-
-      let childParent = parent;
-      if (child.type.name === "ordered_list" && typeof id === "string") {
-        childParent = id;
-      } else if (child.type.name === "list_item") {
-        childParent = typeof id === "string" ? id : userAuthoredParent;
-      }
-
-      visit(child, childParent);
-    });
-  }
-
-  visit(doc, documentParent);
+  doc.descendants((node, _position, parent) => {
+    const id = node.attrs.id;
+    if (isClauseNode(node, parent, doc) && typeof id === "string") {
+      clauses.set(id, { node });
+    }
+  });
   return clauses;
 }
 
@@ -169,18 +158,41 @@ function clauseNodesById(doc: ProseMirrorNode): Map<string, ProseMirrorNode> {
   );
 }
 
-function formValueIds(doc: ProseMirrorNode): Set<string> {
-  const ids = new Set<string>();
+function managedNodeSnapshotsById(
+  doc: ProseMirrorNode,
+): Map<string, ManagedNodeSnapshot> {
+  const snapshots = new Map<string, ManagedNodeSnapshot>();
 
-  doc.descendants((node) => {
-    const id = node.attrs.id;
+  function visit(parent: ProseMirrorNode, parentId: string | symbol): void {
+    const children: Array<{ id: string; node: ProseMirrorNode }> = [];
 
-    if (node.type.name === "form_value" && typeof id === "string") {
-      ids.add(id);
-    }
+    parent.descendants((node) => {
+      const id = node.attrs.id;
+      if (typeof id !== "string") return true;
+
+      children.push({ id, node });
+      return false;
+    });
+
+    children.forEach((child, index) => {
+      snapshots.set(child.id, { parent: parentId, index });
+      visit(child.node, child.id);
+    });
+  }
+
+  visit(doc, documentParent);
+  return snapshots;
+}
+
+function preservesManagedStructure(
+  before: ReadonlyMap<string, ManagedNodeSnapshot>,
+  after: ReadonlyMap<string, ManagedNodeSnapshot>,
+): boolean {
+  return [...before].every(([id, snapshot]) => {
+    const updated = after.get(id);
+    return updated?.parent === snapshot.parent &&
+      updated.index === snapshot.index;
   });
-
-  return ids;
 }
 
 function clauseMatchesGenerated(
@@ -270,18 +282,13 @@ function createDiffDecorations(
 export function createDiffStylingPlugin(): Plugin<DiffStylingState> {
   return new Plugin<DiffStylingState>({
     key: diffStylingKey,
-    // Block ordinary transactions that remove managed content or reparent a clause.
+    // Block ordinary transactions that remove, reparent or reorder managed nodes.
     filterTransaction(transaction, state) {
       if (transaction.getMeta(diffStylingKey)) return true;
 
-      const clausesBeforeTransaction = clauseSnapshotsById(state.doc);
-      const clausesAfterTransaction = clauseSnapshotsById(transaction.doc);
-      const formValuesAfterTransaction = formValueIds(transaction.doc);
-
-      return [...clausesBeforeTransaction].every(([id, clause]) =>
-        clausesAfterTransaction.get(id)?.parent === clause.parent
-      ) && [...formValueIds(state.doc)].every((id) =>
-        formValuesAfterTransaction.has(id)
+      return preservesManagedStructure(
+        managedNodeSnapshotsById(state.doc),
+        managedNodeSnapshotsById(transaction.doc),
       );
     },
     state: {
