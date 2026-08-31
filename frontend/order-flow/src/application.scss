@@ -1,0 +1,268 @@
+@use "govuk-frontend/dist/govuk/index" as *;
+
+.govuk-width-container {
+  max-width: none;
+  margin-right: govuk-spacing(6);
+  margin-left: govuk-spacing(6);
+}
+
+.attendance {
+  max-width: 65rem;
+  margin-bottom: govuk-spacing(8);
+}
+
+.attendance-row {
+  display: grid;
+  grid-template-columns: minmax(14rem, 22rem) auto 12rem;
+  align-items: center;
+  gap: govuk-spacing(2);
+  padding: govuk-spacing(1) 0;
+  border-bottom: 1px solid govuk-colour("black", $variant: "tint-80");
+}
+
+.attendance-party,
+.attendance-options .govuk-radios__item {
+  margin-bottom: 0;
+}
+
+.attendance-party {
+  @include govuk-font($size: 16, $weight: bold);
+}
+
+.attendance-options {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0;
+}
+
+.attendance-options .govuk-radios__label {
+  @include govuk-font($size: 16);
+
+  padding-top: 2px;
+  padding-right: 0;
+  padding-bottom: 2px;
+}
+
+.attendance-name {
+  display: flex;
+  align-items: center;
+  gap: govuk-spacing(1);
+}
+
+.attendance-name .govuk-label {
+  @include govuk-font($size: 16);
+
+  margin-bottom: 0;
+}
+
+.attendance-name .govuk-input {
+  height: 1.875rem;
+  padding: govuk-spacing(1);
+}
+
+#document-debug,
+#html-debug,
+#nodes-debug,
+#marks-debug,
+#schema-debug {
+  overflow-x: auto;
+}
+
+.attendance-options::after {
+  display: none;
+}
+
+.attendance-options .govuk-radios__item {
+  flex: 0 0 auto;
+  margin-right: 0;
+}
+
+@include govuk-media-query($until: tablet) {
+  .govuk-width-container {
+    margin-right: govuk-spacing(3);
+    margin-left: govuk-spacing(3);
+  }
+
+  .attendance-row {
+    grid-template-columns: 1fr;
+    gap: govuk-spacing(3);
+    padding: govuk-spacing(3) 0;
+  }
+
+  .attendance-options {
+    flex-wrap: wrap;
+  }
+}
+
+.structure-checkboxes {
+  display: flex;
+  gap: govuk-spacing(4);
+}
+
+.structure-checkboxes .govuk-checkboxes__item {
+  margin-bottom: 0;
+}
+
+.ProseMirror ol ol {
+  list-style-type: lower-alpha;
+}
+
+.order-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 8px 2.5rem;
+}
+
+.order-editor-toolbar__button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-width: 40px;
+  height: 40px;
+  margin-bottom: 0;
+  padding: 6px 10px;
+  border: 2px solid govuk-colour("black");
+  box-shadow: none;
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.order-editor-toolbar__button:hover {
+  background: #dbdad9;
+}
+
+.order-editor-toolbar__icon {
+  display: block;
+}
+
+.order-editor-toolbar__separator {
+  width: 1px;
+  height: 28px;
+  margin: 0 6px;
+  background: #b1b4b6;
+}
+
+#editor {
+  @include govuk-font($size: 19);
+
+  position: relative;
+  border: 1px solid govuk-colour("black", $variant: "tint-80");
+  color: govuk-colour("black");
+}
+
+.ProseMirror {
+  --editor-gutter-width: 2.5rem;
+
+  min-height: 12rem;
+  padding: govuk-spacing(4);
+  padding-left: calc(var(--editor-gutter-width) + #{govuk-spacing(4)});
+  outline: none;
+  background: linear-gradient(
+    to right,
+    govuk-colour("black", $variant: "tint-95") 0,
+    govuk-colour("black", $variant: "tint-95") calc(var(--editor-gutter-width) - 1px),
+    govuk-colour("black", $variant: "tint-80") calc(var(--editor-gutter-width) - 1px),
+    govuk-colour("black", $variant: "tint-80") var(--editor-gutter-width),
+    transparent var(--editor-gutter-width)
+  );
+}
+
+.revert-node-button {
+  @include govuk-font($size: 19, $weight: bold);
+
+  position: absolute;
+  left: govuk-spacing(2);
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid govuk-colour("black", $variant: "tint-50");
+  border-radius: 2px;
+  background: govuk-colour("white");
+  color: govuk-colour("black");
+  line-height: 1;
+  cursor: pointer;
+}
+
+.revert-node-button:hover {
+  background: govuk-colour("black", $variant: "tint-95");
+}
+
+.revert-node-button:focus {
+  outline: $govuk-focus-width solid $govuk-focus-colour;
+  outline-offset: 0;
+}
+
+.revert-node-button__icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  vertical-align: middle;
+}
+
+.user-authored-paragraph {
+  box-sizing: border-box;
+  border-left: 4px solid govuk-colour("green");
+  background: govuk-colour("green", $variant: "tint-80");
+}
+
+.modified-clause {
+  box-sizing: border-box;
+  border-left: 4px solid govuk-colour("blue");
+  background: govuk-colour("blue", $variant: "tint-80");
+}
+
+p.user-authored-paragraph,
+p.modified-clause,
+li.user-authored-paragraph > p,
+li.modified-clause > p {
+  width: fit-content;
+  max-width: 100%;
+}
+
+li.user-authored-paragraph,
+li.modified-clause {
+  border-left: 0;
+  background: transparent;
+}
+
+li.user-authored-paragraph > p {
+  box-sizing: border-box;
+  border-left: 4px solid govuk-colour("green");
+  background: govuk-colour("green", $variant: "tint-80");
+}
+
+li.modified-clause > p {
+  box-sizing: border-box;
+  border-left: 4px solid govuk-colour("blue");
+  background: govuk-colour("blue", $variant: "tint-80");
+}
+
+.ProseMirror li:has(.revert-node-button) {
+  position: static;
+}
+
+.ProseMirror-focused {
+  outline: $govuk-focus-width solid $govuk-focus-colour;
+  outline-offset: -$govuk-focus-width;
+}
+
+.ProseMirror h3 {
+  @include govuk-font($size: 19, $weight: bold);
+}
+
+.ProseMirror ol ol {
+  list-style-type: lower-alpha;
+}
+
+.ProseMirror > :first-child {
+  margin-top: 0;
+}
+
+.ProseMirror > :last-child {
+  margin-bottom: 0;
+}
