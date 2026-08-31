@@ -1,24 +1,38 @@
 {
-  "name": "order-flow",
-  "version": "0.0.0",
+  "name": "@hmcts-cft/order-flow",
+  "version": "0.0.0-local",
   "private": true,
+  "description": "Rich-text editor for generated court orders",
   "type": "module",
+  "main": "./dist/lib/index.js",
+  "types": "./dist/lib/index.d.ts",
+  "files": [
+    "dist/lib",
+    "dist/order-flow.css",
+    "src/editor.scss"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/lib/index.d.ts",
+      "import": "./dist/lib/index.js",
+      "default": "./dist/lib/index.js"
+    },
+    "./styles/order-flow.css": "./dist/order-flow.css",
+    "./styles/editor": "./src/editor.scss"
+  },
   "engines": {
     "node": ">=20.19.0"
   },
   "scripts": {
     "dev": "NODE_ENV=development tsx watch src/server.ts",
-    "build": "npm run typecheck && vite build && tsc -p tsconfig.server.json",
+    "build": "npm run build:lib && vite build && tsc -p tsconfig.server.json",
+    "build:lib": "rm -rf dist/lib dist/order-flow.css && tsc -p tsconfig.lib.json && sass --load-path=node_modules src/editor.scss dist/order-flow.css --no-source-map",
     "start": "NODE_ENV=production node dist/server/server.js",
     "test": "npm run typecheck && tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "chokidar": "^3.6.0",
-    "express": "5.2.1",
-    "govuk-frontend": "6.4.0",
-    "nunjucks": "3.2.4",
-    "prosemirror-commands": "1.7.1",
+    "prosemirror-commands": "1.7.2",
     "prosemirror-dropcursor": "1.8.3",
     "prosemirror-gapcursor": "1.4.1",
     "prosemirror-history": "1.5.0",
@@ -28,13 +42,17 @@
     "prosemirror-schema-basic": "1.2.4",
     "prosemirror-schema-list": "1.5.1",
     "prosemirror-state": "1.4.4",
-    "prosemirror-view": "1.42.2"
+    "prosemirror-view": "1.42.3"
   },
   "devDependencies": {
     "@types/express": "5.0.6",
     "@types/node": "26.1.1",
     "@types/nunjucks": "3.2.6",
     "@types/supertest": "7.2.1",
+    "chokidar": "^3.6.0",
+    "express": "5.2.1",
+    "govuk-frontend": "6.4.0",
+    "nunjucks": "3.2.4",
     "sass-embedded": "1.100.0",
     "supertest": "7.2.2",
     "tsx": "4.23.1",

@@ -20,47 +20,10 @@ import {
 import { reconcileOrderDocument } from "./reconciliation.js";
 import { editorSchema } from "./schema.js";
 
-import "prosemirror-gapcursor/style/gapcursor.css";
-import "prosemirror-view/style/prosemirror.css";
-
-const documentDebug = document.querySelector<HTMLElement>("#document-debug");
-const htmlDebug = document.querySelector<HTMLElement>("#html-debug");
-const nodesDebug = document.querySelector<HTMLElement>("#nodes-debug");
-const marksDebug = document.querySelector<HTMLElement>("#marks-debug");
-const schemaDebug = document.querySelector<HTMLElement>("#schema-debug");
-
-if (!documentDebug || !htmlDebug || !nodesDebug || !marksDebug || !schemaDebug) {
-  throw new Error("The editor page is missing its ProseMirror mount points");
-}
-
-const documentDebugElement = documentDebug;
-const htmlDebugElement = htmlDebug;
-
-nodesDebug.textContent = Object.keys(editorSchema.nodes).join("\n");
-marksDebug.textContent = Object.keys(editorSchema.marks).join("\n");
-schemaDebug.textContent = JSON.stringify(
-  {
-    nodes: editorSchema.spec.nodes.toObject(),
-    marks: editorSchema.spec.marks.toObject(),
-  },
-  (_key, value) => typeof value === "function" ? "[Function]" : value,
-  2,
-);
-
-function formatHtml(html: string): string {
-  let depth = 0;
-
-  return html.replace(/></g, ">\n<").split("\n").map((line) => {
-    if (line.startsWith("</")) depth--;
-    const indentedLine = `${"  ".repeat(depth)}${line}`;
-    if (/^<[^/!][^>]*>$/.test(line)) depth++;
-    return indentedLine;
-  }).join("\n");
-}
-
-function createEditorState(): EditorState {
+function createEditorState(document?: ProseMirrorNode): EditorState {
   return EditorState.create({
     schema: editorSchema,
+    doc: document,
     plugins: [
       createDiffStylingPlugin(),
       ...createKeymapPlugins(),
@@ -71,8 +34,24 @@ function createEditorState(): EditorState {
   });
 }
 
-export interface OrderController {
+export interface OrderEditorDocument {
+  schema: "order-flow-document";
+  version: 1;
+  current: Record<string, unknown>;
+  generated: Record<string, unknown>;
+}
+
+export interface CreateOrderEditorOptions {
+  mount: HTMLElement | string;
+  toolbar?: HTMLElement | string;
+  initialDocument?: OrderEditorDocument;
+  onChange?: (document: OrderEditorDocument) => void;
+}
+
+export interface OrderEditorController {
   render(target: ProseMirrorNode): void;
+  getDocument(): OrderEditorDocument;
+  destroy(): void;
 }
 
 const wrapInOrderedList = wrapInList(editorSchema.nodes.ordered_list!);
@@ -106,10 +85,15 @@ function isEditorCommandName(value: string): value is EditorCommandName {
   return Object.hasOwn(editorCommands, value);
 }
 
+interface ConnectedToolbar {
+  update(): void;
+  destroy(): void;
+}
+
 function connectToolbar(
   toolbar: HTMLElement,
   view: EditorView,
-): () => void {
+): ConnectedToolbar {
   const buttons = toolbar.querySelectorAll<HTMLButtonElement>(
     "[data-editor-command]",
   );
@@ -126,14 +110,14 @@ function connectToolbar(
     }
   }
 
-  toolbar.addEventListener("mousedown", (event) => {
+  const handleMouseDown = (event: MouseEvent): void => {
     if (event.target instanceof Element &&
       event.target.closest("[data-editor-command]")) {
       event.preventDefault();
     }
-  });
+  };
 
-  toolbar.addEventListener("click", (event) => {
+  const handleClick = (event: MouseEvent): void => {
     if (!(event.target instanceof Element)) return;
 
     const button = event.target.closest<HTMLButtonElement>(
@@ -145,50 +129,76 @@ function connectToolbar(
 
     view.focus();
     editorCommands[commandName](view.state, view.dispatch, view);
-  });
+  };
+
+  toolbar.addEventListener("mousedown", handleMouseDown);
+  toolbar.addEventListener("click", handleClick);
 
   update();
-  return update;
+  return {
+    update,
+    destroy(): void {
+      toolbar.removeEventListener("mousedown", handleMouseDown);
+      toolbar.removeEventListener("click", handleClick);
+    },
+  };
 }
 
 export function createOrderEditor(
-  selector: string
-): OrderController {
-  const editor = document.querySelector<HTMLElement>(selector);
-  const toolbar = document.querySelector<HTMLElement>(
-    "#order-editor-toolbar",
-  );
-  if (!editor || !toolbar) {
-    throw new Error(`Editor or toolbar element not found: ${selector}`);
+  options: CreateOrderEditorOptions,
+): OrderEditorController {
+  const ownerDocument = typeof options.mount === "string"
+    ? globalThis.document
+    : options.mount.ownerDocument;
+  const editor = typeof options.mount === "string"
+    ? ownerDocument?.querySelector<HTMLElement>(options.mount)
+    : options.mount;
+  const toolbar = typeof options.toolbar === "string"
+    ? ownerDocument?.querySelector<HTMLElement>(options.toolbar)
+    : options.toolbar;
+  if (!editor) {
+    throw new Error(`Order editor mount point not found: ${String(options.mount)}`);
   }
 
-  let updateToolbar = (): void => {};
+  const initialCurrent = options.initialDocument
+    ? editorSchema.nodeFromJSON(options.initialDocument.current)
+    : undefined;
+  const initialGenerated = options.initialDocument
+    ? editorSchema.nodeFromJSON(options.initialDocument.generated)
+    : undefined;
+  let initialState = createEditorState(initialCurrent);
+  if (initialGenerated) {
+    initialState = initialState.apply(
+      setGeneratedDocument(initialState.tr, initialGenerated),
+    );
+  }
+
+  let connectedToolbar: ConnectedToolbar | undefined;
+
+  const getDocument = (): OrderEditorDocument => {
+    const generated = getGeneratedDocument(view.state) ?? view.state.doc;
+    return {
+      schema: "order-flow-document",
+      version: 1,
+      current: view.state.doc.toJSON() as Record<string, unknown>,
+      generated: generated.toJSON() as Record<string, unknown>,
+    };
+  };
 
   const view = new EditorView(editor, {
-    state: createEditorState(),
+    state: initialState,
     dispatchTransaction(transaction) {
       const nextState = view.state.apply(transaction);
       view.updateState(nextState);
-      updateToolbar();
-      documentDebugElement.textContent = JSON.stringify(
-        nextState.doc.toJSON(),
-        null,
-        2,
-      );
-      htmlDebugElement.textContent = formatHtml(view.dom.outerHTML);
+      connectedToolbar?.update();
+      options.onChange?.(getDocument());
     },
   });
 
-  updateToolbar = connectToolbar(toolbar, view);
+  editor.classList.add("order-flow-editor");
+  if (toolbar) connectedToolbar = connectToolbar(toolbar, view);
 
-  documentDebugElement.textContent = JSON.stringify(
-    view.state.doc.toJSON(),
-    null,
-    2,
-  );
-  htmlDebugElement.textContent = formatHtml(view.dom.outerHTML);
-
-  const controller: OrderController = {
+  const controller: OrderEditorController = {
     render(target: ProseMirrorNode): void {
       let transaction = view.state.tr;
       const previousTarget = getGeneratedDocument(view.state);
@@ -210,7 +220,12 @@ export function createOrderEditor(
       setGeneratedDocument(transaction, target);
 
       view.dispatch(transaction.setMeta("addToHistory", false));
-    }
+    },
+    getDocument,
+    destroy(): void {
+      connectedToolbar?.destroy();
+      view.destroy();
+    },
   };
 
   return controller;

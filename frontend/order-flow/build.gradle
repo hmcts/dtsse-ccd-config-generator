@@ -14,7 +14,13 @@ tasks.register('npmTest', Exec) {
 }
 
 tasks.register('npmBuild', Exec) {
-    dependsOn 'npmTest'
+    dependsOn 'npmInstall'
+    workingDir projectDir
+    commandLine 'npm', 'run', 'build:lib'
+}
+
+tasks.register('npmDemo', Exec) {
+    dependsOn 'npmInstall'
     workingDir projectDir
     commandLine 'npm', 'run', 'build'
 }
@@ -24,7 +30,7 @@ tasks.named('assemble') {
 }
 
 tasks.named('check') {
-    dependsOn 'npmBuild'
+    dependsOn 'npmTest'
 }
 
 tasks.named('clean') {

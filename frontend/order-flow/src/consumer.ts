@@ -145,7 +145,17 @@ const orderDateControls = {
   year: orderDateYear,
 };
 
-const controller = createOrderEditor("#editor");
+const documentDebug = document.querySelector<HTMLElement>("#document-debug");
+const htmlDebug = document.querySelector<HTMLElement>("#html-debug");
+
+const controller = createOrderEditor({
+  mount: "#editor",
+  toolbar: "#order-editor-toolbar",
+  onChange(editorDocument) {
+    if (documentDebug) documentDebug.textContent = JSON.stringify(editorDocument.current, null, 2);
+    if (htmlDebug) htmlDebug.textContent = document.querySelector("#editor")?.innerHTML ?? "";
+  },
+});
 
 function readAttendances(): Attendance[] {
   return [...attendanceRows].map((row) => {

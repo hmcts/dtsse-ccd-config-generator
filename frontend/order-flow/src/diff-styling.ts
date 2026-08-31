@@ -38,12 +38,12 @@ function isClauseNode(
     parent?.type.name === "ordered_list";
 }
 
-function createUndoIcon(): HTMLImageElement {
-  const icon = document.createElement("img");
+function createUndoIcon(): HTMLSpanElement {
+  const icon = document.createElement("span");
 
-  icon.alt = "";
+  icon.ariaHidden = "true";
   icon.className = "revert-node-button__icon";
-  icon.src = new URL("./assets/revert.svg", import.meta.url).href;
+  icon.textContent = "↶";
   return icon;
 }
 

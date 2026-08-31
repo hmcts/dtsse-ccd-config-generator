@@ -1,0 +1,234 @@
+.order-flow-editor .ProseMirror {
+  position: relative;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  white-space: break-spaces;
+  -webkit-font-variant-ligatures: none;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0;
+}
+
+.order-flow-editor .ProseMirror pre {
+  white-space: pre-wrap;
+}
+
+.order-flow-editor .ProseMirror li {
+  position: relative;
+}
+
+.order-flow-editor .ProseMirror-hideselection *::selection {
+  background: transparent;
+}
+
+.order-flow-editor .ProseMirror-hideselection *::-moz-selection {
+  background: transparent;
+}
+
+.order-flow-editor .ProseMirror-hideselection {
+  caret-color: transparent;
+}
+
+.order-flow-editor .ProseMirror [draggable][contenteditable="false"] {
+  user-select: text;
+}
+
+.order-flow-editor .ProseMirror-selectednode {
+  outline: 2px solid #8cf;
+}
+
+.order-flow-editor li.ProseMirror-selectednode {
+  outline: none;
+}
+
+.order-flow-editor li.ProseMirror-selectednode::after {
+  position: absolute;
+  inset: -2px -2px -2px -32px;
+  border: 2px solid #8cf;
+  pointer-events: none;
+  content: "";
+}
+
+.order-flow-editor img.ProseMirror-separator {
+  display: inline !important;
+  margin: 0 !important;
+  border: none !important;
+}
+
+.order-flow-editor .ProseMirror-gapcursor {
+  display: none;
+  position: absolute;
+  pointer-events: none;
+}
+
+.order-flow-editor .ProseMirror-gapcursor::after {
+  display: block;
+  position: absolute;
+  top: -2px;
+  width: 20px;
+  border-top: 1px solid #0b0c0c;
+  animation: order-flow-cursor-blink 1.1s steps(2, start) infinite;
+  content: "";
+}
+
+@keyframes order-flow-cursor-blink {
+  to { visibility: hidden; }
+}
+
+.order-flow-editor .ProseMirror-focused .ProseMirror-gapcursor {
+  display: block;
+}
+
+.order-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 8px 2.5rem;
+}
+
+.order-editor-toolbar__button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-width: 40px;
+  height: 40px;
+  margin-bottom: 0;
+  padding: 6px 10px;
+  border: 2px solid #0b0c0c;
+  box-shadow: none;
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.order-editor-toolbar__button:hover {
+  background: #dbdad9;
+}
+
+.order-editor-toolbar__icon {
+  display: block;
+}
+
+.order-editor-toolbar__separator {
+  width: 1px;
+  height: 28px;
+  margin: 0 6px;
+  background: #b1b4b6;
+}
+
+.order-flow-editor {
+  position: relative;
+  border: 1px solid #b1b4b6;
+  color: #0b0c0c;
+  font-family: arial, sans-serif;
+  font-size: 19px;
+  line-height: 1.31579;
+}
+
+.order-flow-editor .ProseMirror {
+  --editor-gutter-width: 2.5rem;
+
+  min-height: 12rem;
+  padding: 20px;
+  padding-left: calc(var(--editor-gutter-width) + 20px);
+  outline: none;
+  background: linear-gradient(
+    to right,
+    #f3f2f1 0,
+    #f3f2f1 calc(var(--editor-gutter-width) - 1px),
+    #b1b4b6 calc(var(--editor-gutter-width) - 1px),
+    #b1b4b6 var(--editor-gutter-width),
+    transparent var(--editor-gutter-width)
+  );
+}
+
+.revert-node-button {
+  position: absolute;
+  left: 10px;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid #505a5f;
+  border-radius: 2px;
+  background: #fff;
+  color: #0b0c0c;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.revert-node-button:hover {
+  background: #f3f2f1;
+}
+
+.revert-node-button:focus {
+  outline: 3px solid #ffdd00;
+  outline-offset: 0;
+}
+
+.revert-node-button__icon {
+  display: inline-block;
+  width: 1.25rem;
+  height: 1.25rem;
+  vertical-align: middle;
+}
+
+.user-authored-paragraph {
+  box-sizing: border-box;
+  border-left: 4px solid #00703c;
+  background: #cce2d8;
+}
+
+.modified-clause {
+  box-sizing: border-box;
+  border-left: 4px solid #1d70b8;
+  background: #d2e2f1;
+}
+
+p.user-authored-paragraph,
+p.modified-clause,
+li.user-authored-paragraph > p,
+li.modified-clause > p {
+  width: fit-content;
+  max-width: 100%;
+}
+
+li.user-authored-paragraph,
+li.modified-clause {
+  border-left: 0;
+  background: transparent;
+}
+
+li.user-authored-paragraph > p {
+  box-sizing: border-box;
+  border-left: 4px solid #00703c;
+  background: #cce2d8;
+}
+
+li.modified-clause > p {
+  box-sizing: border-box;
+  border-left: 4px solid #1d70b8;
+  background: #d2e2f1;
+}
+
+.order-flow-editor .ProseMirror li:has(.revert-node-button) {
+  position: static;
+}
+
+.order-flow-editor .ProseMirror-focused {
+  outline: 3px solid #ffdd00;
+  outline-offset: -3px;
+}
+
+.order-flow-editor .ProseMirror h3 {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.31579;
+}
+
+.order-flow-editor .ProseMirror ol ol {
+  list-style-type: lower-alpha;
+}
