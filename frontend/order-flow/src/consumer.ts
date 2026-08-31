@@ -204,6 +204,11 @@ function readOrderDate(): string {
   }).format(date);
 }
 
+function currentTimeTicks(): string {
+  const ticksAtUnixEpoch = 621355968000000000n;
+  return (BigInt(Date.now()) * 10_000n + ticksAtUnixEpoch).toString();
+}
+
 function buildCurrentOrder(): ProseMirrorNode {
   return buildOrder((order) => {
     const attendance = buildAttendanceRegister(readAttendances());
@@ -251,7 +256,7 @@ function buildCurrentOrder(): ProseMirrorNode {
               if (paymentByDateControl.checked) {
                 subclauses.item(
                   "payment-by-date",
-                  "payment of £213.00 to the claimant by 14 September 2026;",
+                  `payment of £213.00 to the claimant by 14 September 2026; ${currentTimeTicks()}`,
                 );
               }
               if (monthlyPaymentsControl.checked) {

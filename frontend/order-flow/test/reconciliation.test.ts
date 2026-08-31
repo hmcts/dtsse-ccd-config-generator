@@ -101,6 +101,45 @@ describe("order document reconciliation", () => {
     assert.equal(transaction.doc.firstChild!.lastChild!.textContent, "User");
   });
 
+  it("updates untouched generated list-item wording", () => {
+    const generatedItem = (text: string) =>
+      editorSchema.node(
+        "list_item",
+        { id: "item:generated" },
+        editorSchema.node("paragraph", null, editorSchema.text(text)),
+      );
+    const userItem = editorSchema.node(
+      "list_item",
+      null,
+      editorSchema.node("paragraph", null, editorSchema.text("User clause")),
+    );
+    const list = (children: ReturnType<typeof generatedItem>[]) =>
+      editorSchema.node(
+        "ordered_list",
+        { id: "ordered-list:clauses" },
+        children,
+      );
+    const previousItem = generatedItem("Old wording");
+    const targetItem = generatedItem("New wording");
+    const previous = editorSchema.node("doc", null, list([previousItem]));
+    const target = editorSchema.node("doc", null, list([targetItem]));
+    const transaction = EditorState.create({
+      schema: editorSchema,
+      doc: editorSchema.node("doc", null, list([previousItem, userItem])),
+    }).tr;
+
+    reconcileOrderDocument(transaction, previous, target);
+
+    assert.equal(
+      transaction.doc.firstChild!.firstChild!.textContent,
+      "New wording",
+    );
+    assert.equal(
+      transaction.doc.firstChild!.lastChild!.textContent,
+      "User clause",
+    );
+  });
+
   it("adds a nested generated list without replacing edited parent content", () => {
     const paragraph = (text: string) =>
       editorSchema.node("paragraph", null, editorSchema.text(text));

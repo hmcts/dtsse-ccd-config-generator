@@ -159,6 +159,15 @@ function reconcileModified(
 ): void {
   const live = requireManagedNode(transaction, change.id);
 
+  if (change.target.isLeaf || live.node.eq(change.previous)) {
+    transaction.replaceWith(
+      live.position,
+      live.position + live.node.nodeSize,
+      change.target,
+    );
+    return;
+  }
+
   if (isManagedContainer(change.target)) {
     if (!live.node.sameMarkup(change.target)) {
       transaction.setNodeMarkup(
@@ -172,15 +181,6 @@ function reconcileModified(
       transaction,
       live.position,
       change.previous,
-      change.target,
-    );
-    return;
-  }
-
-  if (change.target.isLeaf || live.node.eq(change.previous)) {
-    transaction.replaceWith(
-      live.position,
-      live.position + live.node.nodeSize,
       change.target,
     );
     return;
