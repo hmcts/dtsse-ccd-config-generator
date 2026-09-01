@@ -28,7 +28,7 @@ import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
  * callers stay agnostic of how the raw data is sourced.
  */
 @Service
-class CaseProjectionService {
+public class CaseProjectionService {
 
   private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
 
@@ -51,7 +51,7 @@ class CaseProjectionService {
     this.bindings = buildBindings(caseViews, configRegistry.asMap());
   }
 
-  DecentralisedCaseDetails load(long caseRef) {
+  public DecentralisedCaseDetails load(long caseRef) {
     DecentralisedCaseDetails raw = caseDataRepository.getCase(caseRef);
     return applyProjection(raw);
   }

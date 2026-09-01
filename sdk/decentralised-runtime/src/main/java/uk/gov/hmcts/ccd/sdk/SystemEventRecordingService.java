@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk.impl;
+package uk.gov.hmcts.ccd.sdk;
 
 import java.util.Set;
 import java.util.UUID;
@@ -7,7 +7,8 @@ import org.springframework.stereotype.Service;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedEventDetails;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
-import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
+import uk.gov.hmcts.ccd.sdk.impl.CaseProjectionService;
+import uk.gov.hmcts.ccd.sdk.impl.CaseSubmissionService;
 
 /**
  * Records a system event against a case from inside the service, without a round trip through the
@@ -26,7 +27,7 @@ import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
  */
 @Service
 @RequiredArgsConstructor
-public class SystemEventRecorder {
+public class SystemEventRecordingService {
 
   private final CaseProjectionService caseProjectionService;
   private final ResolvedConfigRegistry resolvedConfigRegistry;

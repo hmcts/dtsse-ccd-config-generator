@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk.impl;
+package uk.gov.hmcts.ccd.sdk;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -18,11 +18,12 @@ import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
-import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
+import uk.gov.hmcts.ccd.sdk.impl.CaseProjectionService;
+import uk.gov.hmcts.ccd.sdk.impl.CaseSubmissionService;
 import uk.gov.hmcts.ccd.sdk.api.Event;
-import uk.gov.hmcts.ccd.sdk.impl.SystemEventRecorder.ActorAttribution;
+import uk.gov.hmcts.ccd.sdk.SystemEventRecordingService.ActorAttribution;
 
-class SystemEventRecorderTest {
+class SystemEventRecordingServiceTest {
 
   private static final long CASE_REF = 123456789L;
 
@@ -30,7 +31,7 @@ class SystemEventRecorderTest {
   private final ResolvedConfigRegistry resolvedConfigRegistry = mock(ResolvedConfigRegistry.class);
   private final CaseSubmissionService submissionService = mock(CaseSubmissionService.class);
 
-  private final SystemEventRecorder recorder = new SystemEventRecorder(
+  private final SystemEventRecordingService recorder = new SystemEventRecordingService(
       caseProjectionService, resolvedConfigRegistry, submissionService);
 
   private enum State { Open, Closed }
