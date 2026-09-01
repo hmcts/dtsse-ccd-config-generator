@@ -7,7 +7,6 @@ import org.springframework.stereotype.Service;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedEventDetails;
-import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.impl.CaseProjectionService;
@@ -34,21 +33,21 @@ public class SystemEventRecordingService {
   public record ActorAttribution(String id, String firstName, String lastName) {
   }
 
-  public DecentralisedSubmitEventResponse recordSystemEvent(long caseReference,
-                                                            String eventId,
-                                                            String authorisation,
-                                                            String summary,
-                                                            ActorAttribution actor) {
-    return recordSystemEvent(caseReference, eventId, authorisation, summary, actor, UUID.randomUUID());
+  public void recordSystemEvent(long caseReference,
+                                String eventId,
+                                String authorisation,
+                                String summary,
+                                ActorAttribution actor) {
+    recordSystemEvent(caseReference, eventId, authorisation, summary, actor, UUID.randomUUID());
   }
 
   /** Overload for callers, such as backfills, that must not record the same event twice. */
-  public DecentralisedSubmitEventResponse recordSystemEvent(long caseReference,
-                                                            String eventId,
-                                                            String authorisation,
-                                                            String summary,
-                                                            ActorAttribution actor,
-                                                            UUID idempotencyKey) {
+  public void recordSystemEvent(long caseReference,
+                                String eventId,
+                                String authorisation,
+                                String summary,
+                                ActorAttribution actor,
+                                UUID idempotencyKey) {
     var current = caseProjectionService.load(caseReference);
     var caseDetails = current.getCaseDetails();
     var eventConfig = resolvedConfigRegistry.getRequiredEvent(caseDetails.getCaseTypeId(), eventId);
@@ -56,7 +55,7 @@ public class SystemEventRecordingService {
     rejectIfEventNotPermittedInCurrentState(eventConfig, caseDetails);
 
     var event = snapshotEvent(current, eventConfig, eventId, summary, actor);
-    return submissionService.submit(event, authorisation, idempotencyKey);
+    submissionService.submit(event, authorisation, idempotencyKey);
   }
 
   private void rejectIfEventNotPermittedInCurrentState(Event<?, ?, ?> eventConfig, CaseDetails caseDetails) {

@@ -16,7 +16,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
-import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.impl.CaseProjectionService;
 import uk.gov.hmcts.ccd.sdk.impl.CaseSubmissionService;
@@ -44,13 +43,9 @@ class SystemEventRecordingServiceTest {
     doReturn(Set.of(State.Open)).when(eventConfig).getPreState();
     when(eventConfig.getName()).thenReturn("Notice of change applied");
     doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("TestCase", "systemTouch");
-    var expected = new DecentralisedSubmitEventResponse();
-    when(submissionService.submit(any(), eq("token"), any())).thenReturn(expected);
-
-    var response = recorder.recordSystemEvent(CASE_REF, "systemTouch", "token",
+    recorder.recordSystemEvent(CASE_REF, "systemTouch", "token",
         "Notice of change by a@b.com", new ActorAttribution("uid-1", "Jane", "Doe"));
 
-    assertThat(response).isSameAs(expected);
     ArgumentCaptor<DecentralisedCaseEvent> captor = forClass(DecentralisedCaseEvent.class);
     verify(submissionService).submit(captor.capture(), eq("token"), any(UUID.class));
     DecentralisedCaseEvent event = captor.getValue();
