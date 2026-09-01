@@ -2709,10 +2709,33 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
   }
 
   /**
+   * Columns a duplicate row may differ in and still be the same row, because the generator re-derives
+   * them rather than reproducing the input's value.
+   *
+   * <p>{@code FieldDisplayOrder} is re-derived from placement sequence — the SDK numbers members as it
+   * emits them, which is why the comparator forgives the column outright (the
+   * display-order-renumbering disposition). Two rows agreeing on everything else therefore describe
+   * one member placed once, and the difference cannot survive into the definition either way.
+   *
+   * <p>Load-bearing for whole GROUPS, not just the pair: a surviving duplicate is a same-key collision,
+   * and that refusal is group-wide because a colliding row kept as a passthrough would merge onto the
+   * derived row it collides with. prl ships three such rows — {@code fl404bDateOrderEndTime} on
+   * {@code manageOrders} and {@code waManageOrders} (display order 88 against 89), and
+   * {@code messageUrgency} on {@code sendAndReplyToMessages} — and each one cost its whole group:
+   * 174 rows of verbatim passthrough for three rows whose only disagreement was a number the SDK
+   * overwrites.
+   */
+  private static final Set<String> ETOCT_REDERIVED_COLUMNS = Set.of(Columns.FIELD_DISPLAY_ORDER);
+
+  /**
    * Drops {@code CaseEventToComplexTypes} rows that are exact duplicates up to a blank/absent column
    * of an earlier row, mirroring the comparator's {@code dropExactDuplicates}: a definition that
    * ships the same keyed row in both a flat file and a fragment directory (civil/prl) imports as one,
    * so the derivation must treat the repeat as one member, not a same-LEC collision.
+   *
+   * <p>Columns the generator re-derives are excluded from the comparison — see
+   * {@link #ETOCT_REDERIVED_COLUMNS}. A row differing only in one of those is not a second member
+   * with different content; it is the same member with a value the emission does not carry.
    */
   private List<SheetRow> dedupeExactEtoctRows(List<SheetRow> rows) {
     if (rows.size() < 2) {
@@ -2726,7 +2749,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
         Object value = column.getValue();
         boolean blankOrNull =
             value == null || (value instanceof String string && string.isBlank());
-        if (!blankOrNull) {
+        if (!blankOrNull && !ETOCT_REDERIVED_COLUMNS.contains(column.getKey())) {
           canonical.put(column.getKey(), value);
         }
       }
