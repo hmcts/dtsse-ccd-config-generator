@@ -8,9 +8,9 @@ tasks.register('npmInstall', Exec) {
 }
 
 tasks.register('npmTest', Exec) {
-    dependsOn 'npmInstall'
+    dependsOn 'npmBuild'
     workingDir projectDir
-    commandLine 'npm', 'test'
+    commandLine 'npm', 'run', 'test:built'
 }
 
 tasks.register('npmBuild', Exec) {

@@ -1,0 +1,54 @@
+name: Order flow check
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/order-flow-check.yml'
+      - 'frontend/order-flow/**'
+      - 'build.gradle'
+      - 'gradle.properties'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'settings.gradle'
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/order-flow-check.yml'
+      - 'frontend/order-flow/**'
+      - 'build.gradle'
+      - 'gradle.properties'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'settings.gradle'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: zulu
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20.19.0
+          cache: npm
+          cache-dependency-path: frontend/order-flow/package-lock.json
+
+      - name: Build and test order flow
+        run: ./gradlew :order-flow:clean :order-flow:build
