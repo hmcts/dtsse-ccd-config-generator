@@ -309,7 +309,7 @@ const controller = createOrderEditor({
   mount: "#editor",
   toolbar: "#order-editor-toolbar",
   initialDocument: {
-    schema: "order-flow-document",
+    schema: "docweave-document",
     version: 1,
     current: initialCurrentDocument.toJSON() as Record<string, unknown>,
     generated: initialGeneratedDocument.toJSON() as Record<string, unknown>,

@@ -1,4 +1,4 @@
-.order-flow-editor .ProseMirror {
+.docweave-editor .ProseMirror {
   position: relative;
   word-wrap: break-word;
   white-space: pre-wrap;
@@ -8,39 +8,39 @@
   font-feature-settings: "liga" 0;
 }
 
-.order-flow-editor .ProseMirror pre {
+.docweave-editor .ProseMirror pre {
   white-space: pre-wrap;
 }
 
-.order-flow-editor .ProseMirror li {
+.docweave-editor .ProseMirror li {
   position: relative;
 }
 
-.order-flow-editor .ProseMirror-hideselection *::selection {
+.docweave-editor .ProseMirror-hideselection *::selection {
   background: transparent;
 }
 
-.order-flow-editor .ProseMirror-hideselection *::-moz-selection {
+.docweave-editor .ProseMirror-hideselection *::-moz-selection {
   background: transparent;
 }
 
-.order-flow-editor .ProseMirror-hideselection {
+.docweave-editor .ProseMirror-hideselection {
   caret-color: transparent;
 }
 
-.order-flow-editor .ProseMirror [draggable][contenteditable="false"] {
+.docweave-editor .ProseMirror [draggable][contenteditable="false"] {
   user-select: text;
 }
 
-.order-flow-editor .ProseMirror-selectednode {
+.docweave-editor .ProseMirror-selectednode {
   outline: 2px solid #8cf;
 }
 
-.order-flow-editor li.ProseMirror-selectednode {
+.docweave-editor li.ProseMirror-selectednode {
   outline: none;
 }
 
-.order-flow-editor li.ProseMirror-selectednode::after {
+.docweave-editor li.ProseMirror-selectednode::after {
   position: absolute;
   inset: -2px -2px -2px -32px;
   border: 2px solid #8cf;
@@ -48,33 +48,33 @@
   content: "";
 }
 
-.order-flow-editor img.ProseMirror-separator {
+.docweave-editor img.ProseMirror-separator {
   display: inline !important;
   margin: 0 !important;
   border: none !important;
 }
 
-.order-flow-editor .ProseMirror-gapcursor {
+.docweave-editor .ProseMirror-gapcursor {
   display: none;
   position: absolute;
   pointer-events: none;
 }
 
-.order-flow-editor .ProseMirror-gapcursor::after {
+.docweave-editor .ProseMirror-gapcursor::after {
   display: block;
   position: absolute;
   top: -2px;
   width: 20px;
   border-top: 1px solid #0b0c0c;
-  animation: order-flow-cursor-blink 1.1s steps(2, start) infinite;
+  animation: docweave-cursor-blink 1.1s steps(2, start) infinite;
   content: "";
 }
 
-@keyframes order-flow-cursor-blink {
+@keyframes docweave-cursor-blink {
   to { visibility: hidden; }
 }
 
-.order-flow-editor .ProseMirror-focused .ProseMirror-gapcursor {
+.docweave-editor .ProseMirror-focused .ProseMirror-gapcursor {
   display: block;
 }
 
@@ -118,7 +118,7 @@
   background: #b1b4b6;
 }
 
-.order-flow-editor {
+.docweave-editor {
   position: relative;
   border: 1px solid #b1b4b6;
   color: #0b0c0c;
@@ -127,7 +127,7 @@
   line-height: 1.31579;
 }
 
-.order-flow-editor .ProseMirror {
+.docweave-editor .ProseMirror {
   --editor-gutter-width: 2.5rem;
 
   min-height: 12rem;
@@ -214,21 +214,21 @@ li.modified-clause > p {
   background: #d2e2f1;
 }
 
-.order-flow-editor .ProseMirror li:has(.revert-node-button) {
+.docweave-editor .ProseMirror li:has(.revert-node-button) {
   position: static;
 }
 
-.order-flow-editor .ProseMirror-focused {
+.docweave-editor .ProseMirror-focused {
   outline: 3px solid #ffdd00;
   outline-offset: -3px;
 }
 
-.order-flow-editor .ProseMirror h3 {
+.docweave-editor .ProseMirror h3 {
   font-size: 19px;
   font-weight: 700;
   line-height: 1.31579;
 }
 
-.order-flow-editor .ProseMirror ol ol {
+.docweave-editor .ProseMirror ol ol {
   list-style-type: lower-alpha;
 }

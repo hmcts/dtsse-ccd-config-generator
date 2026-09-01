@@ -39,7 +39,7 @@ function createEditorState(document?: ProseMirrorNode): EditorState {
 }
 
 export interface OrderEditorDocument {
-  schema: "order-flow-document";
+  schema: "docweave-document";
   version: 1;
   current: Record<string, unknown>;
   generated: Record<string, unknown>;
@@ -186,7 +186,7 @@ export function createOrderEditor(
   const getDocument = (): OrderEditorDocument => {
     const generated = getGeneratedDocument(view.state) ?? view.state.doc;
     return {
-      schema: "order-flow-document",
+      schema: "docweave-document",
       version: 1,
       current: view.state.doc.toJSON() as Record<string, unknown>,
       generated: generated.toJSON() as Record<string, unknown>,
@@ -203,7 +203,7 @@ export function createOrderEditor(
     },
   });
 
-  editor.classList.add("order-flow-editor");
+  editor.classList.add("docweave-editor");
   if (toolbar) connectedToolbar = connectToolbar(toolbar, view);
 
   const controller: OrderEditorController = {

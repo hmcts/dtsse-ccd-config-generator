@@ -111,7 +111,7 @@ describe("public order editor API", () => {
     controller.render(target);
 
     const mount = dom.window.document.querySelector<HTMLElement>("#editor")!;
-    assert.equal(mount.classList.contains("order-flow-editor"), true);
+    assert.equal(mount.classList.contains("docweave-editor"), true);
     assert.match(mount.textContent, /IT IS ORDERED THAT:/);
     assert.match(mount.textContent, /Give up possession by 1 October 2026/);
     assert.equal(
@@ -123,7 +123,7 @@ describe("public order editor API", () => {
     assert.equal(changes.length, 1);
 
     const saved = controller.getDocument();
-    assert.equal(saved.schema, "order-flow-document");
+    assert.equal(saved.schema, "docweave-document");
     assert.equal(saved.version, 1);
     assert.deepEqual(saved.current, target.toJSON());
     assert.deepEqual(saved.generated, target.toJSON());
@@ -149,7 +149,7 @@ describe("public order editor API", () => {
     const controller = createOrderEditor({
       mount: "#restored-editor",
       initialDocument: {
-        schema: "order-flow-document",
+        schema: "docweave-document",
         version: 1,
         current: current as unknown as Record<string, unknown>,
         generated: generated.toJSON() as Record<string, unknown>,
