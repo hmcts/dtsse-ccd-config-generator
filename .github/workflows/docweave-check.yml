@@ -1,10 +1,10 @@
-name: Order flow check
+name: Docweave check
 
 on:
   pull_request:
     paths:
-      - '.github/workflows/order-flow-check.yml'
-      - 'frontend/order-flow/**'
+      - '.github/workflows/docweave-check.yml'
+      - 'frontend/docweave/**'
       - 'build.gradle'
       - 'gradle.properties'
       - 'gradle/**'
@@ -14,8 +14,8 @@ on:
     branches:
       - master
     paths:
-      - '.github/workflows/order-flow-check.yml'
-      - 'frontend/order-flow/**'
+      - '.github/workflows/docweave-check.yml'
+      - 'frontend/docweave/**'
       - 'build.gradle'
       - 'gradle.properties'
       - 'gradle/**'
@@ -48,7 +48,7 @@ jobs:
         with:
           node-version: 20.19.0
           cache: npm
-          cache-dependency-path: frontend/order-flow/package-lock.json
+          cache-dependency-path: frontend/docweave/package-lock.json
 
-      - name: Build and test order flow
-        run: ./gradlew :order-flow:clean :order-flow:build
+      - name: Build and test Docweave
+        run: ./gradlew :docweave:clean :docweave:build

@@ -10,7 +10,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const consumerRoot = mkdtempSync(path.join(tmpdir(), "order-flow-consumer-"));
+const consumerRoot = mkdtempSync(path.join(tmpdir(), "docweave-consumer-"));
 
 function run(command, arguments_, workingDirectory = consumerRoot) {
   execFileSync(command, arguments_, {
@@ -45,7 +45,7 @@ try {
     `
       import { access } from "node:fs/promises";
       import { fileURLToPath } from "node:url";
-      import { buildOrder } from "@hmcts-cft/order-flow";
+      import { buildOrder } from "@hmcts-cft/docweave";
 
       const document = buildOrder((order) => {
         order.paragraph("heading", "IT IS ORDERED THAT:");
@@ -55,7 +55,7 @@ try {
       }
 
       const stylesheet = import.meta.resolve(
-        "@hmcts-cft/order-flow/styles/order-flow.css"
+        "@hmcts-cft/docweave/styles/docweave.css"
       );
       await access(fileURLToPath(stylesheet));
     `,
@@ -69,7 +69,7 @@ try {
         buildOrder,
         createOrderEditor,
         type OrderEditorDocument,
-      } from "@hmcts-cft/order-flow";
+      } from "@hmcts-cft/docweave";
 
       declare const mount: HTMLElement;
       const target = buildOrder((order) => {

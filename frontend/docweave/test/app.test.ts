@@ -5,7 +5,7 @@ import request from "supertest";
 
 import { createApp } from "../src/app.js";
 
-describe("order flow page", () => {
+describe("Docweave page", () => {
   it("renders the GOV.UK page shell and ProseMirror mount points", async () => {
     const response = await request(createApp())
       .get("/")

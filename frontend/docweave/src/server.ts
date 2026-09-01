@@ -24,7 +24,7 @@ const app = createApp({ development, vite });
 const server = createHttpServer(app);
 
 server.listen(port, host, () => {
-  console.log(`Order flow listening on http://${host}:${port}`);
+  console.log(`Docweave listening on http://${host}:${port}`);
 });
 
 async function shutDown(): Promise<void> {

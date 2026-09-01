@@ -1,4 +1,4 @@
-name: Publish HMCTS CFT Order Flow to Azure Artifacts
+name: Publish HMCTS CFT Docweave to Azure Artifacts
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ on:
       - '**/*.md'
       - '*.md'
     tags:
-      - 'hmcts-cft-order-flow/v*'
+      - 'hmcts-cft-docweave/v*'
 
 permissions:
   contents: read
@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: frontend/order-flow
+        working-directory: frontend/docweave
 
     steps:
       - uses: actions/checkout@v7
@@ -36,7 +36,7 @@ jobs:
         with:
           node-version: 20.19.0
           cache: npm
-          cache-dependency-path: frontend/order-flow/package-lock.json
+          cache-dependency-path: frontend/docweave/package-lock.json
 
       - name: Resolve release metadata
         id: release
@@ -46,7 +46,7 @@ jobs:
             release_version='${{ inputs.release_version }}'
             npm_dist_tag='${{ inputs.npm_dist_tag }}'
           else
-            release_version="${GITHUB_REF_NAME#hmcts-cft-order-flow/v}"
+            release_version="${GITHUB_REF_NAME#hmcts-cft-docweave/v}"
             case "$release_version" in
               *-alpha.*) npm_dist_tag="alpha" ;;
               *-beta.*) npm_dist_tag="beta" ;;

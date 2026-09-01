@@ -1,5 +1,5 @@
 {
-  "name": "@hmcts-cft/order-flow",
+  "name": "@hmcts-cft/docweave",
   "version": "0.0.0-local",
   "private": true,
   "description": "Rich-text editor for generated court orders",
@@ -8,7 +8,7 @@
   "types": "./dist/lib/index.d.ts",
   "files": [
     "dist/lib",
-    "dist/order-flow.css",
+    "dist/docweave.css",
     "src/editor.scss"
   ],
   "exports": {
@@ -17,7 +17,7 @@
       "import": "./dist/lib/index.js",
       "default": "./dist/lib/index.js"
     },
-    "./styles/order-flow.css": "./dist/order-flow.css",
+    "./styles/docweave.css": "./dist/docweave.css",
     "./styles/editor": "./src/editor.scss"
   },
   "engines": {
@@ -26,7 +26,7 @@
   "scripts": {
     "dev": "NODE_ENV=development tsx watch src/server.ts",
     "build": "npm run build:lib && vite build && tsc -p tsconfig.server.json",
-    "build:lib": "rm -rf dist/lib dist/order-flow.css && tsc -p tsconfig.lib.json && sass --load-path=node_modules src/editor.scss dist/order-flow.css --no-source-map",
+    "build:lib": "rm -rf dist/lib dist/docweave.css && tsc -p tsconfig.lib.json && sass --load-path=node_modules src/editor.scss dist/docweave.css --no-source-map",
     "start": "NODE_ENV=production node dist/server/server.js",
     "test": "npm run build:lib && npm run test:built",
     "test:built": "npm run typecheck && tsx --test test/*.test.ts && node test/package-smoke.mjs",
