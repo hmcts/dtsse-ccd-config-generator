@@ -69,23 +69,4 @@ public class CaseReindexingService {
         )
     );
   }
-
-  /**
-   * Queue a single case for reindexing at live priority. Call after any write that changes
-   * derived, indexed fields outside a case event (e.g. representation changes).
-   */
-  public int reindexCase(long caseReference) {
-    return jdbcTemplate.update(
-        """
-            insert into ccd.es_queue(reference, case_revision, enqueued_at)
-            select reference, case_revision, now()
-            from ccd.case_data
-            where reference = :reference
-            on conflict (reference) do update
-            set case_revision = greatest(ccd.es_queue.case_revision, excluded.case_revision),
-                enqueued_at = least(ccd.es_queue.enqueued_at, excluded.enqueued_at)
-            """,
-        java.util.Map.of("reference", caseReference)
-    );
-  }
 }
