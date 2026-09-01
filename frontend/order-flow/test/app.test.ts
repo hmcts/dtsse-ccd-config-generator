@@ -31,6 +31,10 @@ describe("order flow page", () => {
     assert.match(response.text, /\sSubpara 2\s/);
     assert.match(response.text, /value="subpara-3"/);
     assert.match(response.text, /\sSubpara 3\s/);
+    assert.match(response.text, /Generated wording reconciliation/);
+    assert.match(response.text, /name="reconciliation-repro"/);
+    assert.match(response.text, /value="alternative-possession-wording"/);
+    assert.match(response.text, /Change generated possession wording/);
     assert.match(response.text, /Suspended possession clause/);
     assert.match(response.text, /name="suspended-order-choice"/);
     assert.match(response.text, /value="clause" checked/);

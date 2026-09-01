@@ -17,6 +17,7 @@ import {
   setGeneratedDocument,
 } from "../src/diff-styling.js";
 import { indentListItem, outdentListItem } from "../src/keymap.js";
+import { reconcileOrderDocument } from "../src/reconciliation.js";
 import { editorSchema } from "../src/schema.js";
 
 function listItem(id: string | null, text: string) {
@@ -713,6 +714,68 @@ describe("diff styling", () => {
 
     state = state.apply(setGeneratedDocument(state.tr, generatedDocument));
 
+    const decorationSet = plugin.props.decorations?.call(plugin, state);
+    assert.ok(decorationSet instanceof DecorationSet);
+    assert.equal(
+      decorationSet.find(
+        undefined,
+        undefined,
+        (spec) => spec.diffKind === "modified",
+      ).length,
+      0,
+    );
+    assert.equal(
+      decorationSet.find(
+        undefined,
+        undefined,
+        (spec) => spec.diffKind === "inserted",
+      ).length,
+      1,
+    );
+  });
+
+  it("does not mark reconciled parent wording changed when preserving a user-authored child", () => {
+    const previousItem = listItem("item:possession", "Old wording");
+    const targetItem = listItem("item:possession", "New wording");
+    const userAuthoredItem = listItem(null, "User-authored subclause");
+    const documentWith = (item: typeof previousItem) =>
+      editorSchema.node(
+        "doc",
+        null,
+        editorSchema.node(
+          "ordered_list",
+          { id: "ordered-list:clauses" },
+          item,
+        ),
+      );
+    const liveItem = editorSchema.node(
+      "list_item",
+      { id: "item:possession" },
+      [
+        previousItem.firstChild!,
+        editorSchema.node("ordered_list", null, userAuthoredItem),
+      ],
+    );
+    const previousDocument = documentWith(previousItem);
+    const targetDocument = documentWith(targetItem);
+    const plugin = createDiffStylingPlugin();
+    let state = EditorState.create({
+      schema: editorSchema,
+      doc: documentWith(liveItem),
+      plugins: [plugin],
+    });
+    const transaction = reconcileOrderDocument(
+      state.tr,
+      previousDocument,
+      targetDocument,
+    );
+
+    state = state.apply(setGeneratedDocument(transaction, targetDocument));
+
+    assert.equal(
+      state.doc.firstChild!.firstChild!.firstChild!.textContent,
+      "New wording",
+    );
     const decorationSet = plugin.props.decorations?.call(plugin, state);
     assert.ok(decorationSet instanceof DecorationSet);
     assert.equal(

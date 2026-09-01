@@ -105,6 +105,26 @@
         }) }}
 
         {{ govukCheckboxes({
+          name: "reconciliation-repro",
+          classes: "structure-checkboxes",
+          fieldset: {
+            legend: {
+              text: "Generated wording reconciliation",
+              classes: "govuk-fieldset__legend--m"
+            }
+          },
+          hint: {
+            text: "The first clause has a green user-authored subclause. Tick this to change its generated parent wording while preserving the subclause."
+          },
+          items: [
+            {
+              value: "alternative-possession-wording",
+              text: "Change generated possession wording"
+            }
+          ]
+        }) }}
+
+        {{ govukCheckboxes({
           name: "suspended-order-choice",
           classes: "structure-checkboxes",
           fieldset: {

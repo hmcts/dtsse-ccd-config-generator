@@ -140,6 +140,118 @@ describe("order document reconciliation", () => {
     );
   });
 
+  it("updates generated list-item wording when it contains a user-authored subclause", () => {
+    const paragraph = (text: string) =>
+      editorSchema.node("paragraph", null, editorSchema.text(text));
+    const generatedItem = (text: string) =>
+      editorSchema.node(
+        "list_item",
+        { id: "item:generated" },
+        paragraph(text),
+      );
+    const userSubclause = editorSchema.node(
+      "list_item",
+      null,
+      paragraph("User-authored subclause"),
+    );
+    const liveItem = editorSchema.node(
+      "list_item",
+      { id: "item:generated" },
+      [
+        paragraph("Old wording"),
+        editorSchema.node("ordered_list", null, userSubclause),
+      ],
+    );
+    const documentWith = (item: typeof liveItem) =>
+      editorSchema.node(
+        "doc",
+        null,
+        editorSchema.node(
+          "ordered_list",
+          { id: "ordered-list:clauses" },
+          item,
+        ),
+      );
+    const transaction = EditorState.create({
+      schema: editorSchema,
+      doc: documentWith(liveItem),
+    }).tr;
+
+    reconcileOrderDocument(
+      transaction,
+      documentWith(generatedItem("Old wording")),
+      documentWith(generatedItem("New wording")),
+    );
+
+    const reconciledItem = transaction.doc.firstChild!.firstChild!;
+    assert.deepEqual(
+      {
+        wording: reconciledItem.firstChild!.textContent,
+        nestedListId: reconciledItem.lastChild!.attrs.id,
+        nestedText: reconciledItem.lastChild!.firstChild!.textContent,
+      },
+      {
+        wording: "New wording",
+        nestedListId: null,
+        nestedText: "User-authored subclause",
+      },
+    );
+  });
+
+  it("preserves edited list-item wording when generated wording changes", () => {
+    const paragraph = (text: string) =>
+      editorSchema.node("paragraph", null, editorSchema.text(text));
+    const generatedItem = (text: string) =>
+      editorSchema.node(
+        "list_item",
+        { id: "item:generated" },
+        paragraph(text),
+      );
+    const userSubclause = editorSchema.node(
+      "list_item",
+      null,
+      paragraph("User-authored subclause"),
+    );
+    const liveItem = editorSchema.node(
+      "list_item",
+      { id: "item:generated" },
+      [
+        paragraph("Judge-edited wording"),
+        editorSchema.node("ordered_list", null, userSubclause),
+      ],
+    );
+    const documentWith = (item: typeof liveItem) =>
+      editorSchema.node(
+        "doc",
+        null,
+        editorSchema.node(
+          "ordered_list",
+          { id: "ordered-list:clauses" },
+          item,
+        ),
+      );
+    const transaction = EditorState.create({
+      schema: editorSchema,
+      doc: documentWith(liveItem),
+    }).tr;
+
+    reconcileOrderDocument(
+      transaction,
+      documentWith(generatedItem("Old generated wording")),
+      documentWith(generatedItem("New generated wording")),
+    );
+
+    const reconciledItem = transaction.doc.firstChild!.firstChild!;
+    assert.equal(
+      reconciledItem.firstChild!.textContent,
+      "Judge-edited wording",
+    );
+    assert.equal(
+      reconciledItem.lastChild!.firstChild!.textContent,
+      "User-authored subclause",
+    );
+  });
+
   it("adds a nested generated list without replacing edited parent content", () => {
     const paragraph = (text: string) =>
       editorSchema.node("paragraph", null, editorSchema.text(text));

@@ -1,8 +1,10 @@
 import { initAll } from "govuk-frontend";
 import { type Node as ProseMirrorNode } from "prosemirror-model";
+import { EditorState } from "prosemirror-state";
 
 import { buildOrder } from "./builder.js";
 import { createOrderEditor } from "./client.js";
+import { editorSchema } from "./schema.js";
 import "./application.scss";
 
 initAll();
@@ -96,6 +98,10 @@ const secondSubparagraphCheckbox = document.querySelector<HTMLInputElement>(
 const thirdSubparagraphCheckbox = document.querySelector<HTMLInputElement>(
   '[name="structure-choice"][value="subpara-3"]',
 );
+const alternativePossessionWordingCheckbox =
+  document.querySelector<HTMLInputElement>(
+    '[name="reconciliation-repro"][value="alternative-possession-wording"]',
+  );
 const suspendedOrderCheckbox = document.querySelector<HTMLInputElement>(
   '[name="suspended-order-choice"][value="clause"]',
 );
@@ -122,6 +128,7 @@ if (
   !orderTextCheckbox ||
   !secondSubparagraphCheckbox ||
   !thirdSubparagraphCheckbox ||
+  !alternativePossessionWordingCheckbox ||
   !suspendedOrderCheckbox ||
   !paymentByDateCheckbox ||
   !monthlyPaymentsCheckbox ||
@@ -136,6 +143,8 @@ if (
 const orderTextControl = orderTextCheckbox;
 const secondSubparagraphControl = secondSubparagraphCheckbox;
 const thirdSubparagraphControl = thirdSubparagraphCheckbox;
+const alternativePossessionWordingControl =
+  alternativePossessionWordingCheckbox;
 const suspendedOrderControl = suspendedOrderCheckbox;
 const paymentByDateControl = paymentByDateCheckbox;
 const monthlyPaymentsControl = monthlyPaymentsCheckbox;
@@ -147,15 +156,6 @@ const orderDateControls = {
 
 const documentDebug = document.querySelector<HTMLElement>("#document-debug");
 const htmlDebug = document.querySelector<HTMLElement>("#html-debug");
-
-const controller = createOrderEditor({
-  mount: "#editor",
-  toolbar: "#order-editor-toolbar",
-  onChange(editorDocument) {
-    if (documentDebug) documentDebug.textContent = JSON.stringify(editorDocument.current, null, 2);
-    if (htmlDebug) htmlDebug.textContent = document.querySelector("#editor")?.innerHTML ?? "";
-  },
-});
 
 function readAttendances(): Attendance[] {
   return [...attendanceRows].map((row) => {
@@ -228,7 +228,11 @@ function buildCurrentOrder(): ProseMirrorNode {
     order.orderedList("order-clauses", (list) => {
       list.item("give-possession", (content) => {
         content
-          .text("The defendants must give up possession on or before ")
+          .text(
+            alternativePossessionWordingControl.checked
+              ? "The defendants are required to give up possession no later than "
+              : "The defendants must give up possession on or before ",
+          )
           .generatedText("deadline", readOrderDate())
           .text(".");
       });
@@ -275,6 +279,55 @@ function buildCurrentOrder(): ProseMirrorNode {
   });
 }
 
+function addReconciliationReproState(
+  generatedDocument: ProseMirrorNode,
+): ProseMirrorNode {
+  let insertionPosition: number | undefined;
+
+  generatedDocument.descendants((node, position) => {
+    if (node.attrs.id !== "item:give-possession") return true;
+
+    insertionPosition = position + node.nodeSize - 1;
+    return false;
+  });
+
+  if (insertionPosition === undefined) {
+    throw new Error("The possession clause is missing");
+  }
+
+  return EditorState.create({
+    schema: editorSchema,
+    doc: generatedDocument,
+  }).doc;
+}
+
+const initialGeneratedDocument = buildCurrentOrder();
+const initialCurrentDocument = addReconciliationReproState(
+  initialGeneratedDocument,
+);
+const controller = createOrderEditor({
+  mount: "#editor",
+  toolbar: "#order-editor-toolbar",
+  initialDocument: {
+    schema: "order-flow-document",
+    version: 1,
+    current: initialCurrentDocument.toJSON() as Record<string, unknown>,
+    generated: initialGeneratedDocument.toJSON() as Record<string, unknown>,
+  },
+  onChange(editorDocument) {
+    if (documentDebug) {
+      documentDebug.textContent = JSON.stringify(
+        editorDocument.current,
+        null,
+        2,
+      );
+    }
+    if (htmlDebug) {
+      htmlDebug.textContent = document.querySelector("#editor")?.innerHTML ?? "";
+    }
+  },
+});
+
 function updateStructure(): void {
   controller.render(buildCurrentOrder());
 }
@@ -282,6 +335,10 @@ function updateStructure(): void {
 orderTextControl.addEventListener("change", updateStructure);
 secondSubparagraphControl.addEventListener("change", updateStructure);
 thirdSubparagraphControl.addEventListener("change", updateStructure);
+alternativePossessionWordingControl.addEventListener(
+  "change",
+  updateStructure,
+);
 suspendedOrderControl.addEventListener("change", updateStructure);
 paymentByDateControl.addEventListener("change", updateStructure);
 monthlyPaymentsControl.addEventListener("change", updateStructure);

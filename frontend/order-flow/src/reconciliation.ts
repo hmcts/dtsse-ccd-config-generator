@@ -1,4 +1,4 @@
-import { type Node as ProseMirrorNode } from "prosemirror-model";
+import { Fragment, type Node as ProseMirrorNode } from "prosemirror-model";
 import { type Transaction } from "prosemirror-state";
 
 import {
@@ -153,6 +153,48 @@ function reconcileNestedModifications(
   }
 }
 
+function directListItemContent(
+  node: ProseMirrorNode,
+): readonly ProseMirrorNode[] {
+  return node.children.filter((child) => child.type.name !== "ordered_list");
+}
+
+function nodesEqual(
+  left: readonly ProseMirrorNode[],
+  right: readonly ProseMirrorNode[],
+): boolean {
+  return left.length === right.length &&
+    left.every((node, index) => node.eq(right[index]!));
+}
+
+function reconcileListItemContent(
+  transaction: Transaction,
+  live: PositionedNode,
+  previous: ProseMirrorNode,
+  target: ProseMirrorNode,
+): void {
+  const liveContent = directListItemContent(live.node);
+  const previousContent = directListItemContent(previous);
+  const targetContent = directListItemContent(target);
+
+  if (
+    !nodesEqual(liveContent, previousContent) ||
+    nodesEqual(previousContent, targetContent)
+  ) {
+    return;
+  }
+
+  const liveContentSize = liveContent.reduce(
+    (size, node) => size + node.nodeSize,
+    0,
+  );
+  transaction.replaceWith(
+    live.position + 1,
+    live.position + 1 + liveContentSize,
+    Fragment.fromArray(targetContent),
+  );
+}
+
 function reconcileModified(
   transaction: Transaction,
   change: ModifiedNodeChange,
@@ -169,6 +211,14 @@ function reconcileModified(
   }
 
   if (isManagedContainer(change.target)) {
+    if (change.target.type.name === "list_item") {
+      reconcileListItemContent(
+        transaction,
+        live,
+        change.previous,
+        change.target,
+      );
+    }
     if (!live.node.sameMarkup(change.target)) {
       transaction.setNodeMarkup(
         live.position,
