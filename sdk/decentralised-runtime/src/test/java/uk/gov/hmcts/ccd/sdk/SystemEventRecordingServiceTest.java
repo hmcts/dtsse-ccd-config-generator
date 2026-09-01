@@ -18,6 +18,7 @@ import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.impl.CaseProjectionService;
+import org.springframework.transaction.support.TransactionTemplate;
 import uk.gov.hmcts.ccd.sdk.impl.CaseSubmissionService;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.SystemEventRecordingService.ActorAttribution;
@@ -29,9 +30,19 @@ class SystemEventRecordingServiceTest {
   private final CaseProjectionService caseProjectionService = mock(CaseProjectionService.class);
   private final ResolvedConfigRegistry resolvedConfigRegistry = mock(ResolvedConfigRegistry.class);
   private final CaseSubmissionService submissionService = mock(CaseSubmissionService.class);
+  private final TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
 
   private final SystemEventRecordingService recorder = new SystemEventRecordingService(
-      caseProjectionService, resolvedConfigRegistry, submissionService);
+      caseProjectionService, resolvedConfigRegistry, submissionService, transactionTemplate);
+
+  {
+    org.mockito.Mockito.doAnswer(invocation -> {
+      invocation
+          .<java.util.function.Consumer<org.springframework.transaction.TransactionStatus>>getArgument(0)
+          .accept(null);
+      return null;
+    }).when(transactionTemplate).executeWithoutResult(org.mockito.ArgumentMatchers.any());
+  }
 
   private enum State { Open, Closed }
 

@@ -4,6 +4,7 @@ import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedEventDetails;
@@ -28,6 +29,7 @@ public class SystemEventRecordingService {
   private final CaseProjectionService caseProjectionService;
   private final ResolvedConfigRegistry resolvedConfigRegistry;
   private final CaseSubmissionService submissionService;
+  private final TransactionTemplate transactionTemplate;
 
   /** The person the event is recorded on behalf of; shown in the audit as proxied by the system user. */
   public record ActorAttribution(String id, String firstName, String lastName) {
@@ -48,14 +50,18 @@ public class SystemEventRecordingService {
                                 String summary,
                                 ActorAttribution actor,
                                 UUID idempotencyKey) {
-    var current = caseProjectionService.load(caseReference);
-    var caseDetails = current.getCaseDetails();
-    var eventConfig = resolvedConfigRegistry.getRequiredEvent(caseDetails.getCaseTypeId(), eventId);
+    // A transaction gives the projection a persistence session, which callers on background
+    // threads (schedulers, tasks) do not otherwise have.
+    transactionTemplate.executeWithoutResult(status -> {
+      var current = caseProjectionService.load(caseReference);
+      var caseDetails = current.getCaseDetails();
+      var eventConfig = resolvedConfigRegistry.getRequiredEvent(caseDetails.getCaseTypeId(), eventId);
 
-    rejectIfEventNotPermittedInCurrentState(eventConfig, caseDetails);
+      rejectIfEventNotPermittedInCurrentState(eventConfig, caseDetails);
 
-    var event = snapshotEvent(current, eventConfig, eventId, summary, actor);
-    submissionService.submit(event, authorisation, idempotencyKey);
+      var event = snapshotEvent(current, eventConfig, eventId, summary, actor);
+      submissionService.submit(event, authorisation, idempotencyKey);
+    });
   }
 
   private void rejectIfEventNotPermittedInCurrentState(Event<?, ?, ?> eventConfig, CaseDetails caseDetails) {
