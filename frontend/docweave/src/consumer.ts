@@ -307,7 +307,6 @@ const initialCurrentDocument = addReconciliationReproState(
 );
 const controller = createOrderEditor({
   mount: "#editor",
-  toolbar: "#order-editor-toolbar",
   initialDocument: {
     schema: "docweave-document",
     version: 1,

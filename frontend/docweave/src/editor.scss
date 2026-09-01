@@ -78,14 +78,29 @@
   display: block;
 }
 
-.order-editor-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin: 0 0 8px 2.5rem;
+.docweave-editor {
+  --editor-gutter-width: 2.5rem;
+
+  position: relative;
+  border: 1px solid #b1b4b6;
+  color: #0b0c0c;
+  font-family: arial, sans-serif;
+  font-size: 19px;
+  line-height: 1.31579;
 }
 
-.order-editor-toolbar__button {
+.docweave-editor__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 20px 8px var(--editor-gutter-width);
+  border-bottom: 1px solid #b1b4b6;
+  background: #f3f2f1;
+}
+
+.docweave-editor__toolbar-button {
+  appearance: none;
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
@@ -96,40 +111,51 @@
   margin-bottom: 0;
   padding: 6px 10px;
   border: 2px solid #0b0c0c;
+  background: #fff;
   box-shadow: none;
+  color: #0b0c0c;
+  cursor: pointer;
+  font-family: inherit;
   font-size: 1.1rem;
   font-weight: 700;
   line-height: 1.2;
   white-space: nowrap;
 }
 
-.order-editor-toolbar__button:hover {
+.docweave-editor__toolbar-button:hover {
   background: #dbdad9;
 }
 
-.order-editor-toolbar__icon {
-  display: block;
+.docweave-editor__toolbar-button:focus {
+  border-color: #0b0c0c;
+  outline: 3px solid #ffdd00;
+  outline-offset: 0;
+  background: #ffdd00;
+  box-shadow: 0 2px 0 #0b0c0c;
 }
 
-.order-editor-toolbar__separator {
+.docweave-editor__toolbar-button:disabled {
+  border-color: #505a5f;
+  background: #f3f2f1;
+  color: #505a5f;
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.docweave-editor__toolbar-icon {
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+
+.docweave-editor__toolbar-separator {
   width: 1px;
   height: 28px;
   margin: 0 6px;
   background: #b1b4b6;
 }
 
-.docweave-editor {
-  position: relative;
-  border: 1px solid #b1b4b6;
-  color: #0b0c0c;
-  font-family: arial, sans-serif;
-  font-size: 19px;
-  line-height: 1.31579;
-}
-
 .docweave-editor .ProseMirror {
-  --editor-gutter-width: 2.5rem;
-
   min-height: 12rem;
   padding: 20px;
   padding-left: calc(var(--editor-gutter-width) + 20px);
@@ -144,77 +170,71 @@
   );
 }
 
-.revert-node-button {
+.docweave-editor__revert {
+  display: flex;
   position: absolute;
   left: 10px;
+  align-items: center;
+  justify-content: center;
   width: 1.5rem;
   height: 1.5rem;
   padding: 0;
   border: 1px solid #505a5f;
   border-radius: 2px;
   background: #fff;
-  color: #0b0c0c;
+  color: #505a5f;
   font-size: 19px;
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
 }
 
-.revert-node-button:hover {
+.docweave-editor__revert:hover {
   background: #f3f2f1;
 }
 
-.revert-node-button:focus {
+.docweave-editor__revert:focus {
   outline: 3px solid #ffdd00;
   outline-offset: 0;
 }
 
-.revert-node-button__icon {
-  display: inline-block;
+.docweave-editor__revert-icon {
+  display: block;
   width: 1.25rem;
   height: 1.25rem;
-  vertical-align: middle;
 }
 
-.user-authored-paragraph {
+.docweave-editor__clause,
+li.docweave-editor__clause > p {
   box-sizing: border-box;
-  border-left: 4px solid #00703c;
-  background: #cce2d8;
 }
 
-.modified-clause {
-  box-sizing: border-box;
-  border-left: 4px solid #1d70b8;
-  background: #d2e2f1;
-}
-
-p.user-authored-paragraph,
-p.modified-clause,
-li.user-authored-paragraph > p,
-li.modified-clause > p {
+p.docweave-editor__clause,
+li.docweave-editor__clause > p {
   width: fit-content;
   max-width: 100%;
 }
 
-li.user-authored-paragraph,
-li.modified-clause {
+// A flagged list item leaves the highlight to its paragraph, so the marker
+// number stays outside the shaded area.
+li.docweave-editor__clause {
   border-left: 0;
   background: transparent;
 }
 
-li.user-authored-paragraph > p {
-  box-sizing: border-box;
+.docweave-editor__clause--inserted,
+li.docweave-editor__clause--inserted > p {
   border-left: 4px solid #00703c;
   background: #cce2d8;
 }
 
-li.modified-clause > p {
-  box-sizing: border-box;
+.docweave-editor__clause--modified,
+li.docweave-editor__clause--modified > p {
   border-left: 4px solid #1d70b8;
   background: #d2e2f1;
 }
 
-.docweave-editor .ProseMirror li:has(.revert-node-button) {
+.docweave-editor .ProseMirror li:has(.docweave-editor__revert) {
   position: static;
 }
 
@@ -230,5 +250,5 @@ li.modified-clause > p {
 }
 
 .docweave-editor .ProseMirror ol ol {
-  list-style-type: lower-alpha;
+  list-style-type: lower-roman;
 }

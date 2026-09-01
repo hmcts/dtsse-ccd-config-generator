@@ -34,11 +34,7 @@ beforeEach(() => {
   dom = new JSDOM(
     `<!doctype html>
       <div id="editor"></div>
-      <div id="restored-editor"></div>
-      <div id="toolbar">
-        <button type="button" data-editor-command="undo">Undo</button>
-        <button type="button" data-editor-command="bold">Bold</button>
-      </div>`,
+      <div id="restored-editor"></div>`,
     { pretendToBeVisual: true },
   );
   originalGlobals = new Map(
@@ -102,7 +98,6 @@ describe("public order editor API", () => {
     });
     const controller = createOrderEditor({
       mount: "#editor",
-      toolbar: "#toolbar",
       onChange(document) {
         changes.push(document);
       },
@@ -112,6 +107,46 @@ describe("public order editor API", () => {
 
     const mount = dom.window.document.querySelector<HTMLElement>("#editor")!;
     assert.equal(mount.classList.contains("docweave-editor"), true);
+    const toolbar = mount.querySelector<HTMLElement>(
+      ".docweave-editor__toolbar",
+    );
+    assert.ok(toolbar);
+    assert.equal(toolbar.getAttribute("role"), "toolbar");
+    assert.equal(
+      toolbar.getAttribute("aria-label"),
+      "Order editor formatting",
+    );
+    const toolbarButtons = [
+      ...toolbar.querySelectorAll<HTMLButtonElement>(
+        "[data-editor-command]",
+      ),
+    ];
+    assert.deepEqual(
+      toolbarButtons.map((button) => button.dataset.editorCommand),
+      ["undo", "redo", "bold", "italic", "numbered", "outdent", "indent"],
+    );
+    assert.deepEqual(
+      toolbarButtons.map((button) => button.getAttribute("aria-label")),
+      [
+        "Undo",
+        "Redo",
+        "Bold",
+        "Italic",
+        "Numbered clause",
+        "Outdent paragraph",
+        "Indent paragraph",
+      ],
+    );
+    assert.equal(
+      toolbarButtons.every((button) => button.type === "button"),
+      true,
+    );
+    assert.equal(toolbarButtons[0]!.disabled, true);
+    assert.equal(toolbarButtons[2]!.disabled, false);
+    assert.equal(changes.length, 1);
+    const changesBeforeToolbarCommand = changes.length;
+    toolbarButtons[2]!.click();
+    assert.equal(changes.length, changesBeforeToolbarCommand + 1);
     assert.match(mount.textContent, /IT IS ORDERED THAT:/);
     assert.match(mount.textContent, /Give up possession by 1 October 2026/);
     assert.equal(
@@ -120,8 +155,6 @@ describe("public order editor API", () => {
       ),
       "false",
     );
-    assert.equal(changes.length, 1);
-
     const saved = controller.getDocument();
     assert.equal(saved.schema, "docweave-document");
     assert.equal(saved.version, 1);
@@ -130,6 +163,9 @@ describe("public order editor API", () => {
 
     controller.destroy();
     assert.equal(mount.querySelector(".ProseMirror"), null);
+    assert.equal(mount.querySelector(".docweave-editor__toolbar"), null);
+    assert.equal(mount.querySelector(".docweave-editor__surface"), null);
+    assert.equal(mount.classList.contains("docweave-editor"), false);
   });
 
   it("restores edits and reconciles new generated values", async () => {
@@ -176,5 +212,44 @@ describe("public order editor API", () => {
     );
 
     controller.destroy();
+  });
+
+  it("creates editor controls in the mount's document", async () => {
+    const { buildOrder, createOrderEditor } = await import("../src/index.js");
+    const generated = buildOrder((order) => {
+      order.paragraph("heading", "Generated heading");
+    });
+    const current = structuredClone(generated.toJSON()) as TestDocumentJSON;
+    current.content[0]!.content![0]!.text = "Edited heading";
+    const ownerDom = new JSDOM('<div id="editor"></div>', {
+      pretendToBeVisual: true,
+    });
+
+    try {
+      const mount = ownerDom.window.document.querySelector<HTMLElement>(
+        "#editor",
+      )!;
+      const controller = createOrderEditor({
+        mount,
+        initialDocument: {
+          schema: "docweave-document",
+          version: 1,
+          current: current as unknown as Record<string, unknown>,
+          generated: generated.toJSON() as Record<string, unknown>,
+        },
+      });
+
+      assert.equal(
+        mount.querySelector(".docweave-editor__toolbar")?.ownerDocument,
+        ownerDom.window.document,
+      );
+      assert.equal(
+        mount.querySelector(".docweave-editor__revert")?.ownerDocument,
+        ownerDom.window.document,
+      );
+      controller.destroy();
+    } finally {
+      ownerDom.window.close();
+    }
   });
 });

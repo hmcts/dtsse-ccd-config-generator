@@ -12,6 +12,7 @@ import {
   getGeneratedDocument,
   setGeneratedDocument,
 } from "./diff-styling.js";
+import { createRedoIcon, createUndoIcon } from "./icons.js";
 import {
   createKeymapPlugins,
   indentListItem,
@@ -47,7 +48,6 @@ export interface OrderEditorDocument {
 
 export interface CreateOrderEditorOptions {
   mount: HTMLElement | string;
-  toolbar?: HTMLElement | string;
   initialDocument?: OrderEditorDocument;
   onChange?: (document: OrderEditorDocument) => void;
 }
@@ -89,6 +89,81 @@ function isEditorCommandName(value: string): value is EditorCommandName {
   return Object.hasOwn(editorCommands, value);
 }
 
+function createToolbarButton(
+  ownerDocument: Document,
+  command: EditorCommandName,
+  label: string,
+  content: string | Node,
+): HTMLButtonElement {
+  const button = ownerDocument.createElement("button");
+  button.type = "button";
+  button.className = "docweave-editor__toolbar-button";
+  button.dataset.editorCommand = command;
+  button.setAttribute("aria-label", label);
+  button.append(content);
+  return button;
+}
+
+function createToolbar(ownerDocument: Document): HTMLElement {
+  const toolbar = ownerDocument.createElement("div");
+  toolbar.className = "docweave-editor__toolbar";
+  toolbar.setAttribute("role", "toolbar");
+  toolbar.setAttribute("aria-label", "Order editor formatting");
+
+  const iconClass = "docweave-editor__toolbar-icon";
+
+  toolbar.append(
+    createToolbarButton(
+      ownerDocument,
+      "undo",
+      "Undo",
+      createUndoIcon(ownerDocument, iconClass),
+    ),
+    createToolbarButton(
+      ownerDocument,
+      "redo",
+      "Redo",
+      createRedoIcon(ownerDocument, iconClass),
+    ),
+  );
+
+  const separator = ownerDocument.createElement("span");
+  separator.className = "docweave-editor__toolbar-separator";
+  separator.setAttribute("aria-hidden", "true");
+  toolbar.append(separator);
+
+  const strong = ownerDocument.createElement("strong");
+  strong.textContent = "B";
+
+  const emphasis = ownerDocument.createElement("em");
+  emphasis.textContent = "I";
+
+  toolbar.append(
+    createToolbarButton(ownerDocument, "bold", "Bold", strong),
+    createToolbarButton(ownerDocument, "italic", "Italic", emphasis),
+    createToolbarButton(
+      ownerDocument,
+      "numbered",
+      "Numbered clause",
+      "1.",
+    ),
+    createToolbarButton(
+      ownerDocument,
+      "outdent",
+      "Outdent paragraph",
+      "←",
+    ),
+    createToolbarButton(
+      ownerDocument,
+      "indent",
+      "Indent paragraph",
+      "→",
+    ),
+  );
+
+  return toolbar;
+}
+
 interface ConnectedToolbar {
   update(): void;
   destroy(): void;
@@ -110,7 +185,6 @@ function connectToolbar(
         editorCommands[commandName](view.state);
 
       button.disabled = !enabled;
-      button.setAttribute("aria-disabled", String(!enabled));
     }
   }
 
@@ -157,9 +231,6 @@ export function createOrderEditor(
   const editor = typeof options.mount === "string"
     ? ownerDocument?.querySelector<HTMLElement>(options.mount)
     : options.mount;
-  const toolbar = typeof options.toolbar === "string"
-    ? ownerDocument?.querySelector<HTMLElement>(options.toolbar)
-    : options.toolbar;
   if (!editor) {
     throw new Error(`Order editor mount point not found: ${String(options.mount)}`);
   }
@@ -181,6 +252,13 @@ export function createOrderEditor(
     );
   }
 
+  const toolbar = createToolbar(editor.ownerDocument);
+  const editorSurface = editor.ownerDocument.createElement("div");
+  editorSurface.className = "docweave-editor__surface";
+  const mountAlreadyStyled = editor.classList.contains("docweave-editor");
+  editor.classList.add("docweave-editor");
+  editor.append(toolbar, editorSurface);
+
   let connectedToolbar: ConnectedToolbar | undefined;
 
   const getDocument = (): OrderEditorDocument => {
@@ -193,7 +271,7 @@ export function createOrderEditor(
     };
   };
 
-  const view = new EditorView(editor, {
+  const view = new EditorView(editorSurface, {
     state: initialState,
     dispatchTransaction(transaction) {
       const nextState = view.state.apply(transaction);
@@ -203,8 +281,7 @@ export function createOrderEditor(
     },
   });
 
-  editor.classList.add("docweave-editor");
-  if (toolbar) connectedToolbar = connectToolbar(toolbar, view);
+  connectedToolbar = connectToolbar(toolbar, view);
 
   const controller: OrderEditorController = {
     render(target: ProseMirrorNode): void {
@@ -234,6 +311,9 @@ export function createOrderEditor(
     destroy(): void {
       connectedToolbar?.destroy();
       view.destroy();
+      toolbar.remove();
+      editorSurface.remove();
+      if (!mountAlreadyStyled) editor.classList.remove("docweave-editor");
     },
   };
 

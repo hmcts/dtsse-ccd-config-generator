@@ -10,6 +10,7 @@ import {
   DecorationSet,
 } from "prosemirror-view";
 
+import { createUndoIcon } from "./icons.js";
 import { hasSameManagedStructure } from "./invariants.js";
 
 interface DiffStylingState {
@@ -32,15 +33,6 @@ function isClauseNode(
 ): boolean {
   return (parent === doc && node.type.name !== "ordered_list") ||
     parent?.type.name === "ordered_list";
-}
-
-function createUndoIcon(): HTMLSpanElement {
-  const icon = document.createElement("span");
-
-  icon.ariaHidden = "true";
-  icon.className = "revert-node-button__icon";
-  icon.textContent = "↶";
-  return icon;
 }
 
 export function deleteUserAuthoredNode(
@@ -121,15 +113,20 @@ export function getGeneratedDocument(
   return diffStylingKey.getState(state)?.generatedDocument;
 }
 
-function createRevertButton(label: string): HTMLButtonElement {
-  const button = document.createElement("button");
+function createRevertButton(
+  ownerDocument: Document,
+  label: string,
+): HTMLButtonElement {
+  const button = ownerDocument.createElement("button");
 
   button.type = "button";
-  button.className = "revert-node-button";
+  button.className = "docweave-editor__revert";
   button.contentEditable = "false";
   button.setAttribute("aria-label", label);
   button.title = label;
-  button.append(createUndoIcon());
+  button.append(
+    createUndoIcon(ownerDocument, "docweave-editor__revert-icon"),
+  );
 
   return button;
 }
@@ -189,13 +186,17 @@ function createDiffDecorations(
     if (isClause && node.attrs.id === null) {
       decorations.push(
         Decoration.node(position, position + node.nodeSize, {
-          class: "user-authored-paragraph",
+          class:
+            "docweave-editor__clause docweave-editor__clause--inserted",
         }, {
           diffKind: "inserted",
         }),
         Decoration.widget(
           position + 1,
-          () => createRevertButton("Undo inserted paragraph"),
+          (view) => createRevertButton(
+            view.dom.ownerDocument,
+            "Undo inserted paragraph",
+          ),
           {
             side: -1,
             revert: (state: EditorState) =>
@@ -218,13 +219,17 @@ function createDiffDecorations(
     ) {
       decorations.push(
         Decoration.node(position, position + node.nodeSize, {
-          class: "modified-clause",
+          class:
+            "docweave-editor__clause docweave-editor__clause--modified",
         }, {
           diffKind: "modified",
         }),
         Decoration.widget(
           position + 1,
-          () => createRevertButton("Undo changes to clause"),
+          (view) => createRevertButton(
+            view.dom.ownerDocument,
+            "Undo changes to clause",
+          ),
           {
             side: -1,
             revert: (state: EditorState) =>
@@ -274,7 +279,7 @@ export function createDiffStylingPlugin(): Plugin<DiffStylingState> {
         if (!(event.target instanceof Element)) return false;
 
         const button = event.target.closest<HTMLButtonElement>(
-          ".revert-node-button",
+          ".docweave-editor__revert",
         );
         if (!button || !view.dom.contains(button)) return false;
 

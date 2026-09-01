@@ -79,6 +79,9 @@ try {
       controller.render(target);
       const saved: OrderEditorDocument = controller.getDocument();
       saved satisfies OrderEditorDocument;
+
+      // @ts-expect-error Docweave owns its toolbar markup and behaviour.
+      createOrderEditor({ mount, toolbar: mount });
     `,
   );
   writeFileSync(
