@@ -47,6 +47,12 @@ Generated documents obey these invariants:
 - The managed descendants of an existing non-container are structurally stable;
   they may be modified, but may not be added or removed.
 
+ProseMirror's schema validates every generated and restored document.
+`buildOrder` additionally rejects duplicate managed IDs. Before reconciliation,
+the editor validates both generated documents and rejects any transition that
+violates the remaining identity and structure invariants. Restored documents
+are also checked against their generated baseline before the editor is created.
+
 ### Editing generated clauses
 
 Users may edit the content of generated clauses but may not delete, reparent or
@@ -56,8 +62,10 @@ indented and outdented.
 
 These rules are enforced by a transaction filter rather than individual editor
 commands, so they also apply to structural changes attempted through keyboard,
-toolbar, paste or drag interactions. A transaction that would remove managed
-generated text is rejected for the same reason.
+toolbar, paste or drag interactions. An ordinary transaction must retain the
+exact managed ID set, node types, parents and sibling positions. A transaction
+that would add managed content or remove managed generated text is rejected for
+the same reason.
 
 Reconciliation transactions are explicitly exempt from this protection because
 the newly generated target may legitimately add or remove managed children at

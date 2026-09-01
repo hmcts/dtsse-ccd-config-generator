@@ -17,6 +17,10 @@ import {
   indentListItem,
   outdentListItem,
 } from "./keymap.js";
+import {
+  assertCurrentDocumentMatchesGenerated,
+  assertValidGeneratedDocument,
+} from "./invariants.js";
 import { reconcileOrderDocument } from "./reconciliation.js";
 import { editorSchema } from "./schema.js";
 
@@ -166,6 +170,10 @@ export function createOrderEditor(
   const initialGenerated = options.initialDocument
     ? editorSchema.nodeFromJSON(options.initialDocument.generated)
     : undefined;
+  if (initialGenerated && initialCurrent) {
+    assertValidGeneratedDocument(initialGenerated);
+    assertCurrentDocumentMatchesGenerated(initialCurrent, initialGenerated);
+  }
   let initialState = createEditorState(initialCurrent);
   if (initialGenerated) {
     initialState = initialState.apply(
@@ -200,6 +208,7 @@ export function createOrderEditor(
 
   const controller: OrderEditorController = {
     render(target: ProseMirrorNode): void {
+      assertValidGeneratedDocument(target);
       let transaction = view.state.tr;
       const previousTarget = getGeneratedDocument(view.state);
 

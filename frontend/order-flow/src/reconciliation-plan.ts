@@ -33,7 +33,7 @@ export function managedChildren(node: ProseMirrorNode): ManagedNode[] {
 
   node.descendants((child) => {
     const id = managedId(child);
-    if (!id) return true;
+    if (id === undefined) return true;
 
     children.push({ id, node: child });
     return false;

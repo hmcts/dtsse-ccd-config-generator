@@ -1,6 +1,7 @@
 import { Fragment, type Node as ProseMirrorNode } from "prosemirror-model";
 import { type Transaction } from "prosemirror-state";
 
+import { assertValidGeneratedDocumentTransition } from "./invariants.js";
 import {
   createChangePlan,
   managedChildren,
@@ -337,6 +338,7 @@ export function reconcileOrderDocument(
   previousTarget: ProseMirrorNode,
   target: ProseMirrorNode,
 ): Transaction {
+  assertValidGeneratedDocumentTransition(previousTarget, target);
   reconcileParent(transaction, null, previousTarget, target);
   return transaction;
 }

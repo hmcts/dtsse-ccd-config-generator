@@ -10,6 +10,8 @@ import {
   DecorationSet,
 } from "prosemirror-view";
 
+import { hasSameManagedStructure } from "./invariants.js";
+
 interface DiffStylingState {
   decorations: DecorationSet;
   generatedDocument?: ProseMirrorNode;
@@ -19,15 +21,9 @@ interface ClauseSnapshot {
   node: ProseMirrorNode;
 }
 
-interface ManagedNodeSnapshot {
-  parent: string | symbol;
-  index: number;
-}
-
 type Revert = (state: EditorState) => Transaction | undefined;
 
 const diffStylingKey = new PluginKey<DiffStylingState>("diff-styling");
-const documentParent = Symbol("document-parent");
 
 function isClauseNode(
   node: ProseMirrorNode,
@@ -158,43 +154,6 @@ function clauseNodesById(doc: ProseMirrorNode): Map<string, ProseMirrorNode> {
   );
 }
 
-function managedNodeSnapshotsById(
-  doc: ProseMirrorNode,
-): Map<string, ManagedNodeSnapshot> {
-  const snapshots = new Map<string, ManagedNodeSnapshot>();
-
-  function visit(parent: ProseMirrorNode, parentId: string | symbol): void {
-    const children: Array<{ id: string; node: ProseMirrorNode }> = [];
-
-    parent.descendants((node) => {
-      const id = node.attrs.id;
-      if (typeof id !== "string") return true;
-
-      children.push({ id, node });
-      return false;
-    });
-
-    children.forEach((child, index) => {
-      snapshots.set(child.id, { parent: parentId, index });
-      visit(child.node, child.id);
-    });
-  }
-
-  visit(doc, documentParent);
-  return snapshots;
-}
-
-function preservesManagedStructure(
-  before: ReadonlyMap<string, ManagedNodeSnapshot>,
-  after: ReadonlyMap<string, ManagedNodeSnapshot>,
-): boolean {
-  return [...before].every(([id, snapshot]) => {
-    const updated = after.get(id);
-    return updated?.parent === snapshot.parent &&
-      updated.index === snapshot.index;
-  });
-}
-
 function clauseMatchesGenerated(
   node: ProseMirrorNode,
   generatedNode: ProseMirrorNode,
@@ -282,14 +241,11 @@ function createDiffDecorations(
 export function createDiffStylingPlugin(): Plugin<DiffStylingState> {
   return new Plugin<DiffStylingState>({
     key: diffStylingKey,
-    // Block ordinary transactions that remove, reparent or reorder managed nodes.
+    // Ordinary edits must preserve the complete managed structure.
     filterTransaction(transaction, state) {
       if (transaction.getMeta(diffStylingKey)) return true;
 
-      return preservesManagedStructure(
-        managedNodeSnapshotsById(state.doc),
-        managedNodeSnapshotsById(transaction.doc),
-      );
+      return hasSameManagedStructure(state.doc, transaction.doc);
     },
     state: {
       init(_config, state) {

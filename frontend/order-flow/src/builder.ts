@@ -1,5 +1,6 @@
 import { type Node as ProseMirrorNode } from "prosemirror-model";
 
+import { assertValidGeneratedDocument } from "./invariants.js";
 import { editorSchema } from "./schema.js";
 
 export interface InlineBuilder {
@@ -140,5 +141,7 @@ export function buildOrder(
   };
 
   define(orderBuilder);
-  return editorSchema.node("doc", null, nodes);
+  const document = editorSchema.node("doc", null, nodes);
+  assertValidGeneratedDocument(document);
+  return document;
 }

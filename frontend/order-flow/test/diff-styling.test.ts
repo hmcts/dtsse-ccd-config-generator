@@ -144,6 +144,88 @@ describe("diff styling", () => {
     assert.ok(result.state.doc.eq(doc));
   });
 
+  it("rejects adding a managed clause through an ordinary edit", () => {
+    const generatedClause = editorSchema.node(
+      "paragraph",
+      { id: "paragraph:generated" },
+      editorSchema.text("Generated"),
+    );
+    const insertedManagedClause = editorSchema.node(
+      "paragraph",
+      { id: "paragraph:inserted" },
+      editorSchema.text("Inserted"),
+    );
+    const doc = editorSchema.node("doc", null, generatedClause);
+    const state = EditorState.create({
+      schema: editorSchema,
+      doc,
+      plugins: [createDiffStylingPlugin()],
+    });
+
+    const result = state.applyTransaction(
+      state.tr.insert(doc.content.size, insertedManagedClause),
+    );
+
+    assert.equal(result.transactions.length, 0);
+    assert.ok(result.state.doc.eq(doc));
+  });
+
+  it("treats an empty-string ID as managed", () => {
+    const managedParagraph = editorSchema.node(
+      "paragraph",
+      { id: "" },
+      editorSchema.text("Generated"),
+    );
+    const replacement = editorSchema.node(
+      "paragraph",
+      null,
+      editorSchema.text("Replacement"),
+    );
+    const doc = editorSchema.node("doc", null, managedParagraph);
+    const state = EditorState.create({
+      schema: editorSchema,
+      doc,
+      plugins: [createDiffStylingPlugin()],
+    });
+
+    const result = state.applyTransaction(
+      state.tr.replaceWith(0, doc.content.size, replacement),
+    );
+
+    assert.equal(result.transactions.length, 0);
+    assert.ok(result.state.doc.eq(doc));
+  });
+
+  it("rejects changing a managed node's type through an ordinary edit", () => {
+    const managedParagraph = editorSchema.node(
+      "paragraph",
+      { id: "managed" },
+      editorSchema.text("Generated"),
+    );
+    const replacement = editorSchema.node(
+      "ordered_list",
+      null,
+      editorSchema.node(
+        "list_item",
+        { id: "managed" },
+        editorSchema.node("paragraph", null, editorSchema.text("Generated")),
+      ),
+    );
+    const doc = editorSchema.node("doc", null, managedParagraph);
+    const state = EditorState.create({
+      schema: editorSchema,
+      doc,
+      plugins: [createDiffStylingPlugin()],
+    });
+
+    const result = state.applyTransaction(
+      state.tr.replaceWith(0, doc.content.size, replacement),
+    );
+
+    assert.equal(result.transactions.length, 0);
+    assert.ok(result.state.doc.eq(doc));
+  });
+
   it("rejects outdenting a generated clause", () => {
     const nested = listItem("item:second", "Second");
     const parent = editorSchema.node(
