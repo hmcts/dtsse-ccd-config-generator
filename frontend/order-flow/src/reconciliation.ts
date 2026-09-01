@@ -159,12 +159,42 @@ function directListItemContent(
   return node.children.filter((child) => child.type.name !== "ordered_list");
 }
 
-function nodesEqual(
-  left: readonly ProseMirrorNode[],
-  right: readonly ProseMirrorNode[],
+function referenceContentNodeEqual(
+  left: ProseMirrorNode,
+  right: ProseMirrorNode,
 ): boolean {
-  return left.length === right.length &&
-    left.every((node, index) => node.eq(right[index]!));
+  if (
+    left.type.name === "generated_text" ||
+    right.type.name === "generated_text"
+  ) {
+    return left.type === right.type && left.attrs.id === right.attrs.id;
+  }
+
+  if (!left.sameMarkup(right) || left.childCount !== right.childCount) {
+    return false;
+  }
+  if (left.isText) return left.text === right.text;
+
+  return left.children.every((child, index) =>
+    referenceContentNodeEqual(child, right.child(index))
+  );
+}
+
+function referenceClauseContentEqual(
+  previous: ProseMirrorNode,
+  target: ProseMirrorNode,
+): boolean {
+  const previousContent = previous.type.name === "list_item"
+    ? directListItemContent(previous)
+    : previous.children;
+  const targetContent = target.type.name === "list_item"
+    ? directListItemContent(target)
+    : target.children;
+
+  return previousContent.length === targetContent.length &&
+    previousContent.every((node, index) =>
+      referenceContentNodeEqual(node, targetContent[index]!)
+    );
 }
 
 function reconcileListItemContent(
@@ -172,17 +202,11 @@ function reconcileListItemContent(
   live: PositionedNode,
   previous: ProseMirrorNode,
   target: ProseMirrorNode,
-): void {
+): boolean {
   const liveContent = directListItemContent(live.node);
-  const previousContent = directListItemContent(previous);
   const targetContent = directListItemContent(target);
 
-  if (
-    !nodesEqual(liveContent, previousContent) ||
-    nodesEqual(previousContent, targetContent)
-  ) {
-    return;
-  }
+  if (referenceClauseContentEqual(previous, target)) return false;
 
   const liveContentSize = liveContent.reduce(
     (size, node) => size + node.nodeSize,
@@ -193,6 +217,12 @@ function reconcileListItemContent(
     live.position + 1 + liveContentSize,
     Fragment.fromArray(targetContent),
   );
+  return true;
+}
+
+function isNestedListChange(change: NodeChange): boolean {
+  const node = change.kind === "removed" ? change.previous : change.target;
+  return node.type.name === "ordered_list";
 }
 
 function reconcileModified(
@@ -201,7 +231,12 @@ function reconcileModified(
 ): void {
   const live = requireManagedNode(transaction, change.id);
 
-  if (change.target.isLeaf || live.node.eq(change.previous)) {
+  if (
+    change.target.isLeaf ||
+    live.node.eq(change.previous) ||
+    (change.target.type.name === "paragraph" &&
+      !referenceClauseContentEqual(change.previous, change.target))
+  ) {
     transaction.replaceWith(
       live.position,
       live.position + live.node.nodeSize,
@@ -211,8 +246,9 @@ function reconcileModified(
   }
 
   if (isManagedContainer(change.target)) {
+    let replacedListItemContent = false;
     if (change.target.type.name === "list_item") {
-      reconcileListItemContent(
+      replacedListItemContent = reconcileListItemContent(
         transaction,
         live,
         change.previous,
@@ -232,6 +268,7 @@ function reconcileModified(
       live.position,
       change.previous,
       change.target,
+      replacedListItemContent ? isNestedListChange : undefined,
     );
     return;
   }
@@ -248,10 +285,12 @@ function reconcileParent(
   parentPosition: number | null,
   previousParent: ProseMirrorNode,
   targetParent: ProseMirrorNode,
+  includeChange: (change: NodeChange) => boolean = () => true,
 ): void {
   const changes = createChangePlan(previousParent, targetParent);
 
   for (const change of changes) {
+    if (!includeChange(change)) continue;
     switch (change.kind) {
       case "added": {
         if (

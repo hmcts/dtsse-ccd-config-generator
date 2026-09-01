@@ -8,7 +8,7 @@ import { reconcileOrderDocument } from "../src/reconciliation.js";
 import { editorSchema } from "../src/schema.js";
 
 describe("order document reconciliation", () => {
-  it("is a no-op", () => {
+  it("replaces directly edited paragraph wording when reference wording changes", () => {
     const live = buildOrder((order) => {
       order.paragraph("heading", "Edited heading");
     });
@@ -30,8 +30,8 @@ describe("order document reconciliation", () => {
     );
 
     assert.equal(result, transaction);
-    assert.equal(result.steps.length, 0);
-    assert.equal(result.doc.firstChild!.textContent, "Edited heading");
+    assert.equal(result.steps.length, 1);
+    assert.equal(result.doc.firstChild!.textContent, "New heading");
   });
 
   it("updates generated text while preserving edited surrounding text", () => {
@@ -59,6 +59,90 @@ describe("order document reconciliation", () => {
       paragraph.child(1).attrs.id,
       "generated-text:paragraph:deadline:date",
     );
+  });
+
+  it("updates generated text while preserving edited list-item wording", () => {
+    const orderWithDate = (prefix: string, date: string) =>
+      buildOrder((order) => {
+        order.orderedList("clauses", (list) => {
+          list.item("deadline", (content) => {
+            content.text(prefix).generatedText("date", date).text(".");
+          });
+        });
+      });
+    const previousTarget = orderWithDate("Payment is due by ", "1 September");
+    const live = orderWithDate("Please pay by ", "1 September");
+    const target = orderWithDate("Payment is due by ", "8 September");
+    const transaction = EditorState.create({
+      schema: editorSchema,
+      doc: live,
+    }).tr;
+
+    reconcileOrderDocument(transaction, previousTarget, target);
+
+    const paragraph = transaction.doc.firstChild!.firstChild!.firstChild!;
+    assert.equal(paragraph.firstChild!.text, "Please pay by ");
+    assert.equal(paragraph.child(1).attrs.text, "8 September");
+  });
+
+  it("adds generated text when replacing edited list-item wording", () => {
+    const orderWith = (
+      wording: string,
+      generatedText: string | undefined,
+    ) =>
+      buildOrder((order) => {
+        order.orderedList("clauses", (list) => {
+          list.item("deadline", (content) => {
+            content.text(wording);
+            if (generatedText) {
+              content.generatedText("date", generatedText);
+            }
+          });
+        });
+      });
+    const previousTarget = orderWith("Old wording", undefined);
+    const live = orderWith("Judge-edited wording", undefined);
+    const target = orderWith("New wording: ", "8 September");
+    const transaction = EditorState.create({
+      schema: editorSchema,
+      doc: live,
+    }).tr;
+
+    reconcileOrderDocument(transaction, previousTarget, target);
+
+    const item = transaction.doc.firstChild!.firstChild!;
+    assert.equal(item.childCount, 1);
+    assert.equal(item.firstChild!.childCount, 2);
+    assert.equal(item.firstChild!.textContent, "New wording: 8 September");
+  });
+
+  it("removes generated text when replacing edited list-item wording", () => {
+    const withGeneratedText = (wording: string) =>
+      buildOrder((order) => {
+        order.orderedList("clauses", (list) => {
+          list.item("deadline", (content) => {
+            content.text(wording).generatedText("date", "1 September");
+          });
+        });
+      });
+    const previousTarget = withGeneratedText("Old wording: ");
+    const live = withGeneratedText("Judge-edited wording: ");
+    const target = buildOrder((order) => {
+      order.orderedList("clauses", (list) => {
+        list.item("deadline", "New wording");
+      });
+    });
+    const transaction = EditorState.create({
+      schema: editorSchema,
+      doc: live,
+    }).tr;
+
+    reconcileOrderDocument(transaction, previousTarget, target);
+
+    const item = transaction.doc.firstChild!.firstChild!;
+    assert.equal(item.childCount, 1);
+    assert.equal(item.firstChild!.childCount, 1);
+    assert.equal(item.textContent, "New wording");
   });
 
   it("updates managed container markup without removing user content", () => {
@@ -198,7 +282,7 @@ describe("order document reconciliation", () => {
     );
   });
 
-  it("preserves edited list-item wording when generated wording changes", () => {
+  it("replaces directly edited list-item wording when reference wording changes", () => {
     const paragraph = (text: string) =>
       editorSchema.node("paragraph", null, editorSchema.text(text));
     const generatedItem = (text: string) =>
@@ -244,12 +328,49 @@ describe("order document reconciliation", () => {
     const reconciledItem = transaction.doc.firstChild!.firstChild!;
     assert.equal(
       reconciledItem.firstChild!.textContent,
-      "Judge-edited wording",
+      "New generated wording",
     );
     assert.equal(
       reconciledItem.lastChild!.firstChild!.textContent,
       "User-authored subclause",
     );
+  });
+
+  it("removes user-authored descendants when their generated clause is removed", () => {
+    const previousTarget = buildOrder((order) => {
+      order.orderedList("clauses", (list) => {
+        list.item("remove", "Generated parent");
+        list.item("keep", "Keep");
+      });
+    });
+    const target = buildOrder((order) => {
+      order.orderedList("clauses", (list) => {
+        list.item("keep", "Keep");
+      });
+    });
+    const generatedParent = previousTarget.firstChild!.firstChild!;
+    const userItem = editorSchema.node(
+      "list_item",
+      null,
+      editorSchema.node(
+        "paragraph",
+        null,
+        editorSchema.text("User-authored qualification"),
+      ),
+    );
+    const userList = editorSchema.node("ordered_list", null, userItem);
+    const live = EditorState.create({
+      schema: editorSchema,
+      doc: previousTarget,
+    }).tr.insert(1 + generatedParent.nodeSize - 1, userList).doc;
+    const transaction = EditorState.create({
+      schema: editorSchema,
+      doc: live,
+    }).tr;
+
+    reconcileOrderDocument(transaction, previousTarget, target);
+
+    assert.equal(transaction.doc.textContent, "Keep");
   });
 
   it("adds a nested generated list without replacing edited parent content", () => {

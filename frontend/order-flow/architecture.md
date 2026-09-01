@@ -70,9 +70,11 @@ When the inputs change the buildOrder function is invoked to derive an updated t
 The reconciliation process then runs to update the view, comparing the existing
 view state, the previous target and the new target:
 
-- Replace a generated clause wholesale when the user has not edited it.
-- Preserve an edited clause's ordinary content while updating its existing
-  managed descendants.
+- Replace a generated clause's ordinary content when its newly built reference
+  wording differs from the previous target.
+- Otherwise, preserve direct edits to the clause's ordinary content while
+  updating its managed descendants.
 - Insert and remove managed children at the document root and within managed
   containers.
-- Preserve ID-less user-authored content.
+- Preserve user-authored content where it belongs to clauses still present in
+  the document.
