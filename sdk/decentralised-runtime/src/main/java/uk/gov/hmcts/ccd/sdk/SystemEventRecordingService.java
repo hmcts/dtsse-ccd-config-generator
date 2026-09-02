@@ -14,12 +14,9 @@ import uk.gov.hmcts.ccd.sdk.impl.CaseProjectionService;
 import uk.gov.hmcts.ccd.sdk.impl.CaseSubmissionService;
 
 /**
- * Records a system event against a case from inside the service, without a round trip through the
- * CCD data store. Recording an event stores a fresh case snapshot, which is what carries changes made
- * outside a user-triggered event (e.g. a representation change applied by a background task) into the
- * search index, the History tab and the audit trail together.
- *
- * <p>No event authorisation is applied, so this must only be used with system events, and the event's
+ * Records a system event against a case in-process, without a round trip through the CCD data store.
+ * The recorded event stores a fresh case snapshot, refreshing the search index, the History tab and
+ * the audit trail together. No event authorisation is applied: system events only, and the event's
  * submit handler should be free of side effects.
  */
 @Service
@@ -31,7 +28,7 @@ public class SystemEventRecordingService {
   private final CaseSubmissionService submissionService;
   private final TransactionTemplate transactionTemplate;
 
-  /** The person the event is recorded on behalf of; shown in the audit as proxied by the system user. */
+  /** The person the event is recorded on behalf of; the audit shows them as proxied by the system user. */
   public record ActorAttribution(String id, String firstName, String lastName) {
   }
 
@@ -43,15 +40,13 @@ public class SystemEventRecordingService {
     recordSystemEvent(caseReference, eventId, authorisation, summary, actor, UUID.randomUUID());
   }
 
-  /** Overload for callers, such as backfills, that must not record the same event twice. */
   public void recordSystemEvent(long caseReference,
                                 String eventId,
                                 String authorisation,
                                 String summary,
                                 ActorAttribution actor,
                                 UUID idempotencyKey) {
-    // A transaction gives the projection a persistence session, which callers on background
-    // threads (schedulers, tasks) do not otherwise have.
+    // the transaction gives background callers a persistence session for the projection
     transactionTemplate.executeWithoutResult(status -> {
       var current = caseProjectionService.load(caseReference);
       var caseDetails = current.getCaseDetails();
