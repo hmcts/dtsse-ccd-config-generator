@@ -3,9 +3,13 @@ import { describe, it } from "node:test";
 
 import { EditorState } from "prosemirror-state";
 
-import { buildOrder } from "../src/builder.js";
+import { buildOrder as buildDocWeaveDocument } from "../src/builder.js";
 import { reconcileOrderDocument } from "../src/reconciliation.js";
 import { editorSchema } from "../src/schema.js";
+
+const buildOrder = (
+  define: Parameters<typeof buildDocWeaveDocument>[0],
+) => buildDocWeaveDocument(define).node;
 
 describe("order document reconciliation", () => {
   it("replaces directly edited paragraph wording when reference wording changes", () => {
@@ -38,7 +42,7 @@ describe("order document reconciliation", () => {
     const orderWithDate = (prefix: string, date: string) =>
       buildOrder((order) => {
         order.paragraph("deadline", (content) => {
-          content.text(prefix).generatedText("date", date).text(".");
+          content.text(prefix).fact("date", date).text(".");
         });
       });
     const previousTarget = orderWithDate("Payment is due by ", "1 September");
@@ -66,7 +70,7 @@ describe("order document reconciliation", () => {
       buildOrder((order) => {
         order.orderedList("clauses", (list) => {
           list.item("deadline", (content) => {
-            content.text(prefix).generatedText("date", date).text(".");
+            content.text(prefix).fact("date", date).text(".");
           });
         });
       });
@@ -95,7 +99,7 @@ describe("order document reconciliation", () => {
           list.item("deadline", (content) => {
             content.text(wording);
             if (generatedText) {
-              content.generatedText("date", generatedText);
+              content.fact("date", generatedText);
             }
           });
         });
@@ -121,7 +125,7 @@ describe("order document reconciliation", () => {
       buildOrder((order) => {
         order.orderedList("clauses", (list) => {
           list.item("deadline", (content) => {
-            content.text(wording).generatedText("date", "1 September");
+            content.text(wording).fact("date", "1 September");
           });
         });
       });

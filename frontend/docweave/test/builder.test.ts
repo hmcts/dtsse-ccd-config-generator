@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildOrder } from "../src/builder.js";
+import {
+  buildOrder,
+  getDocumentFactSources,
+} from "../src/builder.js";
 import { editorSchema } from "../src/schema.js";
 
 describe("order builder", () => {
@@ -11,21 +14,21 @@ describe("order builder", () => {
       order.paragraph("attendance", (content) => {
         content
           .text("The Court heard from ")
-          .generatedText("register", "Alex Smith, counsel for the claimant")
+          .fact("register", "Alex Smith, counsel for the claimant")
           .text(".");
       });
       order.orderedList("clauses", (list) => {
         list.item("possession", (content) => {
           content
             .text("Give up possession by ")
-            .generatedText("deadline", "1 September 2026")
+            .fact("deadline", "1 September 2026")
             .text(".");
         });
         list.item("costs", "Pay the claimant's costs.");
       });
     });
 
-    const json = JSON.parse(JSON.stringify(document.toJSON())) as unknown;
+    const json = JSON.parse(JSON.stringify(document.node.toJSON())) as unknown;
     assert.deepEqual(json, {
       type: "doc",
       content: [
@@ -102,8 +105,8 @@ describe("order builder", () => {
       });
     });
 
-    assert.equal(document.firstChild!.childCount, 1);
-    assert.equal(document.firstChild!.firstChild!.attrs.id, "item:first");
+    assert.equal(document.node.firstChild!.childCount, 1);
+    assert.equal(document.node.firstChild!.firstChild!.attrs.id, "item:first");
   });
 
   it("builds managed nested ordered lists", () => {
@@ -118,7 +121,7 @@ describe("order builder", () => {
       });
     });
 
-    const parent = document.firstChild!.firstChild!;
+    const parent = document.node.firstChild!.firstChild!;
     const nestedList = parent.lastChild!;
 
     assert.equal(parent.attrs.id, "item:parent");
@@ -154,10 +157,10 @@ describe("order builder", () => {
   it("renders generated text with its managed DOM marker", () => {
     const document = buildOrder((order) => {
       order.paragraph("date", (content) => {
-        content.generatedText("value", "1 September 2026");
+        content.fact("value", "1 September 2026");
       });
     });
-    const generatedText = document.firstChild!.firstChild!;
+    const generatedText = document.node.firstChild!.firstChild!;
     const toDOM = editorSchema.nodes.generated_text!.spec.toDOM;
 
     assert.ok(toDOM);
@@ -176,14 +179,50 @@ describe("order builder", () => {
       order.paragraph("attendance", (content) => {
         content
           .text("The Court heard from ")
-          .generatedText("register", "Alex Smith")
+          .fact("register", "Alex Smith")
           .text(".");
       });
     });
 
     assert.equal(
-      document.textBetween(0, document.content.size),
+      document.node.textBetween(0, document.node.content.size),
       "The Court heard from Alex Smith.",
     );
+  });
+
+  it("keeps fact source IDs outside the ProseMirror document", () => {
+    const document = buildOrder((order) => {
+      order.paragraph("payment", (content) => {
+        content.fact("amount", "£2342.00", {
+          sourceId: "arrears-amount",
+        });
+      });
+    });
+
+    assert.equal(document.node.type.name, "doc");
+    assert.equal(
+      getDocumentFactSources(document).get(
+        "generated-text:paragraph:payment:amount",
+      ),
+      "arrears-amount",
+    );
+    assert.doesNotMatch(
+      JSON.stringify(document.node.toJSON()),
+      /arrears-amount/,
+    );
+  });
+
+  it("rejects source IDs that cannot be HTML IDs", () => {
+    for (const sourceId of ["", "two words", "line\nbreak"]) {
+      assert.throws(
+        () =>
+          buildOrder((order) => {
+            order.paragraph("payment", (content) => {
+              content.fact("amount", "£1", { sourceId });
+            });
+          }),
+        /Invalid fact source ID/,
+      );
+    }
   });
 });

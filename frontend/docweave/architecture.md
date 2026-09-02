@@ -2,10 +2,12 @@
 
 ## Approach
 
-Business rules will declaratively build the complete target reference document from the current inputs:
+Business rules declaratively build a `DocWeaveDocument` from the current
+inputs. It contains the ProseMirror target node and runtime-only interaction
+metadata; only the node is persisted:
 
 ```ts
-function buildCurrentOrder(inputs: OrderInputs): ProseMirrorNode {
+function buildCurrentOrder(inputs: OrderInputs): DocWeaveDocument {
   return buildOrder((order) => {
     order.paragraph("heading", "IT IS ORDERED THAT:");
 
@@ -26,7 +28,31 @@ function buildCurrentOrder(inputs: OrderInputs): ProseMirrorNode {
 controller.render(buildCurrentOrder(inputs));
 ```
 
-It is a pure function that builds a ProseMirror target node based on inputs.
+It is a pure function that builds a ProseMirror target node and its ephemeral
+interaction metadata based on the inputs.
+
+### Facts and source controls
+
+Immutable generated values are declared as facts. A fact may identify the DOM
+element that supplies its value:
+
+```ts
+content
+  .text("The defence must be filed by ")
+  .fact("defence-date", inputs.defenceDate, {
+    sourceId: "adj-defence-date",
+  });
+```
+
+The builder records source IDs beside the ProseMirror node in the opaque
+`DocWeaveDocument`; they are not node attributes. The editor uses this sidecar
+metadata to make a fact navigate to its source control. A composite source
+scrolls into view and its first enabled form control receives focus.
+
+Editor state is persisted separately as a `DocWeaveSnapshot`, obtained with
+`controller.getSnapshot()` and restored with `initialSnapshot`. Snapshot JSON
+contains only the current and generated ProseMirror documents, never source
+control IDs.
 
 ### Generated node identity
 
@@ -73,7 +99,7 @@ the document root or within managed containers.
 
 ## Reconciliation
 
-When the inputs change the buildOrder function is invoked to derive an updated target node.
+When the inputs change, `buildOrder` derives an updated `DocWeaveDocument`.
 
 The reconciliation process then runs to update the view, comparing the existing
 view state, the previous target and the new target:

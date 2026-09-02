@@ -8,10 +8,18 @@ import { type Command, EditorState } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 
 import {
+  type DocWeaveDocument,
+  getDocumentFactSources,
+} from "./builder.js";
+import {
   createDiffStylingPlugin,
   getGeneratedDocument,
   setGeneratedDocument,
 } from "./diff-styling.js";
+import {
+  createFactNavigationPlugin,
+  setFactNavigationSources,
+} from "./fact-navigation.js";
 import { createRedoIcon, createUndoIcon } from "./icons.js";
 import {
   createKeymapPlugins,
@@ -25,12 +33,16 @@ import {
 import { reconcileOrderDocument } from "./reconciliation.js";
 import { editorSchema } from "./schema.js";
 
-function createEditorState(document?: ProseMirrorNode): EditorState {
+function createEditorState(
+  ownerDocument: Document,
+  document?: ProseMirrorNode,
+): EditorState {
   return EditorState.create({
     schema: editorSchema,
     doc: document,
     plugins: [
       createDiffStylingPlugin(),
+      createFactNavigationPlugin(ownerDocument),
       ...createKeymapPlugins(),
       dropCursor(),
       gapCursor(),
@@ -39,7 +51,7 @@ function createEditorState(document?: ProseMirrorNode): EditorState {
   });
 }
 
-export interface OrderEditorDocument {
+export interface DocWeaveSnapshot {
   schema: "docweave-document";
   version: 1;
   current: Record<string, unknown>;
@@ -48,13 +60,13 @@ export interface OrderEditorDocument {
 
 export interface CreateOrderEditorOptions {
   mount: HTMLElement | string;
-  initialDocument?: OrderEditorDocument;
-  onChange?: (document: OrderEditorDocument) => void;
+  initialSnapshot?: DocWeaveSnapshot;
+  onChange?: (snapshot: DocWeaveSnapshot) => void;
 }
 
 export interface OrderEditorController {
-  render(target: ProseMirrorNode): void;
-  getDocument(): OrderEditorDocument;
+  render(document: DocWeaveDocument): void;
+  getSnapshot(): DocWeaveSnapshot;
   destroy(): void;
 }
 
@@ -235,17 +247,17 @@ export function createOrderEditor(
     throw new Error(`Order editor mount point not found: ${String(options.mount)}`);
   }
 
-  const initialCurrent = options.initialDocument
-    ? editorSchema.nodeFromJSON(options.initialDocument.current)
+  const initialCurrent = options.initialSnapshot
+    ? editorSchema.nodeFromJSON(options.initialSnapshot.current)
     : undefined;
-  const initialGenerated = options.initialDocument
-    ? editorSchema.nodeFromJSON(options.initialDocument.generated)
+  const initialGenerated = options.initialSnapshot
+    ? editorSchema.nodeFromJSON(options.initialSnapshot.generated)
     : undefined;
   if (initialGenerated && initialCurrent) {
     assertValidGeneratedDocument(initialGenerated);
     assertCurrentDocumentMatchesGenerated(initialCurrent, initialGenerated);
   }
-  let initialState = createEditorState(initialCurrent);
+  let initialState = createEditorState(editor.ownerDocument, initialCurrent);
   if (initialGenerated) {
     initialState = initialState.apply(
       setGeneratedDocument(initialState.tr, initialGenerated),
@@ -261,7 +273,7 @@ export function createOrderEditor(
 
   let connectedToolbar: ConnectedToolbar | undefined;
 
-  const getDocument = (): OrderEditorDocument => {
+  const getSnapshot = (): DocWeaveSnapshot => {
     const generated = getGeneratedDocument(view.state) ?? view.state.doc;
     return {
       schema: "docweave-document",
@@ -277,14 +289,15 @@ export function createOrderEditor(
       const nextState = view.state.apply(transaction);
       view.updateState(nextState);
       connectedToolbar?.update();
-      options.onChange?.(getDocument());
+      options.onChange?.(getSnapshot());
     },
   });
 
   connectedToolbar = connectToolbar(toolbar, view);
 
   const controller: OrderEditorController = {
-    render(target: ProseMirrorNode): void {
+    render(document: DocWeaveDocument): void {
+      const target = document.node;
       assertValidGeneratedDocument(target);
       let transaction = view.state.tr;
       const previousTarget = getGeneratedDocument(view.state);
@@ -304,10 +317,14 @@ export function createOrderEditor(
       }
 
       setGeneratedDocument(transaction, target);
+      setFactNavigationSources(
+        transaction,
+        getDocumentFactSources(document),
+      );
 
       view.dispatch(transaction.setMeta("addToHistory", false));
     },
-    getDocument,
+    getSnapshot,
     destroy(): void {
       connectedToolbar?.destroy();
       view.destroy();

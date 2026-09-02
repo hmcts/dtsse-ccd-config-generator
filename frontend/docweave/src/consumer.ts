@@ -2,7 +2,7 @@ import { initAll } from "govuk-frontend";
 import { type Node as ProseMirrorNode } from "prosemirror-model";
 import { EditorState } from "prosemirror-state";
 
-import { buildOrder } from "./builder.js";
+import { buildOrder, type DocWeaveDocument } from "./builder.js";
 import { createOrderEditor } from "./client.js";
 import { editorSchema } from "./schema.js";
 import "./application.scss";
@@ -209,14 +209,14 @@ function currentTimeTicks(): string {
   return (BigInt(Date.now()) * 10_000n + ticksAtUnixEpoch).toString();
 }
 
-function buildCurrentOrder(): ProseMirrorNode {
+function buildCurrentOrder(): DocWeaveDocument {
   return buildOrder((order) => {
     const attendance = buildAttendanceRegister(readAttendances());
     if (attendance) {
       order.paragraph("attendance", (content) => {
         content
           .text("The Court heard from ")
-          .generatedText("register", attendance)
+          .fact("register", attendance)
           .text(".");
       });
     }
@@ -233,7 +233,7 @@ function buildCurrentOrder(): ProseMirrorNode {
               ? "The defendants are required to give up possession no later than "
               : "The defendants must give up possession on or before ",
           )
-          .generatedText("deadline", readOrderDate())
+          .fact("deadline", readOrderDate(), { sourceId: "order-date" })
           .text(".");
       });
 
@@ -303,20 +303,23 @@ function addReconciliationReproState(
 
 const initialGeneratedDocument = buildCurrentOrder();
 const initialCurrentDocument = addReconciliationReproState(
-  initialGeneratedDocument,
+  initialGeneratedDocument.node,
 );
 const controller = createOrderEditor({
   mount: "#editor",
-  initialDocument: {
+  initialSnapshot: {
     schema: "docweave-document",
     version: 1,
     current: initialCurrentDocument.toJSON() as Record<string, unknown>,
-    generated: initialGeneratedDocument.toJSON() as Record<string, unknown>,
+    generated: initialGeneratedDocument.node.toJSON() as Record<
+      string,
+      unknown
+    >,
   },
-  onChange(editorDocument) {
+  onChange(snapshot) {
     if (documentDebug) {
       documentDebug.textContent = JSON.stringify(
-        editorDocument.current,
+        snapshot.current,
         null,
         2,
       );

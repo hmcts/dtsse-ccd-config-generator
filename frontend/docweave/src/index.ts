@@ -1,5 +1,7 @@
 export {
   buildOrder,
+  type DocWeaveDocument,
+  type FactOptions,
   type InlineBuilder,
   type ListItemBuilder,
   type OrderBuilder,
@@ -8,6 +10,6 @@ export {
 export {
   createOrderEditor,
   type CreateOrderEditorOptions,
+  type DocWeaveSnapshot,
   type OrderEditorController,
-  type OrderEditorDocument,
 } from "./client.js";

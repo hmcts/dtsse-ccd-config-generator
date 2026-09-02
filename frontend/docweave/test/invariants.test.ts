@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { EditorState } from "prosemirror-state";
 
-import { buildOrder } from "../src/builder.js";
+import { buildOrder as buildDocWeaveDocument } from "../src/builder.js";
 import {
   assertCurrentDocumentMatchesGenerated,
   assertValidGeneratedDocument,
@@ -11,6 +11,10 @@ import {
 } from "../src/invariants.js";
 import { reconcileOrderDocument } from "../src/reconciliation.js";
 import { editorSchema } from "../src/schema.js";
+
+const buildOrder = (
+  define: Parameters<typeof buildDocWeaveDocument>[0],
+) => buildDocWeaveDocument(define).node;
 
 describe("generated document invariants", () => {
   it("uses the ProseMirror schema to reject invalid document structure", () => {
@@ -138,7 +142,7 @@ describe("generated document invariants", () => {
     });
     const target = buildOrder((order) => {
       order.paragraph("deadline", (content) => {
-        content.text("Payment is due by ").generatedText("date", "1 October");
+        content.text("Payment is due by ").fact("date", "1 October");
       });
     });
 
@@ -168,7 +172,7 @@ describe("generated document invariants", () => {
       order.paragraph("heading", "IT IS ORDERED THAT:");
       order.orderedList("clauses", (list) => {
         list.item("parent", (content) => {
-          content.text("Payment is due by ").generatedText("date", "1 October");
+          content.text("Payment is due by ").fact("date", "1 October");
         });
         list.item("costs", "Pay the claimant's costs");
       });
@@ -186,7 +190,7 @@ describe("generated document invariants", () => {
     const orderWithDate = (date: string) =>
       buildOrder((order) => {
         order.paragraph("deadline", (content) => {
-          content.generatedText("date", date);
+          content.fact("date", date);
         });
       });
 

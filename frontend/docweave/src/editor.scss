@@ -243,6 +243,23 @@ li.docweave-editor__clause--modified > p {
   outline-offset: -3px;
 }
 
+.docweave-editor__fact-link {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 0.15em;
+}
+
+.docweave-editor__fact-link:hover,
+.docweave-editor__fact-link:focus {
+  background: #ffdd00;
+}
+
+.docweave-editor__fact-link:focus {
+  outline: 3px solid #ffdd00;
+  outline-offset: 1px;
+}
+
 .docweave-editor .ProseMirror h3 {
   font-size: 19px;
   font-weight: 700;

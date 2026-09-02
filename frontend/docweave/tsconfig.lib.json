@@ -11,6 +11,7 @@
     "src/builder.ts",
     "src/client.ts",
     "src/diff-styling.ts",
+    "src/fact-navigation.ts",
     "src/keymap.ts",
     "src/reconciliation.ts",
     "src/schema.ts"

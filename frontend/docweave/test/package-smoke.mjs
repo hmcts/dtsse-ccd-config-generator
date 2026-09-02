@@ -50,7 +50,7 @@ try {
       const document = buildOrder((order) => {
         order.paragraph("heading", "IT IS ORDERED THAT:");
       });
-      if (document.textContent !== "IT IS ORDERED THAT:") {
+      if (document.node.textContent !== "IT IS ORDERED THAT:") {
         throw new Error("The installed package did not build an order");
       }
 
@@ -68,17 +68,22 @@ try {
       import {
         buildOrder,
         createOrderEditor,
-        type OrderEditorDocument,
+        type DocWeaveDocument,
+        type DocWeaveSnapshot,
       } from "@hmcts-cft/docweave";
 
       declare const mount: HTMLElement;
-      const target = buildOrder((order) => {
-        order.paragraph("heading", "IT IS ORDERED THAT:");
+      const target: DocWeaveDocument = buildOrder((order) => {
+        order.paragraph("heading", (content) => {
+          content.fact("heading", "IT IS ORDERED THAT:", {
+            sourceId: "heading-input",
+          });
+        });
       });
       const controller = createOrderEditor({ mount });
       controller.render(target);
-      const saved: OrderEditorDocument = controller.getDocument();
-      saved satisfies OrderEditorDocument;
+      const saved: DocWeaveSnapshot = controller.getSnapshot();
+      saved satisfies DocWeaveSnapshot;
 
       // @ts-expect-error Docweave owns its toolbar markup and behaviour.
       createOrderEditor({ mount, toolbar: mount });

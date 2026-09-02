@@ -3,9 +3,13 @@ import { type Node as ProseMirrorNode } from "prosemirror-model";
 import { assertValidGeneratedDocument } from "./invariants.js";
 import { editorSchema } from "./schema.js";
 
+export interface FactOptions {
+  sourceId?: string;
+}
+
 export interface InlineBuilder {
   text(value: string): this;
-  generatedText(id: string, value: string): this;
+  fact(id: string, value: string, options?: FactOptions): this;
 }
 
 type ClauseContent = string | ((content: InlineBuilder) => void);
@@ -33,10 +37,53 @@ export interface OrderBuilder {
   ): void;
 }
 
+const documentFactSources = new WeakMap<
+  DocWeaveDocument,
+  ReadonlyMap<string, string>
+>();
+let createDocWeaveDocument: (
+  node: ProseMirrorNode,
+  factSources: ReadonlyMap<string, string>,
+) => DocWeaveDocument;
+
+/** A generated document and its runtime-only DocWeave metadata. */
+export class DocWeaveDocument {
+  readonly node: ProseMirrorNode;
+
+  private constructor(
+    node: ProseMirrorNode,
+    factSources: ReadonlyMap<string, string>,
+  ) {
+    this.node = node;
+    documentFactSources.set(this, new Map(factSources));
+  }
+
+  static {
+    createDocWeaveDocument = (node, factSources) =>
+      new DocWeaveDocument(node, factSources);
+  }
+}
+
+/** @internal */
+export function getDocumentFactSources(
+  document: DocWeaveDocument,
+): ReadonlyMap<string, string> {
+  const factSources = documentFactSources.get(document);
+  if (!factSources) throw new TypeError("Invalid DocWeaveDocument");
+  return factSources;
+}
+
+function assertValidSourceId(sourceId: string): void {
+  if (sourceId.length === 0 || /[\t\n\f\r ]/.test(sourceId)) {
+    throw new Error(`Invalid fact source ID: ${JSON.stringify(sourceId)}`);
+  }
+}
+
 export function buildOrder(
   define: (order: OrderBuilder) => void,
-): ProseMirrorNode {
+): DocWeaveDocument {
   const nodes: ProseMirrorNode[] = [];
+  const factSources = new Map<string, string>();
 
   function buildContent(
     ownerId: string,
@@ -50,13 +97,22 @@ export function buildOrder(
         if (value) inlineNodes.push(editorSchema.text(value));
         return inlineBuilder;
       },
-      generatedText(id: string, value: string): InlineBuilder {
+      fact(
+        id: string,
+        value: string,
+        options: FactOptions = {},
+      ): InlineBuilder {
+        const factId = `generated-text:${ownerId}:${id}`;
         inlineNodes.push(
           editorSchema.node("generated_text", {
-            id: `generated-text:${ownerId}:${id}`,
+            id: factId,
             text: value,
           }),
         );
+        if (options.sourceId !== undefined) {
+          assertValidSourceId(options.sourceId);
+          factSources.set(factId, options.sourceId);
+        }
         return inlineBuilder;
       },
     };
@@ -143,5 +199,5 @@ export function buildOrder(
   define(orderBuilder);
   const document = editorSchema.node("doc", null, nodes);
   assertValidGeneratedDocument(document);
-  return document;
+  return createDocWeaveDocument(document, factSources);
 }
