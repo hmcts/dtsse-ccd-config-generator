@@ -213,12 +213,10 @@ function buildCurrentOrder(): DocWeaveDocument {
   return buildOrder((order) => {
     const attendance = buildAttendanceRegister(readAttendances());
     if (attendance) {
-      order.paragraph("attendance", (content) => {
-        content
-          .text("The Court heard from ")
-          .fact("register", attendance)
-          .text(".");
-      });
+      order.paragraph(
+        "attendance-heard",
+        `The Court heard from ${attendance}.`,
+      );
     }
 
     if (orderTextControl.checked) {
