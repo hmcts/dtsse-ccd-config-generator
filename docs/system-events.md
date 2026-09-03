@@ -26,6 +26,17 @@ systemEventExecutor.execute(caseReference, idempotencyKey, () -> {
 });
 ```
 
+System events reuse the transaction and persistence stages described in the runtime's
+[event submission flow](./decentralised-runtime.md#event-submission-flow).
+
+In this example:
+
+1. The runtime opens a transaction, locks the case and checks the idempotency key.
+2. For a new event, it executes the lambda inside the transaction.
+3. When the lambda returns successfully, it projects the case and writes a `ccd.case_event` record
+   with the event ID `paymentUpdated`.
+4. If the lambda or subsequent persistence fails, it rolls back the transaction.
+
 ## System user identity
 
 The SDK's system user identity is set through Spring Boot configuration:
@@ -72,24 +83,7 @@ retry. Replaying the same key for the same case returns without invoking the act
 
 System event IDs do not have to be registered in CCD configuration. The result supplies the event ID,
 display name and optional summary for the audit entry. CCD's public history endpoint applies configured
-event access rules, so an unregistered ID remains in persisted history but is not returned by that
-endpoint.
-
-System events use the same message publication rules as other events. An unconfigured event ID, or a
-configured event not marked for publication, does not produce a case-event message. A system event
-whose ID matches a configured, publishable event does produce one.
-
-## Transaction and state behaviour
-
-The executor locks the case and then runs the action, application database writes, case metadata
-update, relational projection, database audit capture and CCD history insert in one transaction. If
-the action or any later step fails, all local writes are rolled back. Execution is rejected when the
-caller already has an active transaction so the executor can own this ordering reliably.
-
-An action can leave the state unchanged or return a value from the case type's state enum. The
-executor deliberately does not resolve or validate the result against CCD configuration, run
-configured event callbacks, pre-state checks or CCD event permission checks; those remain the
-caller's domain and authorisation responsibility.
+event access rules, so an unregistered ID remains in persisted history but is not returned CCD.
 
 ## Security boundary
 
@@ -123,24 +117,11 @@ including:
 - generated credentials or reference data belonging to the case; and
 - recording an external service request against the case.
 
-These are durable changes to the case model which should produce one audited case event and one
-refreshed snapshot.
-
-The following should normally remain outside system events:
-
-- notification delivery and outbox rows;
-- `scheduled_tasks` rows;
-- generation-failure and pack-delivery operational evidence;
-- draft or unsubmitted event data;
-- test-support data; and
-- writes already made by a configured event submit handler.
-
 ## Transaction boundary and external effects
 
 The executor can make local database changes atomic. It cannot make external APIs, document storage,
 notifications or task-management systems participate in that database transaction.
 
-Remote work should therefore be idempotent or moved outside the short local event transaction. Where
+Side effects work should therefore be idempotent or moved outside the short local event transaction. Where
 the remote action must follow a committed case change, it should be driven by an outbox or another
-post-commit mechanism. Holding a database lock while making a remote call increases contention and
-still does not make the remote operation transactional.
+post-commit mechanism.
