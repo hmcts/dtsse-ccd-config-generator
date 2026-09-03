@@ -5,6 +5,9 @@ remaining transactional and audited.
 
 This covers decentralised case data projected from application-owned relational data.
 
+> **Warning:** Before using this API, you must read and understand the
+> [security model](#security-boundary).
+
 ## Example
 
 A service can make a local case change and record it as a system event in one operation:
