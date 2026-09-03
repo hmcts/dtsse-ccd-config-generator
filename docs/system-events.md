@@ -1,7 +1,7 @@
 # System events
 
 Services can perform system-initiated changes locally without a round trip through CCD's API, while
-remaining transactional and audited.
+remaining transactional and [auditable](./audit.md).
 
 This covers decentralised case data projected from application-owned relational data.
 
