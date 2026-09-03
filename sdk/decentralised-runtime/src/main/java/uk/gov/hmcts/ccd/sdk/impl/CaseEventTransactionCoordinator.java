@@ -10,6 +10,7 @@ import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
@@ -44,6 +45,7 @@ class CaseEventTransactionCoordinator {
     long caseEventId = auditEventService.reserveCaseEventId();
     CaseEventWrite<T> write = Objects.requireNonNull(work.get(), "Case event work must return a write");
 
+    TransactionAspectSupport.currentTransactionStatus().flush();
     upsertCase(write.event(), write.dataUpdate());
     DecentralisedCaseDetails savedCase = caseProjectionService.load(caseReference);
     auditEventService.saveAuditRecord(

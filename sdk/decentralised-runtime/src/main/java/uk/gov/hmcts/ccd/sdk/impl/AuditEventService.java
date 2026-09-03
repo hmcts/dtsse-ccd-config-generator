@@ -244,7 +244,7 @@ class AuditEventService {
           user.userDetails().getUid(),
           eventDetails.getEventId(),
           oldState,
-          toCaseDetails(event.getCaseDetails()),
+          toCaseDetails(currentView),
           inserted.id(),
           inserted.createdDate()
       );

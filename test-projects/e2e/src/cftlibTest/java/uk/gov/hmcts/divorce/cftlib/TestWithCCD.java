@@ -171,6 +171,9 @@ public class TestWithCCD extends CftlibTest {
     NamedParameterJdbcTemplate db;
 
     @Autowired
+    private JpaCaseNoteRepository jpaCaseNoteRepository;
+
+    @Autowired
     private CaseReindexingService reindexQueueService;
 
     @Autowired
@@ -1169,6 +1172,7 @@ public class TestWithCCD extends CftlibTest {
     public void testPublishingToMessageOutbox() {
         db.update("DELETE FROM ccd.message_queue_candidates", Map.of());
         clearInvocations(jmsTemplate);
+        String projectedNote = "Test note 0";
 
         var token = ccdApi.startEvent(
             getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
@@ -1200,14 +1204,23 @@ public class TestWithCCD extends CftlibTest {
         Integer totalMessages = db.queryForObject("SELECT count(*) FROM ccd.message_queue_candidates", Map.of(), Integer.class);
         assertThat(totalMessages, equalTo(1));
 
-        String noteCheck = """
-            SELECT message_information->'AdditionalData'->'Data'->>'note'
+        String messageCheck = """
+            SELECT message_information::text
              FROM ccd.message_queue_candidates
              WHERE reference = :caseReference
              """;
 
-        String retrievedNote = db.queryForObject(noteCheck, Map.of("caseReference", caseRef), String.class);
-        assertThat(retrievedNote, equalTo("Test!"));
+        String messageInformation = db.queryForObject(
+            messageCheck,
+            Map.of("caseReference", caseRef),
+            String.class
+        );
+        JsonNode publishedData = mapper.readTree(messageInformation)
+            .path("AdditionalData")
+            .path("Data");
+        assertThat(publishedData.path("note").isNull(), is(true));
+        assertThat(StreamSupport.stream(publishedData.path("notes").spliterator(), false)
+            .anyMatch(value -> projectedNote.equals(value.path("value").path("note").asText())), is(true));
 
         // Verify the EventTimeStamp from the JSON blob
         String timestampCheckSql = """
@@ -1228,7 +1241,10 @@ public class TestWithCCD extends CftlibTest {
         );
 
         JsonNode payload = payloadCaptor.getValue();
-        assertThat(payload.path("AdditionalData").path("Data").path("note").asText(), equalTo("Test!"));
+        JsonNode publishedPayloadData = payload.path("AdditionalData").path("Data");
+        assertThat(publishedPayloadData.path("note").isNull(), is(true));
+        assertThat(StreamSupport.stream(publishedPayloadData.path("notes").spliterator(), false)
+            .anyMatch(value -> projectedNote.equals(value.path("value").path("note").asText())), is(true));
 
         Map<String, String> capturedProperties = new HashMap<>();
         Message jmsMessage = mock(Message.class);
@@ -2530,6 +2546,40 @@ public class TestWithCCD extends CftlibTest {
                 assertThat(StreamSupport.stream(indexed.path("data").path("notes").spliterator(), false)
                     .anyMatch(value -> note.equals(value.path("value").path("note").asText())), is(true));
             });
+    }
+
+    @SneakyThrows
+    @Order(19)
+    @Test
+    void systemEventPublishesPostActionJpaProjection() {
+        String note = "Published system event note";
+        long reference = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+
+        systemEventExecutor.execute(reference, UUID.randomUUID(), () -> {
+            jpaCaseNoteRepository.save(new JpaCaseNote(reference, "E2E System", note));
+            return new SystemEventResult<>(
+                PublishedEvent.class.getSimpleName(),
+                "Published Event",
+                null,
+                Optional.<State>empty()
+            );
+        });
+
+        String messageInformation = db.queryForObject(
+            """
+            select message_information::text
+              from ccd.message_queue_candidates
+             where reference = :reference
+            """,
+            Map.of("reference", reference),
+            String.class
+        );
+        JsonNode publishedData = mapper.readTree(messageInformation)
+            .path("AdditionalData")
+            .path("Data");
+
+        assertThat(StreamSupport.stream(publishedData.path("notes").spliterator(), false)
+            .anyMatch(value -> note.equals(value.path("value").path("note").asText())), is(true));
     }
 
     @SneakyThrows

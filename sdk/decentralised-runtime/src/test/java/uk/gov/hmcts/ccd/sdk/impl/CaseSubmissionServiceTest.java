@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
@@ -30,16 +31,8 @@ class CaseSubmissionServiceTest {
   private final DecentralisedSubmissionHandler submitHandler = mock(DecentralisedSubmissionHandler.class);
   private final LegacyCallbackSubmissionHandler legacyHandler = mock(LegacyCallbackSubmissionHandler.class);
   private final IdamService idam = mock(IdamService.class);
-  private final IdempotencyEnforcer idempotencyEnforcer = mock(IdempotencyEnforcer.class);
-  private final AuditEventService auditEventService = mock(AuditEventService.class);
   private final CaseDataRepository caseDataRepository = mock(CaseDataRepository.class);
-  private final CaseProjectionService caseProjectionService = mock(CaseProjectionService.class);
-  private final CaseEventTransactionCoordinator transactionCoordinator = new CaseEventTransactionCoordinator(
-      idempotencyEnforcer,
-      auditEventService,
-      caseDataRepository,
-      caseProjectionService
-  );
+  private final CaseEventTransactionCoordinator transactionCoordinator = mock(CaseEventTransactionCoordinator.class);
 
   private final CaseSubmissionService service = new CaseSubmissionService(
       resolvedConfigRegistry,
@@ -60,21 +53,26 @@ class CaseSubmissionServiceTest {
         "Bearer raw-token",
         new UserInfo("sub", "uid", "name", "given", "family", List.of("caseworker"))
     ));
-    when(idempotencyEnforcer.lockCaseAndGetExistingEvent(IDEMPOTENCY_KEY, 123456789L))
-        .thenReturn(Optional.empty());
-    when(auditEventService.reserveCaseEventId()).thenReturn(42L);
     when(legacyHandler.apply(eq(event), eq("Bearer raw-token"))).thenReturn(handlerResult());
-    when(caseProjectionService.load(123456789L)).thenReturn(savedCaseDetails());
+    when(transactionCoordinator.execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any()))
+        .thenAnswer(invocation -> {
+          var work = invocation
+              .<Supplier<CaseEventTransactionCoordinator.CaseEventWrite<Supplier<SubmitResponse<?>>>>>getArgument(2);
+          var write = work.get();
+          return CaseEventTransactionCoordinator.TransactionResult.created(
+              42L,
+              savedCaseDetails(),
+              write.result()
+          );
+        });
+
     service.submit(event, "raw-token", IDEMPOTENCY_KEY);
 
     verify(legacyHandler).apply(event, "Bearer raw-token");
-    verify(auditEventService).saveAuditRecord(
-        eq(42L),
-        eq(event),
-        any(IdamService.User.class),
-        any(CaseDetails.class),
+    verify(transactionCoordinator).execute(
+        eq(123456789L),
         eq(IDEMPOTENCY_KEY),
-        eq(Optional.empty())
+        any()
     );
   }
 
@@ -88,12 +86,12 @@ class CaseSubmissionServiceTest {
         "Bearer raw-token",
         new UserInfo("sub", "uid", "name", "given", "family", List.of("caseworker"))
     ));
-    when(idempotencyEnforcer.lockCaseAndGetExistingEvent(IDEMPOTENCY_KEY, 123456789L))
-        .thenReturn(Optional.of(99L));
+    when(transactionCoordinator.execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any()))
+        .thenReturn(CaseEventTransactionCoordinator.TransactionResult.replayed(99L));
     when(caseDataRepository.caseDetailsAtEvent(123456789L, 99L)).thenReturn(savedCaseDetails());
     service.submit(event, "raw-token", IDEMPOTENCY_KEY);
 
-    verifyNoInteractions(auditEventService, legacyHandler);
+    verifyNoInteractions(legacyHandler);
   }
 
   private DecentralisedCaseEvent event() {
