@@ -19,6 +19,7 @@ import uk.gov.hmcts.reform.idam.client.models.UserInfo;
 
 @Service
 @ConditionalOnProperty(prefix = SystemEventExecutorImpl.SYSTEM_USER_PREFIX, name = "id")
+@Transactional(propagation = Propagation.NEVER)
 class SystemEventExecutorImpl implements SystemEventExecutor {
 
   static final String SYSTEM_USER_PREFIX = "ccd.decentralised-runtime.system-user";
@@ -49,7 +50,6 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
     this.caseDataRepository = caseDataRepository;
   }
 
-  @Transactional(propagation = Propagation.NEVER)
   @Override
   public <State extends Enum<State>> void execute(
       long caseReference,
@@ -59,7 +59,6 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
     execute(caseReference, Optional.empty(), idempotencyKey, action);
   }
 
-  @Transactional(propagation = Propagation.NEVER)
   @Override
   public <State extends Enum<State>> void execute(
       long caseReference,
