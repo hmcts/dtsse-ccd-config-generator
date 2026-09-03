@@ -37,17 +37,21 @@ class CaseSubmissionServiceTest {
   private final AuditEventService auditEventService = mock(AuditEventService.class);
   private final CaseDataRepository caseDataRepository = mock(CaseDataRepository.class);
   private final CaseProjectionService caseProjectionService = mock(CaseProjectionService.class);
+  private final CaseEventTransactionCoordinator transactionCoordinator = new CaseEventTransactionCoordinator(
+      idempotencyEnforcer,
+      transactionTemplate,
+      auditEventService,
+      caseDataRepository,
+      caseProjectionService
+  );
 
   private final CaseSubmissionService service = new CaseSubmissionService(
       resolvedConfigRegistry,
       submitHandler,
       legacyHandler,
       idam,
-      idempotencyEnforcer,
-      transactionTemplate,
-      auditEventService,
-      caseDataRepository,
-      caseProjectionService
+      transactionCoordinator,
+      caseDataRepository
   );
 
   @Test
@@ -78,7 +82,8 @@ class CaseSubmissionServiceTest {
         any(IdamService.User.class),
         any(CaseDetails.class),
         eq(IDEMPOTENCY_KEY),
-        eq(Optional.empty())
+        eq(Optional.empty()),
+        eq(CaseEventPublication.PUBLISH)
     );
   }
 

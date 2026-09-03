@@ -202,7 +202,7 @@ The SDK wraps every case event inside a database transaction covering:
 - insert into `ccd.case_event` (audit history)
 - insert into the Elasticsearch queue table
 
-The orchestration lives in [`CaseSubmissionService`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/CaseSubmissionService.java). If a concurrent update to `ccd.case_data` is detected, a `409 CONFLICT` is returned and the transaction rolls back, aligning behaviour with CCD.
+The common transaction ordering lives in [`CaseEventTransactionCoordinator`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/CaseEventTransactionCoordinator.java) and is used by both CCD submissions and [local system events](./system-events.md). If a concurrent update to `ccd.case_data` is detected, a `409 CONFLICT` is returned and the transaction rolls back, aligning behaviour with CCD.
 
 ## Supplementary data
 

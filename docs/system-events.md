@@ -3,7 +3,7 @@
 Services can perform system-initiated changes locally without a round trip through CCD's API, while
 remaining transactional and audited.
 
-This proposal covers decentralised case data projected from application-owned relational data.
+This covers decentralised case data projected from application-owned relational data.
 
 ## Example
 
@@ -12,24 +12,19 @@ A service can make a local case change and record it as a system event in one op
 ```java
 String serviceRequestReference = paymentStatusCallback.getServiceRequestReference();
 
-systemEventExecutor.execute(
-    caseReference,
-    new ActorAttribution(userId, firstName, lastName),
-    idempotencyKey,
-    () -> {
-        paymentService.applyUpdate(caseReference, serviceRequestReference);
-        return new SystemEventResult<>(
-            "paymentUpdated",
-            "Payment updated",
-            Optional.of(State.CASE_ISSUED)
-        );
-    }
-);
+systemEventExecutor.execute(caseReference, idempotencyKey, () -> {
+    paymentService.applyUpdate(caseReference, serviceRequestReference);
+    return new SystemEventResult<>(
+        "paymentUpdated",
+        "Payment updated",
+        Optional.of(State.CASE_ISSUED)
+    );
+});
 ```
 
 ## System user identity
 
-The sdk's system user identify is set through Spring Boot configuration:
+The SDK's system user identity is set through Spring Boot configuration:
 
 ```yaml
 ccd:
@@ -40,6 +35,14 @@ ccd:
       first-name: Case Service
       last-name: System
 ```
+
+The executor bean is only created when `id` is configured. If it is present, all four values are
+required and are validated when the application starts.
+
+For work performed solely by the service, the configured system identity is recorded as the event
+user. When an `ActorAttribution` is supplied, the actor is recorded as the event user and the system
+identity is recorded in the `proxied_by` fields. This matches the existing CCD history model for one
+identity acting on behalf of another.
 
 ### Attribute system work to a person
 
@@ -58,12 +61,19 @@ systemEventExecutor.execute(
     }
 );
 ```
-## Proposed API
+
+## API
 
 ```java
-public interface SystemEventExecutor<State> {
+public interface SystemEventExecutor {
 
-    void execute(
+    <State extends Enum<State>> void execute(
+        long caseReference,
+        UUID idempotencyKey,
+        SystemEventAction<State> action
+    );
+
+    <State extends Enum<State>> void execute(
         long caseReference,
         ActorAttribution actor,
         UUID idempotencyKey,
@@ -72,12 +82,12 @@ public interface SystemEventExecutor<State> {
 }
 
 @FunctionalInterface
-public interface SystemEventAction<State> {
+public interface SystemEventAction<State extends Enum<State>> {
 
     SystemEventResult<State> execute();
 }
 
-public record SystemEventResult<State>(
+public record SystemEventResult<State extends Enum<State>>(
     String eventId,
     String summary,
     Optional<State> state
@@ -93,12 +103,28 @@ public record ActorAttribution(
 ```
 
 The caller must derive a stable idempotency key from the originating operation and reuse it for every
-retry.
+retry. Replaying the same key for the same case returns without invoking the action again.
 
 System event IDs do not have to be registered in CCD configuration. The result supplies the event ID
-and summary required by the audit entry.
+and summary required by the audit entry. If the ID matches a configured event, its configured display
+name is used; otherwise the summary is also used as the display name. CCD's public history endpoint
+applies configured event access rules, so an unregistered ID remains in persisted history but is not
+returned by that endpoint.
 
-An application may optionally register descriptive metadata for consistent display names.
+System events never publish a case-event message, including when their ID matches a configured,
+publishable event.
+
+## Transaction and state behaviour
+
+The executor locks the case and then runs the action, application database writes, case metadata
+update, relational projection, database audit capture and CCD history insert in one transaction. If
+the action or any later step fails, all local writes are rolled back. Execution is rejected when the
+caller already has an active transaction so the executor can own this ordering reliably.
+
+An action can leave the state unchanged or return a value from the case type's state enum. The
+executor rejects values from another enum. It deliberately does not run configured event callbacks,
+pre-state checks or CCD event permission checks; those remain the caller's domain and authorisation
+responsibility.
 
 ## Security boundary
 
