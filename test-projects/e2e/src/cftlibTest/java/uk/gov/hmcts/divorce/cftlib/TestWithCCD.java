@@ -2460,10 +2460,10 @@ public class TestWithCCD extends CftlibTest {
                     + "values (:reference, 'E2E System', :note)",
                 Map.of("reference", reference, "note", note)
             );
-            return new SystemEventResult<>(eventId, summary, summary, Optional.of(State.Holding));
+            return SystemEventResult.withStateTransition(eventId, summary, summary, State.Holding);
         });
 
-        systemEventExecutor.<State>execute(reference, idempotencyKey, () -> {
+        systemEventExecutor.execute(reference, idempotencyKey, () -> {
             throw new AssertionError("An idempotent replay must not invoke the action");
         });
 
@@ -2557,11 +2557,9 @@ public class TestWithCCD extends CftlibTest {
 
         systemEventExecutor.execute(reference, UUID.randomUUID(), () -> {
             jpaCaseNoteRepository.save(new JpaCaseNote(reference, "E2E System", note));
-            return new SystemEventResult<>(
+            return SystemEventResult.withoutStateTransition(
                 PublishedEvent.class.getSimpleName(),
-                "Published Event",
-                null,
-                Optional.<State>empty()
+                "Published Event"
             );
         });
 
@@ -2607,11 +2605,9 @@ public class TestWithCCD extends CftlibTest {
                         + "values (:reference, :author, 'On behalf of user')",
                     Map.of("reference", reference, "author", userInfo.getName())
                 );
-                return new SystemEventResult<>(
+                return SystemEventResult.withoutStateTransition(
                     eventId,
-                    "Unconfigured system event",
-                    null,
-                    Optional.<State>empty()
+                    "Unconfigured system event"
                 );
             }
         );
@@ -2660,7 +2656,7 @@ public class TestWithCCD extends CftlibTest {
             Long.class
         );
 
-        assertThrows(IllegalStateException.class, () -> systemEventExecutor.<State>execute(
+        assertThrows(IllegalStateException.class, () -> systemEventExecutor.execute(
             reference,
             UUID.randomUUID(),
             () -> {
@@ -2675,7 +2671,7 @@ public class TestWithCCD extends CftlibTest {
 
         UndeclaredThrowableException checkedFailure = assertThrows(
             UndeclaredThrowableException.class,
-            () -> systemEventExecutor.<State>execute(
+            () -> systemEventExecutor.execute(
                 reference,
                 UUID.randomUUID(),
                 () -> {
@@ -2713,11 +2709,10 @@ public class TestWithCCD extends CftlibTest {
             systemEventExecutor.execute(
                 reference,
                 UUID.randomUUID(),
-                () -> new SystemEventResult<>(
+                () -> SystemEventResult.withoutStateTransition(
                     "nestedEvent",
                     "Nested event",
-                    "Nested event",
-                    Optional.<State>empty()
+                    "Nested event"
                 )
             )
         ));
@@ -2726,11 +2721,10 @@ public class TestWithCCD extends CftlibTest {
             reference,
             (ActorAttribution) null,
             UUID.randomUUID(),
-            () -> new SystemEventResult<>(
+            () -> SystemEventResult.withoutStateTransition(
                 "missingActor",
                 "Missing actor",
-                "Missing actor",
-                Optional.<State>empty()
+                "Missing actor"
             )
         ));
 
@@ -2742,11 +2736,10 @@ public class TestWithCCD extends CftlibTest {
                 UUID.randomUUID(),
                 () -> {
                     missingCaseActionInvoked.set(true);
-                    return new SystemEventResult<>(
+                    return SystemEventResult.withoutStateTransition(
                         "missingCase",
                         "Missing case",
-                        "Missing case",
-                        Optional.<State>empty()
+                        "Missing case"
                     );
                 }
             )
@@ -2756,7 +2749,7 @@ public class TestWithCCD extends CftlibTest {
     }
 
     @SneakyThrows
-    private SystemEventResult<State> throwCheckedSystemEventException() {
+    private SystemEventResult throwCheckedSystemEventException() {
         throw new IOException("Expected checked action failure");
     }
 

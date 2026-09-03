@@ -7,16 +7,16 @@ import java.util.UUID;
  */
 public interface SystemEventExecutor {
 
-  <State extends Enum<State>> void execute(
+  void execute(
       long caseReference,
       UUID idempotencyKey,
-      SystemEventAction<State> action
+      SystemEventAction action
   );
 
-  <State extends Enum<State>> void execute(
+  void execute(
       long caseReference,
       ActorAttribution actor,
       UUID idempotencyKey,
-      SystemEventAction<State> action
+      SystemEventAction action
   );
 }

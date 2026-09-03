@@ -51,20 +51,20 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
   }
 
   @Override
-  public <State extends Enum<State>> void execute(
+  public void execute(
       long caseReference,
       UUID idempotencyKey,
-      SystemEventAction<State> action
+      SystemEventAction action
   ) {
     execute(caseReference, Optional.empty(), idempotencyKey, action);
   }
 
   @Override
-  public <State extends Enum<State>> void execute(
+  public void execute(
       long caseReference,
       ActorAttribution actor,
       UUID idempotencyKey,
-      SystemEventAction<State> action
+      SystemEventAction action
   ) {
     if (actor == null) {
       throw new IllegalArgumentException("Actor attribution is required");
@@ -72,11 +72,11 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
     execute(caseReference, Optional.of(actor), idempotencyKey, action);
   }
 
-  private <State extends Enum<State>> void execute(
+  private void execute(
       long caseReference,
       Optional<ActorAttribution> actor,
       UUID idempotencyKey,
-      SystemEventAction<State> action
+      SystemEventAction action
   ) {
     validateRequest(actor, idempotencyKey, action);
     transactionCoordinator.execute(
@@ -86,15 +86,15 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
     );
   }
 
-  private <State extends Enum<State>> CaseEventTransactionCoordinator.CaseEventWrite<Void> prepareSystemEvent(
+  private CaseEventTransactionCoordinator.CaseEventWrite<Void> prepareSystemEvent(
       long caseReference,
       Optional<ActorAttribution> actor,
-      SystemEventAction<State> action
+      SystemEventAction action
   ) {
     CaseDetails currentCase = caseDataRepository.getCase(caseReference).getCaseDetails();
     final String previousState = currentCase.getState();
 
-    SystemEventResult<State> result = action.execute();
+    SystemEventResult result = action.execute();
     if (result == null) {
       throw new IllegalArgumentException("System event action must return a result");
     }
@@ -105,7 +105,7 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
         .caseType(currentCase.getCaseTypeId())
         .eventId(result.eventId())
         .eventName(result.eventName())
-        .summary(result.summary());
+        .summary(result.summary().orElse(null));
     actor.ifPresent(value -> eventDetailsBuilder
         .proxiedBy(value.id())
         .proxiedByFirstName(value.firstName())
@@ -130,15 +130,15 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
     );
   }
 
-  private <State extends Enum<State>> void validateResult(SystemEventResult<State> result) {
+  private void validateResult(SystemEventResult result) {
     requireText(result.eventId(), "System event ID");
     requireText(result.eventName(), "System event name");
   }
 
-  private <State extends Enum<State>> void validateRequest(
+  private void validateRequest(
       Optional<ActorAttribution> actor,
       UUID idempotencyKey,
-      SystemEventAction<State> action
+      SystemEventAction action
   ) {
     if (idempotencyKey == null) {
       throw new IllegalArgumentException("System event idempotency key is required");

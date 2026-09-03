@@ -17,11 +17,11 @@ String serviceRequestReference = paymentStatusCallback.getServiceRequestReferenc
 
 systemEventExecutor.execute(caseReference, idempotencyKey, () -> {
     paymentService.applyUpdate(caseReference, serviceRequestReference);
-    return new SystemEventResult<>(
+    return SystemEventResult.withStateTransition(
         "paymentUpdated",
         "Payment updated",
         "Payment updated",
-        Optional.of(State.CASE_ISSUED)
+        State.CASE_ISSUED
     );
 });
 ```
@@ -68,11 +68,10 @@ systemEventExecutor.execute(
     accessChangeIdempotencyKey,
     () -> {
         caseAccessService.applyChange(caseReference, request);
-        return new SystemEventResult<>(
+        return SystemEventResult.withoutStateTransition(
             "caseAccessUpdated",
             "Case access updated",
-            "Case access updated",
-            Optional.empty()
+            "Case access updated"
         );
     }
 );
