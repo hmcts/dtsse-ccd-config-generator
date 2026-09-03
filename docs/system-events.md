@@ -83,7 +83,7 @@ retry. Replaying the same key for the same case returns without invoking the act
 
 System event IDs do not have to be registered in CCD configuration. The result supplies the event ID,
 display name and optional summary for the audit entry. CCD's public history endpoint applies configured
-event access rules, so an unregistered ID remains in persisted history but is not returned CCD.
+event access rules, so an unregistered ID remains in persisted history but is not returned by CCD.
 
 ## Security boundary
 
