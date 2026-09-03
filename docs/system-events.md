@@ -5,6 +5,9 @@ remaining transactional and [auditable](./audit.md).
 
 This covers decentralised case data projected from application-owned relational data.
 
+System events can only operate on existing CCD cases. New cases must be created through CCD's case
+creation API before this executor can be used.
+
 > **Warning:** Before using this API, you must read and understand the
 > [security model](#security-boundary).
 
