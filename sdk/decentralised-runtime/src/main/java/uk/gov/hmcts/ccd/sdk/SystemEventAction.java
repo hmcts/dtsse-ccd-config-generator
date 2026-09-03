@@ -6,5 +6,5 @@ package uk.gov.hmcts.ccd.sdk;
 @FunctionalInterface
 public interface SystemEventAction {
 
-  SystemEventResult execute();
+  SystemEventResult execute(SystemEventExecutionContext context);
 }

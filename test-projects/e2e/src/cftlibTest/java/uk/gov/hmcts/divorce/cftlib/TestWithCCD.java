@@ -2454,8 +2454,17 @@ public class TestWithCCD extends CftlibTest {
             params,
             Integer.class
         );
+        String stateBefore = db.queryForObject(
+            "select state from ccd.case_data where reference = :reference",
+            params,
+            String.class
+        );
 
-        SystemEventExecutionResult executed = systemEventExecutor.execute(reference, idempotencyKey, () -> {
+        SystemEventExecutionResult executed = systemEventExecutor.execute(reference, idempotencyKey, context -> {
+            assertThat(context.caseReference(), equalTo(reference));
+            assertThat(context.idempotencyKey(), equalTo(idempotencyKey));
+            assertThat(context.caseTypeId(), equalTo("E2E"));
+            assertThat(context.currentState(), equalTo(stateBefore));
             db.update(
                 "insert into case_notes(reference, author, note) "
                     + "values (:reference, 'E2E System', :note)",
@@ -2464,7 +2473,7 @@ public class TestWithCCD extends CftlibTest {
             return SystemEventResult.withStateTransition(eventId, summary, summary, State.Holding);
         });
 
-        SystemEventExecutionResult replayed = systemEventExecutor.execute(reference, idempotencyKey, () -> {
+        SystemEventExecutionResult replayed = systemEventExecutor.execute(reference, idempotencyKey, context -> {
             throw new AssertionError("An idempotent replay must not invoke the action");
         });
 
@@ -2561,7 +2570,7 @@ public class TestWithCCD extends CftlibTest {
         String note = "Published system event note";
         long reference = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
 
-        systemEventExecutor.execute(reference, UUID.randomUUID(), () -> {
+        systemEventExecutor.execute(reference, UUID.randomUUID(), context -> {
             jpaCaseNoteRepository.save(new JpaCaseNote(reference, "E2E System", note));
             return SystemEventResult.withoutStateTransition(
                 PublishedEvent.class.getSimpleName(),
@@ -2605,7 +2614,7 @@ public class TestWithCCD extends CftlibTest {
             reference,
             new ActorAttribution(userInfo.getUid(), userInfo.getGivenName(), userInfo.getFamilyName()),
             UUID.randomUUID(),
-            () -> {
+            context -> {
                 db.update(
                     "insert into case_notes(reference, author, note) "
                         + "values (:reference, :author, 'On behalf of user')",
@@ -2665,7 +2674,7 @@ public class TestWithCCD extends CftlibTest {
         assertThrows(IllegalStateException.class, () -> systemEventExecutor.execute(
             reference,
             UUID.randomUUID(),
-            () -> {
+            context -> {
                 db.update(
                     "insert into case_notes(reference, author, note) "
                         + "values (:reference, 'E2E System', 'Rolled back exception')",
@@ -2680,7 +2689,7 @@ public class TestWithCCD extends CftlibTest {
             () -> systemEventExecutor.execute(
                 reference,
                 UUID.randomUUID(),
-                () -> {
+                context -> {
                     db.update(
                         "insert into case_notes(reference, author, note) "
                             + "values (:reference, 'E2E System', 'Rolled back checked exception')",
@@ -2715,7 +2724,7 @@ public class TestWithCCD extends CftlibTest {
             systemEventExecutor.execute(
                 reference,
                 UUID.randomUUID(),
-                () -> SystemEventResult.withoutStateTransition(
+                context -> SystemEventResult.withoutStateTransition(
                     "nestedEvent",
                     "Nested event",
                     "Nested event"
@@ -2727,7 +2736,7 @@ public class TestWithCCD extends CftlibTest {
             reference,
             (ActorAttribution) null,
             UUID.randomUUID(),
-            () -> SystemEventResult.withoutStateTransition(
+            context -> SystemEventResult.withoutStateTransition(
                 "missingActor",
                 "Missing actor",
                 "Missing actor"
@@ -2740,7 +2749,7 @@ public class TestWithCCD extends CftlibTest {
             () -> systemEventExecutor.execute(
                 9999999999999999L,
                 UUID.randomUUID(),
-                () -> {
+                context -> {
                     missingCaseActionInvoked.set(true);
                     return SystemEventResult.withoutStateTransition(
                         "missingCase",

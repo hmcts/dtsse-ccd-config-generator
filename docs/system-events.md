@@ -18,8 +18,8 @@ A service can make a local case change and record it as a system event in one op
 ```java
 String serviceRequestReference = paymentStatusCallback.getServiceRequestReference();
 
-SystemEventExecutionResult execution = systemEventExecutor.execute(caseReference, idempotencyKey, () -> {
-    paymentService.applyUpdate(caseReference, serviceRequestReference);
+SystemEventExecutionResult execution = systemEventExecutor.execute(caseReference, idempotencyKey, context -> {
+    paymentService.applyUpdate(context.caseReference(), serviceRequestReference);
     return SystemEventResult.withStateTransition(
         "paymentUpdated",
         "Payment updated",
@@ -31,6 +31,9 @@ SystemEventExecutionResult execution = systemEventExecutor.execute(caseReference
 
 The result contains the persisted event ID and an `EXECUTED` or `REPLAYED` outcome. A replay is a
 successful idempotent result: the original event ID is returned and the action is not invoked again.
+For a new event, the action receives the case reference, idempotency key, case type ID and current
+state read while the case is locked. This also allows an action method with the same signature to be
+passed by method reference.
 
 System events reuse the transaction and persistence stages described in the runtime's
 [event submission flow](./decentralised-runtime.md#event-submission-flow).
@@ -72,8 +75,8 @@ systemEventExecutor.execute(
     caseReference,
     new ActorAttribution(userId, firstName, lastName),
     accessChangeIdempotencyKey,
-    () -> {
-        caseAccessService.applyChange(caseReference, request);
+    context -> {
+        caseAccessService.applyChange(context.caseReference(), request);
         return SystemEventResult.withoutStateTransition(
             "caseAccessUpdated",
             "Case access updated",

@@ -13,6 +13,7 @@ import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedEventDetails;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.ActorAttribution;
 import uk.gov.hmcts.ccd.sdk.SystemEventAction;
+import uk.gov.hmcts.ccd.sdk.SystemEventExecutionContext;
 import uk.gov.hmcts.ccd.sdk.SystemEventExecutionResult;
 import uk.gov.hmcts.ccd.sdk.SystemEventExecutor;
 import uk.gov.hmcts.ccd.sdk.SystemEventResult;
@@ -83,7 +84,7 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
     var transactionResult = transactionCoordinator.execute(
         caseReference,
         idempotencyKey,
-        () -> prepareSystemEvent(caseReference, actor, action)
+        () -> prepareSystemEvent(caseReference, actor, idempotencyKey, action)
     );
     return transactionResult.existingEventId()
         .map(eventId -> new SystemEventExecutionResult(
@@ -99,12 +100,19 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
   private CaseEventTransactionCoordinator.CaseEventWrite<Void> prepareSystemEvent(
       long caseReference,
       Optional<ActorAttribution> actor,
+      UUID idempotencyKey,
       SystemEventAction action
   ) {
     CaseDetails currentCase = caseDataRepository.getCase(caseReference).getCaseDetails();
     final String previousState = currentCase.getState();
 
-    SystemEventResult result = action.execute();
+    var context = new SystemEventExecutionContext(
+        caseReference,
+        idempotencyKey,
+        currentCase.getCaseTypeId(),
+        previousState
+    );
+    SystemEventResult result = action.execute(context);
     if (result == null) {
       throw new IllegalArgumentException("System event action must return a result");
     }
