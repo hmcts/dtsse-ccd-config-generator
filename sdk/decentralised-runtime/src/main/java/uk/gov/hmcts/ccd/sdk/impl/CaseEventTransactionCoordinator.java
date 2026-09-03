@@ -72,8 +72,7 @@ class CaseEventTransactionCoordinator {
         write.user(),
         savedCase.getCaseDetails(),
         idempotencyKey,
-        write.significantItem(),
-        write.publication()
+        write.significantItem()
     );
 
     return TransactionResult.created(caseEventId, savedCase, write.result());
@@ -97,7 +96,6 @@ class CaseEventTransactionCoordinator {
       IdamService.User user,
       Optional<JsonNode> dataUpdate,
       Optional<SignificantItem> significantItem,
-      CaseEventPublication publication,
       T result
   ) {
   }

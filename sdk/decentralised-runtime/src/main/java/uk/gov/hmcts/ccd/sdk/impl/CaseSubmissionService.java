@@ -36,7 +36,7 @@ public class CaseSubmissionService {
     var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
 
     try {
-      CaseEventTransactionCoordinator.TransactionResult<Supplier<SubmitResponse<?>>> transactionResult =
+      var transactionResult =
           transactionCoordinator.execute(
               event.getCaseDetails().getReference(),
               idempotencyKey,
@@ -71,7 +71,6 @@ public class CaseSubmissionService {
         user,
         handlerResult.dataUpdate(),
         handlerResult.significantItem(),
-        CaseEventPublication.PUBLISH,
         handlerResult.responseSupplier()
     );
   }

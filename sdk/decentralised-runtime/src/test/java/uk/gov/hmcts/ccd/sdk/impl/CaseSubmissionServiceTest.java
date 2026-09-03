@@ -82,8 +82,7 @@ class CaseSubmissionServiceTest {
         any(IdamService.User.class),
         any(CaseDetails.class),
         eq(IDEMPOTENCY_KEY),
-        eq(Optional.empty()),
-        eq(CaseEventPublication.PUBLISH)
+        eq(Optional.empty())
     );
   }
 

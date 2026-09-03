@@ -113,8 +113,9 @@ display name and optional summary for the audit entry. CCD's public history endp
 event access rules, so an unregistered ID remains in persisted history but is not returned by that
 endpoint.
 
-System events never publish a case-event message, including when their ID matches a configured,
-publishable event.
+System events use the same message publication rules as other events. An unconfigured event ID, or a
+configured event not marked for publication, does not produce a case-event message. A system event
+whose ID matches a configured, publishable event does produce one.
 
 ## Transaction and state behaviour
 

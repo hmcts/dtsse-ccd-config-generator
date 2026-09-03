@@ -127,7 +127,6 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
         systemUser(),
         Optional.empty(),
         Optional.empty(),
-        CaseEventPublication.SUPPRESS,
         null
     );
   }

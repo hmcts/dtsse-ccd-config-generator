@@ -121,6 +121,7 @@ class AuditEventService {
     }
   }
 
+  @SneakyThrows
   public long saveAuditRecord(
       long caseEventId,
       DecentralisedCaseEvent event,
@@ -128,27 +129,6 @@ class AuditEventService {
       uk.gov.hmcts.ccd.domain.model.definition.CaseDetails currentView,
       UUID idempotencyKey,
       Optional<uk.gov.hmcts.reform.ccd.client.model.SignificantItem> significantItem
-  ) {
-    return saveAuditRecord(
-        caseEventId,
-        event,
-        user,
-        currentView,
-        idempotencyKey,
-        significantItem,
-        CaseEventPublication.PUBLISH
-    );
-  }
-
-  @SneakyThrows
-  long saveAuditRecord(
-      long caseEventId,
-      DecentralisedCaseEvent event,
-      IdamService.User user,
-      uk.gov.hmcts.ccd.domain.model.definition.CaseDetails currentView,
-      UUID idempotencyKey,
-      Optional<uk.gov.hmcts.reform.ccd.client.model.SignificantItem> significantItem,
-      CaseEventPublication publication
   ) {
     significantItem.ifPresent(this::validateSignificantItem);
 
@@ -253,7 +233,7 @@ class AuditEventService {
     var inserted = ndb.queryForObject(sql, params, this::mapInsertedAuditEvent);
     significantItem.ifPresent(item -> saveSignificantItem(inserted.id(), item));
 
-    if (publication == CaseEventPublication.PUBLISH && this.publisher.isPresent()) {
+    if (this.publisher.isPresent()) {
       log.info(
           "Publishing event {} for case reference: {}",
           eventDetails.getEventId(),
@@ -268,15 +248,9 @@ class AuditEventService {
           inserted.id(),
           inserted.createdDate()
       );
-    } else if (publication == CaseEventPublication.PUBLISH) {
-      log.info(
-          "Message publishing disabled, skipping event publication for case reference: {}",
-          currentView.getReference()
-      );
     } else {
       log.info(
-          "Skipping publication for system event {} on case reference: {}",
-          eventDetails.getEventId(),
+          "Message publishing disabled, skipping event publication for case reference: {}",
           currentView.getReference()
       );
     }
