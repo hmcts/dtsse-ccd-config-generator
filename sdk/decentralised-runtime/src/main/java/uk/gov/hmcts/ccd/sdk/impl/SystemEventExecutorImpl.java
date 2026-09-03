@@ -11,8 +11,6 @@ import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedEventDetails;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.ActorAttribution;
-import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
-import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.SystemEventAction;
 import uk.gov.hmcts.ccd.sdk.SystemEventExecutor;
 import uk.gov.hmcts.ccd.sdk.SystemEventResult;
@@ -33,7 +31,6 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
   private final SystemIdentity systemIdentity;
   private final CaseEventTransactionCoordinator transactionCoordinator;
   private final CaseDataRepository caseDataRepository;
-  private final ResolvedConfigRegistry configRegistry;
 
   SystemEventExecutorImpl(
       @Value("${ccd.decentralised-runtime.system-user.id:}") String systemUserId,
@@ -41,8 +38,7 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
       @Value("${ccd.decentralised-runtime.system-user.first-name:}") String systemUserFirstName,
       @Value("${ccd.decentralised-runtime.system-user.last-name:}") String systemUserLastName,
       CaseEventTransactionCoordinator transactionCoordinator,
-      CaseDataRepository caseDataRepository,
-      ResolvedConfigRegistry configRegistry
+      CaseDataRepository caseDataRepository
   ) {
     this.systemIdentity = new SystemIdentity(
         systemUserId,
@@ -53,7 +49,6 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
     validateSystemIdentity(systemIdentity);
     this.transactionCoordinator = transactionCoordinator;
     this.caseDataRepository = caseDataRepository;
-    this.configRegistry = configRegistry;
   }
 
   @Override
@@ -102,20 +97,19 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
       SystemEventAction<State> action
   ) {
     CaseDetails currentCase = caseDataRepository.getCase(caseReference).getCaseDetails();
-    ResolvedCCDConfig<?, ?, ?> config = configRegistry.getRequired(currentCase.getCaseTypeId());
     final String previousState = currentCase.getState();
 
     SystemEventResult<State> result = action.execute();
     if (result == null) {
       throw new IllegalArgumentException("System event action must return a result");
     }
-    validateResult(result, config);
+    validateResult(result);
     result.state().ifPresent(state -> currentCase.setState(String.valueOf(state)));
 
     var eventDetailsBuilder = DecentralisedEventDetails.builder()
         .caseType(currentCase.getCaseTypeId())
         .eventId(result.eventId())
-        .eventName(resolveEventName(config, result))
+        .eventName(result.eventName())
         .summary(result.summary());
     actor.ifPresent(value -> eventDetailsBuilder
         .proxiedBy(value.id())
@@ -141,30 +135,10 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
     );
   }
 
-  private <State extends Enum<State>> String resolveEventName(
-      ResolvedCCDConfig<?, ?, ?> config,
-      SystemEventResult<State> result
-  ) {
-    var configuredEvent = config.getEvents().get(result.eventId());
-    String eventName = configuredEvent == null ? null : configuredEvent.getName();
-    if (eventName == null || eventName.isBlank()) {
-      eventName = result.summary();
-    }
-    requireText(eventName, "System event name", EVENT_NAME_MAX_LENGTH);
-    return eventName;
-  }
-
-  private <State extends Enum<State>> void validateResult(
-      SystemEventResult<State> result,
-      ResolvedCCDConfig<?, ?, ?> config
-  ) {
+  private <State extends Enum<State>> void validateResult(SystemEventResult<State> result) {
     requireText(result.eventId(), "System event ID", EVENT_ID_MAX_LENGTH);
+    requireText(result.eventName(), "System event name", EVENT_NAME_MAX_LENGTH);
     requireText(result.summary(), "System event summary", EVENT_SUMMARY_MAX_LENGTH);
-    result.state().ifPresent(state -> {
-      if (!config.getStateClass().isInstance(state)) {
-        throw new IllegalArgumentException("System event requested an unknown case state");
-      }
-    });
   }
 
   private <State extends Enum<State>> void validateRequest(

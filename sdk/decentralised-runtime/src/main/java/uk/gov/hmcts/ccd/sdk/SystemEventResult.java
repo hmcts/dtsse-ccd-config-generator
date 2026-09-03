@@ -8,12 +8,14 @@ import java.util.Optional;
  */
 public record SystemEventResult<State extends Enum<State>>(
     String eventId,
+    String eventName,
     String summary,
     Optional<State> state
 ) {
 
   public SystemEventResult {
     Objects.requireNonNull(eventId, "eventId");
+    Objects.requireNonNull(eventName, "eventName");
     Objects.requireNonNull(summary, "summary");
     Objects.requireNonNull(state, "state");
   }

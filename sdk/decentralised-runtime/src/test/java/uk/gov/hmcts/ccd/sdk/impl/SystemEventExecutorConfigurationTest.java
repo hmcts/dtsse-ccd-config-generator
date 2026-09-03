@@ -5,7 +5,6 @@ import static org.mockito.Mockito.mock;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.SystemEventExecutor;
 
 class SystemEventExecutorConfigurationTest {
@@ -13,8 +12,7 @@ class SystemEventExecutorConfigurationTest {
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
       .withUserConfiguration(SystemEventExecutorImpl.class)
       .withBean(CaseEventTransactionCoordinator.class, () -> mock(CaseEventTransactionCoordinator.class))
-      .withBean(CaseDataRepository.class, () -> mock(CaseDataRepository.class))
-      .withBean(ResolvedConfigRegistry.class, () -> mock(ResolvedConfigRegistry.class));
+      .withBean(CaseDataRepository.class, () -> mock(CaseDataRepository.class));
 
   @Test
   void doesNotCreateExecutorWithoutSystemUserConfiguration() {

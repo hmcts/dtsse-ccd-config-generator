@@ -17,6 +17,7 @@ systemEventExecutor.execute(caseReference, idempotencyKey, () -> {
     return new SystemEventResult<>(
         "paymentUpdated",
         "Payment updated",
+        "Payment updated",
         Optional.of(State.CASE_ISSUED)
     );
 });
@@ -56,6 +57,7 @@ systemEventExecutor.execute(
         return new SystemEventResult<>(
             "caseAccessUpdated",
             "Case access updated",
+            "Case access updated",
             Optional.empty()
         );
     }
@@ -89,6 +91,7 @@ public interface SystemEventAction<State extends Enum<State>> {
 
 public record SystemEventResult<State extends Enum<State>>(
     String eventId,
+    String eventName,
     String summary,
     Optional<State> state
 ) {
@@ -105,11 +108,10 @@ public record ActorAttribution(
 The caller must derive a stable idempotency key from the originating operation and reuse it for every
 retry. Replaying the same key for the same case returns without invoking the action again.
 
-System event IDs do not have to be registered in CCD configuration. The result supplies the event ID
-and summary required by the audit entry. If the ID matches a configured event, its configured display
-name is used; otherwise the summary is also used as the display name. CCD's public history endpoint
-applies configured event access rules, so an unregistered ID remains in persisted history but is not
-returned by that endpoint.
+System event IDs do not have to be registered in CCD configuration. The result supplies the event ID,
+display name and summary required by the audit entry. CCD's public history endpoint applies configured
+event access rules, so an unregistered ID remains in persisted history but is not returned by that
+endpoint.
 
 System events never publish a case-event message, including when their ID matches a configured,
 publishable event.
@@ -122,9 +124,9 @@ the action or any later step fails, all local writes are rolled back. Execution 
 caller already has an active transaction so the executor can own this ordering reliably.
 
 An action can leave the state unchanged or return a value from the case type's state enum. The
-executor rejects values from another enum. It deliberately does not run configured event callbacks,
-pre-state checks or CCD event permission checks; those remain the caller's domain and authorisation
-responsibility.
+executor deliberately does not resolve or validate the result against CCD configuration, run
+configured event callbacks, pre-state checks or CCD event permission checks; those remain the
+caller's domain and authorisation responsibility.
 
 ## Security boundary
 
