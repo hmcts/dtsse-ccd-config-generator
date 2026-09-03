@@ -6,7 +6,8 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedEventDetails;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
@@ -48,6 +49,7 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
     this.caseDataRepository = caseDataRepository;
   }
 
+  @Transactional(propagation = Propagation.NEVER)
   @Override
   public <State extends Enum<State>> void execute(
       long caseReference,
@@ -57,6 +59,7 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
     execute(caseReference, Optional.empty(), idempotencyKey, action);
   }
 
+  @Transactional(propagation = Propagation.NEVER)
   @Override
   public <State extends Enum<State>> void execute(
       long caseReference,
@@ -77,10 +80,6 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
       SystemEventAction<State> action
   ) {
     validateRequest(actor, idempotencyKey, action);
-    if (TransactionSynchronizationManager.isActualTransactionActive()) {
-      throw new IllegalStateException("System events cannot be executed from an existing transaction");
-    }
-
     transactionCoordinator.execute(
         caseReference,
         idempotencyKey,

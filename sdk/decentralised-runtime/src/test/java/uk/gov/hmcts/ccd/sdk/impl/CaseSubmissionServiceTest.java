@@ -12,8 +12,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.transaction.support.TransactionCallback;
-import org.springframework.transaction.support.TransactionTemplate;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
@@ -33,13 +31,11 @@ class CaseSubmissionServiceTest {
   private final LegacyCallbackSubmissionHandler legacyHandler = mock(LegacyCallbackSubmissionHandler.class);
   private final IdamService idam = mock(IdamService.class);
   private final IdempotencyEnforcer idempotencyEnforcer = mock(IdempotencyEnforcer.class);
-  private final TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
   private final AuditEventService auditEventService = mock(AuditEventService.class);
   private final CaseDataRepository caseDataRepository = mock(CaseDataRepository.class);
   private final CaseProjectionService caseProjectionService = mock(CaseProjectionService.class);
   private final CaseEventTransactionCoordinator transactionCoordinator = new CaseEventTransactionCoordinator(
       idempotencyEnforcer,
-      transactionTemplate,
       auditEventService,
       caseDataRepository,
       caseProjectionService
@@ -69,10 +65,6 @@ class CaseSubmissionServiceTest {
     when(auditEventService.reserveCaseEventId()).thenReturn(42L);
     when(legacyHandler.apply(eq(event), eq("Bearer raw-token"))).thenReturn(handlerResult());
     when(caseProjectionService.load(123456789L)).thenReturn(savedCaseDetails());
-    when(transactionTemplate.execute(any())).thenAnswer(invocation ->
-        invocation.<TransactionCallback<?>>getArgument(0).doInTransaction(null)
-    );
-
     service.submit(event, "raw-token", IDEMPOTENCY_KEY);
 
     verify(legacyHandler).apply(event, "Bearer raw-token");
@@ -99,10 +91,6 @@ class CaseSubmissionServiceTest {
     when(idempotencyEnforcer.lockCaseAndGetExistingEvent(IDEMPOTENCY_KEY, 123456789L))
         .thenReturn(Optional.of(99L));
     when(caseDataRepository.caseDetailsAtEvent(123456789L, 99L)).thenReturn(savedCaseDetails());
-    when(transactionTemplate.execute(any())).thenAnswer(invocation ->
-        invocation.<TransactionCallback<?>>getArgument(0).doInTransaction(null)
-    );
-
     service.submit(event, "raw-token", IDEMPOTENCY_KEY);
 
     verifyNoInteractions(auditEventService, legacyHandler);

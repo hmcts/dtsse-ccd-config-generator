@@ -4,10 +4,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
+import lombok.RequiredArgsConstructor;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
@@ -17,41 +19,19 @@ import uk.gov.hmcts.reform.ccd.client.model.SignificantItem;
  * Owns the transaction ordering shared by every locally persisted CCD case event.
  */
 @Service
+@RequiredArgsConstructor
 class CaseEventTransactionCoordinator {
 
   private final IdempotencyEnforcer idempotencyEnforcer;
-  private final TransactionTemplate transactionTemplate;
   private final AuditEventService auditEventService;
   private final CaseDataRepository caseDataRepository;
   private final CaseProjectionService caseProjectionService;
 
-  CaseEventTransactionCoordinator(
-      IdempotencyEnforcer idempotencyEnforcer,
-      TransactionTemplate transactionTemplate,
-      AuditEventService auditEventService,
-      CaseDataRepository caseDataRepository,
-      CaseProjectionService caseProjectionService
-  ) {
-    this.idempotencyEnforcer = idempotencyEnforcer;
-    this.transactionTemplate = transactionTemplate;
-    this.auditEventService = auditEventService;
-    this.caseDataRepository = caseDataRepository;
-    this.caseProjectionService = caseProjectionService;
-  }
-
-  <T> TransactionResult<T> execute(
+  @Transactional(rollbackFor = Exception.class)
+  public <T> TransactionResult<T> execute(
       long caseReference,
       UUID idempotencyKey,
-      CaseEventWork<T> work
-  ) {
-    return Objects.requireNonNull(transactionTemplate.execute(status ->
-        executeInTransaction(caseReference, idempotencyKey, work)));
-  }
-
-  private <T> TransactionResult<T> executeInTransaction(
-      long caseReference,
-      UUID idempotencyKey,
-      CaseEventWork<T> work
+      Supplier<CaseEventWrite<T>> work
   ) {
     Optional<Long> existingEventId = idempotencyEnforcer.lockCaseAndGetExistingEvent(
         idempotencyKey,
@@ -62,7 +42,7 @@ class CaseEventTransactionCoordinator {
     }
 
     long caseEventId = auditEventService.reserveCaseEventId();
-    CaseEventWrite<T> write = Objects.requireNonNull(work.execute(), "Case event work must return a write");
+    CaseEventWrite<T> write = Objects.requireNonNull(work.get(), "Case event work must return a write");
 
     upsertCase(write.event(), write.dataUpdate());
     DecentralisedCaseDetails savedCase = caseProjectionService.load(caseReference);
@@ -84,11 +64,6 @@ class CaseEventTransactionCoordinator {
     } catch (EmptyResultDataAccessException e) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Case was updated concurrently", e);
     }
-  }
-
-  @FunctionalInterface
-  interface CaseEventWork<T> {
-    CaseEventWrite<T> execute();
   }
 
   record CaseEventWrite<T>(

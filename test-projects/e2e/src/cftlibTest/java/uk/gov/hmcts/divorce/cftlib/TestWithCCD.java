@@ -10,6 +10,7 @@ import java.io.IOException;
 import jakarta.jms.ConnectionFactory;
 import jakarta.jms.Message;
 
+import java.lang.reflect.UndeclaredThrowableException;
 import java.net.InetSocketAddress;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -89,6 +90,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jms.core.JmsTemplate;
 import org.springframework.jms.core.MessagePostProcessor;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
@@ -2621,6 +2623,23 @@ public class TestWithCCD extends CftlibTest {
             }
         ));
 
+        UndeclaredThrowableException checkedFailure = assertThrows(
+            UndeclaredThrowableException.class,
+            () -> systemEventExecutor.<State>execute(
+                reference,
+                UUID.randomUUID(),
+                () -> {
+                    db.update(
+                        "insert into case_notes(reference, author, note) "
+                            + "values (:reference, 'E2E System', 'Rolled back checked exception')",
+                        params
+                    );
+                    return throwCheckedSystemEventException();
+                }
+            )
+        );
+        assertThat(checkedFailure.getUndeclaredThrowable(), instanceOf(IOException.class));
+
         assertThat(db.queryForObject(
             "select count(*) from case_notes where reference = :reference",
             params,
@@ -2640,7 +2659,7 @@ public class TestWithCCD extends CftlibTest {
             Long.class
         ), equalTo(revisionBefore));
 
-        assertThrows(IllegalStateException.class, () -> transactionTemplate.executeWithoutResult(status ->
+        assertThrows(IllegalTransactionStateException.class, () -> transactionTemplate.executeWithoutResult(status ->
             systemEventExecutor.execute(
                 reference,
                 UUID.randomUUID(),
@@ -2684,6 +2703,11 @@ public class TestWithCCD extends CftlibTest {
         );
         assertThat(missingCase.getStatusCode().value(), equalTo(404));
         assertThat(missingCaseActionInvoked.get(), is(false));
+    }
+
+    @SneakyThrows
+    private SystemEventResult<State> throwCheckedSystemEventException() {
+        throw new IOException("Expected checked action failure");
     }
 
     @Order(19)
