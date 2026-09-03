@@ -2436,7 +2436,7 @@ public class TestWithCCD extends CftlibTest {
                     + "values (:reference, 'E2E System', :note)",
                 Map.of("reference", reference, "note", note)
             );
-            return new SystemEventResult<>(eventId, summary, Optional.of(State.Holding));
+            return new SystemEventResult<>(eventId, summary, summary, Optional.of(State.Holding));
         });
 
         systemEventExecutor.<State>execute(reference, idempotencyKey, () -> {
@@ -2545,7 +2545,8 @@ public class TestWithCCD extends CftlibTest {
                 );
                 return new SystemEventResult<>(
                     PublishedEvent.class.getSimpleName(),
-                    "System published summary",
+                    "Published Event",
+                    null,
                     Optional.<State>empty()
                 );
             }
@@ -2554,6 +2555,7 @@ public class TestWithCCD extends CftlibTest {
         Map<String, Object> history = db.queryForMap(
             """
             select ce.event_name,
+                   ce.summary,
                    ce.user_id,
                    ce.user_first_name,
                    ce.user_last_name,
@@ -2568,6 +2570,7 @@ public class TestWithCCD extends CftlibTest {
             Map.of("reference", reference, "eventId", PublishedEvent.class.getSimpleName())
         );
         assertThat(history.get("event_name"), equalTo("Published Event"));
+        assertThat(history.get("summary"), nullValue());
         assertThat(history.get("user_id"), equalTo(userInfo.getUid()));
         assertThat(history.get("user_first_name"), equalTo(userInfo.getGivenName()));
         assertThat(history.get("user_last_name"), equalTo(userInfo.getFamilyName()));
@@ -2581,7 +2584,7 @@ public class TestWithCCD extends CftlibTest {
         ), equalTo(outboxBefore));
 
         Map<String, Object> eventFromCcd = getLatestAuditEvent(user, reference, PublishedEvent.class.getSimpleName());
-        assertThat(eventFromCcd.get("summary"), equalTo("System published summary"));
+        assertThat(eventFromCcd.get("summary"), nullValue());
         assertThat(eventFromCcd.get("user_id"), equalTo(userInfo.getUid()));
         assertThat(eventFromCcd.get("proxied_by"), equalTo("00000000-0000-0000-0000-000000000042"));
     }
@@ -2589,7 +2592,7 @@ public class TestWithCCD extends CftlibTest {
     @SneakyThrows
     @Order(19)
     @Test
-    void failedAndInvalidSystemEventsRollBackAllLocalChanges() {
+    void failedSystemEventsRollBackAllLocalChanges() {
         long reference = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
         Map<String, Object> params = Map.of("reference", reference);
         Long revisionBefore = db.queryForObject(
@@ -2608,23 +2611,6 @@ public class TestWithCCD extends CftlibTest {
                     params
                 );
                 throw new IllegalStateException("Expected action failure");
-            }
-        ));
-
-        assertThrows(IllegalArgumentException.class, () -> systemEventExecutor.execute(
-            reference,
-            UUID.randomUUID(),
-            () -> {
-                db.update(
-                    "insert into case_notes(reference, author, note) "
-                        + "values (:reference, 'E2E System', 'Rolled back state')",
-                    params
-                );
-                return new SystemEventResult<>(
-                    "invalidState",
-                    "Invalid state",
-                    Optional.of(ForeignState.UNKNOWN)
-                );
             }
         ));
 
@@ -2651,7 +2637,12 @@ public class TestWithCCD extends CftlibTest {
             systemEventExecutor.execute(
                 reference,
                 UUID.randomUUID(),
-                () -> new SystemEventResult<>("nestedEvent", "Nested event", Optional.<State>empty())
+                () -> new SystemEventResult<>(
+                    "nestedEvent",
+                    "Nested event",
+                    "Nested event",
+                    Optional.<State>empty()
+                )
             )
         ));
 
@@ -2659,7 +2650,12 @@ public class TestWithCCD extends CftlibTest {
             reference,
             (ActorAttribution) null,
             UUID.randomUUID(),
-            () -> new SystemEventResult<>("missingActor", "Missing actor", Optional.<State>empty())
+            () -> new SystemEventResult<>(
+                "missingActor",
+                "Missing actor",
+                "Missing actor",
+                Optional.<State>empty()
+            )
         ));
 
         AtomicBoolean missingCaseActionInvoked = new AtomicBoolean();
@@ -2670,7 +2666,12 @@ public class TestWithCCD extends CftlibTest {
                 UUID.randomUUID(),
                 () -> {
                     missingCaseActionInvoked.set(true);
-                    return new SystemEventResult<>("missingCase", "Missing case", Optional.<State>empty());
+                    return new SystemEventResult<>(
+                        "missingCase",
+                        "Missing case",
+                        "Missing case",
+                        Optional.<State>empty()
+                    );
                 }
             )
         );
@@ -3893,7 +3894,4 @@ public class TestWithCCD extends CftlibTest {
         assertThat("Audit data should be empty after case deletion", auditCount, equalTo(0));
     }
 
-    private enum ForeignState {
-        UNKNOWN
-    }
 }

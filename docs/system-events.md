@@ -109,7 +109,7 @@ The caller must derive a stable idempotency key from the originating operation a
 retry. Replaying the same key for the same case returns without invoking the action again.
 
 System event IDs do not have to be registered in CCD configuration. The result supplies the event ID,
-display name and summary required by the audit entry. CCD's public history endpoint applies configured
+display name and optional summary for the audit entry. CCD's public history endpoint applies configured
 event access rules, so an unregistered ID remains in persisted history but is not returned by that
 endpoint.
 

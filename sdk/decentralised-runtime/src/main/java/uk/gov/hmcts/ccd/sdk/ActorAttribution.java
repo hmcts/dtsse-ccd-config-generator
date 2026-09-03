@@ -1,15 +1,12 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import java.util.Objects;
+import lombok.NonNull;
 
 /**
  * Trusted audit attribution for a person on whose behalf a system event is executed.
  */
-public record ActorAttribution(String id, String firstName, String lastName) {
-
-  public ActorAttribution {
-    Objects.requireNonNull(id, "id");
-    Objects.requireNonNull(firstName, "firstName");
-    Objects.requireNonNull(lastName, "lastName");
-  }
-}
+public record ActorAttribution(
+    @NonNull String id,
+    @NonNull String firstName,
+    @NonNull String lastName
+) {}
