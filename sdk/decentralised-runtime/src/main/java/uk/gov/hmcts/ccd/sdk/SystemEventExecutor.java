@@ -7,13 +7,13 @@ import java.util.UUID;
  */
 public interface SystemEventExecutor {
 
-  void execute(
+  SystemEventExecutionResult execute(
       long caseReference,
       UUID idempotencyKey,
       SystemEventAction action
   );
 
-  void execute(
+  SystemEventExecutionResult execute(
       long caseReference,
       ActorAttribution actor,
       UUID idempotencyKey,

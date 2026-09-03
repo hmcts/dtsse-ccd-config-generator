@@ -124,6 +124,7 @@ import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
 import uk.gov.hmcts.ccd.sdk.ActorAttribution;
 import uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy;
+import uk.gov.hmcts.ccd.sdk.SystemEventExecutionResult;
 import uk.gov.hmcts.ccd.sdk.SystemEventExecutor;
 import uk.gov.hmcts.ccd.sdk.SystemEventResult;
 import uk.gov.hmcts.ccd.sdk.retention.RetainAndDisposeProperties;
@@ -2454,7 +2455,7 @@ public class TestWithCCD extends CftlibTest {
             Integer.class
         );
 
-        systemEventExecutor.execute(reference, idempotencyKey, () -> {
+        SystemEventExecutionResult executed = systemEventExecutor.execute(reference, idempotencyKey, () -> {
             db.update(
                 "insert into case_notes(reference, author, note) "
                     + "values (:reference, 'E2E System', :note)",
@@ -2463,9 +2464,13 @@ public class TestWithCCD extends CftlibTest {
             return SystemEventResult.withStateTransition(eventId, summary, summary, State.Holding);
         });
 
-        systemEventExecutor.execute(reference, idempotencyKey, () -> {
+        SystemEventExecutionResult replayed = systemEventExecutor.execute(reference, idempotencyKey, () -> {
             throw new AssertionError("An idempotent replay must not invoke the action");
         });
+
+        assertThat(executed.outcome(), equalTo(SystemEventExecutionResult.Outcome.EXECUTED));
+        assertThat(replayed.outcome(), equalTo(SystemEventExecutionResult.Outcome.REPLAYED));
+        assertThat(replayed.eventId(), equalTo(executed.eventId()));
 
         Map<String, Object> history = db.queryForMap(
             """
@@ -2486,6 +2491,7 @@ public class TestWithCCD extends CftlibTest {
             """,
             Map.of("reference", reference, "eventId", eventId)
         );
+        assertThat(executed.eventId(), equalTo(((Number) history.get("id")).longValue()));
         assertThat(history.get("event_name"), equalTo(summary));
         assertThat(history.get("summary"), equalTo(summary));
         assertThat(history.get("user_id"), equalTo("00000000-0000-0000-0000-000000000042"));

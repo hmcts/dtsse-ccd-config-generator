@@ -13,6 +13,7 @@ import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedEventDetails;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.ActorAttribution;
 import uk.gov.hmcts.ccd.sdk.SystemEventAction;
+import uk.gov.hmcts.ccd.sdk.SystemEventExecutionResult;
 import uk.gov.hmcts.ccd.sdk.SystemEventExecutor;
 import uk.gov.hmcts.ccd.sdk.SystemEventResult;
 import uk.gov.hmcts.reform.idam.client.models.UserInfo;
@@ -51,16 +52,16 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
   }
 
   @Override
-  public void execute(
+  public SystemEventExecutionResult execute(
       long caseReference,
       UUID idempotencyKey,
       SystemEventAction action
   ) {
-    execute(caseReference, Optional.empty(), idempotencyKey, action);
+    return execute(caseReference, Optional.empty(), idempotencyKey, action);
   }
 
   @Override
-  public void execute(
+  public SystemEventExecutionResult execute(
       long caseReference,
       ActorAttribution actor,
       UUID idempotencyKey,
@@ -69,21 +70,30 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
     if (actor == null) {
       throw new IllegalArgumentException("Actor attribution is required");
     }
-    execute(caseReference, Optional.of(actor), idempotencyKey, action);
+    return execute(caseReference, Optional.of(actor), idempotencyKey, action);
   }
 
-  private void execute(
+  private SystemEventExecutionResult execute(
       long caseReference,
       Optional<ActorAttribution> actor,
       UUID idempotencyKey,
       SystemEventAction action
   ) {
     validateRequest(actor, idempotencyKey, action);
-    transactionCoordinator.execute(
+    var transactionResult = transactionCoordinator.execute(
         caseReference,
         idempotencyKey,
         () -> prepareSystemEvent(caseReference, actor, action)
     );
+    return transactionResult.existingEventId()
+        .map(eventId -> new SystemEventExecutionResult(
+            eventId,
+            SystemEventExecutionResult.Outcome.REPLAYED
+        ))
+        .orElseGet(() -> new SystemEventExecutionResult(
+            transactionResult.createdEvent().orElseThrow().eventId(),
+            SystemEventExecutionResult.Outcome.EXECUTED
+        ));
   }
 
   private CaseEventTransactionCoordinator.CaseEventWrite<Void> prepareSystemEvent(
