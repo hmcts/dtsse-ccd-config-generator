@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.HashMap;
@@ -56,6 +57,7 @@ class CaseDataRepository {
               version,
               last_state_modified_date,
               coalesce(c.last_modified, c.created_date) as last_modified,
+              c.resolved_ttl,
               supplementary_data::text,
               case_revision
          from ccd.case_data c
@@ -93,6 +95,7 @@ class CaseDataRepository {
               ce.version as version,
               ce.created_date as last_state_modified_date,
               ce.created_date as last_modified,
+              cd.resolved_ttl,
               cd.supplementary_data::text,
               ce.case_revision
          from ccd.case_event ce
@@ -223,6 +226,7 @@ class CaseDataRepository {
     caseDetails.setCreatedDate(rs.getObject("created_date", LocalDateTime.class));
     caseDetails.setLastModified(rs.getObject("last_modified", LocalDateTime.class));
     caseDetails.setLastStateModifiedDate(rs.getObject("last_state_modified_date", LocalDateTime.class));
+    caseDetails.setResolvedTTL(rs.getObject("resolved_ttl", LocalDate.class));
 
     var caseDataJson = rs.getString("case_data");
     caseDetails.setData(defaultMapper.readValue(caseDataJson, JSON_NODE_MAP));

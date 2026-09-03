@@ -119,6 +119,7 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
         .caseDetailsBefore(before)
         .caseDetails(currentCase)
         .eventDetails(eventDetailsBuilder.build())
+        .resolvedTtl(currentCase.getResolvedTTL())
         .internalCaseId(Long.valueOf(currentCase.getId()))
         .build();
 

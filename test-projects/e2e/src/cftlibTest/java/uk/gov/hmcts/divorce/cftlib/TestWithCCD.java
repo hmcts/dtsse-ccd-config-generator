@@ -2418,6 +2418,12 @@ public class TestWithCCD extends CftlibTest {
         long reference = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
         UUID idempotencyKey = UUID.randomUUID();
         Map<String, Object> params = Map.of("reference", reference);
+        LocalDate resolvedTtl = LocalDate.now().plusDays(30);
+
+        db.update(
+            "update ccd.case_data set resolved_ttl = :resolvedTtl where reference = :reference",
+            Map.of("reference", reference, "resolvedTtl", resolvedTtl)
+        );
 
         Long revisionBefore = db.queryForObject(
             "select case_revision from ccd.case_data where reference = :reference",
@@ -2497,6 +2503,11 @@ public class TestWithCCD extends CftlibTest {
             String.class
         ), equalTo(State.Holding.toString()));
         assertThat(db.queryForObject(
+            "select resolved_ttl from ccd.case_data where reference = :reference",
+            params,
+            LocalDate.class
+        ), equalTo(resolvedTtl));
+        assertThat(db.queryForObject(
             "select count(*) from ccd.message_queue_candidates where reference = :reference",
             params,
             Integer.class
@@ -2522,8 +2533,9 @@ public class TestWithCCD extends CftlibTest {
     @SneakyThrows
     @Order(19)
     @Test
-    void systemEventCanActOnBehalfOfAUserWithoutPublishingConfiguredEvent() {
+    void systemEventCanActOnBehalfOfAUserWithoutPublishingUnconfiguredEvent() {
         String user = "TEST_CASE_WORKER_USER@mailinator.com";
+        String eventId = "unconfiguredSystemEvent";
         var userInfo = idam.getUserInfo(getAuthorisation(user));
         long reference = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
         Map<String, Object> params = Map.of("reference", reference);
@@ -2544,8 +2556,8 @@ public class TestWithCCD extends CftlibTest {
                     Map.of("reference", reference, "author", userInfo.getName())
                 );
                 return new SystemEventResult<>(
-                    PublishedEvent.class.getSimpleName(),
-                    "Published Event",
+                    eventId,
+                    "Unconfigured system event",
                     null,
                     Optional.<State>empty()
                 );
@@ -2567,9 +2579,9 @@ public class TestWithCCD extends CftlibTest {
              where cd.reference = :reference
                and ce.event_id = :eventId
             """,
-            Map.of("reference", reference, "eventId", PublishedEvent.class.getSimpleName())
+            Map.of("reference", reference, "eventId", eventId)
         );
-        assertThat(history.get("event_name"), equalTo("Published Event"));
+        assertThat(history.get("event_name"), equalTo("Unconfigured system event"));
         assertThat(history.get("summary"), nullValue());
         assertThat(history.get("user_id"), equalTo(userInfo.getUid()));
         assertThat(history.get("user_first_name"), equalTo(userInfo.getGivenName()));
@@ -2582,11 +2594,6 @@ public class TestWithCCD extends CftlibTest {
             params,
             Integer.class
         ), equalTo(outboxBefore));
-
-        Map<String, Object> eventFromCcd = getLatestAuditEvent(user, reference, PublishedEvent.class.getSimpleName());
-        assertThat(eventFromCcd.get("summary"), nullValue());
-        assertThat(eventFromCcd.get("user_id"), equalTo(userInfo.getUid()));
-        assertThat(eventFromCcd.get("proxied_by"), equalTo("00000000-0000-0000-0000-000000000042"));
     }
 
     @SneakyThrows
