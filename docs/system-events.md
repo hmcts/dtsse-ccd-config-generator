@@ -67,47 +67,6 @@ systemEventExecutor.execute(
 );
 ```
 
-## API
-
-```java
-public interface SystemEventExecutor {
-
-    <State extends Enum<State>> void execute(
-        long caseReference,
-        UUID idempotencyKey,
-        SystemEventAction<State> action
-    );
-
-    <State extends Enum<State>> void execute(
-        long caseReference,
-        ActorAttribution actor,
-        UUID idempotencyKey,
-        SystemEventAction<State> action
-    );
-}
-
-@FunctionalInterface
-public interface SystemEventAction<State extends Enum<State>> {
-
-    SystemEventResult<State> execute();
-}
-
-public record SystemEventResult<State extends Enum<State>>(
-    String eventId,
-    String eventName,
-    String summary,
-    Optional<State> state
-) {
-}
-
-public record ActorAttribution(
-    String id,
-    String firstName,
-    String lastName
-) {
-}
-```
-
 The caller must derive a stable idempotency key from the originating operation and reuse it for every
 retry. Replaying the same key for the same case returns without invoking the action again.
 
