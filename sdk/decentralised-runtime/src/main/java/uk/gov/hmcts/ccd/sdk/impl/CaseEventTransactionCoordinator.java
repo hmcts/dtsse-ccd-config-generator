@@ -45,8 +45,8 @@ class CaseEventTransactionCoordinator {
     long caseEventId = auditEventService.reserveCaseEventId();
     CaseEventWrite<T> write = Objects.requireNonNull(work.get(), "Case event work must return a write");
 
-    TransactionAspectSupport.currentTransactionStatus().flush();
     upsertCase(write.event(), write.dataUpdate());
+    TransactionAspectSupport.currentTransactionStatus().flush();
     DecentralisedCaseDetails savedCase = caseProjectionService.load(caseReference);
     auditEventService.saveAuditRecord(
         caseEventId,
