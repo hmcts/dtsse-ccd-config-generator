@@ -43,12 +43,15 @@ public class CaseSubmissionService {
               () -> prepareSubmission(event, user, handler)
           );
 
-      return transactionResult.existingEventId()
-          .map(eventId -> replayIdempotentRequest(event.getCaseDetails().getReference(), eventId))
-          .orElseGet(() -> {
-            var created = transactionResult.createdEvent().orElseThrow();
-            return buildSuccessResponse(new SubmissionOutcome(created.savedCase(), created.result()));
-          });
+      if (transactionResult.replayed()) {
+        return replayIdempotentRequest(
+            event.getCaseDetails().getReference(),
+            transactionResult.eventId()
+        );
+      }
+
+      var created = transactionResult.created().orElseThrow();
+      return buildSuccessResponse(new SubmissionOutcome(created.savedCase(), created.result()));
 
     } catch (CallbackValidationException e) {
       var response = new DecentralisedSubmitEventResponse();

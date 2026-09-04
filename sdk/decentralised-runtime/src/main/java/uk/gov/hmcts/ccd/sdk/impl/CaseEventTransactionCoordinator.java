@@ -77,13 +77,21 @@ class CaseEventTransactionCoordinator {
   ) {
   }
 
-  record CreatedEvent<T>(long eventId, DecentralisedCaseDetails savedCase, T result) {
+  record CreatedResult<T>(DecentralisedCaseDetails savedCase, T result) {
   }
 
-  record TransactionResult<T>(Optional<Long> existingEventId, Optional<CreatedEvent<T>> createdEvent) {
+  record TransactionResult<T>(long eventId, Optional<CreatedResult<T>> created) {
+
+    TransactionResult {
+      Objects.requireNonNull(created, "Created result optional is required");
+    }
+
+    boolean replayed() {
+      return created.isEmpty();
+    }
 
     static <T> TransactionResult<T> replayed(long eventId) {
-      return new TransactionResult<>(Optional.of(eventId), Optional.empty());
+      return new TransactionResult<>(eventId, Optional.empty());
     }
 
     static <T> TransactionResult<T> created(
@@ -91,7 +99,7 @@ class CaseEventTransactionCoordinator {
         DecentralisedCaseDetails savedCase,
         T result
     ) {
-      return new TransactionResult<>(Optional.empty(), Optional.of(new CreatedEvent<>(eventId, savedCase, result)));
+      return new TransactionResult<>(eventId, Optional.of(new CreatedResult<>(savedCase, result)));
     }
   }
 }

@@ -86,15 +86,12 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
         idempotencyKey,
         () -> prepareSystemEvent(caseReference, actor, idempotencyKey, action)
     );
-    return transactionResult.existingEventId()
-        .map(eventId -> new SystemEventExecutionResult(
-            eventId,
-            SystemEventExecutionResult.Outcome.REPLAYED
-        ))
-        .orElseGet(() -> new SystemEventExecutionResult(
-            transactionResult.createdEvent().orElseThrow().eventId(),
-            SystemEventExecutionResult.Outcome.EXECUTED
-        ));
+    return new SystemEventExecutionResult(
+        transactionResult.eventId(),
+        transactionResult.replayed()
+            ? SystemEventExecutionResult.Outcome.REPLAYED
+            : SystemEventExecutionResult.Outcome.EXECUTED
+    );
   }
 
   private CaseEventTransactionCoordinator.CaseEventWrite<Void> prepareSystemEvent(
