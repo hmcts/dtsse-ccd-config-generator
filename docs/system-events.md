@@ -46,6 +46,9 @@ In this example:
    with the event ID `paymentUpdated`.
 4. If the lambda or subsequent persistence fails, it rolls back the transaction.
 
+`SystemEventExecutor.execute(...)` must be called without an active transaction. This ensures the
+executor creates and owns the complete case-event transaction rather than joining a caller's transaction.
+
 ## System user identity
 
 The SDK's system user identity is set through Spring Boot configuration:
