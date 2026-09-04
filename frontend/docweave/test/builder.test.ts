@@ -133,25 +133,36 @@ describe("order builder", () => {
     );
   });
 
-  it("rejects an ordered list with no items", () => {
-    assert.throws(
-      () => buildOrder((order) => order.orderedList("empty", () => {})),
-      { message: 'Ordered list "empty" must contain at least one item' },
-    );
+  it("omits an ordered list with no items", () => {
+    const document = buildOrder((order) => {
+      order.paragraph("heading", "IT IS ORDERED THAT:");
+      order.orderedList("empty", () => {});
+    });
+
+    assert.deepEqual(JSON.parse(JSON.stringify(document.node.toJSON())), {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          attrs: { id: "paragraph:heading" },
+          content: [{ type: "text", text: "IT IS ORDERED THAT:" }],
+        },
+      ],
+    });
   });
 
-  it("rejects an empty nested ordered list", () => {
-    assert.throws(
-      () =>
-        buildOrder((order) => {
-          order.orderedList("clauses", (list) => {
-            list.item("parent", "Parent", (item) => {
-              item.orderedList("empty", () => {});
-            });
-          });
-        }),
-      { message: 'Ordered list "empty" must contain at least one item' },
-    );
+  it("omits an empty nested ordered list", () => {
+    const document = buildOrder((order) => {
+      order.orderedList("clauses", (list) => {
+        list.item("parent", "Parent", (item) => {
+          item.orderedList("empty", () => {});
+        });
+      });
+    });
+
+    const parent = document.node.firstChild!.firstChild!;
+    assert.equal(parent.childCount, 1);
+    assert.equal(parent.firstChild!.type.name, "paragraph");
   });
 
   it("renders generated text with its managed DOM marker", () => {

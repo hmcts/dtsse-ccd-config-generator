@@ -124,7 +124,7 @@ export function buildOrder(
   function buildOrderedList(
     id: string,
     defineList: (list: OrderedListBuilder) => void,
-  ): ProseMirrorNode {
+  ): ProseMirrorNode | undefined {
     const items: ProseMirrorNode[] = [];
     const listBuilder: OrderedListBuilder = {
       item(
@@ -150,7 +150,11 @@ export function buildOrder(
                 `List item "${itemId}" may contain only one nested ordered list`,
               );
             }
-            children.push(buildOrderedList(nestedListId, defineNestedList));
+            const nestedList = buildOrderedList(
+              nestedListId,
+              defineNestedList,
+            );
+            if (nestedList) children.push(nestedList);
           },
         };
 
@@ -166,9 +170,7 @@ export function buildOrder(
     };
 
     defineList(listBuilder);
-    if (items.length === 0) {
-      throw new Error(`Ordered list "${id}" must contain at least one item`);
-    }
+    if (items.length === 0) return undefined;
 
     return editorSchema.node(
       "ordered_list",
@@ -192,7 +194,8 @@ export function buildOrder(
       id: string,
       defineList: (list: OrderedListBuilder) => void,
     ): void {
-      nodes.push(buildOrderedList(id, defineList));
+      const list = buildOrderedList(id, defineList);
+      if (list) nodes.push(list);
     },
   };
 
