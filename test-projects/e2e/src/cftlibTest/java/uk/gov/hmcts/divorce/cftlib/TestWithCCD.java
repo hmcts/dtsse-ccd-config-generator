@@ -2701,6 +2701,27 @@ public class TestWithCCD extends CftlibTest {
         );
         assertThat(checkedFailure.getUndeclaredThrowable(), instanceOf(IOException.class));
 
+        assertSystemEventResultRejected(
+            reference,
+            SystemEventResult.withoutStateTransition("e".repeat(71), "Valid event"),
+            "System event ID exceeds 70 characters"
+        );
+        assertSystemEventResultRejected(
+            reference,
+            SystemEventResult.withoutStateTransition("validEvent", "e".repeat(31)),
+            "System event name exceeds 30 characters"
+        );
+        assertSystemEventResultRejected(
+            reference,
+            SystemEventResult.withoutStateTransition("validEvent", "Valid event", "s".repeat(1025)),
+            "System event summary exceeds 1024 characters"
+        );
+        assertSystemEventResultRejected(
+            reference,
+            SystemEventResult.withStateTransition("validEvent", "Valid event", OversizedState.VALUE),
+            "System event state exceeds 255 characters"
+        );
+
         assertThat(db.queryForObject(
             "select count(*) from case_notes where reference = :reference",
             params,
@@ -2766,6 +2787,18 @@ public class TestWithCCD extends CftlibTest {
     @SneakyThrows
     private SystemEventResult throwCheckedSystemEventException() {
         throw new IOException("Expected checked action failure");
+    }
+
+    private void assertSystemEventResultRejected(
+        long reference,
+        SystemEventResult result,
+        String expectedMessage
+    ) {
+        IllegalArgumentException failure = assertThrows(
+            IllegalArgumentException.class,
+            () -> systemEventExecutor.execute(reference, UUID.randomUUID(), context -> result)
+        );
+        assertThat(failure.getMessage(), equalTo(expectedMessage));
     }
 
     @Order(19)
@@ -3981,6 +4014,15 @@ public class TestWithCCD extends CftlibTest {
         Integer auditCount = db.getJdbcTemplate()
             .queryForObject("SELECT COUNT(*) FROM ccd.audit_log", Integer.class);
         assertThat("Audit data should be empty after case deletion", auditCount, equalTo(0));
+    }
+
+    private enum OversizedState {
+        VALUE;
+
+        @Override
+        public String toString() {
+            return "s".repeat(256);
+        }
     }
 
 }

@@ -26,6 +26,10 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
 
   static final String SYSTEM_USER_PREFIX = "ccd.decentralised-runtime.system-user";
 
+  private static final int EVENT_ID_MAX_LENGTH = 70;
+  private static final int EVENT_NAME_MAX_LENGTH = 30;
+  private static final int EVENT_SUMMARY_MAX_LENGTH = 1024;
+  private static final int STATE_ID_MAX_LENGTH = 255;
   private static final int USER_ID_MAX_LENGTH = 64;
   private static final int USER_NAME_MAX_LENGTH = 255;
 
@@ -146,8 +150,14 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
   }
 
   private void validateResult(SystemEventResult result) {
-    requireText(result.eventId(), "System event ID");
-    requireText(result.eventName(), "System event name");
+    requireText(result.eventId(), "System event ID", EVENT_ID_MAX_LENGTH);
+    requireText(result.eventName(), "System event name", EVENT_NAME_MAX_LENGTH);
+    result.summary().ifPresent(summary ->
+        requireMaxLength(summary, "System event summary", EVENT_SUMMARY_MAX_LENGTH)
+    );
+    result.state().ifPresent(state ->
+        requireMaxLength(String.valueOf(state), "System event state", STATE_ID_MAX_LENGTH)
+    );
   }
 
   private void validateRequest(
@@ -191,14 +201,18 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
 
   private void requireText(String value, String field, int maxLength) {
     requireText(value, field);
-    if (value.codePointCount(0, value.length()) > maxLength) {
-      throw new IllegalArgumentException(field + " exceeds " + maxLength + " characters");
-    }
+    requireMaxLength(value, field, maxLength);
   }
 
   private void requireText(String value, String field) {
     if (value == null || value.isBlank()) {
       throw new IllegalArgumentException(field + " is required");
+    }
+  }
+
+  private void requireMaxLength(String value, String field, int maxLength) {
+    if (value.codePointCount(0, value.length()) > maxLength) {
+      throw new IllegalArgumentException(field + " exceeds " + maxLength + " characters");
     }
   }
 
