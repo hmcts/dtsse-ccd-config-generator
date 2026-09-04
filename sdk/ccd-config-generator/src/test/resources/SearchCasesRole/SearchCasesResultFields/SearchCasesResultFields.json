@@ -1,0 +1,40 @@
+[
+  {
+    "CaseFieldID": "[CASE_REFERENCE]",
+    "CaseTypeID": "SearchCasesRole",
+    "DisplayContextParameter": "#DATETIMEDISPLAY(d MMMM yyyy)",
+    "DisplayOrder": 4,
+    "Label": "Case Number",
+    "LiveFrom": "03/02/2021",
+    "ResultsOrdering": "1:ASC",
+    "UseCase": "orgcases",
+    "UserRole": ""
+  },
+  {
+    "CaseFieldID": "caseName",
+    "CaseTypeID": "SearchCasesRole",
+    "DisplayOrder": 3,
+    "Label": "Case name",
+    "LiveFrom": "03/02/2021",
+    "UseCase": "SEARCH",
+    "UserRole": "caseworker-publiclaw-courtadmin"
+  },
+  {
+    "CaseFieldID": "caseName",
+    "CaseTypeID": "SearchCasesRole",
+    "DisplayOrder": 2,
+    "Label": "Case name",
+    "LiveFrom": "03/02/2021",
+    "UseCase": "WORKBASKET",
+    "UserRole": "caseworker-publiclaw-solicitor"
+  },
+  {
+    "CaseFieldID": "caseName",
+    "CaseTypeID": "SearchCasesRole",
+    "DisplayOrder": 1,
+    "Label": "Case name",
+    "LiveFrom": "03/02/2021",
+    "UseCase": "orgcases",
+    "UserRole": ""
+  }
+]

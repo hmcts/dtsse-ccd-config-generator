@@ -19,6 +19,7 @@ import uk.gov.hmcts.ccd.sdk.api.AccessType;
 import uk.gov.hmcts.ccd.sdk.api.AccessType.AccessTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.AccessTypeRole;
 import uk.gov.hmcts.ccd.sdk.api.AccessTypeRole.AccessTypeRoleBuilder;
+import uk.gov.hmcts.ccd.sdk.api.Banner;
 import uk.gov.hmcts.ccd.sdk.api.CCDAccessGroup;
 import uk.gov.hmcts.ccd.sdk.api.CaseCategory.CaseCategoryBuilder;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
@@ -50,7 +51,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   final List<SearchBuilder<T, R>> workBasketInputFields = Lists.newArrayList();
   final List<SearchBuilder<T, R>> searchResultFields = Lists.newArrayList();
   final List<SearchBuilder<T, R>> searchInputFields = Lists.newArrayList();
-  final List<SearchCasesBuilder<T>> searchCaseResultFields = Lists.newArrayList();
+  final List<SearchCasesBuilder<T, R>> searchCaseResultFields = Lists.newArrayList();
   final List<CaseRoleToAccessProfileBuilder<R>> caseRoleToAccessProfiles = Lists.newArrayList();
   final List<CaseCategoryBuilder<R>> categories = Lists.newArrayList();
   final List<AccessTypeBuilder> accessTypes = Lists.newArrayList();
@@ -87,6 +88,9 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     config.searchParties = buildBuilders(searchParty, SearchPartyBuilder::build);
     config.noticeOfChange = noticeOfChangeBuilder == null ? null : noticeOfChangeBuilder.build(config.caseType);
     config.complexTypeAuthorisations = Lists.newArrayList(complexTypeAuthorisations);
+    // Resolve @CCD(gate) fields against the current environment once, so every ID-based generator
+    // gates the same set. Empty unless a field is gated off, keeping ungated definitions unchanged.
+    config.gatedOffFieldIds = FieldUtils.gatedOffFieldIds(config.caseClass);
 
     return config;
   }
@@ -152,6 +156,48 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
+  @SafeVarargs
+  public final void includeCaseRolesInCaseTypeAuthorisation(R... roles) {
+    for (R role : roles) {
+      if (!role.getRole().matches("\\[.+\\]")) {
+        throw new IllegalArgumentException(
+            "Case-type case-role authorisation requires a CCD case role: " + role.getRole());
+      }
+    }
+    config.caseRolesWithCaseTypeAuthorisation.addAll(Set.of(roles));
+  }
+
+  @Override
+  public void explicitStateGrants() {
+    config.explicitStateGrants = true;
+  }
+
+  @Override
+  public void noCaseHistoryTab() {
+    config.noCaseHistoryTab = true;
+  }
+
+  @Override
+  public void emitCaseRoleJurisdiction() {
+    config.emitCaseRoleJurisdiction = true;
+  }
+
+  @Override
+  public void jurisdictionShuttered() {
+    config.jurisdictionShuttered = true;
+  }
+
+  @Override
+  public void enableForDeletion() {
+    config.enableForDeletion = true;
+  }
+
+  @Override
+  public void printableDocumentsUrl(String url) {
+    config.printableDocumentsUrl = url;
+  }
+
+  @Override
   public void omitHistoryForRoles(R... roles) {
     omitHistoryForRoles.addAll(Set.of(roles));
   }
@@ -192,7 +238,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
-  public SearchCasesBuilder<T> searchCasesFields() {
+  public SearchCasesBuilder<T, R> searchCasesFields() {
     return registerSearchCasesBuilder(searchCaseResultFields);
   }
 
@@ -216,6 +262,13 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   @Override
   public CaseRoleToAccessProfileBuilder<R> caseRoleToAccessProfile(R caseRole) {
     var builder = CaseRoleToAccessProfileBuilder.<R>builder(caseRole);
+    caseRoleToAccessProfiles.add(builder);
+    return builder;
+  }
+
+  @Override
+  public CaseRoleToAccessProfileBuilder<R> roleToAccessProfile(String roleName) {
+    var builder = CaseRoleToAccessProfileBuilder.<R>builder(roleName);
     caseRoleToAccessProfiles.add(builder);
     return builder;
   }
@@ -269,8 +322,10 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     Set<List<String>> existingAccessTypeKeys = config.accessTypes.stream()
         .map(ConfigBuilderImpl::accessTypeKey)
         .collect(Collectors.toCollection(HashSet::new));
+    // A mapping declared against a literal role name carries no HasRole constant, so read its name
+    // from roleName instead — the same either/or RoleToAccessProfilesGenerator emits the row from.
     Set<String> mappedRoleNames = config.caseRoleToAccessProfiles.stream()
-        .map(profile -> profile.getRole().getRole())
+        .map(profile -> profile.getRole() != null ? profile.getRole().getRole() : profile.getRoleName())
         .collect(Collectors.toCollection(HashSet::new));
 
     Map<List<String>, AccessType> derivedAccessTypes = new LinkedHashMap<>();
@@ -351,6 +406,16 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
+  public void banner(boolean enabled, String description, String url, String urlText) {
+    config.banner = Banner.builder()
+        .enabled(enabled)
+        .description(description)
+        .url(url)
+        .urlText(urlText)
+        .build();
+  }
+
+  @Override
   public void grantComplexType(TypedPropertyGetter<T, ?> field, String listElementCode,
                                Set<Permission> permissions, R... roles) {
     String caseFieldId = propertyUtils.getPropertyName(config.caseClass, field);
@@ -366,8 +431,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     return builder;
   }
 
-  private SearchCasesBuilder<T> registerSearchCasesBuilder(List<SearchCasesBuilder<T>> target) {
-    SearchCasesBuilder<T> builder = SearchCasesBuilder.builder(config.caseClass, propertyUtils);
+  private SearchCasesBuilder<T, R> registerSearchCasesBuilder(List<SearchCasesBuilder<T, R>> target) {
+    SearchCasesBuilder<T, R> builder = SearchCasesBuilder.builder(config.caseClass, propertyUtils);
     target.add(builder);
     return builder;
   }

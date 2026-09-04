@@ -34,7 +34,12 @@ public class Event<T, R extends HasRole, S> {
   private boolean explicitGrants;
   private boolean showSummary;
   private boolean showEventNotes;
+  private boolean significant;
+  private boolean canSaveDraft;
   private boolean publishToCamunda;
+  // Omit the PostConditionState column entirely rather than emitting the resolved post-state; see
+  // EventBuilder.postStateFromCallback().
+  private boolean postStateFromCallback;
   private Integer ttlIncrement;
   private AboutToStart<T, S> aboutToStartCallback;
   private AboutToSubmit<T, S> aboutToSubmitCallback;
@@ -119,6 +124,52 @@ public class Event<T, R extends HasRole, S> {
 
     public EventBuilder<T, R, S> showSummary() {
       this.showSummary = true;
+      return this;
+    }
+
+    /**
+     * Sets the CaseEvent sheet's {@code SignificantEvent} flag to {@code Y}. Not consumed by the
+     * definition-store importer or data-store at runtime; a definition-time marker some services
+     * use to flag events of note in their own tooling.
+     */
+    public EventBuilder<T, R, S> significant() {
+      this.significant = true;
+      return this;
+    }
+
+    /**
+     * Sets the CaseEvent sheet's {@code CanSaveDraft} flag to {@code Y}, allowing the caseworker
+     * to save a partially-completed submission and resume it later. The definition-store importer
+     * rejects this on any event with a pre-state ({@code EventEntityCanSaveDraftValidatorImpl}):
+     * it is only valid on create events.
+     */
+    public EventBuilder<T, R, S> canSaveDraft() {
+      this.canSaveDraft = true;
+      return this;
+    }
+
+    /**
+     * Omit the {@code PostConditionState} column from this event's CaseEvent row, so the state the
+     * case ends in is decided at runtime by the about-to-submit callback rather than by the
+     * definition.
+     *
+     * <p>The three column values are three distinct runtime behaviours, and the builder's
+     * state-targeting methods can only express two of them: a concrete state pins the transition,
+     * {@code *} keeps the case in its current state, and an <em>absent</em> column means neither —
+     * the data store finds no post-state to apply
+     * ({@code CasePostStateEvaluationService.getDefaultPostStateReference} throws "No default post
+     * state exists" if it is ever consulted), so the only state that lands is the one the
+     * about-to-submit callback returned. Without this the generator always writes a value, forcing
+     * a definition-declared transition onto an event whose hand-written definition deliberately had
+     * none.
+     *
+     * <p>The pre-states still come from the builder as usual, so declare the transition target you
+     * would otherwise want ({@code forStateTransition}) or simply {@code forState(...)} — only the
+     * emitted column is suppressed. The event must have an about-to-submit callback that returns a
+     * state; otherwise the case never leaves its current state.
+     */
+    public EventBuilder<T, R, S> postStateFromCallback() {
+      this.postStateFromCallback = true;
       return this;
     }
 
