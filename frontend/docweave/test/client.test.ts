@@ -83,6 +83,19 @@ afterEach(() => {
 });
 
 describe("public order editor API", () => {
+  it("refuses a mount point that already has an editor", async () => {
+    const { createOrderEditor } = await import("../src/index.js");
+    const controller = createOrderEditor({ mount: "#editor" });
+
+    assert.throws(
+      () => createOrderEditor({ mount: "#editor" }),
+      /already has an editor/,
+    );
+
+    controller.destroy();
+    assert.doesNotThrow(() => createOrderEditor({ mount: "#editor" }).destroy());
+  });
+
   it("renders, reports changes, serializes and destroys an editor", async () => {
     const { buildOrder, createOrderEditor } = await import("../src/index.js");
     const changes: unknown[] = [];

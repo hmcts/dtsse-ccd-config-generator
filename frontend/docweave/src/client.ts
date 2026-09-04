@@ -246,6 +246,14 @@ export function createOrderEditor(
   if (!editor) {
     throw new Error(`Order editor mount point not found: ${String(options.mount)}`);
   }
+  // Mounting twice silently stacked a second toolbar and surface, which is almost
+  // always a caller that forgot to destroy the previous editor (module reloads in
+  // particular). Fail loudly rather than leaving two editors over one document.
+  if (editor.querySelector(".docweave-editor__surface")) {
+    throw new Error(
+      `Order editor mount point already has an editor, destroy it first: ${String(options.mount)}`,
+    );
+  }
 
   const initialCurrent = options.initialSnapshot
     ? editorSchema.nodeFromJSON(options.initialSnapshot.current)
