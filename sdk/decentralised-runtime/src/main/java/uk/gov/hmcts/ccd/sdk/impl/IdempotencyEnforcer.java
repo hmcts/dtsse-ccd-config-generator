@@ -25,33 +25,37 @@ class IdempotencyEnforcer {
         .addValue("reference", caseReference)
         .addValue("key", idempotencyKey);
 
-    /*
-     * We establish a lock on the case and look up the idempotency key to see if we've processed this event before.
-     */
-    var matches = db.query(
+    var caseIds = db.query(
         """
-        select ce.id as event_id
+        select cd.id
         from ccd.case_data cd
-        left join ccd.case_event ce
-          on ce.case_data_id = cd.id
-         and ce.idempotency_key = :key
         where cd.reference = :reference
-        for update of cd
+        for update
         """,
         params,
-        (rs, rowNum) -> rs.getObject("event_id", Long.class)
+        (rs, rowNum) -> rs.getLong("id")
     );
 
-    if (matches.isEmpty()) {
+    if (caseIds.isEmpty()) {
       log.debug("Case reference {} not found while acquiring idempotency lock; proceeding.", caseReference);
       return Optional.empty();
     }
 
-    Long eventId = matches.get(0);
-    if (eventId != null) {
+    Optional<Long> existingEventId = db.query(
+        """
+        select ce.id
+        from ccd.case_event ce
+        where ce.case_data_id = :caseDataId
+          and ce.idempotency_key = :key
+        """,
+        params.addValue("caseDataId", caseIds.get(0)),
+        (rs, rowNum) -> rs.getLong("id")
+    ).stream().findFirst();
+
+    if (existingEventId.isPresent()) {
       log.info("Idempotency key '{}' already exists (event id {}). Request previously processed.",
-          idempotencyKey, eventId);
-      return Optional.of(eventId);
+          idempotencyKey, existingEventId.get());
+      return existingEventId;
     }
 
     log.debug("Idempotency key '{}' not found; continuing processing (case reference {}).",
