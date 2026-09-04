@@ -130,6 +130,6 @@ including:
 The executor can make local database changes atomic. It cannot make external APIs, document storage,
 notifications or task-management systems participate in that database transaction.
 
-Side effects work should therefore be idempotent or moved outside the short local event transaction. Where
+Work involving side effects should therefore be idempotent or moved outside the short local event transaction. Where
 the remote action must follow a committed case change, it should be driven by an outbox or another
 post-commit mechanism.
