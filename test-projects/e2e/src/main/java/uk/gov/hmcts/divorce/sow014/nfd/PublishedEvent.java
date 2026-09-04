@@ -36,6 +36,7 @@ public class PublishedEvent implements CCDConfig<CaseData, State, UserRole> {
             .grantHistoryOnly(LEGAL_ADVISOR, JUDGE))
             .page("addCaseNotes")
             .pageLabel("Add case notes")
-            .optional(CaseData::getNote);
+            .optional(CaseData::getNote)
+            .readonly(CaseData::getNotes);
     }
 }

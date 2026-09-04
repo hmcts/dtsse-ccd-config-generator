@@ -10,6 +10,7 @@ import java.io.IOException;
 import jakarta.jms.ConnectionFactory;
 import jakarta.jms.Message;
 
+import java.lang.reflect.UndeclaredThrowableException;
 import java.net.InetSocketAddress;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -32,6 +33,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.HashMap;
 import java.util.stream.StreamSupport;
@@ -88,8 +90,11 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jms.core.JmsTemplate;
 import org.springframework.jms.core.MessagePostProcessor;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
+import uk.gov.hmcts.divorce.divorcecase.model.State;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
 import uk.gov.hmcts.divorce.simplecase.SimpleCaseConfiguration;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseData;
@@ -117,7 +122,11 @@ import uk.gov.hmcts.divorce.jsonlegacy.JsonLegacyCcdConfig;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
+import uk.gov.hmcts.ccd.sdk.ActorAttribution;
 import uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy;
+import uk.gov.hmcts.ccd.sdk.SystemEventExecutionResult;
+import uk.gov.hmcts.ccd.sdk.SystemEventExecutor;
+import uk.gov.hmcts.ccd.sdk.SystemEventResult;
 import uk.gov.hmcts.ccd.sdk.retention.RetainAndDisposeProperties;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
@@ -141,6 +150,10 @@ import uk.gov.hmcts.rse.ccd.lib.test.CftlibTest;
     "ccd.decentralised-runtime.retain-and-dispose.cron=-",
     "ccd.decentralised-runtime.retain-and-dispose.system-user.username=dummysystemupdate@test.com",
     "ccd.decentralised-runtime.retain-and-dispose.system-user.password=password",
+    "ccd.decentralised-runtime.system-user.id=00000000-0000-0000-0000-000000000042",
+    "ccd.decentralised-runtime.system-user.username=e2e-system-user",
+    "ccd.decentralised-runtime.system-user.first-name=E2E",
+    "ccd.decentralised-runtime.system-user.last-name=System",
     "spring.autoconfigure.exclude=com.azure.spring.cloud.autoconfigure.implementation.jms.ServiceBusJmsAutoConfiguration"
 })
 @Slf4j
@@ -159,7 +172,13 @@ public class TestWithCCD extends CftlibTest {
     NamedParameterJdbcTemplate db;
 
     @Autowired
+    private JpaCaseNoteRepository jpaCaseNoteRepository;
+
+    @Autowired
     private CaseReindexingService reindexQueueService;
+
+    @Autowired
+    private SystemEventExecutor systemEventExecutor;
 
     @Autowired
     @Qualifier("retainAndDisposeTask")
@@ -1154,6 +1173,7 @@ public class TestWithCCD extends CftlibTest {
     public void testPublishingToMessageOutbox() {
         db.update("DELETE FROM ccd.message_queue_candidates", Map.of());
         clearInvocations(jmsTemplate);
+        String projectedNote = "Test note 0";
 
         var token = ccdApi.startEvent(
             getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
@@ -1185,14 +1205,23 @@ public class TestWithCCD extends CftlibTest {
         Integer totalMessages = db.queryForObject("SELECT count(*) FROM ccd.message_queue_candidates", Map.of(), Integer.class);
         assertThat(totalMessages, equalTo(1));
 
-        String noteCheck = """
-            SELECT message_information->'AdditionalData'->'Data'->>'note'
+        String messageCheck = """
+            SELECT message_information::text
              FROM ccd.message_queue_candidates
              WHERE reference = :caseReference
              """;
 
-        String retrievedNote = db.queryForObject(noteCheck, Map.of("caseReference", caseRef), String.class);
-        assertThat(retrievedNote, equalTo("Test!"));
+        String messageInformation = db.queryForObject(
+            messageCheck,
+            Map.of("caseReference", caseRef),
+            String.class
+        );
+        JsonNode publishedData = mapper.readTree(messageInformation)
+            .path("AdditionalData")
+            .path("Data");
+        assertThat(publishedData.path("note").isNull(), is(true));
+        assertThat(StreamSupport.stream(publishedData.path("notes").spliterator(), false)
+            .anyMatch(value -> projectedNote.equals(value.path("value").path("note").asText())), is(true));
 
         // Verify the EventTimeStamp from the JSON blob
         String timestampCheckSql = """
@@ -1213,7 +1242,10 @@ public class TestWithCCD extends CftlibTest {
         );
 
         JsonNode payload = payloadCaptor.getValue();
-        assertThat(payload.path("AdditionalData").path("Data").path("note").asText(), equalTo("Test!"));
+        JsonNode publishedPayloadData = payload.path("AdditionalData").path("Data");
+        assertThat(publishedPayloadData.path("note").isNull(), is(true));
+        assertThat(StreamSupport.stream(publishedPayloadData.path("notes").spliterator(), false)
+            .anyMatch(value -> projectedNote.equals(value.path("value").path("note").asText())), is(true));
 
         Map<String, String> capturedProperties = new HashMap<>();
         Message jmsMessage = mock(Message.class);
@@ -2393,6 +2425,380 @@ public class TestWithCCD extends CftlibTest {
         assertThat(newValues.path("reference").asLong(), equalTo(caseRef));
         assertThat(newValues.path("note").asText(), equalTo(noteText));
         assertThat(newValues.path("author").asText(), equalTo(submittingUserInfo.getName()));
+    }
+
+    @SneakyThrows
+    @Order(19)
+    @Test
+    void systemEventCreatesHistoryAuditAndProjectedSnapshotOnce() {
+        String eventId = "systemNoteAdded";
+        String summary = "System note added";
+        String note = "System event note";
+        long reference = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+        UUID idempotencyKey = UUID.randomUUID();
+        Map<String, Object> params = Map.of("reference", reference);
+        LocalDate resolvedTtl = LocalDate.now().plusDays(30);
+
+        db.update(
+            "update ccd.case_data set resolved_ttl = :resolvedTtl where reference = :reference",
+            Map.of("reference", reference, "resolvedTtl", resolvedTtl)
+        );
+
+        Long revisionBefore = db.queryForObject(
+            "select case_revision from ccd.case_data where reference = :reference",
+            params,
+            Long.class
+        );
+        Integer outboxBefore = db.queryForObject(
+            "select count(*) from ccd.message_queue_candidates where reference = :reference",
+            params,
+            Integer.class
+        );
+        String stateBefore = db.queryForObject(
+            "select state from ccd.case_data where reference = :reference",
+            params,
+            String.class
+        );
+
+        SystemEventExecutionResult executed = systemEventExecutor.execute(reference, idempotencyKey, context -> {
+            assertThat(context.caseReference(), equalTo(reference));
+            assertThat(context.idempotencyKey(), equalTo(idempotencyKey));
+            assertThat(context.caseTypeId(), equalTo("E2E"));
+            assertThat(context.currentState(), equalTo(stateBefore));
+            db.update(
+                "insert into case_notes(reference, author, note) "
+                    + "values (:reference, 'E2E System', :note)",
+                Map.of("reference", reference, "note", note)
+            );
+            return SystemEventResult.withStateTransition(eventId, summary, summary, State.Holding);
+        });
+
+        SystemEventExecutionResult replayed = systemEventExecutor.execute(reference, idempotencyKey, context -> {
+            throw new AssertionError("An idempotent replay must not invoke the action");
+        });
+
+        assertThat(executed.outcome(), equalTo(SystemEventExecutionResult.Outcome.EXECUTED));
+        assertThat(replayed.outcome(), equalTo(SystemEventExecutionResult.Outcome.REPLAYED));
+        assertThat(replayed.eventId(), equalTo(executed.eventId()));
+
+        Map<String, Object> history = db.queryForMap(
+            """
+            select ce.id,
+                   ce.event_name,
+                   ce.summary,
+                   ce.user_id,
+                   ce.user_first_name,
+                   ce.user_last_name,
+                   ce.proxied_by,
+                   ce.state_id,
+                   ce.state_name,
+                   ce.data::text as data
+              from ccd.case_event ce
+              join ccd.case_data cd on cd.id = ce.case_data_id
+             where cd.reference = :reference
+               and ce.event_id = :eventId
+            """,
+            Map.of("reference", reference, "eventId", eventId)
+        );
+        assertThat(executed.eventId(), equalTo(((Number) history.get("id")).longValue()));
+        assertThat(history.get("event_name"), equalTo(summary));
+        assertThat(history.get("summary"), equalTo(summary));
+        assertThat(history.get("user_id"), equalTo("00000000-0000-0000-0000-000000000042"));
+        assertThat(history.get("user_first_name"), equalTo("E2E"));
+        assertThat(history.get("user_last_name"), equalTo("System"));
+        assertThat(history.get("proxied_by"), nullValue());
+        assertThat(history.get("state_id"), equalTo(State.Holding.toString()));
+        assertThat(history.get("state_name"), equalTo("20 week holding period"));
+
+        JsonNode snapshot = mapper.readTree((String) history.get("data"));
+        assertThat(StreamSupport.stream(snapshot.path("notes").spliterator(), false)
+            .anyMatch(value -> note.equals(value.path("value").path("note").asText())), is(true));
+
+        Integer matchingNotes = db.queryForObject(
+            "select count(*) from case_notes where reference = :reference and note = :note",
+            Map.of("reference", reference, "note", note),
+            Integer.class
+        );
+        assertThat(matchingNotes, equalTo(1));
+        assertThat(db.queryForObject(
+            "select count(*) from ccd.audit_log where case_event_id = :eventId",
+            Map.of("eventId", history.get("id")),
+            Integer.class
+        ), equalTo(1));
+        assertThat(db.queryForObject(
+            "select case_revision from ccd.case_data where reference = :reference",
+            params,
+            Long.class
+        ), equalTo(revisionBefore + 1));
+        assertThat(db.queryForObject(
+            "select state from ccd.case_data where reference = :reference",
+            params,
+            String.class
+        ), equalTo(State.Holding.toString()));
+        assertThat(db.queryForObject(
+            "select resolved_ttl from ccd.case_data where reference = :reference",
+            params,
+            LocalDate.class
+        ), equalTo(resolvedTtl));
+        assertThat(db.queryForObject(
+            "select count(*) from ccd.message_queue_candidates where reference = :reference",
+            params,
+            Integer.class
+        ), equalTo(outboxBefore));
+
+        Long caseDataId = db.queryForObject(
+            "select id from ccd.case_data where reference = :reference",
+            params,
+            Long.class
+        );
+        await()
+            .pollInterval(Duration.ofSeconds(1))
+            .atMost(ELASTICSEARCH_ASSERTION_TIMEOUT)
+            .untilAsserted(() -> {
+                JsonNode indexed = fetchElasticsearchDocument(caseDataId);
+                assertThat(indexed.path("case_revision").asLong(), equalTo(revisionBefore + 1));
+                assertThat(indexed.path("state").asText(), equalTo(State.Holding.toString()));
+                assertThat(StreamSupport.stream(indexed.path("data").path("notes").spliterator(), false)
+                    .anyMatch(value -> note.equals(value.path("value").path("note").asText())), is(true));
+            });
+    }
+
+    @SneakyThrows
+    @Order(19)
+    @Test
+    void systemEventPublishesPostActionJpaProjection() {
+        String note = "Published system event note";
+        long reference = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+
+        systemEventExecutor.execute(reference, UUID.randomUUID(), context -> {
+            jpaCaseNoteRepository.save(new JpaCaseNote(reference, "E2E System", note));
+            return SystemEventResult.withoutStateTransition(
+                PublishedEvent.class.getSimpleName(),
+                "Published Event"
+            );
+        });
+
+        String messageInformation = db.queryForObject(
+            """
+            select message_information::text
+              from ccd.message_queue_candidates
+             where reference = :reference
+            """,
+            Map.of("reference", reference),
+            String.class
+        );
+        JsonNode publishedData = mapper.readTree(messageInformation)
+            .path("AdditionalData")
+            .path("Data");
+
+        assertThat(StreamSupport.stream(publishedData.path("notes").spliterator(), false)
+            .anyMatch(value -> note.equals(value.path("value").path("note").asText())), is(true));
+    }
+
+    @SneakyThrows
+    @Order(19)
+    @Test
+    void systemEventCanActOnBehalfOfAUserWithoutPublishingUnconfiguredEvent() {
+        String user = "TEST_CASE_WORKER_USER@mailinator.com";
+        String eventId = "unconfiguredSystemEvent";
+        var userInfo = idam.getUserInfo(getAuthorisation(user));
+        long reference = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+        Map<String, Object> params = Map.of("reference", reference);
+        Integer outboxBefore = db.queryForObject(
+            "select count(*) from ccd.message_queue_candidates where reference = :reference",
+            params,
+            Integer.class
+        );
+
+        systemEventExecutor.execute(
+            reference,
+            new ActorAttribution(userInfo.getUid(), userInfo.getGivenName(), userInfo.getFamilyName()),
+            UUID.randomUUID(),
+            context -> {
+                db.update(
+                    "insert into case_notes(reference, author, note) "
+                        + "values (:reference, :author, 'On behalf of user')",
+                    Map.of("reference", reference, "author", userInfo.getName())
+                );
+                return SystemEventResult.withoutStateTransition(
+                    eventId,
+                    "Unconfigured system event"
+                );
+            }
+        );
+
+        Map<String, Object> history = db.queryForMap(
+            """
+            select ce.event_name,
+                   ce.summary,
+                   ce.user_id,
+                   ce.user_first_name,
+                   ce.user_last_name,
+                   ce.proxied_by,
+                   ce.proxied_by_first_name,
+                   ce.proxied_by_last_name
+              from ccd.case_event ce
+              join ccd.case_data cd on cd.id = ce.case_data_id
+             where cd.reference = :reference
+               and ce.event_id = :eventId
+            """,
+            Map.of("reference", reference, "eventId", eventId)
+        );
+        assertThat(history.get("event_name"), equalTo("Unconfigured system event"));
+        assertThat(history.get("summary"), nullValue());
+        assertThat(history.get("user_id"), equalTo(userInfo.getUid()));
+        assertThat(history.get("user_first_name"), equalTo(userInfo.getGivenName()));
+        assertThat(history.get("user_last_name"), equalTo(userInfo.getFamilyName()));
+        assertThat(history.get("proxied_by"), equalTo("00000000-0000-0000-0000-000000000042"));
+        assertThat(history.get("proxied_by_first_name"), equalTo("E2E"));
+        assertThat(history.get("proxied_by_last_name"), equalTo("System"));
+        assertThat(db.queryForObject(
+            "select count(*) from ccd.message_queue_candidates where reference = :reference",
+            params,
+            Integer.class
+        ), equalTo(outboxBefore));
+    }
+
+    @SneakyThrows
+    @Order(19)
+    @Test
+    void failedSystemEventsRollBackAllLocalChanges() {
+        long reference = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+        Map<String, Object> params = Map.of("reference", reference);
+        Long revisionBefore = db.queryForObject(
+            "select case_revision from ccd.case_data where reference = :reference",
+            params,
+            Long.class
+        );
+
+        assertThrows(IllegalStateException.class, () -> systemEventExecutor.execute(
+            reference,
+            UUID.randomUUID(),
+            context -> {
+                db.update(
+                    "insert into case_notes(reference, author, note) "
+                        + "values (:reference, 'E2E System', 'Rolled back exception')",
+                    params
+                );
+                throw new IllegalStateException("Expected action failure");
+            }
+        ));
+
+        UndeclaredThrowableException checkedFailure = assertThrows(
+            UndeclaredThrowableException.class,
+            () -> systemEventExecutor.execute(
+                reference,
+                UUID.randomUUID(),
+                context -> {
+                    db.update(
+                        "insert into case_notes(reference, author, note) "
+                            + "values (:reference, 'E2E System', 'Rolled back checked exception')",
+                        params
+                    );
+                    return throwCheckedSystemEventException();
+                }
+            )
+        );
+        assertThat(checkedFailure.getUndeclaredThrowable(), instanceOf(IOException.class));
+
+        assertSystemEventResultRejected(
+            reference,
+            SystemEventResult.withoutStateTransition("e".repeat(71), "Valid event"),
+            "System event ID exceeds 70 characters"
+        );
+        assertSystemEventResultRejected(
+            reference,
+            SystemEventResult.withoutStateTransition("validEvent", "e".repeat(31)),
+            "System event name exceeds 30 characters"
+        );
+        assertSystemEventResultRejected(
+            reference,
+            SystemEventResult.withoutStateTransition("validEvent", "Valid event", "s".repeat(1025)),
+            "System event summary exceeds 1024 characters"
+        );
+        assertSystemEventResultRejected(
+            reference,
+            SystemEventResult.withStateTransition("validEvent", "Valid event", OversizedState.VALUE),
+            "System event state exceeds 255 characters"
+        );
+
+        assertThat(db.queryForObject(
+            "select count(*) from case_notes where reference = :reference",
+            params,
+            Integer.class
+        ), equalTo(0));
+        assertThat(db.queryForObject(
+            "select count(*) from ccd.audit_log audit "
+                + "join ccd.case_event event on event.id = audit.case_event_id "
+                + "join ccd.case_data case_data on case_data.id = event.case_data_id "
+                + "where case_data.reference = :reference",
+            params,
+            Integer.class
+        ), equalTo(0));
+        assertThat(db.queryForObject(
+            "select case_revision from ccd.case_data where reference = :reference",
+            params,
+            Long.class
+        ), equalTo(revisionBefore));
+
+        assertThrows(IllegalTransactionStateException.class, () -> transactionTemplate.executeWithoutResult(status ->
+            systemEventExecutor.execute(
+                reference,
+                UUID.randomUUID(),
+                context -> SystemEventResult.withoutStateTransition(
+                    "nestedEvent",
+                    "Nested event",
+                    "Nested event"
+                )
+            )
+        ));
+
+        assertThrows(IllegalArgumentException.class, () -> systemEventExecutor.execute(
+            reference,
+            (ActorAttribution) null,
+            UUID.randomUUID(),
+            context -> SystemEventResult.withoutStateTransition(
+                "missingActor",
+                "Missing actor",
+                "Missing actor"
+            )
+        ));
+
+        AtomicBoolean missingCaseActionInvoked = new AtomicBoolean();
+        ResponseStatusException missingCase = assertThrows(
+            ResponseStatusException.class,
+            () -> systemEventExecutor.execute(
+                9999999999999999L,
+                UUID.randomUUID(),
+                context -> {
+                    missingCaseActionInvoked.set(true);
+                    return SystemEventResult.withoutStateTransition(
+                        "missingCase",
+                        "Missing case",
+                        "Missing case"
+                    );
+                }
+            )
+        );
+        assertThat(missingCase.getStatusCode().value(), equalTo(404));
+        assertThat(missingCaseActionInvoked.get(), is(false));
+    }
+
+    @SneakyThrows
+    private SystemEventResult throwCheckedSystemEventException() {
+        throw new IOException("Expected checked action failure");
+    }
+
+    private void assertSystemEventResultRejected(
+        long reference,
+        SystemEventResult result,
+        String expectedMessage
+    ) {
+        IllegalArgumentException failure = assertThrows(
+            IllegalArgumentException.class,
+            () -> systemEventExecutor.execute(reference, UUID.randomUUID(), context -> result)
+        );
+        assertThat(failure.getMessage(), equalTo(expectedMessage));
     }
 
     @Order(19)
@@ -3608,6 +4014,15 @@ public class TestWithCCD extends CftlibTest {
         Integer auditCount = db.getJdbcTemplate()
             .queryForObject("SELECT COUNT(*) FROM ccd.audit_log", Integer.class);
         assertThat("Audit data should be empty after case deletion", auditCount, equalTo(0));
+    }
+
+    private enum OversizedState {
+        VALUE;
+
+        @Override
+        public String toString() {
+            return "s".repeat(256);
+        }
     }
 
 }
