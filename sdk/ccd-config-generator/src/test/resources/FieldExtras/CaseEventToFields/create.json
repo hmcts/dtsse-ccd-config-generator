@@ -1,0 +1,58 @@
+[
+  {
+    "CaseEventID": "create",
+    "CaseFieldID": "noSummaryField",
+    "CaseTypeID": "FieldExtras",
+    "DefaultValue": "no-summary default",
+    "DisplayContext": "MANDATORY",
+    "LiveFrom": "01/01/2017",
+    "PageColumnNumber": 1,
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 3,
+    "PageID": 1
+  },
+  {
+    "CaseEventID": "create",
+    "CaseFieldID": "optionalField",
+    "CaseTypeID": "FieldExtras",
+    "DefaultValue": "a literal default",
+    "DisplayContext": "OPTIONAL",
+    "FieldShowCondition": "noSummaryField=\"*\"",
+    "LiveFrom": "01/01/2017",
+    "PageColumnNumber": 1,
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 1,
+    "PageID": 1,
+    "RetainHiddenValue": "Y",
+    "ShowSummaryChangeOption": "Y"
+  },
+  {
+    "CaseEventFieldHint": "Readonly override hint",
+    "CaseEventFieldLabel": "Readonly override label",
+    "CaseEventID": "create",
+    "CaseFieldID": "readonlyField",
+    "CaseTypeID": "FieldExtras",
+    "DisplayContext": "READONLY",
+    "DisplayContextParameter": "#TEXTAREA",
+    "FieldShowCondition": "optionalField=\"a literal default\"",
+    "LiveFrom": "01/01/2017",
+    "PageColumnNumber": 1,
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 2,
+    "PageID": 1,
+    "RetainHiddenValue": "Y"
+  },
+  {
+    "CaseEventID": "create",
+    "CaseFieldID": "publishAliasField",
+    "CaseTypeID": "FieldExtras",
+    "DisplayContext": "OPTIONAL",
+    "LiveFrom": "01/01/2017",
+    "PageColumnNumber": 1,
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 4,
+    "PageID": 1,
+    "PublishAs": "aliasOnly",
+    "ShowSummaryChangeOption": "Y"
+  }
+]

@@ -10,6 +10,7 @@ import java.util.Map;
 import lombok.SneakyThrows;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
+import uk.gov.hmcts.ccd.sdk.StateId;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
@@ -22,8 +23,11 @@ class StateGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R
     int i = 1;
     if (config.getStateClass().isEnum()) {
       for (Object enumConstant : config.getStateClass().getEnumConstants()) {
+        if (isIgnored(enumConstant)) {
+          continue;
+        }
         Map<String, Object> field = enumToJsonMap(config.getCaseType(), config.getStateClass(), enumConstant,
-            enumConstant.toString());
+            StateId.of(enumConstant));
         field.put("DisplayOrder", i++);
         result.add(field);
       }
@@ -33,21 +37,71 @@ class StateGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R
     JsonUtils.mergeInto(output, result, new JsonUtils.AddMissing(), "ID");
   }
 
+  /**
+   * Whether a state constant is excluded from the generated definition by
+   * {@code @CCD(ignore = true)}.
+   *
+   * <p>A service reusing an existing {@code State} enum often has constants no case type declares —
+   * a sentinel such as an {@code @JsonEnumDefaultValue UNKNOWN}, or a legacy composite state — which
+   * cannot simply be deleted because the service's own code still switches on them. Without this,
+   * every constant emits a {@code State} row and the definition gains states it never had.
+   * {@code ignore = true} means the same thing here as it does on a case field: the member
+   * contributes nothing to the definition. It also drops the constant's
+   * {@code AuthorisationCaseState} rows, since a grant on a state that does not exist would fail to
+   * import.
+   *
+   * <p>Read via {@link Enum#name()}, never {@code toString()}, for the reason given in
+   * {@link uk.gov.hmcts.ccd.sdk.StateId}: an enum with an {@code @JsonValue toString()} returning
+   * the lowercase id would otherwise throw {@code NoSuchFieldException}.
+   *
+   * <p>Read off the constant's OWN {@link Enum#getDeclaringClass()}, not the case type's declared
+   * state class, because the two are not always the same enum. {@code forStates(...)} takes the
+   * state type as a generic parameter, and a shared {@code EnumSet} constant declared on one state
+   * enum can be handed to an event on a case type parameterised by a different one — erasure means
+   * nothing rejects it at compile time. nfdiv does exactly this: its {@code NFD_ExceptionRecord}
+   * case type is {@code CCDConfig<ExceptionRecord, ExceptionRecordState, UserRole>}, yet
+   * {@code CompleteAwaitingPaymentDcnProcessing} configures an event on it with
+   * {@code forStates(State.POST_SUBMISSION_STATES)} — constants of the unrelated {@code State} enum.
+   * Those constants reach the {@code AuthorisationCaseState} rows, so looking {@code Holding} up on
+   * {@code ExceptionRecordState} threw {@code NoSuchFieldException} and failed the whole build.
+   * {@link uk.gov.hmcts.ccd.sdk.StateId#of} already resolves the emitted state ID via the declaring
+   * class for the same reason; this makes the ignore test agree with it.
+   *
+   * <p>A non-enum argument (the state type need not be an enum — {@link #write} guards on
+   * {@code isEnum()}) carries no annotation and so is never ignored.
+   *
+   * @param enumConstant the constant to test
+   * @return true when the constant carries {@code @CCD(ignore = true)}
+   */
+  @SneakyThrows
+  static boolean isIgnored(Object enumConstant) {
+    if (!(enumConstant instanceof Enum<?> e)) {
+      return false;
+    }
+    CCD ccd = e.getDeclaringClass().getField(e.name()).getAnnotation(CCD.class);
+    return ccd != null && ccd.ignore();
+  }
+
   @SneakyThrows
   public static Map<String, Object> enumToJsonMap(String caseType, Class<?> enumType,
                                                   Object enumConstant, String id) {
     Map<String, Object> field = JsonUtils.caseRow(caseType);
     field.put("ID", id);
 
-    CCD ccd = enumType.getField(enumConstant.toString()).getAnnotation(CCD.class);
+    // Read the constant's annotation via Enum.name(), not toString(): an enum whose toString() is
+    // overridden (e.g. an @JsonValue toString() returning the lowercase id) would otherwise throw
+    // NoSuchFieldException here.
+    CCD ccd = enumType.getField(((Enum<?>) enumConstant).name()).getAnnotation(CCD.class);
     String name = ccd != null && !Strings.isNullOrEmpty(ccd.label()) ? ccd.label() :
-        enumConstant.toString();
+        id;
     field.put("Name", name);
-    field.put("Description", name);
-    String desc = ccd != null ? ccd.hint() : "";
+    // Description defaults to Name (today's behaviour); @CCD#description() overrides it.
+    String description = ccd != null && !Strings.isNullOrEmpty(ccd.description()) ? ccd.description() : name;
+    field.put("Description", description);
+    String hint = ccd != null ? ccd.hint() : "";
 
-    if (!Strings.isNullOrEmpty(desc)) {
-      field.put("TitleDisplay", desc);
+    if (!Strings.isNullOrEmpty(hint)) {
+      field.put("TitleDisplay", hint);
     }
 
     return field;

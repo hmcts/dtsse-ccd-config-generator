@@ -1,0 +1,61 @@
+[
+  {
+    "ID": "HearingBooking",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "venue"
+  },
+  {
+    "ID": "HearingBooking",
+    "FieldType": "DateTime",
+    "HintText": "Use 24 hour format",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "endDate"
+  },
+  {
+    "ID": "HearingBooking",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "String",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "hearingNeedsBooked"
+  },
+  {
+    "ID": "HearingBooking",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "hearingNeedsDetails"
+  },
+  {
+    "ID": "HearingBooking",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "typeDetails"
+  },
+  {
+    "ID": "HearingBooking",
+    "FieldType": "JudgeAndLegalAdvisor",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "judgeAndLegalAdvisor"
+  },
+  {
+    "ID": "HearingBooking",
+    "FieldType": "DateTime",
+    "HintText": "Use 24 hour format",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "startDate"
+  },
+  {
+    "ID": "HearingBooking",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "type"
+  }
+]

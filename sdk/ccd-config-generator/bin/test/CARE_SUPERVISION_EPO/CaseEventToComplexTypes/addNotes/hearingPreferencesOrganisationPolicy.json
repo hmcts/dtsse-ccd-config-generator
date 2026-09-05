@@ -1,0 +1,26 @@
+[
+  {
+    "DefaultValue": "[SOLICITOR]",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingPreferencesOrganisationPolicy",
+    "CaseEventID": "addNotes",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "OrgPolicyCaseAssignedRole"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingPreferencesOrganisationPolicy",
+    "CaseEventID": "addNotes",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "OrgPolicyReference",
+    "EventElementLabel": "Org ref",
+    "EventHintText": "Sol org ref"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingPreferencesOrganisationPolicy",
+    "CaseEventID": "addNotes",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "Organisation.OrganisationID"
+  }
+]

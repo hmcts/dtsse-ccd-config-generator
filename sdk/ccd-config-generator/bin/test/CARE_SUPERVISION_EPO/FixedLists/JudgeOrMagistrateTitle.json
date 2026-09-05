@@ -1,0 +1,51 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 1,
+    "ListElementCode": "HER_HONOUR_JUDGE",
+    "ListElement": "Her Honour Judge",
+    "ID": "JudgeOrMagistrateTitle"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 2,
+    "ListElementCode": "HIS_HONOUR_JUDGE",
+    "ListElement": "His Honour Judge",
+    "ID": "JudgeOrMagistrateTitle"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 3,
+    "ListElementCode": "DISTRICT_JUDGE",
+    "ListElement": "District Judge",
+    "ID": "JudgeOrMagistrateTitle"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 4,
+    "ListElementCode": "DEPUTY_DISTRICT_JUDGE",
+    "ListElement": "Deputy District Judge",
+    "ID": "JudgeOrMagistrateTitle"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 5,
+    "ListElementCode": "DEPUTY_DISTRICT_JUDGE_MAGISTRATES_COURT",
+    "ListElement": "District Judge Magistrates Court",
+    "ID": "JudgeOrMagistrateTitle"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 6,
+    "ListElementCode": "MAGISTRATES",
+    "ListElement": "Magistrates (JP)",
+    "ID": "JudgeOrMagistrateTitle"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 7,
+    "ListElementCode": "OTHER",
+    "ListElement": "Other",
+    "ID": "JudgeOrMagistrateTitle"
+  }
+]

@@ -1,0 +1,24 @@
+[
+  {
+    "ID": "PlacementSupportingDocument",
+    "FieldType": "Document",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "document"
+  },
+  {
+    "ID": "PlacementSupportingDocument",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "description"
+  },
+  {
+    "ID": "PlacementSupportingDocument",
+    "FieldType": "FixedRadioList",
+    "FieldTypeParameter": "PlacementDocumentType",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "type"
+  }
+]

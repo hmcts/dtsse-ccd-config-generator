@@ -1,0 +1,75 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "caseLocalAuthority",
+    "DisplayOrder": 1,
+    "Label": "Local authority"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "caseName",
+    "DisplayOrder": 2,
+    "Label": "Case name"
+  },
+  {
+    "LiveFrom" : "01/01/2017",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "CaseFieldID" : "hearingDetails",
+    "UserRole" : "caseworker-publiclaw-solicitor",
+    "Label" : "Hearing Details"
+  },
+  {
+    "LiveFrom" : "01/01/2017",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "CaseFieldID" : "hearingDetails",
+    "UserRole" : "caseworker-publiclaw-courtadmin",
+    "Label" : "Hearing Details"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "familyManCaseNumber",
+    "DisplayOrder": 3,
+    "Label": "FamilyMan case number"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "[CASE_REFERENCE]",
+    "DisplayOrder": 4,
+    "Label": "Case Number"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "dateSubmitted",
+    "DisplayContextParameter" : "#DATETIMEDISPLAY(d  MMMM yyyy)",
+    "DisplayOrder": 5,
+    "Label": "Date submitted"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "evidenceHandled",
+    "DisplayOrder": 6,
+    "Label": "Supplementary evidence handled"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "hearingPreferencesWelsh",
+    "DisplayOrder": 7,
+    "Label": "Is in Welsh"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "internationalElement",
+    "ListElementCode": "issues",
+    "FieldShowCondition": "hearingPreferencesWelsh=\"no\"",
+    "DisplayOrder": 8,
+    "Label": "int el"
+  }
+]

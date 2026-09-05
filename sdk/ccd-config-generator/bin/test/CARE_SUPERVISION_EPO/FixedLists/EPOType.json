@@ -1,0 +1,16 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 1,
+    "ListElementCode": "REMOVE_TO_ACCOMMODATION",
+    "ListElement": "Remove to accommodation",
+    "ID": "EPOType"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 2,
+    "ListElementCode": "PREVENT_REMOVAL",
+    "ListElement": "Prevent removal from an address",
+    "ID": "EPOType"
+  }
+]

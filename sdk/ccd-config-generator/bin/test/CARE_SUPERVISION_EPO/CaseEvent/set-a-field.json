@@ -1,0 +1,15 @@
+[
+  {
+    "PreConditionState(s)": "*",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "PostConditionState": "*",
+    "Description": "Sets the new aField value",
+    "DisplayOrder": 1,
+    "EndButtonLabel": "Save and continue",
+    "ID": "set-a-field",
+    "SecurityClassification": "Public",
+    "Name": "Set a field",
+    "Publish": "N"
+  }
+]

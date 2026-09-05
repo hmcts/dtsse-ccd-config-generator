@@ -2,6 +2,8 @@ package uk.gov.hmcts.ccd.sdk.generator;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.apache.commons.lang3.StringUtils.capitalize;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.caseFieldIds;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.ccdAnnotation;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
@@ -23,7 +25,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Optional;
 import java.util.Set;
 import org.apache.commons.lang3.ArrayUtils;
 import org.springframework.beans.BeanUtils;
@@ -51,6 +52,11 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
     for (Event<T, R, S> event : config.getEvents().values()) {
       List<Field.FieldBuilder> fields = event.getFields().getFields();
       for (Field.FieldBuilder fb : fields) {
+        // A gated-off field's CaseField row is suppressed; skip its event-derived permissions so no
+        // AuthorisationCaseField row references a field that was not emitted.
+        if (config.getGatedOffFieldIds().contains(fb.build().getId())) {
+          continue;
+        }
 
         for (R role : event.getGrants().keys()) {
           if (event.getHistoryOnlyRoles().contains(role)) {
@@ -97,6 +103,9 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       // Add read for any tab fields
       for (Tab<T, R> tab : config.getTabs()) {
         for (TabField field : tab.getFields()) {
+          if (config.getGatedOffFieldIds().contains(field.getId())) {
+            continue;
+          }
           boolean giveReadPermission = tab.getForRolesAsString().contains(role) || tab.getForRoles().isEmpty();
           if (giveReadPermission && !fieldRolePermissions.contains(field.getId(), role)) {
             fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
@@ -109,6 +118,9 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
           Iterables.concat(config.getWorkBasketInputFields(),
               config.getWorkBasketResultFields())) {
         for (SearchField<R> searchField : basket.getFields()) {
+          if (config.getGatedOffFieldIds().contains(searchField.getId())) {
+            continue;
+          }
           if (searchField.availableToRole(role) && !fieldRolePermissions.contains(searchField.getId(), role)) {
             fieldRolePermissions.put(searchField.getId(), role, Collections.singleton(Permission.R));
           }
@@ -120,6 +132,9 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
           Iterables.concat(config.getSearchInputFields(),
               config.getSearchResultFields())) {
         for (SearchField<R> searchField : search.getFields()) {
+          if (config.getGatedOffFieldIds().contains(searchField.getId())) {
+            continue;
+          }
           if (searchField.availableToRole(role) && !fieldRolePermissions.contains(searchField.getId(), role)) {
             fieldRolePermissions.put(searchField.getId(), role, Collections.singleton(Permission.R));
           }
@@ -131,6 +146,9 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
 
     File folder = new File(root.getPath(), "AuthorisationCaseField");
     folder.mkdir();
+    // Hoisted out of the per-row loop: the walk is over the whole case-data class, and a real model
+    // has thousands of rows across dozens of roles.
+    Set<String> emittedFieldIds = caseFieldIds(config.getCaseClass());
     for (String role : fieldRolePermissions.columnKeySet()) {
       List<Map<String, Object>> permissions = Lists.newArrayList();
       Map<String, Set<Permission>> rolePermissions = fieldRolePermissions.column(role);
@@ -152,9 +170,12 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
           permission.put("CaseFieldID", field);
           permission.put("CRUD", Permission.toString(fieldPermission));
 
-          Optional<JsonUnwrapped> unwrapped = isUnwrappedField(config.getCaseClass(), field);
-
-          if (unwrapped.isEmpty()) {
+          // Suppress the row only for an @JsonUnwrapped CONTAINER's own name, which emits no
+          // CaseField row to grant on. A name-only test also discarded rows for a real field whose
+          // CCD ID happens to equal a container's Java member name — see
+          // FieldUtils.isUnwrappedContainerId.
+          if (!isUnwrappedField(config.getCaseClass(), field).isPresent()
+              || emittedFieldIds.contains(field)) {
             permissions.add(permission);
           }
         }
@@ -175,8 +196,10 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
   ) {
 
     for (java.lang.reflect.Field field : getCaseFields(parent)) {
-      CCD ccdAnnotation = field.getAnnotation(CCD.class);
-      Class<? extends HasAccessControl>[] access = mergeAccess(defaultAccessControl, ccdAnnotation);
+      // Through the owner, so a class-level @CCD(member) override supplies this member's access
+      // here as it supplies its metadata -- see CCD#member().
+      CCD ccd = ccdAnnotation(parent, field);
+      Class<? extends HasAccessControl>[] access = mergeAccess(defaultAccessControl, ccd);
       JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
 
       if (null != unwrapped) {
@@ -191,11 +214,9 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
           for (HasRole key : roleGrants.keys()) {
             Set<Permission> perms = Sets.newHashSet();
             perms.addAll(roleGrants.get(key));
-
             if (fieldRolePermissions.contains(id, key.getRole())) {
               perms.addAll(fieldRolePermissions.get(id, key.getRole()));
             }
-
             fieldRolePermissions.put(id, key.getRole(), perms);
           }
         }

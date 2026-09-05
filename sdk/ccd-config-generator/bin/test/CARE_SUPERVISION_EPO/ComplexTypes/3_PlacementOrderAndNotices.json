@@ -1,0 +1,24 @@
+[
+  {
+    "ID": "PlacementOrderAndNotices",
+    "FieldType": "Document",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "document"
+  },
+  {
+    "ID": "PlacementOrderAndNotices",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "description"
+  },
+  {
+    "ID": "PlacementOrderAndNotices",
+    "FieldType": "FixedRadioList",
+    "FieldTypeParameter": "PlacementOrderAndNoticesType",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "type"
+  }
+]

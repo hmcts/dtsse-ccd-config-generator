@@ -1,0 +1,9 @@
+[
+  { "LiveFrom": "01/01/2017", "CaseTypeID": "Clustered", "CaseFieldID": "caseTitle", "UserRole": "caseworker-test", "CRUD": "CRUD" },
+  { "LiveFrom": "01/01/2017", "CaseTypeID": "Clustered", "CaseFieldID": "applicant1FirstName", "UserRole": "caseworker-test", "CRUD": "CRUD" },
+  { "LiveFrom": "01/01/2017", "CaseTypeID": "Clustered", "CaseFieldID": "applicant1LastName", "UserRole": "caseworker-test", "CRUD": "CRUD" },
+  { "LiveFrom": "01/01/2017", "CaseTypeID": "Clustered", "CaseFieldID": "applicant1EmailAddress", "UserRole": "caseworker-test", "CRUD": "CRUD" },
+  { "LiveFrom": "01/01/2017", "CaseTypeID": "Clustered", "CaseFieldID": "applicant2FirstName", "UserRole": "caseworker-test", "CRUD": "CRUD" },
+  { "LiveFrom": "01/01/2017", "CaseTypeID": "Clustered", "CaseFieldID": "applicant2LastName", "UserRole": "caseworker-test", "CRUD": "CRUD" },
+  { "LiveFrom": "01/01/2017", "CaseTypeID": "Clustered", "CaseFieldID": "applicant2EmailAddress", "UserRole": "caseworker-test", "CRUD": "CRUD" }
+]

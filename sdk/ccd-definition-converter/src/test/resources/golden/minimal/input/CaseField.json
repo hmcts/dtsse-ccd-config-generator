@@ -1,0 +1,62 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "ID": "applicantName",
+    "Label": "Applicant name",
+    "FieldType": "Text",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "ID": "applicantEmail",
+    "Label": "Applicant email",
+    "HintText": "We only use this to contact you about the case",
+    "FieldType": "Email",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "ID": "isUrgent",
+    "Label": "Is the case urgent?",
+    "FieldType": "YesOrNo",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "ID": "claimType",
+    "Label": "Type of claim",
+    "FieldType": "FixedList",
+    "FieldTypeParameter": "ClaimType",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "ID": "notes",
+    "Label": "Case notes",
+    "FieldType": "TextArea",
+    "FieldShowCondition": "isUrgent=\"Yes\"",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "ID": "respondent",
+    "Label": "Respondent",
+    "FieldType": "Complex",
+    "FieldTypeParameter": "Party",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "ID": "case-notes-2",
+    "Label": "Extra case notes",
+    "FieldType": "Text",
+    "SecurityClassification": "Public"
+  }
+]

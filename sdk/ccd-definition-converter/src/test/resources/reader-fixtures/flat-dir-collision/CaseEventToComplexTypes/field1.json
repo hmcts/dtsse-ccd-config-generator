@@ -1,0 +1,9 @@
+[
+  {
+    "CaseTypeID": "Test",
+    "ID": "dirOnlyRow",
+    "CaseEventID": "someEvent",
+    "CaseFieldID": "field1",
+    "ListElementCode": "fromFragmentDir"
+  }
+]

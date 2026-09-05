@@ -1,0 +1,16 @@
+[
+  {
+    "ID": "EmailAddress",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "email"
+  },
+  {
+    "ID": "EmailAddress",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "emailUsageType"
+  }
+]

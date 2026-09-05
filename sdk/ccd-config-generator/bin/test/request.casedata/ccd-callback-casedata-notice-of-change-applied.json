@@ -1,0 +1,45 @@
+{
+  "organisationPolicy": {
+    "Organisation": {
+      "OrganisationID": "HEBFGBR",
+      "OrganisationName": "NFD Solicitor Organisation"
+    },
+    "PreviousOrganisations": [
+      {
+        "id": "f853bdc2-b1b2-49df-9961-b48278fddf76",
+        "value": {
+          "ToTimestamp": "2024-05-29T17:21:13.783832",
+          "FromTimestamp": "2024-01-09T11:07:13.016456",
+          "OrganisationName": "Probate Test Org Two",
+          "OrganisationAddress": {
+            "County": "London county",
+            "PostCode": "SE1 9QU",
+            "PostTown": "London",
+            "AddressLine1": "31 St. Thomas Street"
+          }
+        }
+      }
+    ],
+    "OrgPolicyCaseAssignedRole": "CCD_SOLICITOR"
+  },
+  "changeOrganisationRequestField": {
+    "CreatedBy": "TEST_SOLICITOR@mailinator.com",
+    "CaseRoleId": {
+      "value": {
+        "code": "[APPONESOLICITOR]",
+        "label": "APPLICANT_1_SOLICITOR"
+      },
+      "list_items": [
+        {
+          "code": "[APPONESOLICITOR]",
+          "label": "APPLICANT_1_SOLICITOR"
+        }
+      ]
+    },
+    "ApprovalStatus": "1",
+    "RequestTimestamp": "2024-05-28T17:40:14.857926",
+    "OrganisationToAdd": {
+      "OrganisationID": "HEBFGBR"
+    }
+  }
+}

@@ -1,0 +1,67 @@
+[
+  {
+    "ID": "DirectionResponse",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "cannotComplyReason"
+  },
+  {
+    "ID": "DirectionResponse",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "complied"
+  },
+  {
+    "ID": "DirectionResponse",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "String",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "c2Uploaded"
+  },
+  {
+    "ID": "DirectionResponse",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "responder"
+  },
+  {
+    "ID": "DirectionResponse",
+    "FieldType": "Document",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "cannotComplyFile"
+  },
+  {
+    "ID": "DirectionResponse",
+    "FieldType": "FixedRadioList",
+    "FieldTypeParameter": "DirectionAssignee",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "assignee"
+  },
+  {
+    "ID": "DirectionResponse",
+    "FieldType": "UUID",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "directionId"
+  },
+  {
+    "ID": "DirectionResponse",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "documentDetails"
+  },
+  {
+    "ID": "DirectionResponse",
+    "FieldType": "Document",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "file"
+  }
+]

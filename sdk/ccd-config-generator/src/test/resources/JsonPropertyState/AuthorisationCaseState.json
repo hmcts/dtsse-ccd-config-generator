@@ -1,0 +1,30 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "JsonPropertyState",
+    "CaseStateID": "Open",
+    "UserRole": "caseworker-publiclaw-courtadmin",
+    "CRUD": "CRU"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "JsonPropertyState",
+    "CaseStateID": "Open",
+    "UserRole": "caseworker-publiclaw-solicitor",
+    "CRUD": "CRU"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "JsonPropertyState",
+    "CaseStateID": "PREPARE_FOR_HEARING",
+    "UserRole": "caseworker-publiclaw-courtadmin",
+    "CRUD": "R"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "JsonPropertyState",
+    "CaseStateID": "PREPARE_FOR_HEARING",
+    "UserRole": "caseworker-publiclaw-solicitor",
+    "CRUD": "R"
+  }
+]

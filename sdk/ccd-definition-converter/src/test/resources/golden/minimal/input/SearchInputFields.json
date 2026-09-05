@@ -1,0 +1,17 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseFieldID": "applicantName",
+    "Label": "Applicant name",
+    "DisplayOrder": 1
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseFieldID": "applicantEmail",
+    "UserRole": "caseworker-test",
+    "Label": "Applicant email",
+    "DisplayOrder": 2
+  }
+]

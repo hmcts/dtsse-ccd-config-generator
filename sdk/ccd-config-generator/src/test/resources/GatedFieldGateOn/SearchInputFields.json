@@ -1,0 +1,16 @@
+[
+  {
+    "CaseFieldID": "baseField",
+    "CaseTypeID": "GatedField",
+    "DisplayOrder": 1,
+    "Label": "A base field",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "CaseFieldID": "gatedField",
+    "CaseTypeID": "GatedField",
+    "DisplayOrder": 2,
+    "Label": "A Judgments-Online field",
+    "LiveFrom": "01/01/2017"
+  }
+]

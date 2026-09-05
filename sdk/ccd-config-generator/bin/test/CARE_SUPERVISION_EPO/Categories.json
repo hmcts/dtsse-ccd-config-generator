@@ -1,0 +1,10 @@
+[
+  {
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CategoryID": "TD",
+    "CategoryLabel": "Category Label",
+    "DisplayOrder": 1,
+    "LiveFrom": "01/10/2022",
+    "ParentCategoryID": "A"
+  }
+]

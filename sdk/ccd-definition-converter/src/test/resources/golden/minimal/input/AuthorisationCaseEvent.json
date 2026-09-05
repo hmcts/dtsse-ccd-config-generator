@@ -1,0 +1,37 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseEventID": "createCase",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseEventID": "createCase",
+    "UserRole": "citizen",
+    "CRUD": "CR"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseEventID": "addNotes",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseEventID": "addNotes",
+    "UserRole": "[CREATOR]",
+    "CRUD": "R"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseEventID": "closeCase",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  }
+]

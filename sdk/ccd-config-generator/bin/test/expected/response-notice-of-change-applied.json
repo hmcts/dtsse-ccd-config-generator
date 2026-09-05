@@ -1,0 +1,71 @@
+{
+  "data": {
+    "hearingPreferenceswelsh": null,
+    "hearingPreferencesinterpreter": null,
+    "hearingPreferencesrefreshments": null,
+    "hearingPreferenceslocationPreferenceslocal": null,
+    "hearingPreferenceslocationPreferencesonline": null,
+    "hearingPreferencesorganisationPolicy": null,
+    "orderCollection": [],
+    "servedCaseManagementOrders": [],
+    "confidentialChildren": [],
+    "confidentialRespondents": [],
+    "confidentialOthers": [],
+    "organisationPolicy": {
+      "Organisation": {
+        "OrganisationName": "NFD Solicitor Organisation",
+        "OrganisationID": "HEBFGBR"
+      },
+      "PreviousOrganisations": [
+        {
+          "id": "f853bdc2-b1b2-49df-9961-b48278fddf76",
+          "value": {
+            "FromTimestamp": "2024-01-09T11:07:13.016456",
+            "ToTimestamp": "2024-05-29T17:21:13.783832",
+            "OrganisationName": "Probate Test Org Two",
+            "OrganisationAddress": {
+              "AddressLine1": "31 St. Thomas Street",
+              "AddressLine2": null,
+              "AddressLine3": null,
+              "PostTown": "London",
+              "County": "London county",
+              "PostCode": "SE1 9QU",
+              "Country": null
+            }
+          }
+        }
+      ],
+      "OrgPolicyCaseAssignedRole": "CCD_SOLICITOR"
+    },
+    "orderAppliesToAllChildren": null,
+    "changeOrganisationRequestField": {
+      "OrganisationToAdd": {
+        "OrganisationName": null,
+        "OrganisationID": "HEBFGBR"
+      },
+      "CaseRoleId": {
+        "value": {
+          "code": "[APPONESOLICITOR]",
+          "label": "APPLICANT_1_SOLICITOR"
+        },
+        "list_items": [
+          {
+            "code": "[APPONESOLICITOR]",
+            "label": "APPLICANT_1_SOLICITOR"
+          }
+        ],
+        "caseTypePermissions": "APPLICANT_1_SOLICITOR",
+        "role": "[APPONESOLICITOR]"
+      },
+      "ApprovalStatus": "1",
+      "RequestTimestamp": "2024-05-28T17:40:14.857926",
+      "CreatedBy": "TEST_SOLICITOR@mailinator.com"
+    },
+    "confidentialPlacements": []
+  },
+  "errors": null,
+  "warnings": null,
+  "state": null,
+  "data_classification": null,
+  "security_classification": null
+}

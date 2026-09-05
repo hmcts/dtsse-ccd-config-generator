@@ -1,0 +1,93 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseFieldID": "applicantName",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseFieldID": "applicantName",
+    "UserRole": "citizen",
+    "CRUD": "CR"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseFieldID": "applicantEmail",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseFieldID": "applicantEmail",
+    "UserRole": "citizen",
+    "CRUD": "CR"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseFieldID": "isUrgent",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseFieldID": "isUrgent",
+    "UserRole": "citizen",
+    "CRUD": "CR"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseFieldID": "claimType",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseFieldID": "claimType",
+    "UserRole": "citizen",
+    "CRUD": "CR"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseFieldID": "notes",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseFieldID": "notes",
+    "UserRole": "[CREATOR]",
+    "CRUD": "R"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseFieldID": "respondent",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseFieldID": "case-notes-2",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseFieldID": "case-notes-2",
+    "UserRole": "[CREATOR]",
+    "CRUD": "R"
+  }
+]

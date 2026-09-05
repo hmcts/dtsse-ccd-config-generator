@@ -1,0 +1,26 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "ID": "createCase",
+    "Name": "Create case",
+    "Description": "Create a new case",
+    "DisplayOrder": 1,
+    "PreConditionState(s)": "",
+    "PostConditionState": "Open",
+    "SecurityClassification": "Public",
+    "ShowSummary": "Y"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "ID": "updateCase",
+    "Name": "Update case",
+    "Description": "Update an open case",
+    "DisplayOrder": 2,
+    "PreConditionState(s)": "Open",
+    "PostConditionState": "PREPARE_FOR_HEARING",
+    "SecurityClassification": "Public",
+    "ShowSummary": "N"
+  }
+]

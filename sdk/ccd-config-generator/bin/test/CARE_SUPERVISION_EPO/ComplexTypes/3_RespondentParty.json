@@ -1,0 +1,108 @@
+[
+  {
+    "ID": "RespondentParty",
+    "FieldType": "FixedRadioList",
+    "FieldTypeParameter": "PartyType",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "partyType"
+  },
+  {
+    "ID": "RespondentParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "gender"
+  },
+  {
+    "ID": "RespondentParty",
+    "FieldType": "Telephone",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "telephoneNumber"
+  },
+  {
+    "ID": "RespondentParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "placeOfBirth"
+  },
+  {
+    "ID": "RespondentParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "lastName"
+  },
+  {
+    "ID": "RespondentParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "relationshipToChild"
+  },
+  {
+    "ID": "RespondentParty",
+    "FieldType": "Date",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "dateOfBirth"
+  },
+  {
+    "ID": "RespondentParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "genderIdentification"
+  },
+  {
+    "ID": "RespondentParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "contactDetailsHidden"
+  },
+  {
+    "ID": "RespondentParty",
+    "FieldType": "Address",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "address"
+  },
+  {
+    "ID": "RespondentParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "partyId"
+  },
+  {
+    "ID": "RespondentParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "firstName"
+  },
+  {
+    "ID": "RespondentParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "litigationIssues"
+  },
+  {
+    "ID": "RespondentParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "contactDetailsHiddenReason"
+  },
+  {
+    "ID": "RespondentParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "litigationIssuesDetails"
+  }
+]

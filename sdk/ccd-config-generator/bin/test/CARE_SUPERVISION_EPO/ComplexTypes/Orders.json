@@ -1,0 +1,33 @@
+[
+  {
+    "ID": "Orders",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "directions"
+  },
+  {
+    "ID": "Orders",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "OrderType",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "orderType"
+  },
+  {
+    "ID": "Orders",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "EmergencyProtectionOrdersType",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "emergencyProtectionOrders"
+  },
+  {
+    "ID": "Orders",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "EmergencyProtectionOrderDirectionsType",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "emergencyProtectionOrderDirections"
+  }
+]

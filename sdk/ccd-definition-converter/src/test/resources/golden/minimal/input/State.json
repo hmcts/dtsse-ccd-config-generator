@@ -1,0 +1,15 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "ID": "Open",
+    "Name": "Open"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "ID": "Closed",
+    "Name": "Closed",
+    "TitleDisplay": "# Case closed"
+  }
+]

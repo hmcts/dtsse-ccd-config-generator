@@ -1,0 +1,9 @@
+[
+  {
+    "CaseTypeID": "GatedMember",
+    "Description": "Solicitor role",
+    "ID": "[SOLICITOR]",
+    "LiveFrom": "01/01/2017",
+    "Name": "Solicitor"
+  }
+]

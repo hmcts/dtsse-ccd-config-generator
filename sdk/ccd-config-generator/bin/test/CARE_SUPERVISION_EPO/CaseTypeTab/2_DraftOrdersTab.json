@@ -1,0 +1,50 @@
+[
+  {
+    "TabDisplayOrder": 2,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "standardDirectionOrder",
+    "Channel": "CaseWorker",
+    "UserRole": "",
+    "TabFieldDisplayOrder": 1,
+    "TabLabel": "Draft orders",
+    "FieldShowCondition": "standardDirectionOrder.orderStatus!=\"SEALED\"",
+    "TabID": "DraftOrdersTab",
+    "TabShowCondition": "standardDirectionOrder.orderStatus!=\"SEALED\" OR caseManagementOrder!=\"\" OR sharedDraftCMODocument!=\"\" OR cmoToAction!=\"\""
+  },
+  {
+    "TabDisplayOrder": 2,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "sharedDraftCMODocument",
+    "Channel": "CaseWorker",
+    "UserRole": "",
+    "TabFieldDisplayOrder": 2,
+    "TabLabel": "Draft orders",
+    "TabID": "DraftOrdersTab"
+  },
+  {
+    "TabDisplayOrder": 2,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "dateSubmitted",
+    "Channel": "CaseWorker",
+    "UserRole": "",
+    "TabFieldDisplayOrder": 3,
+    "DisplayContextParameter": "#DATETIMEDISPLAY(d  MMMM yyyy)",
+    "TabLabel": "Draft orders",
+    "TabID": "DraftOrdersTab"
+  },
+  {
+    "CaseFieldID": "test-label",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "Channel": "CaseWorker",
+    "FieldShowCondition": "",
+    "LiveFrom": "01/01/2017",
+    "TabDisplayOrder": 2,
+    "TabFieldDisplayOrder": 4,
+    "TabID": "DraftOrdersTab",
+    "TabLabel": "Draft orders",
+    "UserRole": ""
+  }
+]

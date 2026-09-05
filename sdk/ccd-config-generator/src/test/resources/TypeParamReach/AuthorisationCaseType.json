@@ -1,0 +1,50 @@
+[
+  {
+    "CRUD": "CRU",
+    "CaseTypeID": "TypeParamReach",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-approver"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseTypeID": "TypeParamReach",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-caa"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "TypeParamReach",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-bulkscan"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseTypeID": "TypeParamReach",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-bulkscansystemupdate"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseTypeID": "TypeParamReach",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-cafcass"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseTypeID": "TypeParamReach",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-courtadmin"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseTypeID": "TypeParamReach",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseTypeID": "TypeParamReach",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-systemupdate"
+  }
+]

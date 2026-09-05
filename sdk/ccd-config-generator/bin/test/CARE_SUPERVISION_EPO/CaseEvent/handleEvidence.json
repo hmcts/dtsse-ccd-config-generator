@@ -1,0 +1,12 @@
+[
+  {
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "Description" : "Handle supplementary evidence",
+    "ID" : "handleEvidence",
+    "LiveFrom" : "01/01/2017",
+    "Name" : "Handle supplementary evidence",
+    "PostConditionState" : "*",
+    "PreConditionState(s)" : "*",
+    "Publish": "N"
+  }
+]

@@ -1,0 +1,23 @@
+[
+  {
+    "CRUD": "CRU",
+    "CaseFieldID": "baseField",
+    "CaseTypeID": "TypeParamReach",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseFieldID": "caseHistory",
+    "CaseTypeID": "TypeParamReach",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseFieldID": "venueField",
+    "CaseTypeID": "TypeParamReach",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor"
+  }
+]

@@ -1,0 +1,43 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "Description": "Initial case state – create title as a minimum; add documents, etc.",
+    "DisplayOrder": 1,
+    "ID": "Open",
+    "Name": "Initial case state – create title as a minimum; add documents, etc."
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "Description": "Submitted case state - LA can no longer edit",
+    "DisplayOrder": 2,
+    "ID": "Submitted",
+    "TitleDisplay" : "# **${[CASE_REFERENCE]}** ${applicant1LastName} **&** ${applicant2LastName}\n### **${[STATE]}**\n",
+    "Name": "Submitted case state - LA can no longer edit"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "Description": "Gatekeeping case state - when send to gatekeeper event is triggered",
+    "DisplayOrder": 3,
+    "ID": "Gatekeeping",
+    "Name": "Gatekeeping case state - when send to gatekeeper event is triggered"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "Description": "State indicating that SDO is ready to send - triggered when SDO is issued",
+    "DisplayOrder": 4,
+    "ID": "PREPARE_FOR_HEARING",
+    "Name": "State indicating that SDO is ready to send - triggered when SDO is issued"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "Description": "Deleted case state - all data is removed",
+    "DisplayOrder": 5,
+    "ID": "Deleted",
+    "Name": "Deleted case state - all data is removed"
+  }
+]

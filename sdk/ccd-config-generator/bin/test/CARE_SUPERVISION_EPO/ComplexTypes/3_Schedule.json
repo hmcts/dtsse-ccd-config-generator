@@ -1,0 +1,79 @@
+[
+  {
+    "ID": "Schedule",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "threshold"
+  },
+  {
+    "ID": "Schedule",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "partiesPositions"
+  },
+  {
+    "ID": "Schedule",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "timetableForProceedings"
+  },
+  {
+    "ID": "Schedule",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "timetableForChildren"
+  },
+  {
+    "ID": "Schedule",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "alternativeCarers"
+  },
+  {
+    "ID": "Schedule",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "allocation"
+  },
+  {
+    "ID": "Schedule",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "includeSchedule"
+  },
+  {
+    "ID": "Schedule",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "keyIssues"
+  },
+  {
+    "ID": "Schedule",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "todaysHearing"
+  },
+  {
+    "ID": "Schedule",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "application"
+  },
+  {
+    "ID": "Schedule",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "childrensCurrentArrangement"
+  }
+]

@@ -1,0 +1,11 @@
+[{
+  "CaseFieldID" : "paymentHistoryField",
+  "CaseTypeID" : "CARE_SUPERVISION_EPO",
+  "Channel" : "CaseWorker",
+  "LiveFrom" : "01/01/2017",
+  "TabDisplayOrder" : 12,
+  "TabFieldDisplayOrder" : 1,
+  "TabID" : "PaymentHistory",
+  "TabLabel" : "Payment History",
+  "UserRole" : ""
+}]

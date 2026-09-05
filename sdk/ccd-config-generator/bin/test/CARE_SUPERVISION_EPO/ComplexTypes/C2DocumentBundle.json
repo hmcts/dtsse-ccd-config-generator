@@ -1,0 +1,73 @@
+[
+  {
+    "ID": "C2DocumentBundle",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "pbaNumber"
+  },
+  {
+    "ID": "C2DocumentBundle",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "clientCode"
+  },
+  {
+    "ID": "C2DocumentBundle",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "author"
+  },
+  {
+    "ID": "C2DocumentBundle",
+    "FieldType": "Document",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "document"
+  },
+  {
+    "ID": "C2DocumentBundle",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "uploadedDateTime"
+  },
+  {
+    "ID": "C2DocumentBundle",
+    "FieldType": "FixedRadioList",
+    "FieldTypeParameter": "C2ApplicationType",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "type"
+  },
+  {
+    "ID": "C2DocumentBundle",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "fileReference"
+  },
+  {
+    "ID": "C2DocumentBundle",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "nameOfRepresentative"
+  },
+  {
+    "ID": "C2DocumentBundle",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "usePbaPayment"
+  },
+  {
+    "ID": "C2DocumentBundle",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "description"
+  }
+]

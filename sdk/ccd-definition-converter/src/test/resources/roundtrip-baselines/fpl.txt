@@ -1,0 +1,7 @@
+Sheet 'CaseEvent' row [caseProgressionReport] column 'PreConditionState(s)': expected <CLOSED;Deleted;FINAL_HEARING;GATEKEEPING_LISTING;Gatekeeping;Open;PREPARE_FOR_HEARING;RETURNED;Submitted> but was <*>
+Sheet 'CaseEventToFields' row [addColleaguesToNotify|colleaguesToNotify] column 'Label': expected <Colleagues for ${respondentName}'s solicitor> but column is missing in actual
+Sheet 'CaseField' row [allocationDecision] column 'ShowSummaryContentOption': expected <Y> but column is missing in actual
+Sheet 'EventToComplexTypes' row [|||colleagues|email="DO NOT SHOW"]: expected row has no match in actual: {ListElementCode=colleagues, FieldType=Collection, FieldTypeParameter=Colleague, ElementLabel=Colleague, SecurityClassification=PUBLIC, FieldShowCondition=email="DO NOT SHOW"}
+Sheet 'FixedLists' row [HearingVenue|301] column 'LiveTo': expected <05/06/2022> but column is missing in actual
+Sheet 'FixedLists' row [HearingVenue|302] column 'LiveTo': expected <05/06/2022> but column is missing in actual
+Sheet 'FixedLists' row [RepresentativeRole|LA_BARRISTER]: unexpected row in actual: {ID=RepresentativeRole, ListElement=LA Barrister, ListElementCode=LA_BARRISTER}
