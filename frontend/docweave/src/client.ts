@@ -28,6 +28,7 @@ import {
   indentListItem,
   outdentListItem,
 } from "./keymap.js";
+import { createListNumberingPlugin } from "./list-numbering.js";
 import {
   assertCurrentDocumentMatchesGenerated,
   assertValidGeneratedDocument,
@@ -44,6 +45,7 @@ function createEditorState(
     doc: document,
     plugins: [
       createClipboardPlugin(),
+      createListNumberingPlugin(),
       createDiffStylingPlugin(),
       createFactNavigationPlugin(ownerDocument),
       ...createKeymapPlugins(),

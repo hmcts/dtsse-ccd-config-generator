@@ -8,14 +8,16 @@ const fixtures = [
   {
     source: "Word",
     path: "./fixtures/word-paste/paragraph-and-lists",
+    expectedPath: "./fixtures/clipboard-paste/paragraph-and-lists.json",
   },
   {
-    source: "Google Docs",
+    source: "Google Docs with a list starting at 5",
     path: "./fixtures/google-docs-paste/paragraph-and-lists",
+    expectedPath: "./fixtures/clipboard-paste/paragraph-and-lists-starting-at-5.json",
   },
 ] as const;
 
-const expectedPath = "./fixtures/clipboard-paste/paragraph-and-lists.json";
+const expectedHTMLPath = "./fixtures/clipboard-paste/paragraph-and-lists.html";
 
 const globalNames = [
   "window",
@@ -92,13 +94,15 @@ describe("rich-text clipboard paste", () => {
     it(
       `parses captured ${fixture.source} HTML into the expected ProseMirror document`,
       async () => {
-        const [{ createOrderEditor }, html, text, expected] = await Promise.all([
-          import("../src/index.js"),
-          readFile(new URL(`${fixture.path}.html`, import.meta.url), "utf8"),
-          readFile(new URL(`${fixture.path}.txt`, import.meta.url), "utf8"),
-          readFile(new URL(expectedPath, import.meta.url), "utf8")
-            .then((content) => JSON.parse(content) as unknown),
-        ]);
+        const [{ createOrderEditor }, html, text, expected, expectedHTML] =
+          await Promise.all([
+            import("../src/index.js"),
+            readFile(new URL(`${fixture.path}.html`, import.meta.url), "utf8"),
+            readFile(new URL(`${fixture.path}.txt`, import.meta.url), "utf8"),
+            readFile(new URL(fixture.expectedPath, import.meta.url), "utf8")
+              .then((content) => JSON.parse(content) as unknown),
+            readFile(new URL(expectedHTMLPath, import.meta.url), "utf8"),
+          ]);
         const controller = createOrderEditor({ mount: "#editor" });
         const paste = new dom.window.Event("paste", {
           bubbles: true,
@@ -123,6 +127,17 @@ describe("rich-text clipboard paste", () => {
           JSON.stringify(controller.getSnapshot().current),
         ) as unknown;
         assert.deepEqual(actual, expected);
+
+        const semanticHTML = editor.cloneNode(true) as HTMLElement;
+        for (
+          const widget of semanticHTML.querySelectorAll(".ProseMirror-widget")
+        ) {
+          widget.remove();
+        }
+        for (const element of semanticHTML.querySelectorAll("[class]")) {
+          element.removeAttribute("class");
+        }
+        assert.equal(semanticHTML.innerHTML, expectedHTML.trim());
         controller.destroy();
       },
     );

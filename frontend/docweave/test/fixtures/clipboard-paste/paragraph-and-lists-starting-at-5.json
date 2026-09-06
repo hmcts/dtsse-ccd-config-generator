@@ -1,0 +1,284 @@
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "paragraph",
+      "attrs": {
+        "id": null
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Here is a paragraph"
+        }
+      ]
+    },
+    {
+      "type": "ordered_list",
+      "attrs": {
+        "order": 5,
+        "id": null
+      },
+      "content": [
+        {
+          "type": "list_item",
+          "attrs": {
+            "id": null
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {
+                "id": null
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Here is li1"
+                }
+              ]
+            },
+            {
+              "type": "ordered_list",
+              "attrs": {
+                "order": 1,
+                "id": null
+              },
+              "content": [
+                {
+                  "type": "list_item",
+                  "attrs": {
+                    "id": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "id": null
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Here is 1.i"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "attrs": {
+            "id": null
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {
+                "id": null
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Here is li2"
+                }
+              ]
+            },
+            {
+              "type": "ordered_list",
+              "attrs": {
+                "order": 1,
+                "id": null
+              },
+              "content": [
+                {
+                  "type": "list_item",
+                  "attrs": {
+                    "id": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "id": null
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Here is 2.i"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {
+        "id": null
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Here is a bulleted list"
+        }
+      ]
+    },
+    {
+      "type": "ordered_list",
+      "attrs": {
+        "order": 1,
+        "id": null
+      },
+      "content": [
+        {
+          "type": "list_item",
+          "attrs": {
+            "id": null
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {
+                "id": null
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Bullet 1"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {
+        "id": null
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Here is another para"
+        }
+      ]
+    },
+    {
+      "type": "ordered_list",
+      "attrs": {
+        "order": 1,
+        "id": null
+      },
+      "content": [
+        {
+          "type": "list_item",
+          "attrs": {
+            "id": null
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {
+                "id": null
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Here should be li3"
+                }
+              ]
+            },
+            {
+              "type": "ordered_list",
+              "attrs": {
+                "order": 1,
+                "id": null
+              },
+              "content": [
+                {
+                  "type": "list_item",
+                  "attrs": {
+                    "id": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "id": null
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Here is 3.i"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "attrs": {
+            "id": null
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {
+                "id": null
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Here is li 4"
+                }
+              ]
+            },
+            {
+              "type": "ordered_list",
+              "attrs": {
+                "order": 1,
+                "id": null
+              },
+              "content": [
+                {
+                  "type": "list_item",
+                  "attrs": {
+                    "id": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "id": null
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Here is li 4.i"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
