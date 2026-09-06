@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 
 import { JSDOM } from "jsdom";
 
+import { getDocumentNode } from "../src/builder.js";
+
 interface TestDocumentJSON {
   content: Array<{
     content?: Array<{
@@ -171,8 +173,8 @@ describe("public order editor API", () => {
     const saved = controller.getSnapshot();
     assert.equal(saved.schema, "docweave-document");
     assert.equal(saved.version, 1);
-    assert.deepEqual(saved.current, target.node.toJSON());
-    assert.deepEqual(saved.generated, target.node.toJSON());
+    assert.deepEqual(saved.current, getDocumentNode(target).toJSON());
+    assert.deepEqual(saved.generated, getDocumentNode(target).toJSON());
 
     controller.destroy();
     assert.equal(mount.querySelector(".ProseMirror"), null);
@@ -194,7 +196,7 @@ describe("public order editor API", () => {
       });
     const generated = orderWithDate("1 October 2026");
     const current = structuredClone(
-      generated.node.toJSON(),
+      getDocumentNode(generated).toJSON(),
     ) as TestDocumentJSON;
     current.content[0]!.content![0]!.text = "The judge requires payment by ";
     const controller = createOrderEditor({
@@ -203,7 +205,10 @@ describe("public order editor API", () => {
         schema: "docweave-document",
         version: 1,
         current: current as unknown as Record<string, unknown>,
-        generated: generated.node.toJSON() as Record<string, unknown>,
+        generated: getDocumentNode(generated).toJSON() as Record<
+          string,
+          unknown
+        >,
       },
     });
 
@@ -367,7 +372,7 @@ describe("public order editor API", () => {
       });
     });
     const current = structuredClone(
-      generated.node.toJSON(),
+      getDocumentNode(generated).toJSON(),
     ) as TestDocumentJSON;
     current.content[0]!.content![0]!.text = "Edited heading";
     const ownerDom = new JSDOM('<div id="editor"></div>', {
@@ -391,7 +396,10 @@ describe("public order editor API", () => {
           schema: "docweave-document",
           version: 1,
           current: current as unknown as Record<string, unknown>,
-          generated: generated.node.toJSON() as Record<string, unknown>,
+          generated: getDocumentNode(generated).toJSON() as Record<
+            string,
+            unknown
+          >,
         },
       });
 

@@ -37,6 +37,32 @@ controller.render(buildOrder((order) => {
 }));
 ```
 
+Generated documents expose a read-only logical view without exposing
+ProseMirror nodes or Docweave's internal managed IDs:
+
+```ts
+const document = buildOrder((order) => {
+  order.paragraph("heading", "IT IS ORDERED THAT:");
+  order.orderedList("clauses", (clauses) => {
+    clauses.item("suspended-condition", "The order is suspended while:", (item) => {
+      item.orderedList("payment-terms", (terms) => {
+        terms.item("monthly-payment", "The defendant must pay £25 each month.");
+      });
+    });
+  });
+});
+
+document.textContent;
+document.children.map((clause) => clause.textContent);
+document.getClause("suspended-condition")?.textContent;
+document.getClause("suspended-condition")?.children;
+```
+
+Clause IDs are exactly those supplied to `paragraph()` and `item()`. They must
+be globally unique within a generated document. A clause's `textContent`
+contains its own wording; direct nested clauses are available through
+`children`. Documents and clauses are immutable inspection views.
+
 Call `getSnapshot()` to persist the current and generated documents, pass that
 snapshot back as `initialSnapshot` when restoring an editor, and call
 `destroy()` when the editor is removed.

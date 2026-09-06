@@ -50,8 +50,17 @@ try {
       const document = buildOrder((order) => {
         order.paragraph("heading", "IT IS ORDERED THAT:");
       });
-      if (document.node.textContent !== "IT IS ORDERED THAT:") {
+      if (document.textContent !== "IT IS ORDERED THAT:") {
         throw new Error("The installed package did not build an order");
+      }
+      if (document.getClause("heading")?.textContent !== "IT IS ORDERED THAT:") {
+        throw new Error("The installed package did not expose its clause");
+      }
+      if (document.children[0] !== document.getClause("heading")) {
+        throw new Error("The installed package did not preserve clause identity");
+      }
+      if ("node" in document) {
+        throw new Error("The installed package exposed its ProseMirror node");
       }
 
       const stylesheet = import.meta.resolve(
@@ -68,6 +77,7 @@ try {
       import {
         buildOrder,
         createOrderEditor,
+        type DocWeaveClause,
         type DocWeaveDocument,
         type DocWeaveSnapshot,
       } from "@hmcts-cft/docweave";
@@ -80,6 +90,14 @@ try {
           });
         });
       });
+      const heading: DocWeaveClause | undefined =
+        target.getClause("heading");
+      if (!heading) throw new Error("Heading clause is missing");
+      heading.children satisfies readonly DocWeaveClause[];
+      target.children satisfies readonly DocWeaveClause[];
+      target.textContent satisfies string;
+      // @ts-expect-error ProseMirror is an internal implementation detail.
+      target.node;
       const controller = createOrderEditor({ mount });
       controller.render(target);
       const saved: DocWeaveSnapshot = controller.getSnapshot();

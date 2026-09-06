@@ -3,7 +3,10 @@ import { describe, it } from "node:test";
 
 import { EditorState } from "prosemirror-state";
 
-import { buildOrder as buildDocWeaveDocument } from "../src/builder.js";
+import {
+  buildOrder as buildDocWeaveDocument,
+  getDocumentNode,
+} from "../src/builder.js";
 import {
   assertCurrentDocumentMatchesGenerated,
   assertValidGeneratedDocument,
@@ -14,7 +17,7 @@ import { editorSchema } from "../src/schema.js";
 
 const buildOrder = (
   define: Parameters<typeof buildDocWeaveDocument>[0],
-) => buildDocWeaveDocument(define).node;
+) => getDocumentNode(buildDocWeaveDocument(define));
 
 describe("generated document invariants", () => {
   it("uses the ProseMirror schema to reject invalid document structure", () => {
@@ -31,14 +34,30 @@ describe("generated document invariants", () => {
   });
 
   it("rejects duplicate managed IDs anywhere in a generated document", () => {
+    const duplicateItems = [
+      editorSchema.node(
+        "list_item",
+        { id: "item:duplicate" },
+        editorSchema.node("paragraph", null, editorSchema.text("First")),
+      ),
+      editorSchema.node(
+        "list_item",
+        { id: "item:duplicate" },
+        editorSchema.node("paragraph", null, editorSchema.text("Second")),
+      ),
+    ];
+    const duplicateIdDocument = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node(
+        "ordered_list",
+        { id: "ordered-list:clauses" },
+        duplicateItems,
+      ),
+    );
+
     assert.throws(
-      () =>
-        buildOrder((order) => {
-          order.orderedList("clauses", (list) => {
-            list.item("duplicate", "First occurrence");
-            list.item("duplicate", "Second occurrence");
-          });
-        }),
+      () => assertValidGeneratedDocument(duplicateIdDocument),
       { message: "Duplicate managed node ID: item:duplicate" },
     );
   });

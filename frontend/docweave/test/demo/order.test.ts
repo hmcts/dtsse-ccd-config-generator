@@ -3,7 +3,10 @@ import { describe, it } from "node:test";
 
 import type { DemoOrderInputs } from "../../examples/court-order/inputs.js";
 import { buildDemoOrder } from "../../examples/court-order/order.js";
-import { getDocumentFactSources } from "../../src/builder.js";
+import {
+  getDocumentFactSources,
+  getDocumentNode,
+} from "../../src/builder.js";
 
 const defaultInputs: DemoOrderInputs = {
   attendances: [{
@@ -30,7 +33,7 @@ const defaultInputs: DemoOrderInputs = {
 
 describe("court-order document", () => {
   it("builds coherent default wording without changing values", () => {
-    const text = buildDemoOrder(defaultInputs).node.textContent;
+    const text = buildDemoOrder(defaultInputs).textContent;
 
     assert.match(text, /Alex Smith, counsel for the claimant/);
     assert.match(text, /6 September 2026/);
@@ -45,7 +48,7 @@ describe("court-order document", () => {
       includeRepairsClause: true,
       includeCostsClause: true,
       includeMonthlyPayments: false,
-    }).node.textContent;
+    }).textContent;
 
     assert.match(text, /reported disrepair/);
     assert.match(text, /fixed costs of £355/);
@@ -59,7 +62,7 @@ describe("court-order document", () => {
     });
     const facts: Array<{ id: string; text: string }> = [];
 
-    document.node.descendants((node) => {
+    getDocumentNode(document).descendants((node) => {
       if (node.type.name === "generated_text") {
         facts.push({
           id: node.attrs.id as string,

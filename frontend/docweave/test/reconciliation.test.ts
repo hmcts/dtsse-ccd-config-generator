@@ -3,13 +3,16 @@ import { describe, it } from "node:test";
 
 import { EditorState } from "prosemirror-state";
 
-import { buildOrder as buildDocWeaveDocument } from "../src/builder.js";
+import {
+  buildOrder as buildDocWeaveDocument,
+  getDocumentNode,
+} from "../src/builder.js";
 import { reconcileOrderDocument } from "../src/reconciliation.js";
 import { editorSchema } from "../src/schema.js";
 
 const buildOrder = (
   define: Parameters<typeof buildDocWeaveDocument>[0],
-) => buildDocWeaveDocument(define).node;
+) => getDocumentNode(buildDocWeaveDocument(define));
 
 describe("order document reconciliation", () => {
   it("replaces directly edited paragraph wording when reference wording changes", () => {

@@ -10,6 +10,7 @@ import { EditorView } from "prosemirror-view";
 import {
   type DocWeaveDocument,
   getDocumentFactSources,
+  getDocumentNode,
 } from "./builder.js";
 import {
   createDiffStylingPlugin,
@@ -305,7 +306,7 @@ export function createOrderEditor(
 
   const controller: OrderEditorController = {
     render(document: DocWeaveDocument): void {
-      const target = document.node;
+      const target = getDocumentNode(document);
       assertValidGeneratedDocument(target);
       let transaction = view.state.tr;
       const previousTarget = getGeneratedDocument(view.state);

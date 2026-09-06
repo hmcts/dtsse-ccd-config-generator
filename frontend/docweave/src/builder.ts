@@ -37,30 +37,62 @@ export interface OrderBuilder {
   ): void;
 }
 
-const documentFactSources = new WeakMap<
+export interface DocWeaveClause {
+  readonly id: string;
+  readonly textContent: string;
+  readonly children: readonly DocWeaveClause[];
+}
+
+interface DocWeaveDocumentInternals {
+  node: ProseMirrorNode;
+  factSources: ReadonlyMap<string, string>;
+}
+
+interface BuiltOrderedList {
+  node: ProseMirrorNode;
+  clauses: readonly DocWeaveClause[];
+}
+
+const documentInternals = new WeakMap<
   DocWeaveDocument,
-  ReadonlyMap<string, string>
+  DocWeaveDocumentInternals
 >();
 let createDocWeaveDocument: (
   node: ProseMirrorNode,
   factSources: ReadonlyMap<string, string>,
+  children: readonly DocWeaveClause[],
+  clausesById: ReadonlyMap<string, DocWeaveClause>,
 ) => DocWeaveDocument;
 
 /** A generated document and its runtime-only DocWeave metadata. */
 export class DocWeaveDocument {
-  readonly node: ProseMirrorNode;
+  readonly textContent: string;
+  readonly children: readonly DocWeaveClause[];
+  readonly #clausesById: ReadonlyMap<string, DocWeaveClause>;
 
   private constructor(
     node: ProseMirrorNode,
     factSources: ReadonlyMap<string, string>,
+    children: readonly DocWeaveClause[],
+    clausesById: ReadonlyMap<string, DocWeaveClause>,
   ) {
-    this.node = node;
-    documentFactSources.set(this, new Map(factSources));
+    this.textContent = node.textContent;
+    this.children = Object.freeze([...children]);
+    this.#clausesById = new Map(clausesById);
+    documentInternals.set(this, {
+      node,
+      factSources: new Map(factSources),
+    });
+    Object.freeze(this);
   }
 
   static {
-    createDocWeaveDocument = (node, factSources) =>
-      new DocWeaveDocument(node, factSources);
+    createDocWeaveDocument = (node, factSources, children, clausesById) =>
+      new DocWeaveDocument(node, factSources, children, clausesById);
+  }
+
+  getClause(id: string): DocWeaveClause | undefined {
+    return this.#clausesById.get(id);
   }
 }
 
@@ -68,9 +100,18 @@ export class DocWeaveDocument {
 export function getDocumentFactSources(
   document: DocWeaveDocument,
 ): ReadonlyMap<string, string> {
-  const factSources = documentFactSources.get(document);
-  if (!factSources) throw new TypeError("Invalid DocWeaveDocument");
-  return factSources;
+  const internals = documentInternals.get(document);
+  if (!internals) throw new TypeError("Invalid DocWeaveDocument");
+  return internals.factSources;
+}
+
+/** @internal */
+export function getDocumentNode(
+  document: DocWeaveDocument,
+): ProseMirrorNode {
+  const internals = documentInternals.get(document);
+  if (!internals) throw new TypeError("Invalid DocWeaveDocument");
+  return internals.node;
 }
 
 function assertValidSourceId(sourceId: string): void {
@@ -84,6 +125,30 @@ export function buildOrder(
 ): DocWeaveDocument {
   const nodes: ProseMirrorNode[] = [];
   const factSources = new Map<string, string>();
+  const documentClauses: DocWeaveClause[] = [];
+  const clausesById = new Map<string, DocWeaveClause>();
+  const clauseIds = new Set<string>();
+
+  function assertUniqueClauseId(id: string): void {
+    if (clauseIds.has(id)) {
+      throw new Error(`Duplicate clause ID: ${id}`);
+    }
+    clauseIds.add(id);
+  }
+
+  function createClause(
+    id: string,
+    textContent: string,
+    children: readonly DocWeaveClause[] = [],
+  ): DocWeaveClause {
+    const clause = Object.freeze({
+      id,
+      textContent,
+      children: Object.freeze([...children]),
+    });
+    clausesById.set(id, clause);
+    return clause;
+  }
 
   function buildContent(
     ownerId: string,
@@ -124,22 +189,26 @@ export function buildOrder(
   function buildOrderedList(
     id: string,
     defineList: (list: OrderedListBuilder) => void,
-  ): ProseMirrorNode | undefined {
+  ): BuiltOrderedList | undefined {
     const items: ProseMirrorNode[] = [];
+    const clauses: DocWeaveClause[] = [];
     const listBuilder: OrderedListBuilder = {
       item(
         itemId: string,
         content: ClauseContent,
         defineItem?: (item: ListItemBuilder) => void,
       ): void {
+        assertUniqueClauseId(itemId);
         const managedItemId = `item:${itemId}`;
+        const ownContent = buildContent(managedItemId, content);
         const children = [
           editorSchema.node(
             "paragraph",
             null,
-            buildContent(managedItemId, content),
+            ownContent,
           ),
         ];
+        let childClauses: readonly DocWeaveClause[] = [];
         const itemBuilder: ListItemBuilder = {
           orderedList(
             nestedListId: string,
@@ -154,7 +223,10 @@ export function buildOrder(
               nestedListId,
               defineNestedList,
             );
-            if (nestedList) children.push(nestedList);
+            if (nestedList) {
+              children.push(nestedList.node);
+              childClauses = nestedList.clauses;
+            }
           },
         };
 
@@ -166,27 +238,45 @@ export function buildOrder(
             children,
           ),
         );
+        clauses.push(
+          createClause(
+            itemId,
+            ownContent.map((node) => node.textContent).join(""),
+            childClauses,
+          ),
+        );
       },
     };
 
     defineList(listBuilder);
     if (items.length === 0) return undefined;
 
-    return editorSchema.node(
-      "ordered_list",
-      { id: `ordered-list:${id}` },
-      items,
-    );
+    return {
+      node: editorSchema.node(
+        "ordered_list",
+        { id: `ordered-list:${id}` },
+        items,
+      ),
+      clauses: Object.freeze(clauses),
+    };
   }
 
   const orderBuilder: OrderBuilder = {
     paragraph(id: string, content: ClauseContent): void {
+      assertUniqueClauseId(id);
       const paragraphId = `paragraph:${id}`;
+      const paragraphContent = buildContent(paragraphId, content);
       nodes.push(
         editorSchema.node(
           "paragraph",
           { id: paragraphId },
-          buildContent(paragraphId, content),
+          paragraphContent,
+        ),
+      );
+      documentClauses.push(
+        createClause(
+          id,
+          paragraphContent.map((node) => node.textContent).join(""),
         ),
       );
     },
@@ -195,12 +285,20 @@ export function buildOrder(
       defineList: (list: OrderedListBuilder) => void,
     ): void {
       const list = buildOrderedList(id, defineList);
-      if (list) nodes.push(list);
+      if (list) {
+        nodes.push(list.node);
+        documentClauses.push(...list.clauses);
+      }
     },
   };
 
   define(orderBuilder);
   const document = editorSchema.node("doc", null, nodes);
   assertValidGeneratedDocument(document);
-  return createDocWeaveDocument(document, factSources);
+  return createDocWeaveDocument(
+    document,
+    factSources,
+    documentClauses,
+    clausesById,
+  );
 }

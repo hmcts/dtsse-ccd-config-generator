@@ -3,8 +3,9 @@
 ## Approach
 
 Business rules declaratively build a `DocWeaveDocument` from the current
-inputs. It contains the ProseMirror target node and runtime-only interaction
-metadata; only the node is persisted:
+inputs. It exposes an immutable logical clause view for consumers while
+Docweave privately retains the ProseMirror target node and runtime-only
+interaction metadata:
 
 ```ts
 function buildCurrentOrder(inputs: OrderInputs): DocWeaveDocument {
@@ -31,6 +32,28 @@ controller.render(buildCurrentOrder(inputs));
 It is a pure function that builds a ProseMirror target node and its ephemeral
 interaction metadata based on the inputs.
 
+### Read-only inspection
+
+Consumers inspect generated wording without traversing ProseMirror nodes:
+
+```ts
+document.textContent;
+document.children.map((clause) => clause.textContent);
+document.getClause("parent")?.textContent;
+document.getClause("parent")?.children;
+```
+
+Paragraphs and list items are logical clauses. Their public IDs are exactly the
+IDs supplied to `paragraph()` and `item()`, and must be globally unique within
+the document. Ordered-list containers are omitted from the public hierarchy:
+top-level list items appear in `document.children`, and nested list items appear
+in their parent clause's `children`.
+
+A clause's `textContent` contains its own wording and excludes nested clauses.
+`document.textContent` contains the wording of the complete generated target.
+The document, clause objects and child arrays are immutable, and repeated
+`getClause()` calls return the same clause view.
+
 ### Facts and source controls
 
 Immutable generated values are declared as facts. A fact may identify the DOM
@@ -56,12 +79,14 @@ control IDs.
 
 ### Generated node identity
 
-Generated paragraphs, list items, ordered lists and generated text share one
-globally unique `id` attribute so the same reconciliation algorithm can handle
-them. Values use node-specific namespaces, for example `paragraph:order-text`,
-`ordered-list:order-clauses`, `item:give-possession` and
-`generated-text:item:give-possession:deadline`. User-authored nodes have no ID
-and are preserved.
+Internally, generated paragraphs, list items, ordered lists and generated text
+share one globally unique managed `id` attribute so the same reconciliation
+algorithm can handle them. These private values use node-specific namespaces,
+for example `paragraph:order-text`, `ordered-list:order-clauses`,
+`item:give-possession` and
+`generated-text:item:give-possession:deadline`. They are distinct from the
+prefix-free public clause IDs. User-authored nodes have no managed ID and are
+preserved.
 
 Generated documents obey these invariants:
 

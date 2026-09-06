@@ -3,7 +3,9 @@ import { describe, it } from "node:test";
 
 import {
   buildOrder,
+  type DocWeaveClause,
   getDocumentFactSources,
+  getDocumentNode,
 } from "../src/builder.js";
 import { editorSchema } from "../src/schema.js";
 
@@ -28,7 +30,9 @@ describe("order builder", () => {
       });
     });
 
-    const json = JSON.parse(JSON.stringify(document.node.toJSON())) as unknown;
+    const json = JSON.parse(
+      JSON.stringify(getDocumentNode(document).toJSON()),
+    ) as unknown;
     assert.deepEqual(json, {
       type: "doc",
       content: [
@@ -105,8 +109,97 @@ describe("order builder", () => {
       });
     });
 
-    assert.equal(document.node.firstChild!.childCount, 1);
-    assert.equal(document.node.firstChild!.firstChild!.attrs.id, "item:first");
+    const node = getDocumentNode(document);
+    assert.equal(node.firstChild!.childCount, 1);
+    assert.equal(node.firstChild!.firstChild!.attrs.id, "item:first");
+  });
+
+  it("exposes an immutable logical clause hierarchy with public IDs", () => {
+    const document = buildOrder((order) => {
+      order.paragraph("heading", "IT IS ORDERED THAT:");
+      order.orderedList("clauses", (list) => {
+        list.item("suspended-condition", (content) => {
+          content
+            .text("The order is suspended while £")
+            .fact("amount", "25.00")
+            .text(" is paid:");
+        }, (item) => {
+          item.orderedList("payment-terms", (terms) => {
+            terms.item("monthly-payment", "Pay £25.00 each month.");
+          });
+        });
+      });
+    });
+
+    assert.equal(
+      document.textContent,
+      "IT IS ORDERED THAT:The order is suspended while £25.00 is paid:" +
+        "Pay £25.00 each month.",
+    );
+    assert.deepEqual(
+      document.children.map((clause) => clause.id),
+      ["heading", "suspended-condition"],
+    );
+
+    const suspension = document.getClause("suspended-condition");
+    assert.ok(suspension);
+    assert.equal(
+      suspension.textContent,
+      "The order is suspended while £25.00 is paid:",
+    );
+    assert.deepEqual(
+      suspension.children.map((clause) => ({
+        id: clause.id,
+        textContent: clause.textContent,
+      })),
+      [{
+        id: "monthly-payment",
+        textContent: "Pay £25.00 each month.",
+      }],
+    );
+    assert.equal(
+      document.getClause("monthly-payment"),
+      suspension.children[0],
+    );
+    assert.equal(document.getClause("missing"), undefined);
+    assert.equal(Object.isFrozen(document), true);
+    assert.equal(Object.isFrozen(document.children), true);
+    assert.equal(Object.isFrozen(suspension), true);
+    assert.equal(Object.isFrozen(suspension.children), true);
+    assert.throws(() => {
+      (document.children as DocWeaveClause[]).push(suspension);
+    }, TypeError);
+    assert.equal(
+      Reflect.set(suspension, "textContent", "Changed"),
+      false,
+    );
+  });
+
+  it("requires paragraph and item IDs to be globally unique", () => {
+    assert.throws(
+      () =>
+        buildOrder((order) => {
+          order.paragraph("duplicate", "Paragraph");
+          order.orderedList("clauses", (list) => {
+            list.item("duplicate", "List item");
+          });
+        }),
+      { message: "Duplicate clause ID: duplicate" },
+    );
+
+    assert.throws(
+      () =>
+        buildOrder((order) => {
+          order.orderedList("clauses", (list) => {
+            list.item("duplicate", "Parent", (item) => {
+              item.orderedList("nested", (nested) => {
+                nested.item("duplicate", "Child");
+              });
+            });
+          });
+        }),
+      { message: "Duplicate clause ID: duplicate" },
+    );
   });
 
   it("builds managed nested ordered lists", () => {
@@ -121,7 +214,7 @@ describe("order builder", () => {
       });
     });
 
-    const parent = document.node.firstChild!.firstChild!;
+    const parent = getDocumentNode(document).firstChild!.firstChild!;
     const nestedList = parent.lastChild!;
 
     assert.equal(parent.attrs.id, "item:parent");
@@ -139,7 +232,9 @@ describe("order builder", () => {
       order.orderedList("empty", () => {});
     });
 
-    assert.deepEqual(JSON.parse(JSON.stringify(document.node.toJSON())), {
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(getDocumentNode(document).toJSON())),
+      {
       type: "doc",
       content: [
         {
@@ -148,7 +243,8 @@ describe("order builder", () => {
           content: [{ type: "text", text: "IT IS ORDERED THAT:" }],
         },
       ],
-    });
+      },
+    );
   });
 
   it("omits an empty nested ordered list", () => {
@@ -160,7 +256,7 @@ describe("order builder", () => {
       });
     });
 
-    const parent = document.node.firstChild!.firstChild!;
+    const parent = getDocumentNode(document).firstChild!.firstChild!;
     assert.equal(parent.childCount, 1);
     assert.equal(parent.firstChild!.type.name, "paragraph");
   });
@@ -171,7 +267,7 @@ describe("order builder", () => {
         content.fact("value", "1 September 2026");
       });
     });
-    const generatedText = document.node.firstChild!.firstChild!;
+    const generatedText = getDocumentNode(document).firstChild!.firstChild!;
     const toDOM = editorSchema.nodes.generated_text!.spec.toDOM;
 
     assert.ok(toDOM);
@@ -195,8 +291,9 @@ describe("order builder", () => {
       });
     });
 
+    const node = getDocumentNode(document);
     assert.equal(
-      document.node.textBetween(0, document.node.content.size),
+      node.textBetween(0, node.content.size),
       "The Court heard from Alex Smith.",
     );
   });
@@ -210,7 +307,8 @@ describe("order builder", () => {
       });
     });
 
-    assert.equal(document.node.type.name, "doc");
+    const node = getDocumentNode(document);
+    assert.equal(node.type.name, "doc");
     assert.equal(
       getDocumentFactSources(document).get(
         "generated-text:paragraph:payment:amount",
@@ -218,7 +316,7 @@ describe("order builder", () => {
       "arrears-amount",
     );
     assert.doesNotMatch(
-      JSON.stringify(document.node.toJSON()),
+      JSON.stringify(node.toJSON()),
       /arrears-amount/,
     );
   });
