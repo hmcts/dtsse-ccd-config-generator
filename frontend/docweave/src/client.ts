@@ -12,6 +12,7 @@ import {
   getDocumentFactSources,
   getDocumentNode,
 } from "./builder.js";
+import { createClipboardPlugin } from "./clipboard.js";
 import {
   createDiffStylingPlugin,
   getGeneratedDocument,
@@ -42,6 +43,7 @@ function createEditorState(
     schema: editorSchema,
     doc: document,
     plugins: [
+      createClipboardPlugin(),
       createDiffStylingPlugin(),
       createFactNavigationPlugin(ownerDocument),
       ...createKeymapPlugins(),
