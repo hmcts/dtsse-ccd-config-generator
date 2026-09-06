@@ -1,5 +1,5 @@
-import path from "node:path";
 import { createRequire } from "node:module";
+import path from "node:path";
 
 import express, { type Express } from "express";
 import nunjucks from "nunjucks";
@@ -22,13 +22,14 @@ export function createApp({
   vite,
 }: AppOptions = {}): Express {
   const app = express();
+  const exampleRoot = path.join(projectRoot, "examples", "court-order");
 
   app.disable("x-powered-by");
   app.set("view engine", "njk");
 
   nunjucks.configure(
     [
-      path.join(projectRoot, "views"),
+      path.join(exampleRoot, "views"),
       path.join(govukFrontendRoot, "dist"),
     ],
     {
@@ -50,9 +51,7 @@ export function createApp({
     ),
   );
 
-  if (vite) {
-    app.use(vite.middlewares);
-  }
+  if (vite) app.use(vite.middlewares);
 
   app.get("/", (_request, response) => {
     const today = new Date();
@@ -64,6 +63,16 @@ export function createApp({
         day: today.getDate(),
         month: today.getMonth() + 1,
         year: today.getFullYear(),
+      },
+      initialPaymentDate: {
+        day: 14,
+        month: 9,
+        year: 2026,
+      },
+      firstMonthlyPaymentDate: {
+        day: 28,
+        month: 9,
+        year: 2026,
       },
     });
   });

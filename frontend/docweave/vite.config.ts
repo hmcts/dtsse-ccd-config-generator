@@ -6,7 +6,7 @@ function reloadNunjucks(): Plugin {
   return {
     name: "reload-nunjucks",
     configureServer(server) {
-      const viewsDirectory = path.resolve("views");
+      const viewsDirectory = path.resolve("examples/court-order/views");
 
       server.watcher.add(viewsDirectory);
       server.watcher.on("change", (file) => {
@@ -21,13 +21,25 @@ function reloadNunjucks(): Plugin {
 export default defineConfig({
   plugins: [reloadNunjucks()],
   publicDir: false,
+  resolve: {
+    alias: [
+      {
+        find: "@hmcts-cft/docweave/styles/docweave.css",
+        replacement: path.resolve("src/editor.scss"),
+      },
+      {
+        find: "@hmcts-cft/docweave",
+        replacement: path.resolve("src/index.ts"),
+      },
+    ],
+  },
   build: {
     cssCodeSplit: false,
     cssMinify: "esbuild",
     emptyOutDir: true,
     outDir: "dist/public",
     rollupOptions: {
-      input: path.resolve("src/consumer.ts"),
+      input: path.resolve("examples/court-order/main.ts"),
       output: {
         entryFileNames: "assets/application.js",
         assetFileNames: (assetInfo) =>

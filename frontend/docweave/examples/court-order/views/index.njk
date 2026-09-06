@@ -1,0 +1,87 @@
+{% extends "govuk/template.njk" %}
+{% from "govuk/components/button/macro.njk" import govukButton %}
+{% from "govuk/components/checkboxes/macro.njk" import govukCheckboxes %}
+{% from "govuk/components/date-input/macro.njk" import govukDateInput %}
+{% from "govuk/components/input/macro.njk" import govukInput %}
+
+{% block pageTitle %}Court order playground - Docweave{% endblock %}
+
+{% block head %}
+  {% if not development %}
+    <link rel="stylesheet" href="/assets/application.css">
+  {% endif %}
+{% endblock %}
+
+{% block header %}{% endblock %}
+
+{% block content %}
+  <div>
+    <div class="demo-introduction">
+      <h1 class="govuk-heading-xl">Court order playground</h1>
+      <p class="govuk-body-l">
+        Change the case inputs and Docweave will reconcile the generated order
+        while preserving compatible edits made in the editor.
+      </p>
+    </div>
+
+    <div class="demo-walkthrough">
+      <h2 class="govuk-heading-m">Try the reconciliation flow</h2>
+      <ol class="govuk-list govuk-list--number">
+        <li>Edit the wording of a clause in the order.</li>
+        <li>Change the possession date and see the generated fact update.</li>
+        <li>Toggle the monthly payment or another optional clause and check that your edit remains.</li>
+      </ol>
+    </div>
+
+    <form id="order-form" novalidate>
+      <section class="attendance-panel"
+               aria-labelledby="attendance-heading"
+               data-order-controls>
+        {% include "partials/attendance.njk" %}
+      </section>
+
+      <div class="demo-layout">
+        <aside class="demo-controls"
+               aria-label="Order inputs"
+               data-order-controls>
+          {% include "partials/order-controls.njk" %}
+          {{ govukButton({
+            text: "Reset example",
+            type: "reset",
+            classes: "govuk-button--secondary"
+          }) }}
+        </aside>
+
+        <section class="demo-editor" aria-labelledby="editor-heading">
+          <h2 class="govuk-heading-l" id="editor-heading">Generated order</h2>
+          <p class="govuk-body">
+            Dotted-underlined generated facts can be activated to return to their source input.
+          </p>
+          <div id="editor" class="demo-editor__surface"></div>
+        </section>
+      </div>
+    </form>
+
+    <details class="govuk-details document-inspector">
+      <summary class="govuk-details__summary">
+        <span class="govuk-details__summary-text">Inspect document JSON</span>
+      </summary>
+      <div class="govuk-details__text">
+        <h2 class="govuk-heading-m">Current document</h2>
+        <pre id="current-document-json"></pre>
+        <h2 class="govuk-heading-m">Generated document</h2>
+        <pre id="generated-document-json"></pre>
+      </div>
+    </details>
+  </div>
+{% endblock %}
+
+{% block footer %}{% endblock %}
+
+{% block bodyEnd %}
+  {% if development %}
+    <script type="module" src="/examples/court-order/main.ts"></script>
+  {% else %}
+    <script type="module" src="/assets/application.js"></script>
+  {% endif %}
+{% endblock %}

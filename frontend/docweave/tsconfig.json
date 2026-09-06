@@ -5,6 +5,11 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "noUncheckedIndexedAccess": true,
+    "paths": {
+      "@hmcts-cft/docweave": [
+        "./src/index.ts"
+      ]
+    },
     "skipLibCheck": true,
     "strict": true,
     "target": "ES2023",
@@ -15,6 +20,7 @@
   },
   "include": [
     "src/**/*.ts",
+    "examples/**/*.ts",
     "test/**/*.ts",
     "vite.config.ts"
   ]

@@ -23,12 +23,12 @@
     "node": ">=20.19.0"
   },
   "scripts": {
-    "dev": "NODE_ENV=development tsx watch src/server.ts",
-    "build": "npm run build:lib && vite build && tsc -p tsconfig.server.json",
+    "dev": "NODE_ENV=development tsx watch examples/court-order/server/server.ts",
+    "build": "npm run build:lib && vite build && tsc -p tsconfig.demo.json",
     "build:lib": "rm -rf dist/lib dist/docweave.css && tsc -p tsconfig.lib.json && sass --load-path=node_modules src/editor.scss dist/docweave.css --no-source-map",
-    "start": "NODE_ENV=production node dist/server/server.js",
+    "start": "NODE_ENV=production node dist/demo/server/server.js",
     "test": "npm run build:lib && npm run test:built",
-    "test:built": "npm run typecheck && tsx --test test/*.test.ts && node test/package-smoke.mjs",
+    "test:built": "npm run typecheck && tsx --test test/*.test.ts test/demo/*.test.ts && node test/package-smoke.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
