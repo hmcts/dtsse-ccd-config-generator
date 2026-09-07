@@ -71,6 +71,40 @@ The compiled stylesheet is available from
 `@hmcts-cft/docweave/styles/docweave.css`. Sass consumers can use
 `@hmcts-cft/docweave/styles/editor`.
 
+## Saved templates
+
+Enable the personal template library with a same-origin endpoint and CSRF
+token:
+
+```ts
+createOrderEditor({
+  mount: "#editor",
+  templates: {
+    url: "/docweave/templates",
+    csrfToken: document.querySelector<HTMLInputElement>(
+      'input[name="_csrf"]',
+    )?.value,
+  },
+});
+```
+
+Express applications can proxy the browser route to the consuming API without
+exposing user or service tokens:
+
+```ts
+import { createTemplateProxy } from "@hmcts-cft/docweave/express";
+
+app.use("/docweave/templates", createTemplateProxy({
+  upstream: "http://api/docweave/templates",
+  getUserToken: request => request.session.user?.accessToken,
+  getServiceToken: () => serviceTokens.getToken(),
+}));
+```
+
+Apply the host application's authentication, authorization and CSRF middleware
+before the proxy. The upstream is fixed in server configuration; browser input
+cannot select a host or arbitrary route.
+
 ## Development
 
 ```sh

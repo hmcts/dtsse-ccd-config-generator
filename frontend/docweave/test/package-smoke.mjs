@@ -46,6 +46,11 @@ try {
       import { access } from "node:fs/promises";
       import { fileURLToPath } from "node:url";
       import { buildOrder } from "@hmcts-cft/docweave";
+      import { createTemplateProxy } from "@hmcts-cft/docweave/express";
+
+      if (typeof createTemplateProxy !== "function") {
+        throw new Error("The installed package did not expose its Express entry point");
+      }
 
       const document = buildOrder((order) => {
         order.paragraph("heading", "IT IS ORDERED THAT:");
@@ -70,6 +75,21 @@ try {
     `,
   );
   run(process.execPath, [path.join(consumerRoot, "consumer.mjs")]);
+
+  writeFileSync(
+    path.join(consumerRoot, "consumer.cjs"),
+    `
+      const { createTemplateProxy } = require("@hmcts-cft/docweave/express");
+
+      if (typeof createTemplateProxy !== "function") {
+        throw new Error("The installed package did not expose its CommonJS Express entry point");
+      }
+    `,
+  );
+  run(process.execPath, [
+    "--no-experimental-require-module",
+    path.join(consumerRoot, "consumer.cjs"),
+  ]);
 
   writeFileSync(
     path.join(consumerRoot, "consumer.ts"),

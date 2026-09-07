@@ -260,6 +260,163 @@ li.docweave-editor__clause--modified > p {
   outline-offset: 1px;
 }
 
+.docweave-templates {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  overflow: auto;
+  padding: 3rem;
+  background: transparent;
+  color: #0b0c0c;
+  font-family: arial, sans-serif;
+}
+
+.docweave-templates::backdrop {
+  background: rgb(11 12 12 / 55%);
+}
+
+.docweave-templates__dialog {
+  box-sizing: border-box;
+  width: min(70rem, 100%);
+  min-height: 32rem;
+  margin: 0 auto;
+  padding: 2rem;
+  background: #fff;
+}
+
+.docweave-templates__header,
+.docweave-templates__search-row,
+.docweave-templates__actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.docweave-templates__header {
+  justify-content: space-between;
+}
+
+.docweave-templates__header h2 {
+  margin: 0;
+}
+
+.docweave-templates__search-row {
+  margin: 1rem 0;
+}
+
+.docweave-templates__search,
+.docweave-templates__form input {
+  box-sizing: border-box;
+  min-height: 2.5rem;
+  padding: .4rem;
+  border: 2px solid #0b0c0c;
+  font: inherit;
+}
+
+.docweave-templates__search {
+  flex: 1;
+}
+
+.docweave-templates__content {
+  display: grid;
+  grid-template-columns: 20rem 1fr;
+  min-height: 20rem;
+  border: 1px solid #b1b4b6;
+}
+
+.docweave-templates__search-row[hidden],
+.docweave-templates__content[hidden],
+.docweave-templates__actions[hidden] {
+  display: none;
+}
+
+.docweave-templates__results-panel {
+  box-sizing: border-box;
+  border-right: 1px solid #b1b4b6;
+}
+
+.docweave-templates__results {
+  margin: 0;
+  padding: 1rem;
+  list-style: none;
+}
+
+.docweave-templates__result {
+  width: 100%;
+  padding: .75rem;
+  border: 0;
+  background: transparent;
+  color: #1d70b8;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.docweave-templates__preview {
+  padding: 1.5rem;
+}
+
+.docweave-templates__actions {
+  margin-top: 1rem;
+}
+
+.docweave-templates__button,
+.docweave-templates__close {
+  min-height: 2.5rem;
+  padding: .5rem 1rem;
+  border: 2px solid #0b0c0c;
+  background: #00703c;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.docweave-templates__close {
+  background: #fff;
+  color: #0b0c0c;
+}
+
+.docweave-templates__button--warning {
+  background: #d4351c;
+}
+
+.docweave-templates__button:focus,
+.docweave-templates__close:focus,
+.docweave-templates__result:focus,
+.docweave-templates__search:focus,
+.docweave-templates__form input:focus {
+  outline: 3px solid #ffdd00;
+  outline-offset: 0;
+}
+
+.docweave-templates__status {
+  min-height: 1.5rem;
+}
+
+.docweave-templates__status--error {
+  border-left: 5px solid #d4351c;
+  padding-left: 1rem;
+  color: #d4351c;
+  font-weight: 700;
+}
+
+.docweave-templates__form label {
+  display: grid;
+  max-width: 40rem;
+  gap: .5rem;
+  font-weight: 700;
+}
+
+.docweave-templates__editor {
+  margin-top: 1rem;
+}
+
 .docweave-editor .ProseMirror h3 {
   font-size: 19px;
   font-weight: 700;

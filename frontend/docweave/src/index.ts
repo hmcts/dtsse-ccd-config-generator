@@ -14,3 +14,14 @@ export {
   type DocWeaveSnapshot,
   type OrderEditorController,
 } from "./client.js";
+export {
+  createHttpTemplateProvider,
+  createTemplateFragment,
+  parseTemplateFragment,
+  type HttpTemplateProviderOptions,
+  type SaveTemplateInput,
+  type Template,
+  type TemplateFragment,
+  type TemplateProvider,
+  type TemplateSearchResult,
+} from "./templates/index.js";

@@ -4,7 +4,11 @@ import { toggleMark } from "prosemirror-commands";
 import { history, redo, undo } from "prosemirror-history";
 import { type Node as ProseMirrorNode } from "prosemirror-model";
 import { wrapInList } from "prosemirror-schema-list";
-import { type Command, EditorState } from "prosemirror-state";
+import {
+  type Command,
+  EditorState,
+  type SelectionBookmark,
+} from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 
 import {
@@ -22,7 +26,12 @@ import {
   createFactNavigationPlugin,
   setFactNavigationSources,
 } from "./fact-navigation.js";
-import { createRedoIcon, createUndoIcon } from "./icons.js";
+import {
+  connectEditorToolbar,
+  createEditorToolbar,
+  type ConnectedEditorToolbar,
+  type EditorToolbarCommands,
+} from "./editor-toolbar.js";
 import {
   createKeymapPlugins,
   indentListItem,
@@ -35,6 +44,16 @@ import {
 } from "./invariants.js";
 import { reconcileOrderDocument } from "./reconciliation.js";
 import { editorSchema } from "./schema.js";
+import {
+  createTemplateDialog,
+  type TemplateDialog,
+} from "./templates/dialog.js";
+import {
+  createHttpTemplateProvider,
+  parseTemplateFragment,
+  type TemplateProvider,
+} from "./templates/index.js";
+import { insertTemplate } from "./templates/insertion.js";
 
 function createEditorState(
   ownerDocument: Document,
@@ -67,6 +86,11 @@ export interface CreateOrderEditorOptions {
   mount: HTMLElement | string;
   initialSnapshot?: DocWeaveSnapshot;
   onChange?: (snapshot: DocWeaveSnapshot) => void;
+  templates?: {
+    url?: string;
+    csrfToken?: string | (() => string | undefined);
+    provider?: TemplateProvider;
+  };
 }
 
 export interface OrderEditorController {
@@ -98,145 +122,15 @@ const editorCommands = {
   numbered: createNumberedClause,
   outdent: outdentListItem,
   indent: indentListItem,
-} satisfies Record<string, Command>;
+} satisfies EditorToolbarCommands;
 
-type EditorCommandName = keyof typeof editorCommands;
-
-function isEditorCommandName(value: string): value is EditorCommandName {
-  return Object.hasOwn(editorCommands, value);
-}
-
-function createToolbarButton(
-  ownerDocument: Document,
-  command: EditorCommandName,
-  label: string,
-  content: string | Node,
-): HTMLButtonElement {
+function createTemplateButton(ownerDocument: Document): HTMLButtonElement {
   const button = ownerDocument.createElement("button");
   button.type = "button";
   button.className = "docweave-editor__toolbar-button";
-  button.dataset.editorCommand = command;
-  button.setAttribute("aria-label", label);
-  button.append(content);
+  button.setAttribute("aria-label", "Insert template");
+  button.textContent = "Insert template";
   return button;
-}
-
-function createToolbar(ownerDocument: Document): HTMLElement {
-  const toolbar = ownerDocument.createElement("div");
-  toolbar.className = "docweave-editor__toolbar";
-  toolbar.setAttribute("role", "toolbar");
-  toolbar.setAttribute("aria-label", "Order editor formatting");
-
-  const iconClass = "docweave-editor__toolbar-icon";
-
-  toolbar.append(
-    createToolbarButton(
-      ownerDocument,
-      "undo",
-      "Undo",
-      createUndoIcon(ownerDocument, iconClass),
-    ),
-    createToolbarButton(
-      ownerDocument,
-      "redo",
-      "Redo",
-      createRedoIcon(ownerDocument, iconClass),
-    ),
-  );
-
-  const separator = ownerDocument.createElement("span");
-  separator.className = "docweave-editor__toolbar-separator";
-  separator.setAttribute("aria-hidden", "true");
-  toolbar.append(separator);
-
-  const strong = ownerDocument.createElement("strong");
-  strong.textContent = "B";
-
-  const emphasis = ownerDocument.createElement("em");
-  emphasis.textContent = "I";
-
-  toolbar.append(
-    createToolbarButton(ownerDocument, "bold", "Bold", strong),
-    createToolbarButton(ownerDocument, "italic", "Italic", emphasis),
-    createToolbarButton(
-      ownerDocument,
-      "numbered",
-      "Numbered clause",
-      "1.",
-    ),
-    createToolbarButton(
-      ownerDocument,
-      "outdent",
-      "Outdent paragraph",
-      "←",
-    ),
-    createToolbarButton(
-      ownerDocument,
-      "indent",
-      "Indent paragraph",
-      "→",
-    ),
-  );
-
-  return toolbar;
-}
-
-interface ConnectedToolbar {
-  update(): void;
-  destroy(): void;
-}
-
-function connectToolbar(
-  toolbar: HTMLElement,
-  view: EditorView,
-): ConnectedToolbar {
-  const buttons = toolbar.querySelectorAll<HTMLButtonElement>(
-    "[data-editor-command]",
-  );
-
-  function update(): void {
-    for (const button of buttons) {
-      const commandName = button.dataset.editorCommand;
-      const enabled = commandName !== undefined &&
-        isEditorCommandName(commandName) &&
-        editorCommands[commandName](view.state);
-
-      button.disabled = !enabled;
-    }
-  }
-
-  const handleMouseDown = (event: MouseEvent): void => {
-    if (event.target instanceof Element &&
-      event.target.closest("[data-editor-command]")) {
-      event.preventDefault();
-    }
-  };
-
-  const handleClick = (event: MouseEvent): void => {
-    if (!(event.target instanceof Element)) return;
-
-    const button = event.target.closest<HTMLButtonElement>(
-      "[data-editor-command]",
-    );
-    const commandName = button?.dataset.editorCommand;
-    if (!button || button.disabled || commandName === undefined ||
-      !isEditorCommandName(commandName)) return;
-
-    view.focus();
-    editorCommands[commandName](view.state, view.dispatch, view);
-  };
-
-  toolbar.addEventListener("mousedown", handleMouseDown);
-  toolbar.addEventListener("click", handleClick);
-
-  update();
-  return {
-    update,
-    destroy(): void {
-      toolbar.removeEventListener("mousedown", handleMouseDown);
-      toolbar.removeEventListener("click", handleClick);
-    },
-  };
 }
 
 export function createOrderEditor(
@@ -260,6 +154,19 @@ export function createOrderEditor(
     );
   }
 
+  const templateProvider = options.templates
+    ? options.templates.provider ??
+      (options.templates.url
+        ? createHttpTemplateProvider({
+          url: options.templates.url,
+          csrfToken: options.templates.csrfToken,
+        })
+        : undefined)
+    : undefined;
+  if (options.templates && !templateProvider) {
+    throw new Error("Templates require either a provider or URL");
+  }
+
   const initialCurrent = options.initialSnapshot
     ? editorSchema.nodeFromJSON(options.initialSnapshot.current)
     : undefined;
@@ -277,14 +184,25 @@ export function createOrderEditor(
     );
   }
 
-  const toolbar = createToolbar(editor.ownerDocument);
+  const toolbar = createEditorToolbar(
+    editor.ownerDocument,
+    "Order editor formatting",
+  );
+  const templateButton = options.templates
+    ? createTemplateButton(editor.ownerDocument)
+    : undefined;
+  if (templateButton) {
+    toolbar.append(templateButton);
+  }
   const editorSurface = editor.ownerDocument.createElement("div");
   editorSurface.className = "docweave-editor__surface";
   const mountAlreadyStyled = editor.classList.contains("docweave-editor");
   editor.classList.add("docweave-editor");
   editor.append(toolbar, editorSurface);
 
-  let connectedToolbar: ConnectedToolbar | undefined;
+  let connectedToolbar: ConnectedEditorToolbar | undefined;
+  let templateDialog: TemplateDialog | undefined;
+  let templateBookmark: SelectionBookmark | undefined;
 
   const getSnapshot = (): DocWeaveSnapshot => {
     const generated = getGeneratedDocument(view.state) ?? view.state.doc;
@@ -299,6 +217,9 @@ export function createOrderEditor(
   const view = new EditorView(editorSurface, {
     state: initialState,
     dispatchTransaction(transaction) {
+      if (templateBookmark) {
+        templateBookmark = templateBookmark.map(transaction.mapping);
+      }
       const nextState = view.state.apply(transaction);
       view.updateState(nextState);
       connectedToolbar?.update();
@@ -306,7 +227,35 @@ export function createOrderEditor(
     },
   });
 
-  connectedToolbar = connectToolbar(toolbar, view);
+  connectedToolbar = connectEditorToolbar(toolbar, view, editorCommands);
+
+  if (templateProvider && templateButton) {
+    templateDialog = createTemplateDialog({
+      ownerDocument: editor.ownerDocument,
+      provider: templateProvider,
+      insert(template) {
+        const { document } = parseTemplateFragment(template.content);
+        const bookmark = templateBookmark ?? view.state.selection.getBookmark();
+        const command = insertTemplate(
+          document,
+          bookmark.resolve(view.state.doc),
+        );
+        command(view.state, (transaction) => {
+          const generated = getGeneratedDocument(view.state);
+          if (generated) {
+            assertCurrentDocumentMatchesGenerated(transaction.doc, generated);
+          }
+          view.dispatch(transaction);
+        }, view);
+        templateBookmark = undefined;
+      },
+      onInserted: () => view.focus(),
+    });
+    templateButton.addEventListener("click", () => {
+      templateBookmark = view.state.selection.getBookmark();
+      templateDialog?.open();
+    });
+  }
 
   const controller: OrderEditorController = {
     render(document: DocWeaveDocument): void {
@@ -340,6 +289,7 @@ export function createOrderEditor(
     getSnapshot,
     destroy(): void {
       connectedToolbar?.destroy();
+      templateDialog?.destroy();
       view.destroy();
       toolbar.remove();
       editorSurface.remove();

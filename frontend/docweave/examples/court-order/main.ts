@@ -9,6 +9,7 @@ import "./application.scss";
 import { createInspector } from "./inspector.js";
 import { readInputs } from "./inputs.js";
 import { buildDemoOrder } from "./order.js";
+import { createInMemoryTemplateProvider } from "./template-provider.js";
 
 initAll();
 
@@ -22,6 +23,7 @@ if (!form || !mount || controlGroups.length === 0) {
 }
 
 const inspector = createInspector(document);
+const templateProvider = createInMemoryTemplateProvider();
 const listeners = new AbortController();
 let controller: OrderEditorController;
 
@@ -33,6 +35,7 @@ function initialiseEditor(): void {
   controller?.destroy();
   controller = createOrderEditor({
     mount: mount!,
+    templates: { provider: templateProvider },
     onChange(snapshot) {
       inspector.update(snapshot);
     },

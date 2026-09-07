@@ -47,6 +47,16 @@ beforeEach(() => {
   );
 
   const window = dom.window;
+  Object.defineProperty(window.Range.prototype, "getClientRects", {
+    configurable: true,
+    value: () => [new window.DOMRect()],
+  });
+  for (const prototype of [window.Range.prototype, window.Text.prototype]) {
+    Object.defineProperty(prototype, "getBoundingClientRect", {
+      configurable: true,
+      value: () => new window.DOMRect(),
+    });
+  }
   const testGlobals: Record<(typeof globalNames)[number], unknown> = {
     window,
     document: window.document,
@@ -96,6 +106,19 @@ describe("public order editor API", () => {
 
     controller.destroy();
     assert.doesNotThrow(() => createOrderEditor({ mount: "#editor" }).destroy());
+  });
+
+  it("rejects incomplete template configuration before mounting", async () => {
+    const { createOrderEditor } = await import("../src/index.js");
+
+    assert.throws(
+      () => createOrderEditor({ mount: "#editor", templates: {} }),
+      /Templates require either a provider or URL/,
+    );
+    assert.equal(
+      dom.window.document.querySelector("#editor")!.childElementCount,
+      0,
+    );
   });
 
   it("renders, reports changes, serializes and destroys an editor", async () => {
@@ -421,5 +444,84 @@ describe("public order editor API", () => {
     } finally {
       ownerDom.window.close();
     }
+  });
+
+  it("loads and inserts a saved template as one undoable edit", async () => {
+    const { buildOrder, createOrderEditor } = await import("../src/index.js");
+    const template = {
+      id: "11111111-1111-1111-1111-111111111111",
+      title: "Standard costs wording",
+      revision: 1,
+      updatedAt: "2026-09-06T12:00:00Z",
+      content: {
+        schema: "docweave-template" as const,
+        version: 1 as const,
+        content: {
+          type: "doc",
+          content: [{
+            type: "paragraph",
+            content: [{ type: "text", text: "Costs in the case." }],
+          }],
+        },
+      },
+    };
+    const controller = createOrderEditor({
+      mount: "#editor",
+      templates: {
+        provider: {
+          async search() {
+            return { items: [template] };
+          },
+          async create() {
+            return template;
+          },
+          async update() {
+            return template;
+          },
+          async delete() {},
+        },
+      },
+    });
+    controller.render(buildOrder((order) => {
+      order.paragraph("managed", "A generated paragraph.");
+    }));
+
+    const generatedText = dom.window.document.querySelector(
+      ".ProseMirror p",
+    )!.firstChild!;
+    const range = dom.window.document.createRange();
+    range.setStart(generatedText, 5);
+    range.collapse(true);
+    dom.window.getSelection()!.removeAllRanges();
+    dom.window.getSelection()!.addRange(range);
+    dom.window.document.dispatchEvent(new dom.window.Event("selectionchange"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    dom.window.document.querySelector<HTMLButtonElement>(
+      '[aria-label="Insert template"]',
+    )!.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    dom.window.document.querySelector<HTMLButtonElement>(
+      ".docweave-templates__result",
+    )!.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    dom.window.document.querySelector<HTMLButtonElement>(
+      ".docweave-templates__actions button",
+    )!.click();
+
+    const mount = dom.window.document.querySelector<HTMLElement>("#editor")!;
+    assert.match(mount.textContent, /Costs in the case\./);
+    assert.equal(dom.window.document.querySelector("dialog")!.open, false);
+    assert.equal(dom.window.document.activeElement, mount.querySelector(".ProseMirror"));
+    const current = controller.getSnapshot().current as {
+      content: Array<{ attrs?: { id?: string | null } }>;
+    };
+    assert.deepEqual(
+      current.content.map((node) => node.attrs?.id),
+      ["paragraph:managed", null],
+    );
+    mount.querySelector<HTMLButtonElement>('[aria-label="Undo"]')!.click();
+    assert.doesNotMatch(mount.textContent, /Costs in the case\./);
+    controller.destroy();
   });
 });
