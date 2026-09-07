@@ -77,6 +77,7 @@ dependencies {
   implementation 'com.github.hmcts.java-logging:logging:8.0.0'
   implementation 'com.github.hmcts:service-auth-provider-java-client:5.3.5'
   implementation 'com.github.hmcts:task-management:DEV-SNAPSHOT'
+  implementation 'com.github.hmcts:docweave:DEV-SNAPSHOT'
 
   implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.9.0'
 
@@ -208,6 +209,7 @@ tasks.withType(CftlibExec).configureEach {
       'divorce_frontend',
       'wa_task_management_api'
     ].join(',')
+    environment 'DOCWEAVE_TEMPLATES_ALLOWED_SERVICES', 'nfdiv_case_api'
     environment 'WA_S2S_AUTHORIZED_SERVICES', [
       'ccd',
       'ccd_data',
