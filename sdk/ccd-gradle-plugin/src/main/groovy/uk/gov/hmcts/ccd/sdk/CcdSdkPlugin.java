@@ -11,6 +11,7 @@ import org.gradle.api.artifacts.ExternalModuleDependency;
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository;
 import org.gradle.api.artifacts.repositories.MavenRepositoryContentDescriptor;
 import org.gradle.api.file.DirectoryProperty;
+import org.gradle.api.logging.Logging;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.tasks.JavaExec;
@@ -34,6 +35,10 @@ public class CcdSdkPlugin implements Plugin<Project> {
     configGeneration.setCanBeConsumed(false);
     configGeneration.setCanBeResolved(true);
     configGeneration.setDescription("Dependencies used when generating CCD configuration");
+    addSdkPlatform(project, "implementation");
+    addSdkPlatform(project, "configGeneration");
+    project.getPluginManager().withPlugin("com.github.hmcts.rse-cft-lib", plugin ->
+        addSdkPlatform(project, "cftlibImplementation"));
     SourceSetContainer ssc = project.getExtensions()
         .getByType(JavaPluginExtension.class)
         .getSourceSets();
@@ -76,20 +81,23 @@ public class CcdSdkPlugin implements Plugin<Project> {
       }
 
       if (config.decentralised) {
-        // This is a signal to the cftlib to link in the feature branch
-        // TODO: remove on landing
-        project.getExtensions().getExtraProperties().set("cftlib.datastore", "decentralised");
         String version = getVersion();
         project.getDependencies().add("implementation", "com.github.hmcts:decentralised-runtime:"
             + version);
         String dependencyNotation = "com.github.hmcts:ccd-runtime-indexing:" + version;
-        addElasticsearchClientDependency(project);
         if (config.runtimeIndexing) {
           project.getDependencies().add("implementation", dependencyNotation);
-        } else {
+        } else if (!hasRuntimeDependency(project, "ccd-runtime-indexing")) {
           project.getPluginManager().withPlugin("com.github.hmcts.rse-cft-lib", plugin ->
               project.getDependencies().add("cftlibImplementation", dependencyNotation));
         }
+      }
+
+      if (hasRuntimeDependency(project, "decentralised-runtime")) {
+        // This is a signal to the cftlib to link in the feature branch
+        // TODO: remove on landing
+        project.getExtensions().getExtraProperties().set("cftlib.datastore", "decentralised");
+        addElasticsearchClientDependency(project);
         // Surface that we are decentralised to the spring boot apps.
         // This is an env var since it needs to be read beyond the application's classpath
         // to shut off the default cftlib elasticsearch indexer when decentralised)
@@ -105,6 +113,17 @@ public class CcdSdkPlugin implements Plugin<Project> {
             + getVersion());
       }
     });
+  }
+
+  private boolean hasRuntimeDependency(Project project, String module) {
+    return project.getConfigurations().getByName("runtimeClasspath").getAllDependencies().stream()
+        .anyMatch(dependency -> "com.github.hmcts".equals(dependency.getGroup())
+            && module.equals(dependency.getName()));
+  }
+
+  private void addSdkPlatform(Project project, String configuration) {
+    project.getDependencies().add(configuration, project.getDependencies().platform(
+        "com.github.hmcts:ccd-sdk-bom:" + getVersion()));
   }
 
   private String getVersion() {
@@ -130,6 +149,29 @@ public class CcdSdkPlugin implements Plugin<Project> {
     private boolean runtimeIndexing = false;
 
     public CCDConfig() {
+    }
+
+    public void setDecentralised(boolean decentralised) {
+      warnDeprecated("decentralised", "implementation 'com.github.hmcts:decentralised-runtime'"
+          + " and, for local indexing, cftlibImplementation 'com.github.hmcts:ccd-runtime-indexing'");
+      this.decentralised = decentralised;
+    }
+
+    public void setCaseEventServiceBus(boolean caseEventServiceBus) {
+      warnDeprecated("caseEventServiceBus", "implementation 'com.github.hmcts:ccd-servicebus-support'");
+      this.caseEventServiceBus = caseEventServiceBus;
+    }
+
+    public void setRuntimeIndexing(boolean runtimeIndexing) {
+      warnDeprecated("runtimeIndexing", "implementation 'com.github.hmcts:ccd-runtime-indexing'"
+          + " for application indexing, or cftlibImplementation 'com.github.hmcts:ccd-runtime-indexing'"
+          + " for local indexing only");
+      this.runtimeIndexing = runtimeIndexing;
+    }
+
+    private void warnDeprecated(String option, String replacement) {
+      Logging.getLogger(CcdSdkPlugin.class).warn("ccd.{} is deprecated. Remove this flag and declare {}"
+          + " in dependencies when needed; the CCD SDK BOM supplies the version.", option, replacement);
     }
   }
 }

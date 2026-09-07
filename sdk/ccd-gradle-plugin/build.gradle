@@ -68,6 +68,8 @@ task functionalTest(type: Test) {
 }
 
 functionalTest.dependsOn(
+    project(':ccd-sdk-bom').tasks.named('publishToMavenLocal'),
+    project(':ccd-runtime-indexing').tasks.named('publishToMavenLocal'),
     project(':ccd-config-generator').tasks.named('publishToMavenLocal'),
     project(':decentralised-runtime').tasks.named('publishToMavenLocal'),
     project(':ccd-servicebus-support').tasks.named('publishToMavenLocal')
