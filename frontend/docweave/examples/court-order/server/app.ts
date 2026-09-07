@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import path from "node:path";
 
-import express, { type Express } from "express";
+import express, { type Express, type RequestHandler } from "express";
 import nunjucks from "nunjucks";
 import type { ViteDevServer } from "vite";
 
@@ -15,6 +15,8 @@ export interface AppOptions {
   projectRoot?: string;
   vite?: ViteDevServer;
   assetPath?: string;
+  templateProxy?: RequestHandler;
+  templatesMode?: "standalone" | "backend";
 }
 
 export function createApp({
@@ -22,6 +24,8 @@ export function createApp({
   projectRoot = process.cwd(),
   vite,
   assetPath = "/assets",
+  templateProxy,
+  templatesMode = "standalone",
 }: AppOptions = {}): Express {
   const app = express();
   const exampleRoot = path.join(projectRoot, "examples", "court-order");
@@ -54,11 +58,16 @@ export function createApp({
   );
 
   if (vite) app.use(vite.middlewares);
+  if (templateProxy) {
+    app.use(express.json());
+    app.use("/docweave/templates", templateProxy);
+  }
 
   const today = new Date();
   Object.assign(app.locals, {
     assetPath,
     development,
+    templatesMode,
     orderDate: {
       day: today.getDate(),
       month: today.getMonth() + 1,

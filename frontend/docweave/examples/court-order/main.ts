@@ -13,6 +13,12 @@ import { createInMemoryTemplateProvider } from "./template-provider.js";
 
 initAll();
 
+declare global {
+  interface Window {
+    __DOCWEAVE_TEMPLATES_MODE__?: "standalone" | "backend";
+  }
+}
+
 const form = document.querySelector<HTMLFormElement>("#order-form");
 const mount = document.querySelector<HTMLElement>("#editor");
 const controlGroups = document.querySelectorAll<HTMLElement>(
@@ -23,7 +29,9 @@ if (!form || !mount || controlGroups.length === 0) {
 }
 
 const inspector = createInspector(document);
-const templateProvider = createInMemoryTemplateProvider();
+const templates = window.__DOCWEAVE_TEMPLATES_MODE__ === "backend"
+  ? { url: "/docweave/templates" }
+  : { provider: createInMemoryTemplateProvider() };
 const listeners = new AbortController();
 let controller: OrderEditorController;
 
@@ -35,7 +43,7 @@ function initialiseEditor(): void {
   controller?.destroy();
   controller = createOrderEditor({
     mount: mount!,
-    templates: { provider: templateProvider },
+    templates,
     onChange(snapshot) {
       inspector.update(snapshot);
     },
