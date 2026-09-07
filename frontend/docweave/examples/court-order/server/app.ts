@@ -14,12 +14,14 @@ export interface AppOptions {
   development?: boolean;
   projectRoot?: string;
   vite?: ViteDevServer;
+  assetPath?: string;
 }
 
 export function createApp({
   development = false,
   projectRoot = process.cwd(),
   vite,
+  assetPath = "/assets",
 }: AppOptions = {}): Express {
   const app = express();
   const exampleRoot = path.join(projectRoot, "examples", "court-order");
@@ -53,28 +55,29 @@ export function createApp({
 
   if (vite) app.use(vite.middlewares);
 
-  app.get("/", (_request, response) => {
-    const today = new Date();
+  const today = new Date();
+  Object.assign(app.locals, {
+    assetPath,
+    development,
+    orderDate: {
+      day: today.getDate(),
+      month: today.getMonth() + 1,
+      year: today.getFullYear(),
+    },
+    initialPaymentDate: {
+      day: 14,
+      month: 9,
+      year: 2026,
+    },
+    firstMonthlyPaymentDate: {
+      day: 28,
+      month: 9,
+      year: 2026,
+    },
+  });
 
-    response.render("index.njk", {
-      assetPath: "/assets",
-      development,
-      orderDate: {
-        day: today.getDate(),
-        month: today.getMonth() + 1,
-        year: today.getFullYear(),
-      },
-      initialPaymentDate: {
-        day: 14,
-        month: 9,
-        year: 2026,
-      },
-      firstMonthlyPaymentDate: {
-        day: 28,
-        month: 9,
-        year: 2026,
-      },
-    });
+  app.get("/", (_request, response) => {
+    response.render("index.njk");
   });
 
   return app;

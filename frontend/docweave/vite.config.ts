@@ -19,6 +19,7 @@ function reloadNunjucks(): Plugin {
 }
 
 export default defineConfig({
+  base: "./",
   plugins: [reloadNunjucks()],
   publicDir: false,
   resolve: {

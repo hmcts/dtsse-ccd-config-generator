@@ -1,6 +1,7 @@
 name: Docweave check
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - '.github/workflows/docweave-check.yml'
@@ -52,3 +53,40 @@ jobs:
 
       - name: Build and test Docweave
         run: ./gradlew :docweave:clean :docweave:build
+
+      - name: Build static demo
+        working-directory: frontend/docweave
+        run: npm run build:demo
+
+      - name: Prepare Pages subpath
+        working-directory: frontend/docweave
+        run: |
+          mkdir -p dist/pages
+          cp -R dist/public dist/pages/docweave
+
+      - name: Upload demo for GitHub Pages
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: frontend/docweave/dist/pages
+
+  deploy:
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}docweave/
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Deploy demo
+        id: deployment
+        uses: actions/deploy-pages@v4

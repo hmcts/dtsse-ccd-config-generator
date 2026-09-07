@@ -123,3 +123,18 @@ The demo is served at <http://127.0.0.1:8000>. Its source is under
 `examples/court-order/`; library source remains under `src/`. See
 [`architecture.md`](architecture.md) for the reconciliation model and generated
 document invariants.
+
+## Published demo
+
+The Docweave check workflow builds the static demo on pull requests and publishes
+it to [GitHub Pages](https://hmcts.github.io/dtsse-ccd-config-generator/docweave/) after
+successful checks for changes on `master`. It can also be run manually on
+`master`. Repository Pages settings must use **GitHub Actions** as the source.
+
+Build the standalone demo locally with `npm run build:demo`. The output in
+`dist/public` can be served by any static web server, including beneath a URL
+prefix. CI places it in `dist/pages/docweave` and publishes `dist/pages` as the
+Pages site, so the demo lives at `/docweave/` beneath the repository URL.
+No Express or Java backend is needed: demo templates are held in browser
+memory and disappear when the page reloads. The initial order date is the build
+date and remains editable in the demo.

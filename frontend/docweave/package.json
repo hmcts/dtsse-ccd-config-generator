@@ -38,7 +38,8 @@
   },
   "scripts": {
     "dev": "NODE_ENV=development tsx watch examples/court-order/server/server.ts",
-    "build": "npm run build:lib && vite build && tsc -p tsconfig.demo.json",
+    "build": "npm run build:lib && npm run build:demo && tsc -p tsconfig.demo.json",
+    "build:demo": "vite build && tsx examples/court-order/server/build-static.ts",
     "build:lib": "rm -rf dist/lib dist/cjs dist/docweave.css && tsc -p tsconfig.lib.json && esbuild src/express.ts --bundle --platform=node --format=cjs --outfile=dist/cjs/express.cjs && sass --load-path=node_modules src/editor.scss dist/docweave.css --no-source-map",
     "start": "NODE_ENV=production node dist/demo/server/server.js",
     "test": "npm run build:lib && npm run test:built",

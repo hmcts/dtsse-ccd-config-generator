@@ -1,4 +1,6 @@
-@use "govuk-frontend/dist/govuk/index" as *;
+@use "govuk-frontend/dist/govuk/index" as * with (
+  $govuk-assets-path: "../../node_modules/govuk-frontend/dist/govuk/assets/"
+);
 
 .govuk-width-container {
   max-width: 110rem;
