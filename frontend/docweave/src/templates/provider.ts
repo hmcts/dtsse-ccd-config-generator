@@ -82,9 +82,6 @@ function validateNode(value: unknown, depth: number): void {
   if (typeof type !== "string" || !allowedNodes.has(type)) {
     throw new Error(`Unsupported template node: ${String(type)}`);
   }
-  if (type === "generated_text") {
-    throw new Error("Generated content cannot be stored in a template");
-  }
 
   const attrs = node.attrs;
   if (attrs !== undefined) {
