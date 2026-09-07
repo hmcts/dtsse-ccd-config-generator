@@ -1,7 +1,7 @@
 import { dropCursor } from "prosemirror-dropcursor";
 import { gapCursor } from "prosemirror-gapcursor";
 import { toggleMark } from "prosemirror-commands";
-import { history, redo, undo } from "prosemirror-history";
+import { closeHistory, history, redo, undo } from "prosemirror-history";
 import { type Node as ProseMirrorNode } from "prosemirror-model";
 import { wrapInList } from "prosemirror-schema-list";
 import {
@@ -210,6 +210,12 @@ export function createOrderEditor(
   let templateDialog: TemplateDialog | undefined;
   let templateBookmark: SelectionBookmark | undefined;
 
+  function openTemplateDialog(): void {
+    if (!templateDialog) return;
+    templateBookmark = view.state.selection.getBookmark();
+    templateDialog.open();
+  }
+
   const getSnapshot = (): DocWeaveSnapshot => {
     const generated = getGeneratedDocument(view.state) ?? view.state.doc;
     return {
@@ -222,6 +228,17 @@ export function createOrderEditor(
 
   const view = new EditorView(editorSurface, {
     state: initialState,
+    handleKeyDown(editorView, event) {
+      const { empty, $from } = editorView.state.selection;
+      if (!templateDialog || !editorView.editable || event.defaultPrevented ||
+        event.key !== "/" || event.altKey || event.ctrlKey || event.metaKey ||
+        event.shiftKey || event.isComposing || editorView.composing || !empty ||
+        $from.parent.type !== editorSchema.nodes.paragraph ||
+        $from.parent.content.size !== 0) return false;
+      event.preventDefault();
+      openTemplateDialog();
+      return true;
+    },
     dispatchTransaction(transaction) {
       if (templateBookmark) {
         templateBookmark = templateBookmark.map(transaction.mapping);
@@ -251,16 +268,15 @@ export function createOrderEditor(
           if (generated) {
             assertCurrentDocumentMatchesGenerated(transaction.doc, generated);
           }
-          view.dispatch(transaction);
+          view.dispatch(closeHistory(transaction));
+          // Keep immediate follow-up typing in its own undo group too.
+          view.dispatch(closeHistory(view.state.tr));
         }, view);
         templateBookmark = undefined;
       },
       onInserted: () => view.focus(),
     });
-    templateButton.addEventListener("click", () => {
-      templateBookmark = view.state.selection.getBookmark();
-      templateDialog?.open();
-    });
+    templateButton.addEventListener("click", openTemplateDialog);
   }
 
   const controller: OrderEditorController = {

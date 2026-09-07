@@ -260,19 +260,23 @@ li.docweave-editor__clause--modified > p {
   outline-offset: 1px;
 }
 
+// Template picker: keep the search and footer visible while each pane scrolls.
 .docweave-templates {
   box-sizing: border-box;
-  width: 100%;
+  width: min(1000px, calc(100vw - 64px));
+  height: min(760px, 80vh);
   max-width: none;
-  height: 100%;
   max-height: none;
-  margin: 0;
+  margin: auto;
+  padding: 0;
   border: 0;
-  overflow: auto;
-  padding: 3rem;
-  background: transparent;
+  overflow: hidden;
+  background: #fff;
   color: #0b0c0c;
-  font-family: arial, sans-serif;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 16px;
+  line-height: 1.4;
+  box-shadow: 0 8px 40px rgb(0 0 0 / 30%);
 }
 
 .docweave-templates::backdrop {
@@ -280,141 +284,291 @@ li.docweave-editor__clause--modified > p {
 }
 
 .docweave-templates__dialog {
-  box-sizing: border-box;
-  width: min(70rem, 100%);
-  min-height: 32rem;
-  margin: 0 auto;
-  padding: 2rem;
-  background: #fff;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
-.docweave-templates__header,
-.docweave-templates__search-row,
-.docweave-templates__actions {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
+.docweave-templates [hidden] {
+  display: none !important;
+}
+
+.docweave-templates__visually-hidden,
+.docweave-templates__status:not(.docweave-templates__status--error) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .docweave-templates__header {
+  display: flex;
   justify-content: space-between;
-}
-
-.docweave-templates__header h2 {
-  margin: 0;
+  flex-shrink: 0;
+  gap: 12px;
+  padding: 20px 24px 0;
 }
 
 .docweave-templates__search-row {
-  margin: 1rem 0;
+  padding: 16px 24px 0;
+}
+
+.docweave-templates__label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 700;
+}
+
+.docweave-templates__hint {
+  margin-bottom: 6px;
+  color: #505a5f;
+  font-size: .9em;
 }
 
 .docweave-templates__search,
 .docweave-templates__form input {
   box-sizing: border-box;
-  min-height: 2.5rem;
-  padding: .4rem;
+  width: 100%;
+  min-height: 40px;
+  padding: 5px;
   border: 2px solid #0b0c0c;
+  border-radius: 0;
+  background: #fff;
+  color: #0b0c0c;
   font: inherit;
-}
-
-.docweave-templates__search {
-  flex: 1;
 }
 
 .docweave-templates__content {
   display: grid;
-  grid-template-columns: 20rem 1fr;
-  min-height: 20rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  margin: 16px 24px 0;
   border: 1px solid #b1b4b6;
-}
-
-.docweave-templates__search-row[hidden],
-.docweave-templates__content[hidden],
-.docweave-templates__actions[hidden] {
-  display: none;
+  overflow: hidden;
 }
 
 .docweave-templates__results-panel {
-  box-sizing: border-box;
+  min-height: 0;
+  overflow-y: auto;
   border-right: 1px solid #b1b4b6;
 }
 
 .docweave-templates__results {
   margin: 0;
-  padding: 1rem;
+  padding: 0;
   list-style: none;
 }
 
+.docweave-templates__result-row {
+  border-left: 4px solid transparent;
+  border-bottom: 1px solid #f3f2f1;
+}
+
+.docweave-templates__result-row:hover {
+  background: #f3f2f1;
+}
+
+.docweave-templates__result--selected,
+.docweave-templates__result--selected:hover {
+  border-left-color: #1d70b8;
+  background: #e8f0fa;
+}
+
 .docweave-templates__result {
+  display: block;
   width: 100%;
-  padding: .75rem;
   border: 0;
+  padding: 12px 14px 6px;
+  background: transparent;
+  color: #0b0c0c;
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.docweave-templates__snippet {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: #505a5f;
+  font-size: .85em;
+  font-style: italic;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.docweave-templates__result-actions {
+  display: flex;
+  gap: 12px;
+  padding: 0 14px 12px;
+}
+
+.docweave-templates__result-action,
+.docweave-templates__load-more {
+  border: 0;
+  padding: 0;
   background: transparent;
   color: #1d70b8;
   font: inherit;
-  text-align: left;
+  font-size: .85em;
   text-decoration: underline;
   cursor: pointer;
 }
 
+.docweave-templates__load-more {
+  margin: 16px;
+}
+
+.docweave-templates__empty {
+  padding: 16px;
+  color: #505a5f;
+}
+
 .docweave-templates__preview {
-  padding: 1.5rem;
+  min-height: 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding: 16px 18px;
+}
+
+.docweave-templates__preview h3 {
+  margin: 0 0 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #f3f2f1;
+  font-size: 1.15em;
+}
+
+.docweave-templates__preview p {
+  margin: 0 0 12px;
+}
+
+.docweave-templates__preview ol {
+  padding-left: 26px;
+}
+
+.docweave-templates__preview li {
+  margin-bottom: 6px;
 }
 
 .docweave-templates__actions {
-  margin-top: 1rem;
+  display: flex;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid #b1b4b6;
 }
 
-.docweave-templates__button,
-.docweave-templates__close {
-  min-height: 2.5rem;
-  padding: .5rem 1rem;
-  border: 2px solid #0b0c0c;
+.docweave-templates__button {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 2px solid transparent;
+  border-radius: 0;
   background: #00703c;
+  box-shadow: 0 2px 0 #002d18;
   color: #fff;
-  font: inherit;
-  font-weight: 700;
+  font-family: arial, sans-serif;
+  font-size: 19px;
+  line-height: 1.2;
   cursor: pointer;
 }
 
-.docweave-templates__close {
-  background: #fff;
+.docweave-templates__button:hover {
+  background: #005a30;
+}
+
+.docweave-templates__button--secondary {
+  background: #f3f2f1;
+  box-shadow: 0 2px 0 #929191;
   color: #0b0c0c;
 }
 
-.docweave-templates__button--warning {
-  background: #d4351c;
+.docweave-templates__button--secondary:hover {
+  background: #dbdad9;
 }
 
-.docweave-templates__button:focus,
-.docweave-templates__close:focus,
-.docweave-templates__result:focus,
-.docweave-templates__search:focus,
-.docweave-templates__form input:focus {
+.docweave-templates__add,
+.docweave-templates__close {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  font-family: arial, sans-serif;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.docweave-templates__close {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: #0b0c0c;
+  cursor: pointer;
+}
+
+.docweave-templates__close:hover {
+  background: #f3f2f1;
+}
+
+.docweave-templates button:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+.docweave-templates button:focus,
+.docweave-templates__preview:focus,
+.docweave-templates__form input:focus,
+.docweave-templates__search:focus {
   outline: 3px solid #ffdd00;
   outline-offset: 0;
 }
 
-.docweave-templates__status {
-  min-height: 1.5rem;
+.docweave-templates__result:focus,
+.docweave-templates__preview:focus {
+  outline-offset: -3px;
+}
+
+.docweave-templates__search:focus {
+  box-shadow: inset 0 0 0 2px #0b0c0c;
 }
 
 .docweave-templates__status--error {
+  margin: 12px 24px 0;
   border-left: 5px solid #d4351c;
-  padding-left: 1rem;
+  padding-left: 16px;
   color: #d4351c;
   font-weight: 700;
+}
+
+.docweave-templates__form {
+  flex: 1;
+  min-height: 0;
+  padding: 16px 24px 0;
+  overflow: auto;
+  font-family: arial, sans-serif;
 }
 
 .docweave-templates__form label {
   display: grid;
   max-width: 40rem;
-  gap: .5rem;
+  gap: 8px;
   font-weight: 700;
 }
 
 .docweave-templates__editor {
-  margin-top: 1rem;
+  margin-top: 16px;
+}
+
+.docweave-templates__form .docweave-templates__actions {
+  margin-top: 16px;
+  padding-right: 0;
+  padding-left: 0;
 }
 
 .docweave-editor .ProseMirror h3 {
