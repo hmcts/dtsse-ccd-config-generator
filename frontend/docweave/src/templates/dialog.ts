@@ -16,6 +16,7 @@ import { editorSchema } from "../schema.js";
 import {
   createTemplateFragment,
   parseTemplateFragment,
+  TEMPLATE_MAX_TITLE_LENGTH,
   TemplateRequestError,
   type Template,
   type TemplateProvider,
@@ -155,7 +156,7 @@ export function createTemplateDialog(
   titleLabel.textContent = "Template title";
   const title = document.createElement("input");
   title.type = "text";
-  title.maxLength = 200;
+  title.maxLength = TEMPLATE_MAX_TITLE_LENGTH;
   titleLabel.append(title);
   const editorShell = document.createElement("div");
   editorShell.className = "docweave-editor docweave-templates__editor";

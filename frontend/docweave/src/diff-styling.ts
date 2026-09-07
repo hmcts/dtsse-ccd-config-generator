@@ -195,7 +195,7 @@ function createDiffDecorations(
           position + 1,
           (view) => createRevertButton(
             view.dom.ownerDocument,
-            "Undo inserted paragraph",
+            "Undo inserted clause",
           ),
           {
             side: -1,
