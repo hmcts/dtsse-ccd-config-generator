@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import { JSDOM } from "jsdom";
 
 import { getDocumentNode } from "../src/builder.js";
+import { createInMemoryTemplateProvider } from "../examples/court-order/template-provider.js";
 
 interface TestDocumentJSON {
   content: Array<{
@@ -27,6 +28,7 @@ const globalNames = [
   "MouseEvent",
   "requestAnimationFrame",
   "cancelAnimationFrame",
+  "getComputedStyle",
 ] as const;
 
 let dom: JSDOM;
@@ -71,6 +73,7 @@ beforeEach(() => {
     MouseEvent: window.MouseEvent,
     requestAnimationFrame: window.requestAnimationFrame.bind(window),
     cancelAnimationFrame: window.cancelAnimationFrame.bind(window),
+    getComputedStyle: window.getComputedStyle.bind(window),
   };
 
   for (const name of globalNames) {
@@ -95,6 +98,74 @@ afterEach(() => {
 });
 
 describe("public order editor API", () => {
+  for (const numbered of [false, true]) {
+    it(`opens with slash in an empty ${numbered ? "numbered clause" : "paragraph"}, cancels cleanly and inserts with undo`, async () => {
+      const { createOrderEditor } = await import("../src/index.js");
+      const store = createInMemoryTemplateProvider();
+      await store.create({ title: "Costs wording", content: {
+        schema: "docweave-template", version: 1,
+        content: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Costs in the case." }] }] },
+      } });
+      const controller = createOrderEditor({ mount: "#editor", templates: { provider: store } });
+      const surface = dom.window.document.querySelector<HTMLElement>("#editor .ProseMirror")!;
+      surface.focus();
+      if (numbered) dom.window.document.querySelector<HTMLButtonElement>('[aria-label="Numbered clause"]')!.click();
+      assert.equal(!!surface.querySelector("ol"), numbered);
+      const original = controller.getSnapshot().current;
+      const slash = () => {
+        const event = new dom.window.KeyboardEvent("keydown", { key: "/", bubbles: true, cancelable: true });
+        surface.dispatchEvent(event);
+        assert.equal(event.defaultPrevented, true);
+      };
+      slash();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      assert.equal(dom.window.document.querySelector("dialog")!.open, true);
+      assert.deepEqual(controller.getSnapshot().current, original);
+      dom.window.document.querySelector("dialog")!.dispatchEvent(new dom.window.Event("cancel", { cancelable: true }));
+      assert.equal(dom.window.document.activeElement, surface);
+      assert.deepEqual(controller.getSnapshot().current, original);
+      slash();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      dom.window.document.querySelector('input[type="search"]')!.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      assert.equal(surface.textContent, "Costs in the case.");
+      assert.equal(dom.window.document.querySelector("dialog")!.open, false);
+      assert.equal(dom.window.document.activeElement, surface);
+      const inserted = controller.getSnapshot().current;
+      // Let ProseMirror observe typing immediately after insertion, without a
+      // history timeout separating the two edits.
+      const text = dom.window.document.createTreeWalker(surface, dom.window.NodeFilter.SHOW_TEXT).nextNode() as Text;
+      text.appendData(" More wording.");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      assert.equal(surface.textContent, "Costs in the case. More wording.");
+      dom.window.document.querySelector<HTMLButtonElement>('[aria-label="Undo"]')!.click();
+      assert.deepEqual(controller.getSnapshot().current, inserted);
+      dom.window.document.querySelector<HTMLButtonElement>('[aria-label="Undo"]')!.click();
+      assert.deepEqual(controller.getSnapshot().current, original);
+      controller.destroy();
+    });
+  }
+
+  it("leaves slash typing alone without templates, in existing text, and during composition or modifier shortcuts", async () => {
+    const { createOrderEditor, buildOrder } = await import("../src/index.js");
+    for (const configured of [false, true]) {
+      const controller = createOrderEditor({ mount: "#editor", ...(configured ? { templates: { provider: createInMemoryTemplateProvider() } } : {}) });
+      const surface = dom.window.document.querySelector<HTMLElement>("#editor .ProseMirror")!;
+      surface.focus();
+      const ignored = (extra: KeyboardEventInit = {}) => {
+        const event = new dom.window.KeyboardEvent("keydown", { key: "/", bubbles: true, cancelable: true, ...extra });
+        surface.dispatchEvent(event);
+        assert.equal(event.defaultPrevented, false);
+        assert.equal(dom.window.document.querySelector("dialog")?.open ?? false, false);
+      };
+      if (!configured) ignored();
+      for (const extra of [{ ctrlKey: true }, { altKey: true }, { metaKey: true }, { shiftKey: true }, { isComposing: true }]) ignored(extra);
+      controller.render(buildOrder((order) => order.paragraph("existing", "Existing text")));
+      surface.focus();
+      ignored();
+      controller.destroy();
+    }
+  });
+
   it("refuses a mount point that already has an editor", async () => {
     const { createOrderEditor } = await import("../src/index.js");
     const controller = createOrderEditor({ mount: "#editor" });
