@@ -23,9 +23,9 @@ dependencies {
     implementation 'com.github.hmcts:service-auth-provider-java-client:5.3.5'
     implementation group: 'com.github.ben-manes.caffeine', name: 'caffeine'
     compileOnly 'io.github.openfeign:feign-core:13.14'
-    compileOnly 'org.projectlombok:lombok:1.18.46'
+    compileOnly 'org.projectlombok:lombok:1.18.48'
 
-    annotationProcessor 'org.projectlombok:lombok:1.18.46'
+    annotationProcessor 'org.projectlombok:lombok:1.18.48'
 
     implementation "org.springframework.boot:spring-boot-autoconfigure"
     runtimeOnly 'org.flywaydb:flyway-database-postgresql'
