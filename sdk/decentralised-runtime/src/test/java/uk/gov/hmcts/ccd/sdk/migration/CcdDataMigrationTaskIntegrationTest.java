@@ -206,6 +206,7 @@ class CcdDataMigrationTaskIntegrationTest {
   @Test
   void togglesPreloadAndCutoverWithSignificantItemDelta() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(100, 10, "prepare", "Submitted", "{\"field\":\"one\"}", minutesAgo(90));
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
     insertSourceSignificantItem(5001, 101, "First document", "http://dm-store/documents/first");
 
@@ -221,7 +222,7 @@ class CcdDataMigrationTaskIntegrationTest {
     updateSourceCase(10, 2, "Updated", "{\"field\":\"two\"}");
     insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", minutesAgo(30));
     insertSourceSignificantItem(5002, 102, "Second document", "http://dm-store/documents/second");
-    insertSourceSignificantItem(5003, 101, "Late old event document", "http://dm-store/documents/late-old-event");
+    insertSourceSignificantItem(5003, 100, "Late old event document", "http://dm-store/documents/late-old-event");
 
     CcdDataMigrationRunResult preload = task(PRELOAD_EVENTS, 1000, 10).runMigration();
 
@@ -238,7 +239,7 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(cutoverEventHwm()).isEqualTo(102);
     assertThat(sourceEventHwm()).isEqualTo(102);
     assertThat(significantItemsHwm()).isEqualTo(5003);
-    assertThat(countRows("ccd.case_event")).isEqualTo(2);
+    assertThat(countRows("ccd.case_event")).isEqualTo(3);
     assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(3);
     assertThat(significantItemDescription(5001)).isEqualTo("First document");
     assertThat(significantItemDescription(5002)).isEqualTo("Second document");
@@ -254,7 +255,7 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(cutoverEventHwm()).isEqualTo(103);
     assertThat(sourceEventHwm()).isEqualTo(103);
     assertThat(significantItemsHwm()).isEqualTo(5003);
-    assertThat(countRows("ccd.case_event")).isEqualTo(3);
+    assertThat(countRows("ccd.case_event")).isEqualTo(4);
     assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(3);
   }
 
@@ -262,8 +263,9 @@ class CcdDataMigrationTaskIntegrationTest {
   void batchesSignificantItemsAcrossCutoverRuns() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", minutesAgo(30));
     insertSourceSignificantItem(5001, 101, "First document", "http://dm-store/documents/first");
-    insertSourceSignificantItem(10002, 101, "Second document", "http://dm-store/documents/second");
+    insertSourceSignificantItem(10002, 102, "Second document", "http://dm-store/documents/second");
 
     CcdDataMigrationRunResult firstCutover = task(CUTOVER, 1000, 1, 5001).runMigration();
 
