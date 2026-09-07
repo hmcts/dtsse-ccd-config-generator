@@ -89,25 +89,31 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "The template request failed.";
 }
 
+let dialogId = 0;
+
 export function createTemplateDialog(
   options: TemplateDialogOptions,
 ): TemplateDialog {
   const document = options.ownerDocument;
   const modal = document.createElement("dialog");
   modal.className = "docweave-templates";
+  const id = `docweave-templates-${++dialogId}`;
+  modal.setAttribute("aria-labelledby", `${id}-heading`);
 
   const panel = document.createElement("section");
   panel.className = "docweave-templates__dialog";
-  panel.setAttribute("aria-labelledby", "docweave-templates-heading");
 
   const heading = document.createElement("h2");
-  heading.id = "docweave-templates-heading";
-  heading.textContent = "Saved templates";
-  const close = button(document, "Close", "docweave-templates__close");
+  heading.id = `${id}-heading`;
+  heading.className = "docweave-templates__visually-hidden";
+  heading.textContent = "Insert template";
+  const create = button(document, "+", "docweave-templates__button docweave-templates__button--secondary docweave-templates__add");
+  create.setAttribute("aria-label", "Create template");
+  const close = button(document, "×", "docweave-templates__close");
   close.setAttribute("aria-label", "Close saved templates");
   const header = document.createElement("div");
   header.className = "docweave-templates__header";
-  header.append(heading, close);
+  header.append(heading, create, close);
 
   const status = document.createElement("p");
   status.className = "docweave-templates__status";
@@ -117,23 +123,36 @@ export function createTemplateDialog(
   const search = document.createElement("input");
   search.type = "search";
   search.className = "docweave-templates__search";
-  search.placeholder = "Search saved templates";
-  search.setAttribute("aria-label", "Search saved templates");
-  const create = button(document, "Create template");
+  search.id = `${id}-search`;
+  search.setAttribute("aria-describedby", `${id}-hint`);
+  search.setAttribute("aria-controls", `${id}-results`);
+  const searchLabel = document.createElement("label");
+  searchLabel.htmlFor = search.id;
+  searchLabel.className = "docweave-templates__label";
+  searchLabel.textContent = "Search by keyword";
+  const hint = document.createElement("div");
+  hint.id = `${id}-hint`;
+  hint.className = "docweave-templates__hint";
+  hint.textContent = "For example, witness statements, possession, transcript";
   const searchRow = document.createElement("div");
   searchRow.className = "docweave-templates__search-row";
-  searchRow.append(search, create);
+  searchRow.append(searchLabel, hint, search);
 
   const results = document.createElement("ul");
   results.className = "docweave-templates__results";
+  results.id = `${id}-results`;
+  results.setAttribute("aria-label", "Templates");
   const loadMore = button(
     document,
     "Load more",
-    "docweave-templates__result",
+    "docweave-templates__load-more",
   );
   loadMore.hidden = true;
   const preview = document.createElement("div");
   preview.className = "docweave-templates__preview";
+  preview.tabIndex = 0;
+  preview.setAttribute("role", "region");
+  preview.setAttribute("aria-label", "Template preview");
   const content = document.createElement("div");
   content.className = "docweave-templates__content";
   const resultsPanel = document.createElement("div");
@@ -142,12 +161,10 @@ export function createTemplateDialog(
   content.append(resultsPanel, preview);
 
   const insert = button(document, "Insert template");
-  const edit = button(document, "Edit");
-  const remove = button(document, "Delete", "docweave-templates__button docweave-templates__button--warning");
+  const dismiss = button(document, "Cancel", "docweave-templates__button docweave-templates__button--secondary");
   const actions = document.createElement("div");
   actions.className = "docweave-templates__actions";
-  actions.hidden = true;
-  actions.append(insert, edit, remove);
+  actions.append(insert, dismiss);
 
   const form = document.createElement("div");
   form.className = "docweave-templates__form";
@@ -168,7 +185,7 @@ export function createTemplateDialog(
   editorMount.className = "docweave-editor__surface";
   editorShell.append(editorToolbar, editorMount);
   const save = button(document, "Save template");
-  const cancel = button(document, "Cancel");
+  const cancel = button(document, "Cancel", "docweave-templates__button docweave-templates__button--secondary");
   const formActions = document.createElement("div");
   formActions.className = "docweave-templates__actions";
   formActions.append(save, cancel);
@@ -179,6 +196,7 @@ export function createTemplateDialog(
   document.body.append(modal);
 
   let selected: Template | undefined;
+  let rows: Array<{ template: Template; item: HTMLLIElement; select: HTMLButtonElement }> = [];
   type Draft = { kind: "create" } | { kind: "edit"; template: Template };
   type Mode = { kind: "browse" } | Draft |
     { kind: "saving"; draft: Draft } |
@@ -189,11 +207,14 @@ export function createTemplateDialog(
   let dirty = false;
   let operationGeneration = 0;
   let nextCursor: string | undefined;
-  let shownTemplates = 0;
-  let debounce: ReturnType<typeof setTimeout> | undefined;
+  type SearchRequest = { query: string; cursor?: string; selectedId?: string; generation: number };
+  let searchPending = false;
+  let queuedSearch: SearchRequest | undefined;
+  let resultsCurrent = false;
   let returnFocus: HTMLElement | null = null;
 
   function beginOperation(): number {
+    queuedSearch = undefined;
     return ++operationGeneration;
   }
 
@@ -217,16 +238,22 @@ export function createTemplateDialog(
     search.disabled = deleting;
     create.disabled = deleting;
     loadMore.disabled = deleting;
-    insert.disabled = deleting;
-    edit.disabled = deleting;
-    remove.disabled = deleting;
+    insert.disabled = deleting || !resultsCurrent || !selected;
+    results.querySelectorAll("button").forEach((control) => {
+      control.disabled = deleting || !resultsCurrent;
+    });
     content.inert = deleting;
   }
 
   function renderPreview(template?: Template): void {
     preview.replaceChildren();
-    selected = template;
-    actions.hidden = !template;
+    selected = undefined;
+    insert.disabled = true;
+    rows.forEach((row) => {
+      const active = row.template.id === template?.id;
+      row.item.classList.toggle("docweave-templates__result--selected", active);
+      row.select.setAttribute("aria-pressed", String(active));
+    });
     if (!template) return;
 
     const previewHeading = document.createElement("h3");
@@ -237,66 +264,134 @@ export function createTemplateDialog(
       { document },
     );
     preview.append(previewHeading, body);
+    preview.scrollTop = 0;
+    selected = template;
+    insert.disabled = mode.kind !== "browse";
   }
 
-  async function runSearch(cursor?: string): Promise<void> {
-    if (mode.kind !== "browse") return;
+  function selectTemplate(template: Template): void {
+    if (mode.kind !== "browse" || !resultsCurrent) return;
+    try {
+      renderPreview(template);
+      showStatus(`${rows.length} templates shown. Selected: ${template.title}`);
+      rows.find((row) => row.template.id === template.id)
+        ?.item.scrollIntoView?.({ block: "nearest" });
+    } catch (error) {
+      showStatus(errorMessage(error), true);
+    }
+  }
+
+  function clearResults(): void {
+    rows = [];
+    results.replaceChildren();
+    renderPreview();
+  }
+
+  function runSearch(cursor?: string, selectedId?: string): void {
+    if (mode.kind !== "browse" || !modal.open) return;
+    const generation = beginOperation();
     if (!cursor) {
+      // Keep the previous page visible, but never act on a stale result.
+      resultsCurrent = false;
+      selected = undefined;
+      insert.disabled = true;
       nextCursor = undefined;
       loadMore.hidden = true;
+      rows.forEach(({ item, select }) => {
+        item.classList.remove("docweave-templates__result--selected");
+        select.setAttribute("aria-pressed", "false");
+      });
+      results.querySelectorAll("button").forEach((control) => {
+        control.disabled = true;
+      });
     }
-    const generation = beginOperation();
+    loadMore.disabled = true;
     showStatus("Searching...");
+    const request = { query: search.value, cursor, selectedId, generation };
+    if (searchPending) {
+      queuedSearch = request;
+      return;
+    }
+    void performSearch(request);
+  }
+
+  async function performSearch({ query, cursor, selectedId, generation }: SearchRequest): Promise<void> {
+    searchPending = true;
     try {
-      const response = await options.provider.search(search.value, cursor);
+      const response = await options.provider.search(query, cursor);
       if (!isCurrent(generation) || mode.kind !== "browse") return;
-      if (!cursor) {
-        results.replaceChildren();
-        shownTemplates = 0;
-      }
+      if (!cursor) clearResults();
+      resultsCurrent = true;
       if (!cursor && response.items.length === 0) {
         const item = document.createElement("li");
+        item.className = "docweave-templates__empty";
         item.textContent = "No templates found.";
         results.append(item);
       } else {
         for (const template of response.items) {
           const item = document.createElement("li");
+          item.className = "docweave-templates__result-row";
           const select = button(
             document,
             template.title,
             "docweave-templates__result",
           );
-          select.addEventListener("click", () => {
-            try {
-              renderPreview(template);
-            } catch (error) {
-              showStatus(errorMessage(error), true);
-            }
-          });
-          item.append(select);
+          select.setAttribute("aria-label", template.title);
+          select.setAttribute("aria-pressed", "false");
+          const snippet = document.createElement("span");
+          snippet.className = "docweave-templates__snippet";
+          try {
+            const parsed = parseTemplateFragment(template.content).document;
+            snippet.textContent = parsed.textBetween(0, parsed.content.size, " ")
+              .replace(/\s+/gu, " ").trim();
+          } catch {
+            snippet.textContent = "Preview unavailable";
+          }
+          select.append(snippet);
+          select.addEventListener("click", () => selectTemplate(template));
+          const rowActions = document.createElement("div");
+          rowActions.className = "docweave-templates__result-actions";
+          const edit = button(document, "Edit", "docweave-templates__result-action");
+          const remove = button(document, "Delete", "docweave-templates__result-action");
+          edit.setAttribute("aria-label", `Edit ${template.title}`);
+          remove.setAttribute("aria-label", `Delete ${template.title}`);
+          edit.addEventListener("click", () => beginEdit(template));
+          remove.addEventListener("click", () => void deleteTemplate(template));
+          rowActions.append(edit, remove);
+          item.append(select, rowActions);
+          rows.push({ template, item, select });
           results.append(item);
         }
       }
-      shownTemplates += response.items.length;
       nextCursor = response.nextCursor ?? undefined;
       loadMore.hidden = !nextCursor;
-      showStatus(
-        `${shownTemplates} template${shownTemplates === 1 ? "" : "s"} shown`,
-      );
+      loadMore.disabled = false;
+      showStatus(`${rows.length} template${rows.length === 1 ? "" : "s"} shown`);
+      const initial = selectedId ? rows.find((row) => row.template.id === selectedId) : rows[0];
+      if (!cursor && initial) selectTemplate(initial.template);
     } catch (error) {
       if (!isCurrent(generation) || mode.kind !== "browse") return;
+      loadMore.disabled = false;
       showStatus(errorMessage(error), true);
+    } finally {
+      searchPending = false;
+      const next = queuedSearch;
+      queuedSearch = undefined;
+      if (next && isCurrent(next.generation) && mode.kind === "browse" && modal.open) {
+        void performSearch(next);
+      }
     }
   }
 
   function beginEdit(template?: Template): void {
-    clearTimeout(debounce);
     beginOperation();
     mode = template ? { kind: "edit", template } : { kind: "create" };
     form.hidden = false;
     content.hidden = true;
     actions.hidden = true;
     searchRow.hidden = true;
+    create.hidden = true;
+    showStatus("");
     title.value = template?.title ?? "";
     connectedEditorToolbar?.destroy();
     editorView?.destroy();
@@ -332,7 +427,8 @@ export function createTemplateDialog(
     form.hidden = true;
     content.hidden = false;
     searchRow.hidden = false;
-    actions.hidden = !selected;
+    actions.hidden = false;
+    create.hidden = false;
     dirty = false;
   }
 
@@ -340,7 +436,6 @@ export function createTemplateDialog(
     if (dirty && !document.defaultView?.confirm(
       "Discard your unsaved template changes?",
     )) return;
-    clearTimeout(debounce);
     endEdit();
     if (typeof modal.close === "function") modal.close();
     else modal.removeAttribute("open");
@@ -348,15 +443,19 @@ export function createTemplateDialog(
   }
 
   close.addEventListener("click", () => closeDialog());
+  dismiss.addEventListener("click", () => closeDialog());
   cancel.addEventListener("click", () => {
     if (!dirty || document.defaultView?.confirm(
       "Discard your unsaved template changes?",
-    )) endEdit();
+    )) {
+      endEdit();
+      search.focus();
+      runSearch();
+    }
   });
   create.addEventListener("click", () => beginEdit());
-  edit.addEventListener("click", () => beginEdit(selected));
-  insert.addEventListener("click", () => {
-    if (!selected) return;
+  function insertSelected(): void {
+    if (!modal.open || mode.kind !== "browse" || !selected || insert.disabled) return;
     try {
       options.insert(selected);
       dirty = false;
@@ -365,11 +464,35 @@ export function createTemplateDialog(
     } catch (error) {
       showStatus(errorMessage(error), true);
     }
-  });
-  remove.addEventListener("click", async () => {
-    if (mode.kind !== "browse" || !selected ||
-      !document.defaultView?.confirm(`Delete "${selected.title}"?`)) return;
-    const template = selected;
+  }
+  insert.addEventListener("click", insertSelected);
+
+  function navigate(event: KeyboardEvent): void {
+    if (mode.kind !== "browse" || !resultsCurrent || event.isComposing || event.altKey ||
+      event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const focusedRow = rows.find((row) => row.select === event.target);
+    if (event.target !== search && !focusedRow) return;
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (focusedRow) selectTemplate(focusedRow.template);
+      insertSelected();
+    } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!rows.length) return;
+      const index = rows.findIndex((row) => row.template.id ===
+        (focusedRow?.template.id ?? selected?.id));
+      const delta = event.key === "ArrowDown" ? 1 : -1;
+      const row = rows[(index + delta + rows.length) % rows.length]!;
+      selectTemplate(row.template);
+      if (focusedRow) row.select.focus({ preventScroll: true });
+    }
+  }
+  search.addEventListener("keydown", navigate);
+  results.addEventListener("keydown", navigate);
+
+  async function deleteTemplate(template: Template): Promise<void> {
+    if (mode.kind !== "browse" ||
+      !document.defaultView?.confirm(`Delete "${template.title}"?`)) return;
     mode = { kind: "deleting" };
     const generation = beginOperation();
     setDeleting(true);
@@ -380,26 +503,22 @@ export function createTemplateDialog(
       mode = { kind: "browse" };
       setDeleting(false);
       renderPreview();
-      await runSearch();
+      runSearch();
     } catch (error) {
       if (!isCurrent(generation) || mode.kind !== "deleting") return;
       mode = { kind: "browse" };
       setDeleting(false);
       showStatus(errorMessage(error), true);
     }
-  });
+  }
   title.addEventListener("input", () => {
     dirty = true;
   });
   search.addEventListener("input", () => {
-    clearTimeout(debounce);
-    beginOperation();
-    nextCursor = undefined;
-    loadMore.hidden = true;
-    debounce = setTimeout(() => void runSearch(), 250);
+    runSearch();
   });
   loadMore.addEventListener("click", () => {
-    if (nextCursor) void runSearch(nextCursor);
+    if (nextCursor) runSearch(nextCursor);
   });
   save.addEventListener("click", async () => {
     if (!editorView || (mode.kind !== "create" && mode.kind !== "edit")) {
@@ -428,8 +547,9 @@ export function createTemplateDialog(
       if (!isCurrent(generation) || mode.kind !== "saving") return;
       dirty = false;
       endEdit();
-      renderPreview(saved);
-      await runSearch();
+      search.value = saved.title;
+      search.focus();
+      runSearch(undefined, saved.id);
     } catch (error) {
       if (!isCurrent(generation) || mode.kind !== "saving") return;
       mode = draft;
@@ -445,6 +565,7 @@ export function createTemplateDialog(
 
   return {
     open(): void {
+      if (modal.open) return;
       returnFocus = document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
@@ -454,10 +575,9 @@ export function createTemplateDialog(
       if (typeof modal.showModal === "function") modal.showModal();
       else modal.setAttribute("open", "");
       search.focus();
-      void runSearch();
+      runSearch();
     },
     destroy(): void {
-      clearTimeout(debounce);
       beginOperation();
       connectedEditorToolbar?.destroy();
       editorView?.destroy();
