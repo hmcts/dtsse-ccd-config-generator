@@ -349,7 +349,7 @@ class DecentralisedESIndexerChaosTest {
 
     awaitLatestIndexed(9101, 9101, 1);
     await().pollInterval(Duration.ofMillis(250)).atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-      Map<String, Object> deadLetter = jdbc().queryForMap(
+      List<Map<String, Object>> deadLetters = jdbc().queryForList(
           """
           select case_event_id, index_id, timestamp, failure_message
             from ccd.es_dead_letter_queue
@@ -358,6 +358,8 @@ class DecentralisedESIndexerChaosTest {
           """,
           Map.of("case_event_id", eventId, "index_id", "global_search"));
 
+      assertThat(deadLetters).hasSize(1);
+      Map<String, Object> deadLetter = deadLetters.get(0);
       assertThat(((Number) deadLetter.get("case_event_id")).longValue()).isEqualTo(eventId);
       assertThat(deadLetter.get("index_id")).isEqualTo("global_search");
       assertThat(deadLetter.get("timestamp")).isNotNull();
@@ -401,8 +403,8 @@ class DecentralisedESIndexerChaosTest {
     await().pollInterval(Duration.ofMillis(100)).atMost(Duration.ofSeconds(3)).untilAsserted(() -> {
       JsonNode document = fetchDocument(CASE_INDEX, 9301);
       assertThat(document.path("data").path("marker").asText()).isEqualTo("notification-wakeup");
-      assertThat(queueSize()).isZero();
     });
+    assertQueueEventuallyEmpty();
   }
 
   @Test
@@ -412,6 +414,7 @@ class DecentralisedESIndexerChaosTest {
 
     commitCaseRevision(9401, 9401, CASE_TYPE, 1, "reindex-notification");
     awaitLatestIndexed(9401, 9401, 1);
+    assertQueueEventuallyEmpty();
     deleteIndex(CASE_INDEX);
 
     int queued = context.getBean(CaseReindexingService.class)
@@ -421,8 +424,8 @@ class DecentralisedESIndexerChaosTest {
     await().pollInterval(Duration.ofMillis(100)).atMost(Duration.ofSeconds(3)).untilAsserted(() -> {
       JsonNode document = fetchDocument(CASE_INDEX, 9401);
       assertThat(document.path("data").path("marker").asText()).isEqualTo("reindex-notification");
-      assertThat(queueSize()).isZero();
     });
+    assertQueueEventuallyEmpty();
   }
 
   private ConfigurableApplicationContext startApplication() {
