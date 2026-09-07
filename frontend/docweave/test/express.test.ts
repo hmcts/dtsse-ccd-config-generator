@@ -50,6 +50,7 @@ describe("template proxy", () => {
       serviceAuthorization: "Bearer service-token",
       url: "/docweave/templates?query=costs",
     });
+    assert.equal(response.headers["cache-control"], "private, no-store");
     await request(app).get("/docweave/templates/not/a/template").expect(404);
     await request(app).get(
       "/docweave/templates/11111111-1111-1111-1111-111111111111",

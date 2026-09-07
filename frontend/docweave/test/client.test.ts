@@ -121,6 +121,38 @@ describe("public order editor API", () => {
     );
   });
 
+  it("rejects unsupported snapshot envelopes before mounting", async () => {
+    const { createOrderEditor } = await import("../src/index.js");
+    const document = { type: "doc" };
+
+    for (const snapshot of [
+      {
+        schema: "another-document",
+        version: 1,
+        current: document,
+        generated: document,
+      },
+      {
+        schema: "docweave-document",
+        version: 2,
+        current: document,
+        generated: document,
+      },
+    ]) {
+      assert.throws(
+        () => createOrderEditor({
+          mount: "#editor",
+          initialSnapshot: snapshot as never,
+        }),
+        /Unsupported Docweave snapshot version/,
+      );
+    }
+    assert.equal(
+      dom.window.document.querySelector("#editor")!.childElementCount,
+      0,
+    );
+  });
+
   it("renders, reports changes, serializes and destroys an editor", async () => {
     const { buildOrder, createOrderEditor } = await import("../src/index.js");
     const changes: unknown[] = [];

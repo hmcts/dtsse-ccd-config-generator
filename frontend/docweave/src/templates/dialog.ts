@@ -179,7 +179,9 @@ export function createTemplateDialog(
 
   let selected: Template | undefined;
   type Draft = { kind: "create" } | { kind: "edit"; template: Template };
-  type Mode = { kind: "browse" } | Draft | { kind: "saving"; draft: Draft };
+  type Mode = { kind: "browse" } | Draft |
+    { kind: "saving"; draft: Draft } |
+    { kind: "deleting" };
   let mode: Mode = { kind: "browse" };
   let editorView: EditorView | undefined;
   let connectedEditorToolbar: ConnectedEditorToolbar | undefined;
@@ -208,6 +210,16 @@ export function createTemplateDialog(
     title.disabled = saving;
     editorShell.inert = saving;
     editorView?.setProps({ editable: () => !saving });
+  }
+
+  function setDeleting(deleting: boolean): void {
+    search.disabled = deleting;
+    create.disabled = deleting;
+    loadMore.disabled = deleting;
+    insert.disabled = deleting;
+    edit.disabled = deleting;
+    remove.disabled = deleting;
+    content.inert = deleting;
   }
 
   function renderPreview(template?: Template): void {
@@ -310,6 +322,7 @@ export function createTemplateDialog(
     beginOperation();
     mode = { kind: "browse" };
     setSaving(false);
+    setDeleting(false);
     connectedEditorToolbar?.destroy();
     connectedEditorToolbar = undefined;
     editorView?.destroy();
@@ -353,17 +366,24 @@ export function createTemplateDialog(
     }
   });
   remove.addEventListener("click", async () => {
-    if (!selected ||
+    if (mode.kind !== "browse" || !selected ||
       !document.defaultView?.confirm(`Delete "${selected.title}"?`)) return;
     const template = selected;
+    mode = { kind: "deleting" };
     const generation = beginOperation();
+    setDeleting(true);
+    showStatus("Deleting...");
     try {
       await options.provider.delete(template.id, template.revision);
-      if (!isCurrent(generation) || mode.kind !== "browse") return;
+      if (!isCurrent(generation) || mode.kind !== "deleting") return;
+      mode = { kind: "browse" };
+      setDeleting(false);
       renderPreview();
       await runSearch();
     } catch (error) {
-      if (!isCurrent(generation) || mode.kind !== "browse") return;
+      if (!isCurrent(generation) || mode.kind !== "deleting") return;
+      mode = { kind: "browse" };
+      setDeleting(false);
       showStatus(errorMessage(error), true);
     }
   });

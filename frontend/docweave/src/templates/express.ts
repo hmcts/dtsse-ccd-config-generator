@@ -25,6 +25,8 @@ export function createTemplateProxy(
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   return async (request, response, next) => {
+    response.setHeader("cache-control", "private, no-store");
+
     if (!isSupportedRoute(request.method, request.path)) {
       response.status(404).json({ message: "Template route not found" });
       return;

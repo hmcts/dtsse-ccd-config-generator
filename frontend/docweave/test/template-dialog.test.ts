@@ -294,4 +294,35 @@ describe("template dialog", () => {
     );
     dialog.destroy();
   });
+
+  it("prevents duplicate deletes while a request is pending", async () => {
+    let finishDelete: (() => void) | undefined;
+    let deletes = 0;
+    const dialog = createTemplateDialog({
+      ownerDocument: dom.window.document,
+      provider: provider({
+        async search() { return { items: [template] }; },
+        async delete() {
+          deletes++;
+          await new Promise<void>((resolve) => { finishDelete = resolve; });
+        },
+      }),
+      insert() {},
+    });
+
+    dialog.open();
+    await tick();
+    button("Existing wording").click();
+    const deleteButton = button("Delete");
+    deleteButton.click();
+    deleteButton.click();
+
+    assert.equal(deleteButton.disabled, true);
+    assert.equal(deletes, 1);
+
+    finishDelete!();
+    await tick();
+    assert.equal(deleteButton.disabled, false);
+    dialog.destroy();
+  });
 });

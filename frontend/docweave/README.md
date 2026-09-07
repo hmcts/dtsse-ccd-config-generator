@@ -1,8 +1,8 @@
 # Docweave
 
-Docweave is a TypeScript library for building generated court orders in a
-ProseMirror editor while preserving compatible user edits when source data
-changes.
+Docweave is a collaborative editor allowing a user to compose documents that are part machine created and part user, whilst remaining readable to both.
+
+Try the [demo]
 
 ## Installation
 

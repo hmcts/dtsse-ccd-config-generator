@@ -167,6 +167,12 @@ export function createOrderEditor(
     throw new Error("Templates require either a provider or URL");
   }
 
+  if (options.initialSnapshot &&
+    (options.initialSnapshot.schema !== "docweave-document" ||
+      options.initialSnapshot.version !== 1)) {
+    throw new Error("Unsupported Docweave snapshot version");
+  }
+
   const initialCurrent = options.initialSnapshot
     ? editorSchema.nodeFromJSON(options.initialSnapshot.current)
     : undefined;
