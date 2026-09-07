@@ -1,0 +1,87 @@
+{
+  "name": "@hmcts-cft/docweave",
+  "version": "0.0.0-local",
+  "description": "Rich-text editor for generated court orders",
+  "type": "module",
+  "main": "./dist/lib/index.js",
+  "types": "./dist/lib/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "express": [
+        "dist/lib/express.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist/lib",
+    "dist/cjs",
+    "dist/docweave.css",
+    "src/editor.scss"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/lib/index.d.ts",
+      "import": "./dist/lib/index.js",
+      "default": "./dist/lib/index.js"
+    },
+    "./express": {
+      "types": "./dist/lib/express.d.ts",
+      "import": "./dist/lib/express.js",
+      "require": "./dist/cjs/express.cjs",
+      "default": "./dist/lib/express.js"
+    },
+    "./styles/docweave.css": "./dist/docweave.css",
+    "./styles/editor": "./src/editor.scss"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "NODE_ENV=development tsx watch examples/court-order/server/server.ts",
+    "build": "npm run build:lib && npm run build:demo && tsc -p tsconfig.demo.json",
+    "build:demo": "vite build && tsx examples/court-order/server/build-static.ts",
+    "build:lib": "rm -rf dist/lib dist/cjs dist/docweave.css && tsc -p tsconfig.lib.json && esbuild src/express.ts --bundle --platform=node --format=cjs --outfile=dist/cjs/express.cjs && sass --load-path=node_modules src/editor.scss dist/docweave.css --no-source-map",
+    "start": "NODE_ENV=production node dist/demo/server/server.js",
+    "test": "npm run build:lib && npm run test:built",
+    "test:built": "npm run typecheck && tsx --test test/*.test.ts test/demo/*.test.ts && node test/package-smoke.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "prosemirror-commands": "1.7.2",
+    "prosemirror-dropcursor": "1.8.3",
+    "prosemirror-gapcursor": "1.4.1",
+    "prosemirror-history": "1.5.0",
+    "prosemirror-keymap": "1.2.3",
+    "prosemirror-model": "1.25.11",
+    "prosemirror-schema-basic": "1.2.4",
+    "prosemirror-schema-list": "1.5.1",
+    "prosemirror-state": "1.4.4",
+    "prosemirror-view": "1.42.3"
+  },
+  "peerDependencies": {
+    "express": ">=5"
+  },
+  "peerDependenciesMeta": {
+    "express": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/express": "5.0.6",
+    "@types/jsdom": "28.0.3",
+    "@types/node": "26.1.1",
+    "@types/nunjucks": "3.2.6",
+    "@types/supertest": "7.2.1",
+    "chokidar": "^3.6.0",
+    "esbuild": "0.28.2",
+    "express": "5.2.1",
+    "govuk-frontend": "6.4.0",
+    "jsdom": "28.1.0",
+    "nunjucks": "3.2.4",
+    "sass-embedded": "1.100.0",
+    "supertest": "7.2.2",
+    "tsx": "4.23.1",
+    "typescript": "7.0.2",
+    "vite": "8.1.5"
+  }
+}
