@@ -71,6 +71,7 @@ See [Routing configuration](./routing-configuration.md) for full details, includ
 
 - [Routing configuration](./routing-configuration.md)
 - [Decentralised runtime in detail](./decentralised-runtime.md)
+- [Local system events](./system-events.md)
 - [Concurrency considerations](./concurrency.md)
 - [Migrating existing services](./data-migration.md)
 - [Retain and dispose](./retain-and-dispose.md)
