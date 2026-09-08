@@ -10,6 +10,7 @@ import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.DefaultResourceLoader;
@@ -20,16 +21,19 @@ import org.springframework.jdbc.core.JdbcTemplate;
     properties = {
         "spring.datasource.url=jdbc:tc:postgresql:15-alpine:///ccd",
         "spring.datasource.driver-class-name=org.testcontainers.jdbc.ContainerDatabaseDriver",
-        "spring.flyway.enabled=false"
+        "spring.flyway.enabled=false",
+        "ccd.sdk.flyway.reader-role=Test SDK Reader"
     })
 class SdkFlywayMigrationIntegrationTest {
 
-  private static final String READER_ROLE = "DTS JIT Access ccd DB Reader SC";
+  private static final String READER_ROLE = "Test SDK Reader";
 
   @Autowired
   private JdbcTemplate jdbc;
   @Autowired
   private DataSource dataSource;
+  @Autowired
+  private SdkFlywayProperties properties;
 
   @Test
   void migratesLibrariesBeforeTheApplicationAndGrantsReadAccess() {
@@ -47,7 +51,8 @@ class SdkFlywayMigrationIntegrationTest {
     configuration.orderedFlywayMigrationStrategy(
         new DefaultResourceLoader(),
         dataSource,
-        migrations.getBeanProvider(SdkFlywayMigration.class)
+        migrations.getBeanProvider(SdkFlywayMigration.class),
+        properties
     ).migrate(appFlyway);
 
     assertThat(jdbc.queryForObject(
@@ -74,6 +79,7 @@ class SdkFlywayMigrationIntegrationTest {
   }
 
   @Configuration
+  @EnableConfigurationProperties(SdkFlywayProperties.class)
   @ImportAutoConfiguration({
       DataSourceAutoConfiguration.class,
       JdbcTemplateAutoConfiguration.class

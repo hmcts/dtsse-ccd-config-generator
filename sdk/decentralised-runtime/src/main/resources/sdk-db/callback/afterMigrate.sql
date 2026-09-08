@@ -1,6 +1,6 @@
 do $$
 declare
-  reader_role constant text := 'DTS JIT Access ccd DB Reader SC';
+  reader_role constant text := '${sdkReaderRole}';
   schema_name constant text := '${flyway:defaultSchema}';
 begin
   if exists (

@@ -80,5 +80,13 @@ Independent libraries are ordered deterministically by their auto-configuration 
 library definitions, missing dependencies, or dependency cycles.
 
 After migrating each library, a shared Flyway callback grants
-`"DTS JIT Access ccd DB Reader SC"` usage on the library schema and select access to its tables. The
-callback does nothing when the role is absent, allowing the same migrations to run in local and test environments.
+the role configured by `ccd.sdk.flyway.reader-role` usage on the library schema and select access to its tables. It
+defaults to `"DTS JIT Access ccd DB Reader SC"`. The callback does nothing when the role is absent, allowing the same
+migrations to run in local and test environments.
+
+```yaml
+ccd:
+  sdk:
+    flyway:
+      reader-role: DTS JIT Access ccd DB Reader SC
+```

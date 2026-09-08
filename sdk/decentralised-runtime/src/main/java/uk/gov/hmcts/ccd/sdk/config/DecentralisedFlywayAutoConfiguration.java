@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.config;
 
+import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Stream;
 import javax.sql.DataSource;
@@ -11,12 +12,14 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration;
 import org.springframework.boot.autoconfigure.flyway.FlywayMigrationStrategy;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.io.ResourceLoader;
 
 @AutoConfiguration(before = FlywayAutoConfiguration.class)
 @ConditionalOnClass(Flyway.class)
 @ConditionalOnProperty(prefix = "spring.flyway", name = "enabled", matchIfMissing = true)
+@EnableConfigurationProperties(SdkFlywayProperties.class)
 public class DecentralisedFlywayAutoConfiguration {
 
   private static final String SDK_CALLBACK_LOCATION = "classpath:sdk-db/callback";
@@ -37,7 +40,8 @@ public class DecentralisedFlywayAutoConfiguration {
   public FlywayMigrationStrategy orderedFlywayMigrationStrategy(
       ResourceLoader resourceLoader,
       DataSource dataSource,
-      ObjectProvider<SdkFlywayMigration> migrations) {
+      ObjectProvider<SdkFlywayMigration> migrations,
+      SdkFlywayProperties properties) {
     return (Flyway appFlyway) -> {
       Properties flywayProperties = new Properties();
       // We want to build indexes concurrently
@@ -52,6 +56,7 @@ public class DecentralisedFlywayAutoConfiguration {
             .defaultSchema(migration.schema())
             .schemas(migration.schema())
             .table(migration.historyTable())
+            .placeholders(Map.of("sdkReaderRole", properties.getReaderRole()))
             .locations(Stream.concat(
                 migration.locations().stream(),
                 Stream.of(SDK_CALLBACK_LOCATION)
