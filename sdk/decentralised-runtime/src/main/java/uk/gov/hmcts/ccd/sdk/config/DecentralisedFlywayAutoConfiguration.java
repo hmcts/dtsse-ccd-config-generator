@@ -59,7 +59,7 @@ public class DecentralisedFlywayAutoConfiguration {
                 "sdkReaderRole",
                 properties.getReaderRole() == null ? "" : properties.getReaderRole()))
             .locations(Stream.concat(
-                migration.locations().stream(),
+                Stream.of(migration.location()),
                 Stream.of(SDK_MIGRATION_LOCATION)
             ).toArray(String[]::new))
             .load()

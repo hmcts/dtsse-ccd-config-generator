@@ -54,7 +54,7 @@ class SdkFlywayMigrationOrderTest {
         Runtime.class,
         null,
         "ccd",
-        List.of("classpath:runtime-db/migration")))
+        "classpath:runtime-db/migration"))
         .isInstanceOf(NullPointerException.class)
         .hasMessage("dependsOn is marked non-null but is null");
   }
