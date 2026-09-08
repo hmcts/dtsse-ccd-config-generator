@@ -1,5 +1,3 @@
-create extension if not exists pg_trgm with schema public;
-
 create table docweave.docweave_template (
     id uuid primary key,
     owner_id uuid not null,
@@ -14,9 +12,6 @@ create table docweave.docweave_template (
 
 create index docweave_template_owner_idx
     on docweave.docweave_template (owner_id);
-
-create index docweave_template_searchable_text_idx
-    on docweave.docweave_template using gin (searchable_text public.gin_trgm_ops);
 
 create index docweave_template_tags_idx
     on docweave.docweave_template using gin (tags);
