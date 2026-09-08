@@ -74,13 +74,12 @@ library definitions, missing dependencies, or dependency cycles.
 
 After migrating each library for the first time, a shared repeatable migration grants the role configured by
 `ccd.sdk.flyway.reader-role` usage on the library schema and select access to its existing tables. It also configures
-default privileges so tables created by later migrations inherit select access. The role defaults to
-`"DTS JIT Access ccd DB Reader SC"`. The migration does nothing when the role is absent, allowing the same migrations to
-run in local and test environments.
+default privileges so tables created by later migrations inherit select access. No grants are applied when the property
+is unset. The configured database role must exist before the library's migrations run.
 
 ```yaml
 ccd:
   sdk:
     flyway:
-      reader-role: DTS JIT Access ccd DB Reader SC
+      # reader-role: DTS JIT Access et DB Reader ST
 ```

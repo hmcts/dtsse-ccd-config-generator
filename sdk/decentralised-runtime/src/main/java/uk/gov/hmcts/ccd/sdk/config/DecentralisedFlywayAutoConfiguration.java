@@ -56,7 +56,9 @@ public class DecentralisedFlywayAutoConfiguration {
             .defaultSchema(migration.schema())
             .schemas(migration.schema())
             .table(migration.historyTable())
-            .placeholders(Map.of("sdkReaderRole", properties.getReaderRole()))
+            .placeholders(Map.of(
+                "sdkReaderRole",
+                properties.getReaderRole() == null ? "" : properties.getReaderRole()))
             .locations(Stream.concat(
                 migration.locations().stream(),
                 Stream.of(SDK_MIGRATION_LOCATION)

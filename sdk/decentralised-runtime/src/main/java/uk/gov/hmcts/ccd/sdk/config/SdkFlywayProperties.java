@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "ccd.sdk.flyway")
 public class SdkFlywayProperties {
 
-  private String readerRole = "DTS JIT Access ccd DB Reader SC";
+  private String readerRole;
 
   public void setReaderRole(String readerRole) {
     if (readerRole == null || !readerRole.matches("[A-Za-z0-9 _-]+")) {

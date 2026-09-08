@@ -1,9 +1,9 @@
 do $$
 declare
-  reader_role constant text := '${sdkReaderRole}';
+  reader_role constant text := nullif('${sdkReaderRole}', '');
   schema_name constant text := '${flyway:defaultSchema}';
 begin
-  if exists (
+  if reader_role is not null and exists (
     select 1
     from pg_roles
     where rolname = reader_role
