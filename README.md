@@ -5,6 +5,7 @@ Write CCD configuration in Java.
 ### Table of contents
 * [Why](#why)
 * [Installation](#installation)
+  + [SDK libraries](#sdk-libraries)
   + [Config generation](#config-generation)
 * [Getting started](#getting-started)
   + [Setting up the case type](#setting-up-the-case-type)
@@ -77,16 +78,43 @@ ccd {
 }
 ```
 
-For decentralised services you can opt in to specialised runtime features:
+### SDK libraries
+
+Declare optional SDK libraries in `dependencies`, without versions. The plugin imports
+`com.github.hmcts:ccd-sdk-bom` at the plugin's version into `implementation`, `configGeneration`, and
+`cftlibImplementation` when the cftlib plugin is applied. The generator itself is added automatically.
+
+For example, to run decentralised persistence, indexing and Service Bus publishing in your application:
 
 ```groovy
-ccd {
-  decentralised = true
-  runtimeIndexing = true // brings ccd-runtime-indexing into the main runtime classpath
+dependencies {
+  implementation 'com.github.hmcts:decentralised-runtime'
+  implementation 'com.github.hmcts:ccd-runtime-indexing'
+  implementation 'com.github.hmcts:ccd-servicebus-support'
 }
 ```
 
-When `runtimeIndexing` is enabled the decentralised indexer uses PostgreSQL `LISTEN`/`NOTIFY` for low latency indexing,
+Only declare the libraries you need. The BOM also covers `ccd-config-generator` and `task-management`.
+It supplies version constraints, not forced versions: normal Gradle conflict resolution still applies.
+
+If indexing should run only in the local cftlib stack, use this instead of the indexer's `implementation` declaration:
+
+```groovy
+dependencies {
+  cftlibImplementation 'com.github.hmcts:ccd-runtime-indexing'
+}
+```
+
+Declaring `decentralised-runtime` on `implementation` (or `runtimeOnly`) also enables the plugin's
+decentralised cftlib configuration and Elasticsearch client compatibility constraint. It does not automatically
+add an indexer; declare one on the appropriate configuration as shown above.
+
+The old `ccd.decentralised`, `ccd.runtimeIndexing` and `ccd.caseEventServiceBus` flags still work but log
+deprecation warnings during Gradle configuration. Replace enabled flags with the dependency declarations above
+and remove disabled flags. When replacing `decentralised = true` with runtime indexing disabled, also add the
+`cftlibImplementation` indexer dependency if you use cftlib; this preserves the old local indexing behaviour.
+
+The decentralised indexer uses PostgreSQL `LISTEN`/`NOTIFY` for low latency indexing,
 with `ccd.sdk.decentralised.poll-interval-ms` as a fallback.
 
 Set `ELASTIC_SEARCH_HOSTS` to the Elasticsearch HTTP endpoint or a comma-separated list of endpoints. For example:

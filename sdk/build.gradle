@@ -14,6 +14,28 @@ repositories {
 def sdkCheck = tasks.register('check');
 
 subprojects {
+    version = System.getenv('RELEASE_VERSION')?.replace('refs/tags/', '') ?: 'DEV-SNAPSHOT'
+    group = 'com.github.hmcts'
+    apply plugin: 'maven-publish'
+
+    publishing {
+        repositories {
+            mavenLocal()
+            maven {
+                name = 'AzureArtifacts'
+                url = uri('https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/maven/v1')
+                credentials {
+                    username = System.getenv('AZURE_DEVOPS_ARTIFACT_USERNAME')
+                    password = System.getenv('AZURE_DEVOPS_ARTIFACT_TOKEN')
+                }
+            }
+        }
+    }
+}
+
+def javaProjects = subprojects.findAll { it.name != 'ccd-sdk-bom' }
+
+configure(javaProjects) {
     apply plugin: 'java'
     apply plugin: 'checkstyle'
     apply plugin: 'jacoco'
@@ -27,8 +49,6 @@ subprojects {
         }
     }
 
-    version = System.getenv('RELEASE_VERSION')?.replace('refs/tags/', '') ?: 'DEV-SNAPSHOT'
-
     compileJava   {
         sourceCompatibility = 21
         targetCompatibility = 21
@@ -41,7 +61,6 @@ subprojects {
         sourceSets = [project.sourceSets.main]
     }
 
-    group = 'com.github.hmcts'
     repositories {
         mavenCentral()
         maven {
@@ -50,7 +69,6 @@ subprojects {
     }
 
     apply plugin: 'java-library'
-    apply plugin: 'maven-publish'
 
     java {
         withJavadocJar()
@@ -64,17 +82,6 @@ subprojects {
                 groupId = 'com.github.hmcts'
                 artifactId = project.name
                 version = project.version
-            }
-        }
-        repositories {
-            mavenLocal()
-            maven {
-                name = 'AzureArtifacts'
-                url = uri('https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/maven/v1')
-                credentials {
-                    username = System.getenv('AZURE_DEVOPS_ARTIFACT_USERNAME')
-                    password = System.getenv('AZURE_DEVOPS_ARTIFACT_TOKEN')
-                }
             }
         }
     }
@@ -127,8 +134,8 @@ tasks.register('jacocoAggregateReport', JacocoReport) {
 
     executionData.from = files(execFiles)
 
-    def srcDirs = subprojects.collect { it.sourceSets.main.allSource.srcDirs }.flatten()
-    def classDirs = subprojects.collect { it.sourceSets.main.output }.flatten()
+    def srcDirs = javaProjects.collect { it.sourceSets.main.allSource.srcDirs }.flatten()
+    def classDirs = javaProjects.collect { it.sourceSets.main.output }.flatten()
 
     sourceDirectories.from = files(srcDirs)
     classDirectories.from = files(classDirs)

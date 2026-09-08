@@ -5,16 +5,23 @@ teams can shift case ownership without rebuilding everything from scratch.
 
 ## Onboarding
 
-Opt in via the Gradle `ccd {}` block:
+Apply the `hmcts.ccd.sdk` Gradle plugin and declare the runtime library without a version:
 
 ```groovy
 ccd {
   configDir = file('build/definitions')
-  decentralised = true
+}
+
+dependencies {
+  implementation 'com.github.hmcts:decentralised-runtime'
+  // For indexing in the local cftlib stack (requires the cftlib plugin):
+  cftlibImplementation 'com.github.hmcts:ccd-runtime-indexing'
 }
 ```
 
-Setting `decentralised = true` adds the [decentralised-runtime](../sdk/decentralised-runtime) as a dependency to your project.
+The SDK plugin imports its BOM to supply library versions and detects the declared runtime dependency to configure
+decentralised cftlib support. The old `ccd.decentralised` flag is deprecated and logs a warning.
+See [SDK libraries](../README.md#sdk-libraries) for configuration choices and migration from the old flags.
 
 ## Native Notice of Change endpoints
 
@@ -187,7 +194,14 @@ The SDK maintains a queue of cases requiring Elasticsearch indexing in `ccd.es_q
 
 - **Reindex helper:** `CaseReindexingService` (in `sdk/decentralised-runtime`) lets you count and enqueue cases modified since a given date. Autowire the bean and call `enqueueCasesModifiedSince(LocalDate)` to repopulate `ccd.es_queue` without bumping `case_revision`; the decentralised indexer uses `EXTERNAL_GTE` so same-revision rewrites are accepted while older revisions still conflict. A successful reindex automatically clears older `ccd.es_dead_letter_queue` rows for the same case reference and `index_id`.
 
-The runtime indexer is provided by the `ccd-runtime-indexing` module when `runtimeIndexing = true`.
+To run the indexer in your application, declare it on `implementation` instead of `cftlibImplementation`:
+
+```groovy
+dependencies {
+  implementation 'com.github.hmcts:ccd-runtime-indexing'
+}
+```
+
 Configure the target cluster with `ELASTIC_SEARCH_HOSTS`; multiple hosts can be supplied as a comma-separated
 list, for example `ELASTIC_SEARCH_HOSTS=http://es-1:9200,http://es-2:9200`.
 
@@ -217,6 +231,16 @@ The SDK's `ccd-servicebus-support` module provides:
 - a `JmsTemplate` configured for Azure Service Bus
 - a scheduled publisher (`CcdCaseEventScheduler`) governed by the `ccd.servicebus.*` properties
 - a startup validator that simply opens a producer on the configured destination and closes it immediately.
+
+Add it without a version; the SDK plugin's BOM supplies it:
+
+```groovy
+dependencies {
+  implementation 'com.github.hmcts:ccd-servicebus-support'
+}
+```
+
+This replaces the deprecated `ccd.caseEventServiceBus` flag.
 
 The validator runs during application boot and fails the service fast if the topic does not exist or the supplied credentials lack `Send` rights.
 

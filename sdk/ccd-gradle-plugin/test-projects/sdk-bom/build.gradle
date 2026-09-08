@@ -1,0 +1,80 @@
+plugins {
+    id 'hmcts.ccd.sdk' apply false
+    id 'com.github.hmcts.rse-cft-lib' version '0.19.2363' apply false
+}
+
+def cftlibFirst = providers.gradleProperty('cftlibFirst').isPresent()
+if (cftlibFirst) {
+    apply plugin: 'com.github.hmcts.rse-cft-lib'
+}
+apply plugin: 'hmcts.ccd.sdk'
+if (!cftlibFirst) {
+    apply plugin: 'com.github.hmcts.rse-cft-lib'
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+def legacy = providers.gradleProperty('legacy').isPresent()
+def applicationIndexing = providers.gradleProperty('applicationIndexing').isPresent()
+def runtimeOnlyLibrary = providers.gradleProperty('runtimeOnlyLibrary').isPresent()
+
+if (legacy) {
+    ccd {
+        decentralised = true
+        runtimeIndexing = applicationIndexing
+        caseEventServiceBus = true
+    }
+} else {
+    dependencies {
+        add(runtimeOnlyLibrary ? 'runtimeOnly' : 'implementation', 'com.github.hmcts:decentralised-runtime')
+        implementation 'com.github.hmcts:ccd-servicebus-support'
+        add(applicationIndexing ? 'implementation' : 'cftlibImplementation',
+            'com.github.hmcts:ccd-runtime-indexing')
+    }
+}
+
+dependencies {
+    configGeneration 'com.github.hmcts:ccd-servicebus-support'
+}
+
+tasks.register('verifySdkDependencies') {
+    doLast {
+        def sdkModules = ['ccd-config-generator', 'decentralised-runtime',
+                          'ccd-runtime-indexing', 'ccd-servicebus-support']
+        def sdkVersion = configurations.implementation.dependencies.find {
+            it.name == 'ccd-sdk-bom'
+        }.version
+
+        def resolveSdk = { String configuration ->
+            // Resolve the real published SDK artifacts and BOM, excluding unrelated cftlib dependencies.
+            def sdk = configurations.getByName(configuration).copyRecursive {
+                it.group == 'com.github.hmcts' && (it.name in sdkModules || it.name == 'ccd-sdk-bom')
+            }
+            sdk.dependencies.findAll { it.name in sdkModules }.each { it.transitive = false }
+            def artifacts = sdk.resolvedConfiguration.resolvedArtifacts
+            assert artifacts.every { it.moduleVersion.id.version == sdkVersion }
+            artifacts.collect { it.name } as Set
+        }
+
+        def runtime = resolveSdk('runtimeClasspath')
+        assert runtime.containsAll(['ccd-config-generator', 'decentralised-runtime', 'ccd-servicebus-support'])
+        assert runtime.contains('ccd-runtime-indexing') == applicationIndexing
+        assert resolveSdk('testRuntimeClasspath').containsAll(runtime)
+        assert resolveSdk('configGeneration') == ['ccd-servicebus-support'] as Set
+        assert resolveSdk('cftlibRuntimeClasspath').contains('ccd-runtime-indexing')
+
+        assert project.ext.get('cftlib.datastore') == 'decentralised'
+        def cftlibTasks = tasks.withType(JavaExec).findAll {
+            it.getTaskIdentity().type.name == 'uk.gov.hmcts.rse.CftlibExec'
+        }
+        assert !cftlibTasks.empty
+        assert cftlibTasks.every { it.environment.CCD_SDK_DECENTRALISED == 'true' }
+        def elasticsearch = configurations.implementation.dependencies.find {
+            it.group == 'co.elastic.clients' && it.name == 'elasticsearch-java'
+        }
+        assert elasticsearch.versionConstraint.strictVersion == '[9, 10)'
+    }
+}
