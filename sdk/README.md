@@ -15,13 +15,6 @@ src/main/resources/<library>-db/migration/
 Add a dedicated Spring Boot auto-configuration that registers your migrations with the central coordinator:
 
 ```java
-package uk.gov.hmcts.ccd.sdk.documents;
-
-import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.context.annotation.Bean;
-import uk.gov.hmcts.ccd.sdk.config.DecentralisedFlywayAutoConfiguration;
-import uk.gov.hmcts.ccd.sdk.config.SdkFlywayMigration;
-
 @AutoConfiguration
 public class DocumentsFlywayAutoConfiguration {
 
