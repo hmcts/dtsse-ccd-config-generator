@@ -300,6 +300,25 @@ describe("order builder", () => {
     );
   });
 
+  it("flattens nested list items into successive lines of plain text", () => {
+    const document = buildOrder((order) => {
+      order.orderedList("clauses", (list) => {
+        list.item("condition", "Suspended on payment of:", (item) => {
+          item.orderedList("terms", (terms) => {
+            terms.item("one-off", "£500 by 1 October;");
+            terms.item("instalments", "£100 every month.");
+          });
+        });
+        list.item("costs", "Costs in the case.");
+      });
+    });
+
+    assert.equal(
+      document.toText(),
+      "Suspended on payment of:\n£500 by 1 October;\n£100 every month.\nCosts in the case.",
+    );
+  });
+
   it("keeps fact source IDs outside the ProseMirror document", () => {
     const document = buildOrder((order) => {
       order.paragraph("payment", (content) => {
