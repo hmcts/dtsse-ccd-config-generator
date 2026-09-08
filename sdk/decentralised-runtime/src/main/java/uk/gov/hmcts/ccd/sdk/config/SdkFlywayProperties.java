@@ -8,4 +8,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class SdkFlywayProperties {
 
   private String readerRole = "DTS JIT Access ccd DB Reader SC";
+
+  public void setReaderRole(String readerRole) {
+    if (readerRole == null || !readerRole.matches("[A-Za-z0-9 _-]+")) {
+      throw new IllegalArgumentException(
+          "ccd.sdk.flyway.reader-role may contain only letters, numbers, spaces, underscores, and hyphens");
+    }
+    this.readerRole = readerRole;
+  }
 }

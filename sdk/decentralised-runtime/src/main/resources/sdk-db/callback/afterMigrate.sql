@@ -8,12 +8,7 @@ begin
     from pg_roles
     where rolname = reader_role
   ) then
-    execute format(
-      'grant usage on schema %I to %I',
-      schema_name,
-      reader_role
-    );
-
+    execute format('grant usage on schema %I to %I', schema_name, reader_role);
     execute format(
       'grant select on all tables in schema %I to %I',
       schema_name,
