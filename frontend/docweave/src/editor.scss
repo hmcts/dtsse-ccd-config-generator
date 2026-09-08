@@ -409,8 +409,7 @@ li.docweave-editor__clause--modified > p {
   padding: 0 14px 12px;
 }
 
-.docweave-templates__result-action,
-.docweave-templates__load-more {
+.docweave-templates__result-action {
   border: 0;
   padding: 0;
   background: transparent;
@@ -419,10 +418,6 @@ li.docweave-editor__clause--modified > p {
   font-size: .85em;
   text-decoration: underline;
   cursor: pointer;
-}
-
-.docweave-templates__load-more {
-  margin: 16px;
 }
 
 .docweave-templates__empty {
@@ -554,11 +549,21 @@ li.docweave-editor__clause--modified > p {
   font-family: arial, sans-serif;
 }
 
-.docweave-templates__form label {
-  display: grid;
+.docweave-templates__field {
   max-width: 40rem;
-  gap: 8px;
+}
+
+.docweave-templates__error:not(:empty) {
+  display: block;
+  margin-bottom: 6px;
+  border-left: 5px solid #d4351c;
+  padding-left: 16px;
+  color: #d4351c;
   font-weight: 700;
+}
+
+.docweave-templates__form input[aria-invalid="true"] {
+  border-color: #d4351c;
 }
 
 .docweave-templates__editor {

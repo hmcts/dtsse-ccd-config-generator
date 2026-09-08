@@ -47,7 +47,7 @@ import { editorSchema } from "./schema.js";
 import {
   createTemplateDialog,
   type TemplateDialog,
-} from "./templates/dialog.js";
+} from "./templates/dialog/index.js";
 import {
   createHttpTemplateProvider,
   parseTemplateFragment,
