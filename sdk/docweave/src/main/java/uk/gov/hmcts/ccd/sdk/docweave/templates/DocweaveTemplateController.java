@@ -56,7 +56,7 @@ public class DocweaveTemplateController {
       @RequestParam(defaultValue = "all") String scope
   ) {
     UUID user = authenticate(userToken, serviceToken);
-    boolean mine = switch (scope.toLowerCase()) {
+    boolean mine = switch (scope.toLowerCase(Locale.ROOT)) {
       case "all" -> false;
       case "mine" -> true;
       default -> throw invalid("Scope must be all or mine");

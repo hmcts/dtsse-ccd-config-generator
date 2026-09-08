@@ -59,8 +59,7 @@ export function createApp({
 
   if (vite) app.use(vite.middlewares);
   if (templateProxy) {
-    app.use(express.json());
-    app.use("/docweave/templates", templateProxy);
+    app.use("/docweave/templates", express.json(), templateProxy);
   }
 
   const today = new Date();
