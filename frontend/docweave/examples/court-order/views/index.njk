@@ -79,6 +79,7 @@
 {% block footer %}{% endblock %}
 
 {% block bodyEnd %}
+  <script>window.__DOCWEAVE_TEMPLATES_MODE__ = "{{ templatesMode }}";</script>
   {% if development %}
     <script type="module" src="/examples/court-order/main.ts"></script>
   {% else %}

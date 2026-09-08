@@ -9,6 +9,7 @@ dependencies {
         api project(':ccd-runtime-indexing')
         api project(':ccd-servicebus-support')
         api project(':task-management')
+        api project(':docweave')
     }
 }
 
