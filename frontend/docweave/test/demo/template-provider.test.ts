@@ -24,6 +24,7 @@ describe("in-memory template provider", () => {
     });
 
     assert.equal(created.revision, 1);
+    assert.deepEqual(created.content, content);
     assert.deepEqual(
       (await provider.search("COSTS")).items.map((item) => item.title),
       ["Standard costs wording"],
@@ -48,24 +49,5 @@ describe("in-memory template provider", () => {
 
     await provider.delete(created.id, updated.revision);
     assert.deepEqual((await provider.search("")).items, []);
-  });
-
-  it("continues searches from an opaque cursor", async () => {
-    const provider = createInMemoryTemplateProvider();
-    await Promise.all(
-      Array.from({ length: 21 }, (_, index) =>
-        provider.create({ title: `Template ${index}`, content })
-      ),
-    );
-
-    const first = await provider.search("");
-    assert.equal(first.items.length, 20);
-    assert.ok(first.nextCursor);
-
-    const second = await provider.search("", first.nextCursor);
-    assert.equal(second.items.length, 1);
-    assert.equal(second.nextCursor, undefined);
-    assert.equal(new Set([...first.items, ...second.items].map(item => item.id)).size, 21);
-    assert.deepEqual(first.items[0]?.content, content);
   });
 });

@@ -1,13 +1,19 @@
 import {
+  TemplateRequestError,
   type SaveTemplateInput,
   type Template,
   type TemplateProvider,
 } from "@hmcts-cft/docweave";
 
-const PAGE_SIZE = 20;
-
 function copy(template: Template): Template {
   return structuredClone(template);
+}
+
+function conflict(): TemplateRequestError {
+  return new TemplateRequestError(
+    "This template was changed elsewhere. Reload it before saving.",
+    409,
+  );
 }
 
 export function createInMemoryTemplateProvider(): TemplateProvider {
@@ -15,41 +21,23 @@ export function createInMemoryTemplateProvider(): TemplateProvider {
 
   function find(id: string): Template {
     const template = templates.get(id);
-    if (!template) throw new Error("Template not found.");
+    if (!template) throw new TemplateRequestError("Template not found.", 404);
     return template;
   }
 
   return {
-    async search(query, cursor) {
+    async search(query) {
       const normalizedQuery = query.trim().toLocaleLowerCase();
-      const matches = [...templates.values()]
-        .filter((template) =>
-          template.title.toLocaleLowerCase().includes(normalizedQuery)
-        )
-        .sort((left, right) =>
-          right.updatedAt.localeCompare(left.updatedAt) ||
-          right.id.localeCompare(left.id)
-        );
-      const [cursorUpdatedAt, cursorId] = cursor?.split("\n") ?? [];
-      const cursorStart = cursor
-        ? matches.findIndex((template) =>
-          template.updatedAt < cursorUpdatedAt! ||
-          (template.updatedAt === cursorUpdatedAt && template.id < cursorId!)
-        )
-        : 0;
-      const start = cursorStart < 0 ? matches.length : cursorStart;
-      const page = matches.slice(
-        start,
-        start + PAGE_SIZE + 1,
-      );
-      const items = page.slice(0, PAGE_SIZE);
-      const last = items.at(-1);
-
       return {
-        items: items.map(copy),
-        nextCursor: page.length > PAGE_SIZE && last
-          ? `${last.updatedAt}\n${last.id}`
-          : undefined,
+        items: [...templates.values()]
+          .filter((template) =>
+            template.title.toLocaleLowerCase().includes(normalizedQuery)
+          )
+          .sort((left, right) =>
+            left.title.localeCompare(right.title) ||
+            left.id.localeCompare(right.id)
+          )
+          .map(copy),
       };
     },
 
@@ -68,9 +56,7 @@ export function createInMemoryTemplateProvider(): TemplateProvider {
     async update(id, input) {
       const current = find(id);
       if (current.revision !== input.expectedRevision) {
-        throw new Error(
-          "This template was changed elsewhere. Reload it before saving.",
-        );
+        throw conflict();
       }
       const updated: Template = {
         ...current,
@@ -86,9 +72,7 @@ export function createInMemoryTemplateProvider(): TemplateProvider {
     async delete(id, expectedRevision) {
       const current = find(id);
       if (current.revision !== expectedRevision) {
-        throw new Error(
-          "This template was changed elsewhere. Reload it before saving.",
-        );
+        throw conflict();
       }
       templates.delete(id);
     },
