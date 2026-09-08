@@ -5,6 +5,7 @@ import { JSDOM } from "jsdom";
 
 import { getDocumentNode } from "../src/builder.js";
 import { createInMemoryTemplateProvider } from "../examples/court-order/template-provider.js";
+import { polyfillBrowserApis } from "./jsdom-polyfills.js";
 
 interface TestDocumentJSON {
   content: Array<{
@@ -49,6 +50,7 @@ beforeEach(() => {
   );
 
   const window = dom.window;
+  polyfillBrowserApis(window);
   Object.defineProperty(window.Range.prototype, "getClientRects", {
     configurable: true,
     value: () => [new window.DOMRect()],

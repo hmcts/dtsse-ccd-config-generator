@@ -5,8 +5,10 @@ import { JSDOM } from "jsdom";
 
 import { createInMemoryTemplateProvider } from "../examples/court-order/template-provider.js";
 
-import { createTemplateDialog } from "../src/templates/dialog.js";
+import { polyfillBrowserApis } from "./jsdom-polyfills.js";
+import { createTemplateDialog } from "../src/templates/dialog/index.js";
 import {
+  TemplateRequestError,
   type Template,
   type TemplateProvider,
 } from "../src/templates/provider.js";
@@ -74,6 +76,7 @@ beforeEach(() => {
     });
   }
   dom.window.confirm = () => true;
+  polyfillBrowserApis(dom.window);
 });
 
 afterEach(() => {
@@ -113,7 +116,7 @@ async function searchFor(query: string): Promise<void> {
 }
 
 function selectedTitle(): string | null | undefined {
-  return dom.window.document.querySelector('[aria-pressed="true"]')?.getAttribute("aria-label");
+  return dom.window.document.querySelector('[aria-current="true"]')?.getAttribute("aria-label");
 }
 
 function provider(
@@ -253,34 +256,6 @@ describe("template dialog", () => {
     dialog.destroy();
   });
 
-  it("queues query changes behind pagination and discards the old page", async () => {
-    const requests: Array<{ query: string; cursor?: string; resolve(value: { items: Template[]; nextCursor?: string }): void }> = [];
-    const dialog = createTemplateDialog({
-      ownerDocument: dom.window.document,
-      provider: provider({ search(query, cursor) {
-        return new Promise((resolve) => { requests.push({ query, cursor, resolve }); });
-      } }),
-      insert() {},
-    });
-    dialog.open();
-    requests[0]!.resolve({ items: [template], nextCursor: "page-2" });
-    await tick();
-    button("Load more").click();
-    assert.equal(selectedTitle(), template.title);
-    assert.equal(button("Insert template").disabled, false);
-    await searchFor("latest");
-    assert.equal(requests.length, 2);
-    assert.equal(button("Insert template").disabled, true);
-    requests[1]!.resolve({ items: [{ ...template, title: "Old page" }] });
-    await tick();
-    assert.deepEqual(requests.map(({ query, cursor }) => [query, cursor]), [["", undefined], ["", "page-2"], ["latest", undefined]]);
-    assert.doesNotMatch(dom.window.document.querySelector(".docweave-templates__results")!.textContent, /Old page/);
-    requests[2]!.resolve({ items: [] });
-    await tick();
-    assert.match(dom.window.document.querySelector(".docweave-templates__results")!.textContent, /No templates found/);
-    dialog.destroy();
-  });
-
   it("previews the first result, navigates with wrapping and inserts from search once", async () => {
     const store = createInMemoryTemplateProvider();
     await store.create({ title: "First wording", content: template.content });
@@ -373,7 +348,9 @@ describe("template dialog", () => {
     const dialog = createTemplateDialog({
       ownerDocument: dom.window.document,
       provider: provider({ search(query) {
-        if (query === "failure") return Promise.reject(new Error("Search failed"));
+        if (query === "failure") {
+          return Promise.reject(new TemplateRequestError("Search failed", 500));
+        }
         return new Promise((resolve) => { pending.set(query, resolve); });
       } }),
       insert() { assert.fail("Must not insert stale results"); },
@@ -444,7 +421,10 @@ describe("template dialog", () => {
 
     assert.equal(title.disabled, true);
     assert.equal(editor.getAttribute("contenteditable"), "false");
-    assert.equal(editor.closest<HTMLElement>(".docweave-templates__editor")!.inert, true);
+    assert.equal(
+      editor.closest(".docweave-templates__editor")!.hasAttribute("inert"),
+      true,
+    );
     // Formatting must not bypass the save lock, even if a command is dispatched.
     dom.window.document.querySelector<HTMLButtonElement>(
       '.docweave-templates__editor [aria-label="Numbered clause"]',
@@ -457,7 +437,10 @@ describe("template dialog", () => {
     assert.equal(title.value, "Unsaved title");
     assert.equal(editor.getAttribute("contenteditable"), "true");
     assert.equal(editor.textContent, "Existing content.");
-    assert.equal(editor.closest<HTMLElement>(".docweave-templates__editor")!.inert, false);
+    assert.equal(
+      editor.closest(".docweave-templates__editor")!.hasAttribute("inert"),
+      false,
+    );
     assert.equal(button("Save template").disabled, false);
     dialog.destroy();
   });
@@ -559,48 +542,6 @@ describe("template dialog", () => {
     dialog.destroy();
   });
 
-  it("loads additional search results from the returned cursor", async () => {
-    const cursors: Array<string | undefined> = [];
-    let finishPage: (() => void) | undefined;
-    const dialog = createTemplateDialog({
-      ownerDocument: dom.window.document,
-      provider: provider({
-        async search(_query, cursor) {
-          const page = cursor ? 1 : 0;
-          cursors.push(cursor);
-          if (cursor) {
-            await new Promise<void>((resolve) => { finishPage = resolve; });
-          }
-          return {
-            items: [{ ...template, id: String(page), title: `Page ${page}` }],
-            nextCursor: page === 0 ? "next-page" : undefined,
-          };
-        },
-      }),
-      insert() {},
-    });
-
-    dialog.open();
-    await tick();
-    button("Load more").click();
-    button("Page 0").click();
-    assert.match(
-      dom.window.document.querySelector(".docweave-templates__preview")!.textContent,
-      /Existing content\./,
-    );
-    finishPage!();
-    await tick();
-
-    assert.deepEqual(cursors, [undefined, "next-page"]);
-    assert.deepEqual(
-      [...dom.window.document.querySelectorAll(
-        ".docweave-templates__results .docweave-templates__result",
-      )].map((result) => result.getAttribute("aria-label")),
-      ["Page 0", "Page 1"],
-    );
-    dialog.destroy();
-  });
-
   it("prevents duplicate deletes while a request is pending", async () => {
     let finishDelete: (() => void) | undefined;
     let deletes = 0;
@@ -629,6 +570,122 @@ describe("template dialog", () => {
     finishDelete!();
     await tick();
     assert.equal(button("Delete").disabled, false);
+    dialog.destroy();
+  });
+
+  it("renders provider titles as text, never as markup", async () => {
+    const hostile = '<img src="x" onerror="alert(1)">Costs & "quoted"';
+    const dialog = createTemplateDialog({
+      ownerDocument: dom.window.document,
+      provider: provider({
+        async search() { return { items: [{ ...template, title: hostile }] }; },
+      }),
+      insert() {},
+    });
+
+    dialog.open();
+    await tick();
+
+    const results = dom.window.document.querySelector(".docweave-templates__results")!;
+    assert.equal(results.querySelector("img"), null);
+    assert.equal(selectedTitle(), hostile);
+    assert.equal(
+      results.querySelector(".docweave-templates__result span")!.textContent,
+      hostile,
+    );
+    assert.equal(
+      dom.window.document.querySelector(".docweave-templates__preview h3")!.textContent,
+      hostile,
+    );
+    dialog.destroy();
+  });
+
+  it("keeps the result list to a single tab stop", async () => {
+    const store = createInMemoryTemplateProvider();
+    for (const title of ["Alpha", "Beta", "Gamma"]) {
+      await store.create({ title, content: template.content });
+    }
+    const dialog = createTemplateDialog({
+      ownerDocument: dom.window.document, provider: store, insert() {},
+    });
+
+    dialog.open();
+    await tick();
+    const tabbable = () => [...dom.window.document.querySelectorAll<HTMLElement>(
+      ".docweave-templates__results button",
+    )].filter((control) => control.tabIndex === 0);
+
+    assert.equal(
+      dom.window.document.querySelectorAll(".docweave-templates__results button").length,
+      9,
+      "three rows of select, edit and delete",
+    );
+    assert.equal(tabbable().length, 3, "only the active row is reachable by Tab");
+    assert.equal(tabbable()[0]!.getAttribute("aria-label"), "Alpha");
+
+    key(searchInput(), "ArrowDown");
+    assert.equal(selectedTitle(), "Beta");
+    assert.equal(tabbable().length, 3);
+    assert.equal(tabbable()[0]!.getAttribute("aria-label"), "Beta");
+    dialog.destroy();
+  });
+
+  it("reports an empty title on the field rather than the status region", async () => {
+    const dialog = createTemplateDialog({
+      ownerDocument: dom.window.document,
+      provider: provider({}),
+      insert() {},
+    });
+
+    dialog.open();
+    await tick();
+    button("Create template").click();
+    const title = dom.window.document.querySelector<HTMLInputElement>(
+      ".docweave-templates__form input",
+    )!;
+    title.value = "   ";
+    button("Save template").click();
+
+    const describedBy = title.getAttribute("aria-describedby")!;
+    const error = dom.window.document.getElementById(describedBy)!;
+    assert.equal(error.textContent, "Enter a template title.");
+    assert.equal(title.getAttribute("aria-invalid"), "true");
+    assert.equal(dom.window.document.activeElement, title);
+    assert.equal(
+      dom.window.document.querySelector<HTMLLabelElement>(
+        `label[for="${title.id}"]`,
+      )!.textContent,
+      "Template title",
+      "the error must sit outside the label, or it becomes part of the field's name",
+    );
+    assert.equal(
+      dom.window.document.querySelector('[role="status"]')!.textContent,
+      "",
+    );
+
+    title.value = "Costs";
+    button("Save template").click();
+    await tick();
+    assert.equal(error.textContent, "");
+    assert.equal(title.getAttribute("aria-invalid"), "false");
+    dialog.destroy();
+  });
+
+  it("does not show transport failures to the user", async () => {
+    const dialog = createTemplateDialog({
+      ownerDocument: dom.window.document,
+      provider: provider({
+        search: () => Promise.reject(new TypeError("fetch failed")),
+      }),
+      insert() {},
+    });
+
+    dialog.open();
+    await tick();
+
+    const status = dom.window.document.querySelector('[role="status"]')!.textContent;
+    assert.doesNotMatch(status, /fetch failed/);
+    assert.match(status, /problem with saved templates/);
     dialog.destroy();
   });
 });

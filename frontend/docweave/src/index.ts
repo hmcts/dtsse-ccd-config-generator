@@ -18,6 +18,7 @@ export {
   createHttpTemplateProvider,
   createTemplateFragment,
   parseTemplateFragment,
+  TemplateRequestError,
   type HttpTemplateProviderOptions,
   type SaveTemplateInput,
   type Template,
