@@ -23,7 +23,6 @@ export interface Template {
 
 export interface TemplateSearchResult {
   items: Template[];
-  nextCursor?: string | null;
 }
 
 export interface SaveTemplateInput {
@@ -32,7 +31,7 @@ export interface SaveTemplateInput {
 }
 
 export interface TemplateProvider {
-  search(query: string, cursor?: string): Promise<TemplateSearchResult>;
+  search(query: string): Promise<TemplateSearchResult>;
   create(input: SaveTemplateInput): Promise<Template>;
   update(
     id: string,
@@ -202,13 +201,10 @@ export function createHttpTemplateProvider(
   }
 
   return {
-    search(query, cursor) {
-      const parameters = new URLSearchParams({
-        query,
-        size: "20",
-      });
-      if (cursor) parameters.set("cursor", cursor);
-      return send<TemplateSearchResult>(`?${parameters}`);
+    search(query) {
+      return send<TemplateSearchResult>(
+        `?${new URLSearchParams({ query })}`,
+      );
     },
     create(input) {
       return send<Template>("", {
