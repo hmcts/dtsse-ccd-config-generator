@@ -15,23 +15,8 @@ create table docweave.docweave_template (
 create index docweave_template_owner_idx
     on docweave.docweave_template (owner_id);
 
-do $$
-declare
-    pg_trgm_schema name;
-begin
-    select namespace.nspname
-    into pg_trgm_schema
-    from pg_extension extension
-    join pg_namespace namespace on namespace.oid = extension.extnamespace
-    where extension.extname = 'pg_trgm';
-
-    execute format(
-        'create index docweave_template_searchable_text_idx '
-        'on docweave.docweave_template using gin (searchable_text %I.gin_trgm_ops)',
-        pg_trgm_schema
-    );
-end
-$$;
+create index docweave_template_searchable_text_idx
+    on docweave.docweave_template using gin (searchable_text public.gin_trgm_ops);
 
 create index docweave_template_tags_idx
     on docweave.docweave_template using gin (tags);
