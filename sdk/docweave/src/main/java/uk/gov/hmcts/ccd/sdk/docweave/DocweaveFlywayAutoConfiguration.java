@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Bean;
 import uk.gov.hmcts.ccd.sdk.config.DecentralisedFlywayAutoConfiguration;
 import uk.gov.hmcts.ccd.sdk.config.SdkFlywayMigration;
 
-@AutoConfiguration(after = DecentralisedFlywayAutoConfiguration.class)
+@AutoConfiguration
 @ConditionalOnClass(name = "org.flywaydb.core.Flyway")
 @ConditionalOnProperty(prefix = "spring.flyway", name = "enabled", matchIfMissing = true)
 public class DocweaveFlywayAutoConfiguration {

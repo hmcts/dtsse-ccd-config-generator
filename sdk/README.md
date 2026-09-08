@@ -58,6 +58,17 @@ return new SdkFlywayMigration(
 - Never modify, rename, reorder, or delete a released migration.
 - Libraries must not make changes outside of their own schema.
 
+## Devtools and new libraries
+
+New libraries sharing SDK types must add `src/main/resources/META-INF/spring-devtools.properties`
+with a unique key and their artifact name:
+
+```properties
+restart.include.documents=/documents.+\\.jar
+```
+
+This keeps them in the SDK's restart classloader; otherwise `bootWithCCD` can silently skip their migrations.
+
 ## Migration execution
 
 The decentralised runtime provides the single Spring Boot `FlywayMigrationStrategy`. It:
