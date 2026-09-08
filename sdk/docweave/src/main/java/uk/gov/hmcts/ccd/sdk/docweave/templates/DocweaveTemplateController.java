@@ -30,10 +30,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
-import uk.gov.hmcts.ccd.sdk.impl.IdamService;
 import uk.gov.hmcts.reform.authorisation.exceptions.InvalidTokenException;
 import uk.gov.hmcts.reform.authorisation.exceptions.ServiceException;
 import uk.gov.hmcts.reform.authorisation.validators.AuthTokenValidator;
+import uk.gov.hmcts.reform.idam.client.IdamClient;
 
 @RestController
 @RequestMapping("/docweave/templates")
@@ -44,7 +44,7 @@ public class DocweaveTemplateController {
   private static final String CACHE_CONTROL = "private, no-store";
 
   private final DocweaveTemplateRepository templates;
-  private final IdamService idam;
+  private final IdamClient idam;
   private final AuthTokenValidator s2s;
   private final DocweaveTemplatesAutoConfiguration.Properties properties;
 
@@ -178,7 +178,7 @@ public class DocweaveTemplateController {
     }
 
     try {
-      return UUID.fromString(idam.retrieveUser(userToken).userDetails().getUid());
+      return UUID.fromString(idam.getUserInfo(bearer(userToken)).getUid());
     } catch (FeignException ex) {
       HttpStatus status = ex.status() >= 400 && ex.status() < 500
           ? HttpStatus.UNAUTHORIZED : HttpStatus.SERVICE_UNAVAILABLE;
