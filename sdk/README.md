@@ -60,24 +60,14 @@ return new SdkFlywayMigration(
 
 ## Devtools and new libraries
 
-When adding a library that shares SDK types, include its JAR in the Spring Boot devtools restart classloader.
-Add `src/main/resources/META-INF/spring-devtools.properties` to the new library with a unique include key,
-using its published artifact name in the pattern:
+New libraries sharing SDK types must add `src/main/resources/META-INF/spring-devtools.properties`
+with a unique key and their artifact name:
 
 ```properties
 restart.include.documents=/documents.+\\.jar
 ```
 
-`bootWithCCD` uses devtools, and the config generator and decentralised runtime already load in the restart
-classloader. Without a matching include, a new library JAR stays in the base classloader. The two loaders can
-load separate copies of `SdkFlywayMigration`, so the coordinator cannot discover the new library's migration
-beans even though the application starts successfully. Other shared SDK types can have the same problem.
-
-Verify new libraries with packaged JARs and the devtools restart classloader, including a fresh database and
-restarts. Ordinary Spring integration tests use a single classloader and will not catch this problem.
-
-Declare migration dependencies in `SdkFlywayMigration`; the `before` and `after` attributes on
-`@AutoConfiguration` do not control migration execution order and are not needed just to register a library's migrations.
+This keeps them in the SDK's restart classloader; otherwise `bootWithCCD` can silently skip their migrations.
 
 ## Migration execution
 
