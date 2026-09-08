@@ -22,7 +22,7 @@ import org.springframework.core.io.ResourceLoader;
 @EnableConfigurationProperties(SdkFlywayProperties.class)
 public class DecentralisedFlywayAutoConfiguration {
 
-  private static final String SDK_CALLBACK_LOCATION = "classpath:sdk-db/callback";
+  private static final String SDK_MIGRATION_LOCATION = "classpath:sdk-db/migration";
 
   @Bean
   public SdkFlywayMigration decentralisedRuntimeMigration() {
@@ -59,7 +59,7 @@ public class DecentralisedFlywayAutoConfiguration {
             .placeholders(Map.of("sdkReaderRole", properties.getReaderRole()))
             .locations(Stream.concat(
                 migration.locations().stream(),
-                Stream.of(SDK_CALLBACK_LOCATION)
+                Stream.of(SDK_MIGRATION_LOCATION)
             ).toArray(String[]::new))
             .load()
             .migrate();

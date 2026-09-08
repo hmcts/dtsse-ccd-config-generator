@@ -68,6 +68,14 @@ class SdkFlywayMigrationIntegrationTest {
         Boolean.class,
         READER_ROLE,
         "test_library.existing_table")).isTrue();
+
+    jdbc.execute("create table test_library.future_table (id bigint primary key)");
+
+    assertThat(jdbc.queryForObject(
+        "select has_table_privilege(?, ?, 'SELECT')",
+        Boolean.class,
+        READER_ROLE,
+        "test_library.future_table")).isTrue();
   }
 
   private SdkFlywayMigration testLibraryMigration() {

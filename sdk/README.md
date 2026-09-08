@@ -72,10 +72,11 @@ This preserves the existing guarantee that SDK-managed database objects exist be
 Independent libraries are ordered deterministically by their auto-configuration class name. Startup fails for duplicate
 library definitions, missing dependencies, or dependency cycles.
 
-After migrating each library, a shared Flyway callback grants
-the role configured by `ccd.sdk.flyway.reader-role` usage on the library schema and select access to its tables. It
-defaults to `"DTS JIT Access ccd DB Reader SC"`. The callback does nothing when the role is absent, allowing the same
-migrations to run in local and test environments.
+After migrating each library for the first time, a shared repeatable migration grants the role configured by
+`ccd.sdk.flyway.reader-role` usage on the library schema and select access to its existing tables. It also configures
+default privileges so tables created by later migrations inherit select access. The role defaults to
+`"DTS JIT Access ccd DB Reader SC"`. The migration does nothing when the role is absent, allowing the same migrations to
+run in local and test environments.
 
 ```yaml
 ccd:
