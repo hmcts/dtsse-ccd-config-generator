@@ -19,12 +19,6 @@ begin
       schema_name,
       reader_role
     );
-
-    execute format(
-      'alter default privileges in schema %I grant select on tables to %I',
-      schema_name,
-      reader_role
-    );
   end if;
 end
 $$;
