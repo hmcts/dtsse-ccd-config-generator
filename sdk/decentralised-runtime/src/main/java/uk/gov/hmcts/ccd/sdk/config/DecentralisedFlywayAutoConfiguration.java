@@ -55,7 +55,6 @@ public class DecentralisedFlywayAutoConfiguration {
             .dataSource(dataSource)
             .defaultSchema(migration.schema())
             .schemas(migration.schema())
-            .table(migration.historyTable())
             .placeholders(Map.of(
                 "sdkReaderRole",
                 properties.getReaderRole() == null ? "" : properties.getReaderRole()))
