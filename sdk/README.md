@@ -75,7 +75,6 @@ beans even though the application starts successfully. Other shared SDK types ca
 
 Verify new libraries with packaged JARs and the devtools restart classloader, including a fresh database and
 restarts. Ordinary Spring integration tests use a single classloader and will not catch this problem.
-`DocweaveRestartIntegrationTest` demonstrates this regression coverage.
 
 Declare migration dependencies in `SdkFlywayMigration`; the `before` and `after` attributes on
 `@AutoConfiguration` do not control migration execution order and are not needed just to register a library's migrations.

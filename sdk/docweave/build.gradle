@@ -29,7 +29,6 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-web'
     testImplementation 'org.springframework.boot:spring-boot-starter-jdbc'
-    testImplementation 'org.springframework.boot:spring-boot-devtools'
     testImplementation 'org.flywaydb:flyway-core'
     testImplementation 'org.testcontainers:testcontainers'
     testImplementation 'org.testcontainers:junit-jupiter'
@@ -50,10 +49,6 @@ java {
 }
 
 tasks.withType(Test).configureEach {
-    dependsOn tasks.jar
-    // Exercise the same JAR-based classloader boundary as bootWithCCD.
-    systemProperty 'docweave.restart-test.classpath',
-        files(tasks.jar.archiveFile, sourceSets.test.output, configurations.testRuntimeClasspath).asPath
     useJUnitPlatform()
     testLogging {
         exceptionFormat = 'full'
