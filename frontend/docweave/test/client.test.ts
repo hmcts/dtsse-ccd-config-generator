@@ -247,6 +247,7 @@ describe("public order editor API", () => {
     });
 
     controller.render(target);
+    assert.equal(controller.getDocument(), target);
 
     const mount = dom.window.document.querySelector<HTMLElement>("#editor")!;
     assert.equal(mount.classList.contains("docweave-editor"), true);

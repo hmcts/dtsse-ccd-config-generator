@@ -2,11 +2,9 @@ import { dropCursor } from "prosemirror-dropcursor";
 import { gapCursor } from "prosemirror-gapcursor";
 import { toggleMark } from "prosemirror-commands";
 import { closeHistory, history, redo, undo } from "prosemirror-history";
-import { type Node as ProseMirrorNode } from "prosemirror-model";
 import { wrapInList } from "prosemirror-schema-list";
 import {
   type Command,
-  EditorState,
   type SelectionBookmark,
 } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
@@ -14,12 +12,15 @@ import { EditorView } from "prosemirror-view";
 import {
   type DocWeaveDocument,
   getDocumentFactSources,
-  getDocumentNode,
 } from "./builder.js";
 import { createClipboardPlugin } from "./clipboard.js";
 import {
+  createOrderEditorController,
+  type DocWeaveSnapshot,
+  type OrderEditorController,
+} from "./controller.js";
+import {
   createDiffStylingPlugin,
-  getGeneratedDocument,
   setGeneratedDocument,
 } from "./diff-styling.js";
 import {
@@ -38,11 +39,7 @@ import {
   outdentListItem,
 } from "./keymap.js";
 import { createListNumberingPlugin } from "./list-numbering.js";
-import {
-  assertCurrentDocumentMatchesGenerated,
-  assertValidGeneratedDocument,
-} from "./invariants.js";
-import { reconcileOrderDocument } from "./reconciliation.js";
+import { assertCurrentDocumentMatchesGenerated } from "./invariants.js";
 import { editorSchema } from "./schema.js";
 import {
   createTemplateDialog,
@@ -55,35 +52,8 @@ import {
 } from "./templates/index.js";
 import { insertTemplate } from "./templates/insertion.js";
 
-function createEditorState(
-  ownerDocument: Document,
-  document?: ProseMirrorNode,
-): EditorState {
-  return EditorState.create({
-    schema: editorSchema,
-    doc: document,
-    plugins: [
-      createClipboardPlugin(),
-      createListNumberingPlugin(),
-      createDiffStylingPlugin(),
-      createFactNavigationPlugin(ownerDocument),
-      ...createKeymapPlugins(),
-      dropCursor(),
-      gapCursor(),
-      history(),
-    ],
-  });
-}
-
-export interface DocWeaveSnapshot {
-  schema: "docweave-document";
-  version: 1;
-  current: Record<string, unknown>;
-  generated: Record<string, unknown>;
-}
-
 export interface CreateOrderEditorOptions {
-  mount: HTMLElement | string;
+  mount?: HTMLElement | string;
   initialSnapshot?: DocWeaveSnapshot;
   onChange?: (snapshot: DocWeaveSnapshot) => void;
   templates?: {
@@ -91,12 +61,6 @@ export interface CreateOrderEditorOptions {
     csrfToken?: string | (() => string | undefined);
     provider?: TemplateProvider;
   };
-}
-
-export interface OrderEditorController {
-  render(document: DocWeaveDocument): void;
-  getSnapshot(): DocWeaveSnapshot;
-  destroy(): void;
 }
 
 const wrapInOrderedList = wrapInList(editorSchema.nodes.ordered_list!);
@@ -134,8 +98,15 @@ function createTemplateButton(ownerDocument: Document): HTMLButtonElement {
 }
 
 export function createOrderEditor(
-  options: CreateOrderEditorOptions,
+  options: CreateOrderEditorOptions = {},
 ): OrderEditorController {
+  if (options.templates && options.mount === undefined) {
+    throw new Error("Templates require an editor mount");
+  }
+  if (options.mount === undefined) {
+    return createOrderEditorController(options).controller;
+  }
+
   const ownerDocument = typeof options.mount === "string"
     ? globalThis.document
     : options.mount.ownerDocument;
@@ -167,28 +138,30 @@ export function createOrderEditor(
     throw new Error("Templates require either a provider or URL");
   }
 
-  if (options.initialSnapshot &&
-    (options.initialSnapshot.schema !== "docweave-document" ||
-      options.initialSnapshot.version !== 1)) {
-    throw new Error("Unsupported Docweave snapshot version");
-  }
-
-  const initialCurrent = options.initialSnapshot
-    ? editorSchema.nodeFromJSON(options.initialSnapshot.current)
-    : undefined;
-  const initialGenerated = options.initialSnapshot
-    ? editorSchema.nodeFromJSON(options.initialSnapshot.generated)
-    : undefined;
-  if (initialGenerated && initialCurrent) {
-    assertValidGeneratedDocument(initialGenerated);
-    assertCurrentDocumentMatchesGenerated(initialCurrent, initialGenerated);
-  }
-  let initialState = createEditorState(editor.ownerDocument, initialCurrent);
-  if (initialGenerated) {
-    initialState = initialState.apply(
-      setGeneratedDocument(initialState.tr, initialGenerated),
-    );
-  }
+  const runtime = createOrderEditorController({
+    initialSnapshot: options.initialSnapshot,
+    onChange: options.onChange,
+    plugins: [
+      createClipboardPlugin(),
+      createListNumberingPlugin(),
+      createDiffStylingPlugin(),
+      createFactNavigationPlugin(editor.ownerDocument),
+      ...createKeymapPlugins(),
+      dropCursor(),
+      gapCursor(),
+      history(),
+    ],
+    prepareGeneratedTransaction(transaction, generated, document) {
+      setGeneratedDocument(transaction, generated);
+      if (document) {
+        setFactNavigationSources(
+          transaction,
+          getDocumentFactSources(document),
+        );
+      }
+      return transaction;
+    },
+  });
 
   const toolbar = createEditorToolbar(
     editor.ownerDocument,
@@ -216,18 +189,8 @@ export function createOrderEditor(
     templateDialog.open();
   }
 
-  const getSnapshot = (): DocWeaveSnapshot => {
-    const generated = getGeneratedDocument(view.state) ?? view.state.doc;
-    return {
-      schema: "docweave-document",
-      version: 1,
-      current: view.state.doc.toJSON() as Record<string, unknown>,
-      generated: generated.toJSON() as Record<string, unknown>,
-    };
-  };
-
   const view = new EditorView(editorSurface, {
-    state: initialState,
+    state: runtime.state,
     handleKeyDown(editorView, event) {
       const { empty, $from } = editorView.state.selection;
       if (!templateDialog || !editorView.editable || event.defaultPrevented ||
@@ -243,11 +206,12 @@ export function createOrderEditor(
       if (templateBookmark) {
         templateBookmark = templateBookmark.map(transaction.mapping);
       }
-      const nextState = view.state.apply(transaction);
-      view.updateState(nextState);
-      connectedToolbar?.update();
-      options.onChange?.(getSnapshot());
+      runtime.dispatch(transaction);
     },
+  });
+  runtime.setStateListener((state) => {
+    view.updateState(state);
+    connectedToolbar?.update();
   });
 
   connectedToolbar = connectEditorToolbar(toolbar, view, editorCommands);
@@ -264,10 +228,10 @@ export function createOrderEditor(
           bookmark.resolve(view.state.doc),
         );
         command(view.state, (transaction) => {
-          const generated = getGeneratedDocument(view.state);
-          if (generated) {
-            assertCurrentDocumentMatchesGenerated(transaction.doc, generated);
-          }
+          assertCurrentDocumentMatchesGenerated(
+            transaction.doc,
+            runtime.generatedDocument,
+          );
           view.dispatch(closeHistory(transaction));
           // Keep immediate follow-up typing in its own undo group too.
           view.dispatch(closeHistory(view.state.tr));
@@ -279,36 +243,10 @@ export function createOrderEditor(
     templateButton.addEventListener("click", openTemplateDialog);
   }
 
-  const controller: OrderEditorController = {
-    render(document: DocWeaveDocument): void {
-      const target = getDocumentNode(document);
-      assertValidGeneratedDocument(target);
-      let transaction = view.state.tr;
-      const previousTarget = getGeneratedDocument(view.state);
-
-      if (previousTarget) {
-        transaction = reconcileOrderDocument(
-          transaction,
-          previousTarget,
-          target,
-        );
-      } else {
-        transaction.replaceWith(
-          0,
-          transaction.doc.content.size,
-          target.content,
-        );
-      }
-
-      setGeneratedDocument(transaction, target);
-      setFactNavigationSources(
-        transaction,
-        getDocumentFactSources(document),
-      );
-
-      view.dispatch(transaction.setMeta("addToHistory", false));
-    },
-    getSnapshot,
+  return {
+    render: runtime.controller.render,
+    getDocument: runtime.controller.getDocument,
+    getSnapshot: runtime.controller.getSnapshot,
     destroy(): void {
       connectedToolbar?.destroy();
       templateDialog?.destroy();
@@ -318,6 +256,4 @@ export function createOrderEditor(
       if (!mountAlreadyStyled) editor.classList.remove("docweave-editor");
     },
   };
-
-  return controller;
 }

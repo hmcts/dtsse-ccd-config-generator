@@ -61,6 +61,9 @@ try {
       if (document.getClause("heading")?.textContent !== "IT IS ORDERED THAT:") {
         throw new Error("The installed package did not expose its clause");
       }
+      if (document.toText() !== "IT IS ORDERED THAT:") {
+        throw new Error("The installed package did not serialize plain text");
+      }
       if (document.children[0] !== document.getClause("heading")) {
         throw new Error("The installed package did not preserve clause identity");
       }
@@ -79,10 +82,19 @@ try {
   writeFileSync(
     path.join(consumerRoot, "consumer.cjs"),
     `
+      const { buildOrder, createOrderEditor } = require("@hmcts-cft/docweave");
       const { createTemplateProxy } = require("@hmcts-cft/docweave/express");
 
       if (typeof createTemplateProxy !== "function") {
         throw new Error("The installed package did not expose its CommonJS Express entry point");
+      }
+      const document = buildOrder((order) => {
+        order.paragraph("heading", "IT IS ORDERED THAT:");
+      });
+      const controller = createOrderEditor();
+      controller.render(document);
+      if (controller.getDocument() !== document) {
+        throw new Error("The CommonJS entry point did not expose the headless editor");
       }
     `,
   );
@@ -116,12 +128,15 @@ try {
       heading.children satisfies readonly DocWeaveClause[];
       target.children satisfies readonly DocWeaveClause[];
       target.textContent satisfies string;
+      target.toText() satisfies string;
       // @ts-expect-error ProseMirror is an internal implementation detail.
       target.node;
       const controller = createOrderEditor({ mount });
       controller.render(target);
+      controller.getDocument() satisfies DocWeaveDocument | undefined;
       const saved: DocWeaveSnapshot = controller.getSnapshot();
       saved satisfies DocWeaveSnapshot;
+      createOrderEditor().render(target);
 
       // @ts-expect-error Docweave owns its toolbar markup and behaviour.
       createOrderEditor({ mount, toolbar: mount });

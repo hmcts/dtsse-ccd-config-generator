@@ -11,9 +11,11 @@ export {
 export {
   createOrderEditor,
   type CreateOrderEditorOptions,
+} from "./client.js";
+export {
   type DocWeaveSnapshot,
   type OrderEditorController,
-} from "./client.js";
+} from "./controller.js";
 export {
   createHttpTemplateProvider,
   createTemplateFragment,

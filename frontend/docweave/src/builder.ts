@@ -94,6 +94,11 @@ export class DocWeaveDocument {
   getClause(id: string): DocWeaveClause | undefined {
     return this.#clausesById.get(id);
   }
+
+  toText(): string {
+    const node = getDocumentNode(this);
+    return node.textBetween(0, node.content.size, "\n");
+  }
 }
 
 /** @internal */

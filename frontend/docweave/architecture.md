@@ -38,6 +38,7 @@ Consumers inspect generated wording without traversing ProseMirror nodes:
 
 ```ts
 document.textContent;
+document.toText();
 document.children.map((clause) => clause.textContent);
 document.getClause("parent")?.textContent;
 document.getClause("parent")?.children;
@@ -51,6 +52,8 @@ in their parent clause's `children`.
 
 A clause's `textContent` contains its own wording and excludes nested clauses.
 `document.textContent` contains the wording of the complete generated target.
+`document.toText()` uses ProseMirror's text serialization and separates blocks
+with newlines.
 The document, clause objects and child arrays are immutable, and repeated
 `getClause()` calls return the same clause view.
 

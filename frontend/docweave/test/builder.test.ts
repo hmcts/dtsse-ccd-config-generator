@@ -281,7 +281,7 @@ describe("order builder", () => {
     ]);
   });
 
-  it("includes generated text in plain-text serialization", () => {
+  it("uses ProseMirror plain-text serialization with block separators", () => {
     const document = buildOrder((order) => {
       order.paragraph("attendance", (content) => {
         content
@@ -289,12 +289,14 @@ describe("order builder", () => {
           .fact("register", "Alex Smith")
           .text(".");
       });
+      order.orderedList("clauses", (list) => {
+        list.item("costs", "Costs in the case.");
+      });
     });
 
-    const node = getDocumentNode(document);
     assert.equal(
-      node.textBetween(0, node.content.size),
-      "The Court heard from Alex Smith.",
+      document.toText(),
+      "The Court heard from Alex Smith.\nCosts in the case.",
     );
   });
 
