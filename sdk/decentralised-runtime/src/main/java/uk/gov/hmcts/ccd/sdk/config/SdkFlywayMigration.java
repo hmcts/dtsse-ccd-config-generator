@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.config;
 
 import java.util.List;
 import java.util.Set;
+import lombok.NonNull;
 
 /**
  * Describes a library-owned set of Flyway migrations.
@@ -13,11 +14,11 @@ import java.util.Set;
  * @param locations classpath locations containing the migrations
  */
 public record SdkFlywayMigration(
-    Class<?> library,
-    Set<Class<?>> dependsOn,
-    String schema,
-    String historyTable,
-    List<String> locations) {
+    @NonNull Class<?> library,
+    @NonNull Set<Class<?>> dependsOn,
+    @NonNull String schema,
+    @NonNull String historyTable,
+    @NonNull List<String> locations) {
 
   public SdkFlywayMigration(
       Class<?> library,
@@ -28,13 +29,10 @@ public record SdkFlywayMigration(
   }
 
   public SdkFlywayMigration {
-    if (library == null) {
-      throw new IllegalArgumentException("SDK migration library must not be null");
-    }
-    if (schema == null || schema.isBlank()) {
+    if (schema.isBlank()) {
       throw new IllegalArgumentException("SDK migration schema must not be blank");
     }
-    if (historyTable == null || historyTable.isBlank()) {
+    if (historyTable.isBlank()) {
       throw new IllegalArgumentException("SDK migration history table must not be blank");
     }
     dependsOn = Set.copyOf(dependsOn);

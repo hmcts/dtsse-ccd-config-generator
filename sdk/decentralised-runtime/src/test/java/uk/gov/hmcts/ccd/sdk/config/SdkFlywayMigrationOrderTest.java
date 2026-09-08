@@ -48,6 +48,18 @@ class SdkFlywayMigrationOrderTest {
         .hasMessageContaining(Alpha.class.getName());
   }
 
+  @Test
+  void rejectsNullDependenciesClearly() {
+    assertThatThrownBy(() -> new SdkFlywayMigration(
+        Runtime.class,
+        null,
+        "ccd",
+        "flyway_schema_history",
+        List.of("classpath:runtime-db/migration")))
+        .isInstanceOf(NullPointerException.class)
+        .hasMessage("dependsOn is marked non-null but is null");
+  }
+
   private SdkFlywayMigration migration(Class<?> library, Class<?>... dependencies) {
     return new SdkFlywayMigration(
         library,
