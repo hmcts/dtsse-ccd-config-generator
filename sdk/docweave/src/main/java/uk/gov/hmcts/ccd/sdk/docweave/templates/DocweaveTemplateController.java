@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -52,8 +53,6 @@ public class DocweaveTemplateController {
       @RequestHeader(value = AUTHORIZATION, required = false) String userToken,
       @RequestHeader(value = SERVICE_AUTHORIZATION, required = false) String serviceToken,
       @RequestParam(defaultValue = "") String query,
-      @RequestParam(defaultValue = "20") int size,
-      @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "all") String scope
   ) {
     UUID user = authenticate(userToken, serviceToken);
@@ -62,10 +61,9 @@ public class DocweaveTemplateController {
       case "mine" -> true;
       default -> throw invalid("Scope must be all or mine");
     };
-    DocweaveTemplateRepository.Page page = templates.search(user, query, size, cursor, mine);
+    List<DocweaveTemplateRepository.Template> found = templates.search(user, query, mine);
     return ok(new SearchResponse(
-        page.items().stream().map(template -> toResponse(template, user)).toList(),
-        page.nextCursor()
+        found.stream().map(template -> toResponse(template, user)).toList()
     ));
   }
 
@@ -150,7 +148,7 @@ public class DocweaveTemplateController {
     return respond(HttpStatus.OK, body);
   }
 
-  private <T> ResponseEntity<T> respond(org.springframework.http.HttpStatusCode status, T body) {
+  private <T> ResponseEntity<T> respond(HttpStatusCode status, T body) {
     return ResponseEntity.status(status)
         .header(HttpHeaders.CACHE_CONTROL, CACHE_CONTROL)
         .body(body);
@@ -227,6 +225,6 @@ public class DocweaveTemplateController {
   ) {
   }
 
-  public record SearchResponse(List<TemplateResponse> items, String nextCursor) {
+  public record SearchResponse(List<TemplateResponse> items) {
   }
 }
