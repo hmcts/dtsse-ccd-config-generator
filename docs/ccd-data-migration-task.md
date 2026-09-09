@@ -98,11 +98,7 @@ If the migration identity changes after a task has already created a progress ro
 fast rather than resuming under different source filters. Operators must either keep the same
 identity configuration or explicitly reset/use a new `task-name` after confirming the target state.
 
-When upgrading from a release where this task was packaged in `decentralised-runtime`, the runtime
-drops the legacy `ccd.ccd_data_migration_progress` table and the support library creates a fresh
-progress table in its own schema. Existing migration progress is intentionally not carried forward;
-only upgrade before beginning a migration or after explicitly clearing any partial target migration
-data. Part-way migrations from the legacy progress table are not supported.
+When upgrading from a release where this task was packaged in `decentralised-runtime`, the legacy `ccd.ccd_data_migration_progress` table is dropped.
 
 ## Configuration
 
