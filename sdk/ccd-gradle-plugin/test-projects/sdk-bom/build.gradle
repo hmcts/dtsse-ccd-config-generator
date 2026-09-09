@@ -38,11 +38,12 @@ if (legacy) {
 
 dependencies {
     configGeneration 'com.github.hmcts:ccd-servicebus-support'
+    testImplementation 'com.github.hmcts:ccd-data-migration-support'
 }
 
 tasks.register('verifySdkDependencies') {
     doLast {
-        def sdkModules = ['ccd-config-generator', 'decentralised-runtime',
+        def sdkModules = ['ccd-config-generator', 'decentralised-runtime', 'ccd-data-migration-support',
                           'ccd-runtime-indexing', 'ccd-servicebus-support']
         def sdkVersion = configurations.implementation.dependencies.find {
             it.name == 'ccd-sdk-bom'
@@ -61,8 +62,11 @@ tasks.register('verifySdkDependencies') {
 
         def runtime = resolveSdk('runtimeClasspath')
         assert runtime.containsAll(['ccd-config-generator', 'decentralised-runtime', 'ccd-servicebus-support'])
+        assert !runtime.contains('ccd-data-migration-support')
         assert runtime.contains('ccd-runtime-indexing') == applicationIndexing
-        assert resolveSdk('testRuntimeClasspath').containsAll(runtime)
+        def testRuntime = resolveSdk('testRuntimeClasspath')
+        assert testRuntime.containsAll(runtime)
+        assert testRuntime.contains('ccd-data-migration-support')
         assert resolveSdk('configGeneration') == ['ccd-servicebus-support'] as Set
         assert resolveSdk('cftlibRuntimeClasspath').contains('ccd-runtime-indexing')
 

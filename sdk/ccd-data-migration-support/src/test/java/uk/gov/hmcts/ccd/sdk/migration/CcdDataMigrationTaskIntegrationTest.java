@@ -52,11 +52,39 @@ class CcdDataMigrationTaskIntegrationTest {
     jdbc.getJdbcTemplate().execute("drop schema if exists fdw_stage cascade");
     jdbc.getJdbcTemplate().execute("drop schema if exists source cascade");
     jdbc.getJdbcTemplate().execute("drop server if exists ccd_migration_test_server cascade");
-    jdbc.getJdbcTemplate().execute("delete from ccd.ccd_data_migration_progress");
+    jdbc.getJdbcTemplate().execute("delete from ccd_data_migration.ccd_data_migration_progress");
     jdbc.getJdbcTemplate().execute("truncate table ccd.case_event, ccd.case_data restart identity cascade");
     restoreTargetSchemaState();
     createSourceTables();
     createFdwTables();
+  }
+
+  @Test
+  void ownsFreshProgressStateOutsideTheRuntimeSchema() {
+    Integer legacyTableCount = jdbc.queryForObject(
+        """
+        select count(*)
+        from information_schema.tables
+        where table_schema = 'ccd'
+          and table_name = 'ccd_data_migration_progress'
+        """,
+        Map.of(),
+        Integer.class
+    );
+    Integer supportTableCount = jdbc.queryForObject(
+        """
+        select count(*)
+        from information_schema.tables
+        where table_schema = 'ccd_data_migration'
+          and table_name = 'ccd_data_migration_progress'
+        """,
+        Map.of(),
+        Integer.class
+    );
+
+    assertThat(legacyTableCount).isZero();
+    assertThat(supportTableCount).isEqualTo(1);
+    assertThat(countRows("ccd_data_migration.ccd_data_migration_progress")).isZero();
   }
 
   @Test
@@ -391,7 +419,7 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
-  void preloadFailsWhenTargetEventsExistWithoutSourceProgress() {
+  void preloadRecoversFreshProgressFromExistingTargetEvents() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
     insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", minutesAgo(60));
@@ -399,13 +427,13 @@ class CcdDataMigrationTaskIntegrationTest {
     insertTargetEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", 1);
     createProgress();
 
-    assertThatThrownBy(() -> task(PRELOAD_EVENTS, 10, 10).runMigration())
-        .isInstanceOf(CcdDataMigrationException.class)
-        .hasMessageContaining("target already contains migrated events")
-        .hasMessageContaining("source_event_hwm is zero");
-    assertThat(countRows("ccd.case_event")).isEqualTo(1);
-    assertThat(localEventHwm()).isEqualTo(101);
-    assertThat(sourceEventHwm()).isZero();
+    CcdDataMigrationRunResult result = task(PRELOAD_EVENTS, 10, 10).runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(result.eventsProcessed()).isEqualTo(1);
+    assertThat(countRows("ccd.case_event")).isEqualTo(2);
+    assertThat(localEventHwm()).isEqualTo(102);
+    assertThat(sourceEventHwm()).isEqualTo(102);
   }
 
   @Test
@@ -1107,7 +1135,7 @@ class CcdDataMigrationTaskIntegrationTest {
   private void createProgress() {
     jdbc.update(
         """
-        insert into ccd.ccd_data_migration_progress (
+        insert into ccd_data_migration.ccd_data_migration_progress (
           task_name,
           config_hash
         ) values (
@@ -1126,7 +1154,7 @@ class CcdDataMigrationTaskIntegrationTest {
   private void createCompleteProgress(long cutoverEventHwm) {
     jdbc.update(
         """
-        insert into ccd.ccd_data_migration_progress (
+        insert into ccd_data_migration.ccd_data_migration_progress (
           task_name,
           config_hash,
           status,
@@ -1307,7 +1335,7 @@ class CcdDataMigrationTaskIntegrationTest {
 
   private String progressStatus() {
     return jdbc.queryForObject(
-        "select status from ccd.ccd_data_migration_progress where task_name = :taskName",
+        "select status from ccd_data_migration.ccd_data_migration_progress where task_name = :taskName",
         Map.of("taskName", "ccd-data-migration"),
         String.class
     );
@@ -1328,7 +1356,7 @@ class CcdDataMigrationTaskIntegrationTest {
 
   private long sourceEventHwm() {
     return jdbc.queryForObject(
-        "select source_event_hwm from ccd.ccd_data_migration_progress where task_name = :taskName",
+        "select source_event_hwm from ccd_data_migration.ccd_data_migration_progress where task_name = :taskName",
         Map.of("taskName", "ccd-data-migration"),
         Long.class
     );
@@ -1336,7 +1364,7 @@ class CcdDataMigrationTaskIntegrationTest {
 
   private Long cutoverEventHwm() {
     return jdbc.queryForObject(
-        "select cutover_event_hwm from ccd.ccd_data_migration_progress where task_name = :taskName",
+        "select cutover_event_hwm from ccd_data_migration.ccd_data_migration_progress where task_name = :taskName",
         Map.of("taskName", "ccd-data-migration"),
         Long.class
     );
@@ -1344,7 +1372,7 @@ class CcdDataMigrationTaskIntegrationTest {
 
   private long significantItemsHwm() {
     return jdbc.queryForObject(
-        "select significant_items_hwm from ccd.ccd_data_migration_progress where task_name = :taskName",
+        "select significant_items_hwm from ccd_data_migration.ccd_data_migration_progress where task_name = :taskName",
         Map.of("taskName", "ccd-data-migration"),
         Long.class
     );
@@ -1533,6 +1561,7 @@ class CcdDataMigrationTaskIntegrationTest {
   @Configuration
   @ImportAutoConfiguration({
       DecentralisedFlywayAutoConfiguration.class,
+      CcdDataMigrationFlywayAutoConfiguration.class,
       DataSourceAutoConfiguration.class,
       DataSourceTransactionManagerAutoConfiguration.class,
       JdbcTemplateAutoConfiguration.class,

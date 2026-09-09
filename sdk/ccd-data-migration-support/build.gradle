@@ -1,0 +1,68 @@
+dependencies {
+    api project(':decentralised-runtime')
+
+    implementation 'org.springframework.boot:spring-boot-autoconfigure'
+    implementation 'org.springframework:spring-jdbc'
+    implementation 'org.springframework:spring-tx'
+    implementation 'org.slf4j:slf4j-api'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    testImplementation 'org.flywaydb:flyway-core'
+    testImplementation 'org.testcontainers:testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+    testRuntimeOnly 'org.flywaydb:flyway-database-postgresql'
+    testRuntimeOnly 'org.postgresql:postgresql'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    [
+        'ccd.data-migration.perf.cases',
+        'ccd.data-migration.perf.events-per-case',
+        'ccd.data-migration.perf.event-id-window-size',
+        'ccd.data-migration.perf.max-seconds'
+    ].each { propertyName ->
+        def propertyValue = System.getProperty(propertyName)
+        if (propertyValue != null) {
+            systemProperty propertyName, propertyValue
+        }
+    }
+}
+
+tasks.register('checkMigrationImmutability') {
+    group = 'verification'
+    description = 'Fails if existing CCD data migration support database migrations are modified, deleted, or renamed'
+
+    doLast {
+        def stdout = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', 'diff', '--name-status', '--find-renames', '--diff-filter=MDR',
+                'origin/master...HEAD', '--',
+                ':(top)sdk/ccd-data-migration-support/src/main/resources/ccd-data-migration-db/migration/V*.sql'
+            standardOutput = stdout
+        }
+
+        def changedExistingMigrations = stdout.toString('UTF-8').readLines().findAll { it.trim() }
+
+        if (!changedExistingMigrations.isEmpty()) {
+            throw new GradleException(
+                "Existing CCD data migration support database migrations must not be modified, deleted, or renamed. "
+                    + "Add a new migration instead.\n\n"
+                    + changedExistingMigrations.join('\n')
+            )
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('checkMigrationImmutability')
+}

@@ -6,6 +6,7 @@ dependencies {
     constraints {
         api project(':ccd-config-generator')
         api project(':decentralised-runtime')
+        api project(':ccd-data-migration-support')
         api project(':ccd-runtime-indexing')
         api project(':ccd-servicebus-support')
         api project(':task-management')
