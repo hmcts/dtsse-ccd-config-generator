@@ -14,33 +14,29 @@
   },
   "files": [
     "dist/lib",
-    "dist/cjs",
     "dist/docweave.css",
     "src/editor.scss"
   ],
   "exports": {
     ".": {
       "types": "./dist/lib/index.d.ts",
-      "import": "./dist/lib/index.js",
       "default": "./dist/lib/index.js"
     },
     "./express": {
       "types": "./dist/lib/express.d.ts",
-      "import": "./dist/lib/express.js",
-      "require": "./dist/cjs/express.cjs",
       "default": "./dist/lib/express.js"
     },
     "./styles/docweave.css": "./dist/docweave.css",
     "./styles/editor": "./src/editor.scss"
   },
   "engines": {
-    "node": ">=20.19.0"
+    "node": "^20.19.0 || >=22.12.0"
   },
   "scripts": {
     "dev": "NODE_ENV=development tsx watch examples/court-order/server/server.ts",
     "build": "npm run build:lib && npm run build:demo && tsc -p tsconfig.demo.json",
     "build:demo": "vite build && tsx examples/court-order/server/build-static.ts",
-    "build:lib": "rm -rf dist/lib dist/cjs dist/docweave.css && tsc -p tsconfig.lib.json && esbuild src/express.ts --bundle --platform=node --format=cjs --outfile=dist/cjs/express.cjs && sass --load-path=node_modules src/editor.scss dist/docweave.css --no-source-map",
+    "build:lib": "rm -rf dist/lib dist/cjs dist/docweave.css && tsc -p tsconfig.lib.json && sass --load-path=node_modules src/editor.scss dist/docweave.css --no-source-map",
     "start": "NODE_ENV=production node dist/demo/server/server.js",
     "test": "npm run build:lib && npm run test:built",
     "test:built": "npm run typecheck && tsx --test test/*.test.ts test/demo/*.test.ts && node test/package-smoke.mjs",

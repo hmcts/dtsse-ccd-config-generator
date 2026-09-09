@@ -43,10 +43,36 @@ try {
   writeFileSync(
     path.join(consumerRoot, "consumer.mjs"),
     `
+      import assert from "node:assert/strict";
       import { access } from "node:fs/promises";
+      import { createRequire } from "node:module";
       import { fileURLToPath } from "node:url";
-      import { buildOrder } from "@hmcts-cft/docweave";
+      import {
+        buildOrder,
+        createOrderEditor,
+        TemplateRequestError,
+      } from "@hmcts-cft/docweave";
       import { createTemplateProxy } from "@hmcts-cft/docweave/express";
+
+      const require = createRequire(import.meta.url);
+      const commonJs = require("@hmcts-cft/docweave");
+      assert.equal(
+        require("@hmcts-cft/docweave/express").createTemplateProxy,
+        createTemplateProxy,
+      );
+      assert.ok(new TemplateRequestError("Conflict", 409) instanceof commonJs.TemplateRequestError);
+      assert.ok(new commonJs.TemplateRequestError("Conflict", 409) instanceof TemplateRequestError);
+
+      for (const [build, createEditor] of [
+        [buildOrder, commonJs.createOrderEditor],
+        [commonJs.buildOrder, createOrderEditor],
+      ]) {
+        const target = build((order) => order.paragraph("heading", "IT IS ORDERED THAT:"));
+        const controller = createEditor();
+        controller.render(target);
+        assert.equal(controller.getDocument(), target);
+        controller.destroy();
+      }
 
       if (typeof createTemplateProxy !== "function") {
         throw new Error("The installed package did not expose its Express entry point");
@@ -54,9 +80,10 @@ try {
 
       const document = buildOrder((order) => {
         order.paragraph("heading", "IT IS ORDERED THAT:");
+        order.paragraph("costs", "Costs in the case.");
       });
-      if (document.textContent !== "IT IS ORDERED THAT:") {
-        throw new Error("The installed package did not build an order");
+      if (document.textContent !== "IT IS ORDERED THAT:\\nCosts in the case.") {
+        throw new Error("The installed package did not serialize plain text with block separators");
       }
       if (document.getClause("heading")?.textContent !== "IT IS ORDERED THAT:") {
         throw new Error("The installed package did not expose its clause");
@@ -79,17 +106,23 @@ try {
   writeFileSync(
     path.join(consumerRoot, "consumer.cjs"),
     `
+      const { buildOrder, createOrderEditor } = require("@hmcts-cft/docweave");
       const { createTemplateProxy } = require("@hmcts-cft/docweave/express");
 
       if (typeof createTemplateProxy !== "function") {
         throw new Error("The installed package did not expose its CommonJS Express entry point");
       }
+      const document = buildOrder((order) => {
+        order.paragraph("heading", "IT IS ORDERED THAT:");
+      });
+      const controller = createOrderEditor();
+      controller.render(document);
+      if (controller.getDocument() !== document) {
+        throw new Error("The CommonJS entry point did not expose the headless editor");
+      }
     `,
   );
-  run(process.execPath, [
-    "--no-experimental-require-module",
-    path.join(consumerRoot, "consumer.cjs"),
-  ]);
+  run(process.execPath, [path.join(consumerRoot, "consumer.cjs")]);
 
   writeFileSync(
     path.join(consumerRoot, "consumer.ts"),
@@ -120,8 +153,10 @@ try {
       target.node;
       const controller = createOrderEditor({ mount });
       controller.render(target);
+      controller.getDocument() satisfies DocWeaveDocument | undefined;
       const saved: DocWeaveSnapshot = controller.getSnapshot();
       saved satisfies DocWeaveSnapshot;
+      createOrderEditor().render(target);
 
       // @ts-expect-error Docweave owns its toolbar markup and behaviour.
       createOrderEditor({ mount, toolbar: mount });

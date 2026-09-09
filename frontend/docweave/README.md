@@ -50,6 +50,14 @@ Call `getSnapshot()` to persist the current and generated documents, pass that
 snapshot back as `initialSnapshot` when restoring an editor, and call
 `destroy()` when the editor is removed.
 
+Omit `mount` to run the same ProseMirror state and reconciliation headlessly.
+`getDocument()` returns the last `DocWeaveDocument` passed to `render()`, and
+`document.textContent` uses ProseMirror's plain-text serialization with newline
+block separators.
+
+Both `import` and `require()` load the same ES module. Node.js consumers need
+20.19 or later in the 20.x series, or 22.12 or later.
+
 The compiled stylesheet is available from
 `@hmcts-cft/docweave/styles/docweave.css`. Sass consumers can use
 `@hmcts-cft/docweave/styles/editor`.

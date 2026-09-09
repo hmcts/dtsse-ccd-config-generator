@@ -133,7 +133,7 @@ describe("order builder", () => {
 
     assert.equal(
       document.textContent,
-      "IT IS ORDERED THAT:The order is suspended while £25.00 is paid:" +
+      "IT IS ORDERED THAT:\nThe order is suspended while £25.00 is paid:\n" +
         "Pay £25.00 each month.",
     );
     assert.deepEqual(
@@ -281,7 +281,7 @@ describe("order builder", () => {
     ]);
   });
 
-  it("includes generated text in plain-text serialization", () => {
+  it("uses ProseMirror plain-text serialization with block separators", () => {
     const document = buildOrder((order) => {
       order.paragraph("attendance", (content) => {
         content
@@ -289,12 +289,33 @@ describe("order builder", () => {
           .fact("register", "Alex Smith")
           .text(".");
       });
+      order.orderedList("clauses", (list) => {
+        list.item("costs", "Costs in the case.");
+      });
     });
 
-    const node = getDocumentNode(document);
     assert.equal(
-      node.textBetween(0, node.content.size),
-      "The Court heard from Alex Smith.",
+      document.textContent,
+      "The Court heard from Alex Smith.\nCosts in the case.",
+    );
+  });
+
+  it("flattens nested list items into successive lines of plain text", () => {
+    const document = buildOrder((order) => {
+      order.orderedList("clauses", (list) => {
+        list.item("condition", "Suspended on payment of:", (item) => {
+          item.orderedList("terms", (terms) => {
+            terms.item("one-off", "£500 by 1 October;");
+            terms.item("instalments", "£100 every month.");
+          });
+        });
+        list.item("costs", "Costs in the case.");
+      });
+    });
+
+    assert.equal(
+      document.textContent,
+      "Suspended on payment of:\n£500 by 1 October;\n£100 every month.\nCosts in the case.",
     );
   });
 
