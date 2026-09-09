@@ -13,8 +13,6 @@ dependencies {
 }
 ```
 
-The Java API remains in `uk.gov.hmcts.ccd.sdk.migration`; only its artifact has changed.
-
 Use this task after the FDW setup in [`fdw-data-migration.md`](fdw-data-migration.md) has created
 the FDW server, user mapping, and at least one of the CCD source foreign tables. The task creates
 any missing `fdw_stage.case_data`, `fdw_stage.case_event`, or

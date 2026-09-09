@@ -94,16 +94,9 @@ dependencies {
 }
 ```
 
-Services using `CcdDataMigrationTask` must also declare the optional support library:
-
-```groovy
-dependencies {
-  implementation 'com.github.hmcts:ccd-data-migration-support'
-}
-```
-
-Only declare the libraries you need. The migration support library is not brought in by
-`decentralised-runtime`. The BOM also covers `ccd-config-generator` and `task-management`.
+Only declare the libraries you need, including `ccd-data-migration-support` when using
+`CcdDataMigrationTask`; `decentralised-runtime` does not bring it in. The BOM also covers
+`ccd-config-generator` and `task-management`.
 It supplies version constraints, not forced versions: normal Gradle conflict resolution still applies.
 
 If indexing should run only in the local cftlib stack, use this instead of the indexer's `implementation` declaration:

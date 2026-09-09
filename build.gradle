@@ -101,6 +101,7 @@ subprojects.each { subproject ->
 
 project(':et') {
     plugins.withId('java') {
+        // Remove when the pinned ET submodule declares the published support library itself.
         dependencies.add(
             'implementation',
             'com.github.hmcts:ccd-data-migration-support:DEV-SNAPSHOT'

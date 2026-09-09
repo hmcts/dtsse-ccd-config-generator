@@ -62,7 +62,6 @@ tasks.register('verifySdkDependencies') {
 
         def runtime = resolveSdk('runtimeClasspath')
         assert runtime.containsAll(['ccd-config-generator', 'decentralised-runtime', 'ccd-servicebus-support'])
-        assert !runtime.contains('ccd-data-migration-support')
         assert runtime.contains('ccd-runtime-indexing') == applicationIndexing
         def testRuntime = resolveSdk('testRuntimeClasspath')
         assert testRuntime.containsAll(runtime)

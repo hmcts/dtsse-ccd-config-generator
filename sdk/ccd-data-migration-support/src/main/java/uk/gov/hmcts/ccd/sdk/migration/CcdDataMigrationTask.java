@@ -30,7 +30,6 @@ public class CcdDataMigrationTask implements Runnable {
   private static final String DOCS_URL =
       "https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/docs/fdw-data-migration.md";
   private static final String TARGET_SCHEMA = "ccd";
-  private static final String PROGRESS_SCHEMA = "ccd_data_migration";
   private static final String FDW_SCHEMA = "fdw_stage";
   private static final String STATUS_PRELOAD = "PRELOAD";
   private static final String STATUS_CUTOVER = "CUTOVER";
@@ -118,7 +117,6 @@ public class CcdDataMigrationTask implements Runnable {
     );
 
     validateDecentralisedRuntimeDisabled();
-    validateProgressTableReady();
     Optional<CcdDataMigrationRunResult> result = advisoryLock().runIfAcquired(
         options.taskName(),
         options.canonicalCaseTypeIds(),
@@ -948,35 +946,6 @@ public class CcdDataMigrationTask implements Runnable {
 
   private void enableElasticsearchQueueTrigger() {
     db.getJdbcTemplate().execute("alter table ccd.case_data enable trigger trigger_enqueue_case_revision");
-  }
-
-  private void validateProgressTableReady() {
-    Integer columnCount = db.queryForObject(
-        """
-        select count(*)
-        from information_schema.columns
-        where table_schema = :schema
-          and table_name = 'ccd_data_migration_progress'
-          and column_name in (
-            'task_name',
-            'config_hash',
-            'status',
-            'cutover_event_hwm',
-            'source_event_hwm',
-            'significant_items_hwm',
-            'created_at',
-            'updated_at'
-          )
-        """,
-        Map.of("schema", PROGRESS_SCHEMA),
-        Integer.class
-    );
-    if (columnCount == null || columnCount != 8) {
-      throw new CcdDataMigrationException(
-          "CCD data migration progress table is missing or incomplete. "
-              + "Run the ccd-data-migration-support Flyway migrations before starting the task."
-      );
-    }
   }
 
   private Progress getOrCreateProgress() {
