@@ -789,15 +789,12 @@ public class CcdDataMigrationTask implements Runnable {
 
     long localEventHwm = localEventHighWaterMark();
     if (localEventHwm > 0) {
-      updateSourceEventProgressHighWaterMark(localEventHwm);
-      log.info(
-          "Recovered CCD data migration progress from target events taskName={} "
-              + "localEventHwm={} targetEventHwm={}",
-          options.taskName(),
-          localEventHwm,
-          targetEventHwm
+      throw new CcdDataMigrationException(
+          "CCD data migration target already contains migrated events but source_event_hwm is zero"
+              + " taskName=" + options.taskName()
+              + " localEventHwm=" + localEventHwm
+              + " targetEventHwm=" + targetEventHwm
       );
-      return localEventHwm;
     }
     return 0;
   }

@@ -103,9 +103,8 @@ identity configuration or explicitly reset/use a new `task-name` after confirmin
 When upgrading from a release where this task was packaged in `decentralised-runtime`, the runtime
 drops the legacy `ccd.ccd_data_migration_progress` table and the support library creates a fresh
 progress table in its own schema. Existing migration progress is intentionally not carried forward;
-restart the preload using the new table. On the first run, the task recovers its event high-water
-mark from events already copied into the target for the configured jurisdiction and case types,
-then continues with later source events.
+only upgrade before beginning a migration or after explicitly clearing any partial target migration
+data. Part-way migrations from the legacy progress table are not supported.
 
 ## Configuration
 

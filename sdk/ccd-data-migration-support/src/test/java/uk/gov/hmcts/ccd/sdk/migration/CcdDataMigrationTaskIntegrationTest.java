@@ -419,7 +419,7 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
-  void preloadRecoversFreshProgressFromExistingTargetEvents() {
+  void preloadFailsWhenTargetEventsExistWithoutSourceProgress() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
     insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", minutesAgo(60));
@@ -427,13 +427,13 @@ class CcdDataMigrationTaskIntegrationTest {
     insertTargetEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", 1);
     createProgress();
 
-    CcdDataMigrationRunResult result = task(PRELOAD_EVENTS, 10, 10).runMigration();
-
-    assertThat(result.caughtUp()).isTrue();
-    assertThat(result.eventsProcessed()).isEqualTo(1);
-    assertThat(countRows("ccd.case_event")).isEqualTo(2);
-    assertThat(localEventHwm()).isEqualTo(102);
-    assertThat(sourceEventHwm()).isEqualTo(102);
+    assertThatThrownBy(() -> task(PRELOAD_EVENTS, 10, 10).runMigration())
+        .isInstanceOf(CcdDataMigrationException.class)
+        .hasMessageContaining("target already contains migrated events")
+        .hasMessageContaining("source_event_hwm is zero");
+    assertThat(countRows("ccd.case_event")).isEqualTo(1);
+    assertThat(localEventHwm()).isEqualTo(101);
+    assertThat(sourceEventHwm()).isZero();
   }
 
   @Test
