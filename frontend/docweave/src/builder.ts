@@ -76,7 +76,7 @@ export class DocWeaveDocument {
     children: readonly DocWeaveClause[],
     clausesById: ReadonlyMap<string, DocWeaveClause>,
   ) {
-    this.textContent = node.textContent;
+    this.textContent = node.textBetween(0, node.content.size, "\n");
     this.children = Object.freeze([...children]);
     this.#clausesById = new Map(clausesById);
     documentInternals.set(this, {
@@ -93,11 +93,6 @@ export class DocWeaveDocument {
 
   getClause(id: string): DocWeaveClause | undefined {
     return this.#clausesById.get(id);
-  }
-
-  toText(): string {
-    const node = getDocumentNode(this);
-    return node.textBetween(0, node.content.size, "\n");
   }
 }
 

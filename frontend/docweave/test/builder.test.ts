@@ -133,7 +133,7 @@ describe("order builder", () => {
 
     assert.equal(
       document.textContent,
-      "IT IS ORDERED THAT:The order is suspended while £25.00 is paid:" +
+      "IT IS ORDERED THAT:\nThe order is suspended while £25.00 is paid:\n" +
         "Pay £25.00 each month.",
     );
     assert.deepEqual(
@@ -295,7 +295,7 @@ describe("order builder", () => {
     });
 
     assert.equal(
-      document.toText(),
+      document.textContent,
       "The Court heard from Alex Smith.\nCosts in the case.",
     );
   });
@@ -314,7 +314,7 @@ describe("order builder", () => {
     });
 
     assert.equal(
-      document.toText(),
+      document.textContent,
       "Suspended on payment of:\n£500 by 1 October;\n£100 every month.\nCosts in the case.",
     );
   });

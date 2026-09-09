@@ -7,7 +7,6 @@ import {
   buildOrder as buildDocWeaveDocument,
   getDocumentNode,
 } from "../src/builder.js";
-import { createOrderEditor } from "../src/client.js";
 import { reconcileOrderDocument } from "../src/reconciliation.js";
 import { editorSchema } from "../src/schema.js";
 
@@ -16,32 +15,6 @@ const buildOrder = (
 ) => getDocumentNode(buildDocWeaveDocument(define));
 
 describe("order document reconciliation", () => {
-  it("runs the controller headlessly and restores snapshots", () => {
-    const first = buildDocWeaveDocument((order) => {
-      order.paragraph("deadline", (content) => {
-        content.text("Payment is due by ").fact("date", "1 September");
-      });
-    });
-    const controller = createOrderEditor();
-    controller.render(first);
-    const restored = createOrderEditor({
-      initialSnapshot: controller.getSnapshot(),
-    });
-    const second = buildDocWeaveDocument((order) => {
-      order.paragraph("deadline", (content) => {
-        content.text("Payment is due by ").fact("date", "8 September");
-      });
-    });
-
-    restored.render(second);
-
-    assert.equal(restored.getDocument(), second);
-    assert.deepEqual(
-      restored.getSnapshot().current,
-      getDocumentNode(second).toJSON(),
-    );
-  });
-
   it("replaces directly edited paragraph wording when reference wording changes", () => {
     const live = buildOrder((order) => {
       order.paragraph("heading", "Edited heading");

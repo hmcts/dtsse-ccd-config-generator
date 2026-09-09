@@ -3,10 +3,7 @@ import { gapCursor } from "prosemirror-gapcursor";
 import { toggleMark } from "prosemirror-commands";
 import { closeHistory, history, redo, undo } from "prosemirror-history";
 import { wrapInList } from "prosemirror-schema-list";
-import {
-  type Command,
-  type SelectionBookmark,
-} from "prosemirror-state";
+import { type Command } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 
 import {
@@ -181,11 +178,9 @@ export function createOrderEditor(
 
   let connectedToolbar: ConnectedEditorToolbar | undefined;
   let templateDialog: TemplateDialog | undefined;
-  let templateBookmark: SelectionBookmark | undefined;
 
   function openTemplateDialog(): void {
     if (!templateDialog) return;
-    templateBookmark = view.state.selection.getBookmark();
     templateDialog.open();
   }
 
@@ -203,9 +198,6 @@ export function createOrderEditor(
       return true;
     },
     dispatchTransaction(transaction) {
-      if (templateBookmark) {
-        templateBookmark = templateBookmark.map(transaction.mapping);
-      }
       runtime.dispatch(transaction);
     },
   });
@@ -222,10 +214,9 @@ export function createOrderEditor(
       provider: templateProvider,
       insert(template) {
         const { document } = parseTemplateFragment(template.content);
-        const bookmark = templateBookmark ?? view.state.selection.getBookmark();
         const command = insertTemplate(
           document,
-          bookmark.resolve(view.state.doc),
+          view.state.selection,
         );
         command(view.state, (transaction) => {
           assertCurrentDocumentMatchesGenerated(
@@ -236,7 +227,6 @@ export function createOrderEditor(
           // Keep immediate follow-up typing in its own undo group too.
           view.dispatch(closeHistory(view.state.tr));
         }, view);
-        templateBookmark = undefined;
       },
       onInserted: () => view.focus(),
     });

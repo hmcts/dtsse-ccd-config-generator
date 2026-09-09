@@ -52,8 +52,11 @@ snapshot back as `initialSnapshot` when restoring an editor, and call
 
 Omit `mount` to run the same ProseMirror state and reconciliation headlessly.
 `getDocument()` returns the last `DocWeaveDocument` passed to `render()`, and
-`document.toText()` uses ProseMirror's plain-text serialization with newline
+`document.textContent` uses ProseMirror's plain-text serialization with newline
 block separators.
+
+Both `import` and `require()` load the same ES module. Node.js consumers need
+20.19 or later in the 20.x series, or 22.12 or later.
 
 The compiled stylesheet is available from
 `@hmcts-cft/docweave/styles/docweave.css`. Sass consumers can use

@@ -43,10 +43,36 @@ try {
   writeFileSync(
     path.join(consumerRoot, "consumer.mjs"),
     `
+      import assert from "node:assert/strict";
       import { access } from "node:fs/promises";
+      import { createRequire } from "node:module";
       import { fileURLToPath } from "node:url";
-      import { buildOrder } from "@hmcts-cft/docweave";
+      import {
+        buildOrder,
+        createOrderEditor,
+        TemplateRequestError,
+      } from "@hmcts-cft/docweave";
       import { createTemplateProxy } from "@hmcts-cft/docweave/express";
+
+      const require = createRequire(import.meta.url);
+      const commonJs = require("@hmcts-cft/docweave");
+      assert.equal(
+        require("@hmcts-cft/docweave/express").createTemplateProxy,
+        createTemplateProxy,
+      );
+      assert.ok(new TemplateRequestError("Conflict", 409) instanceof commonJs.TemplateRequestError);
+      assert.ok(new commonJs.TemplateRequestError("Conflict", 409) instanceof TemplateRequestError);
+
+      for (const [build, createEditor] of [
+        [buildOrder, commonJs.createOrderEditor],
+        [commonJs.buildOrder, createOrderEditor],
+      ]) {
+        const target = build((order) => order.paragraph("heading", "IT IS ORDERED THAT:"));
+        const controller = createEditor();
+        controller.render(target);
+        assert.equal(controller.getDocument(), target);
+        controller.destroy();
+      }
 
       if (typeof createTemplateProxy !== "function") {
         throw new Error("The installed package did not expose its Express entry point");
@@ -54,15 +80,13 @@ try {
 
       const document = buildOrder((order) => {
         order.paragraph("heading", "IT IS ORDERED THAT:");
+        order.paragraph("costs", "Costs in the case.");
       });
-      if (document.textContent !== "IT IS ORDERED THAT:") {
-        throw new Error("The installed package did not build an order");
+      if (document.textContent !== "IT IS ORDERED THAT:\\nCosts in the case.") {
+        throw new Error("The installed package did not serialize plain text with block separators");
       }
       if (document.getClause("heading")?.textContent !== "IT IS ORDERED THAT:") {
         throw new Error("The installed package did not expose its clause");
-      }
-      if (document.toText() !== "IT IS ORDERED THAT:") {
-        throw new Error("The installed package did not serialize plain text");
       }
       if (document.children[0] !== document.getClause("heading")) {
         throw new Error("The installed package did not preserve clause identity");
@@ -98,10 +122,7 @@ try {
       }
     `,
   );
-  run(process.execPath, [
-    "--no-experimental-require-module",
-    path.join(consumerRoot, "consumer.cjs"),
-  ]);
+  run(process.execPath, [path.join(consumerRoot, "consumer.cjs")]);
 
   writeFileSync(
     path.join(consumerRoot, "consumer.ts"),
@@ -128,7 +149,6 @@ try {
       heading.children satisfies readonly DocWeaveClause[];
       target.children satisfies readonly DocWeaveClause[];
       target.textContent satisfies string;
-      target.toText() satisfies string;
       // @ts-expect-error ProseMirror is an internal implementation detail.
       target.node;
       const controller = createOrderEditor({ mount });

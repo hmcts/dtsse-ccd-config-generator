@@ -552,7 +552,7 @@ describe("public order editor API", () => {
     }
   });
 
-  it("loads and inserts a saved template as one undoable edit", async () => {
+  it("keeps template insertion at the selected clause across render as one undoable edit", async () => {
     const { buildOrder, createOrderEditor } = await import("../src/index.js");
     const template = {
       id: "11111111-1111-1111-1111-111111111111",
@@ -588,13 +588,17 @@ describe("public order editor API", () => {
         },
       },
     });
-    controller.render(buildOrder((order) => {
+    const orderWithHeading = (heading: string) => buildOrder((order) => {
+      order.paragraph("heading", heading);
       order.paragraph("managed", "A generated paragraph.");
-    }));
+    });
+    controller.render(orderWithHeading("Short heading."));
 
-    const generatedText = dom.window.document.querySelector(
-      ".ProseMirror p",
-    )!.firstChild!;
+    const surface = dom.window.document.querySelector<HTMLElement>(
+      "#editor .ProseMirror",
+    )!;
+    surface.focus();
+    const generatedText = surface.querySelectorAll("p")[1]!.firstChild!;
     const range = dom.window.document.createRange();
     range.setStart(generatedText, 5);
     range.collapse(true);
@@ -611,6 +615,10 @@ describe("public order editor API", () => {
       ".docweave-templates__result",
     )!.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
+    controller.render(orderWithHeading(
+      "A considerably longer generated heading moves the selected paragraph down.",
+    ));
+    const beforeInsertion = controller.getSnapshot().current;
     dom.window.document.querySelector<HTMLButtonElement>(
       ".docweave-templates__actions button",
     )!.click();
@@ -624,10 +632,11 @@ describe("public order editor API", () => {
     };
     assert.deepEqual(
       current.content.map((node) => node.attrs?.id),
-      ["paragraph:managed", null],
+      ["paragraph:heading", "paragraph:managed", null],
     );
     mount.querySelector<HTMLButtonElement>('[aria-label="Undo"]')!.click();
     assert.doesNotMatch(mount.textContent, /Costs in the case\./);
+    assert.deepEqual(controller.getSnapshot().current, beforeInsertion);
     controller.destroy();
   });
 });
