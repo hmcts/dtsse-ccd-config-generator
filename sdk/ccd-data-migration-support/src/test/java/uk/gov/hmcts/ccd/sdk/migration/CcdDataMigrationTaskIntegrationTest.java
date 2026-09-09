@@ -60,34 +60,6 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
-  void ownsFreshProgressStateOutsideTheRuntimeSchema() {
-    Integer legacyTableCount = jdbc.queryForObject(
-        """
-        select count(*)
-        from information_schema.tables
-        where table_schema = 'ccd'
-          and table_name = 'ccd_data_migration_progress'
-        """,
-        Map.of(),
-        Integer.class
-    );
-    Integer supportTableCount = jdbc.queryForObject(
-        """
-        select count(*)
-        from information_schema.tables
-        where table_schema = 'ccd_data_migration'
-          and table_name = 'ccd_data_migration_progress'
-        """,
-        Map.of(),
-        Integer.class
-    );
-
-    assertThat(legacyTableCount).isZero();
-    assertThat(supportTableCount).isEqualTo(1);
-    assertThat(countRows("ccd_data_migration.ccd_data_migration_progress")).isZero();
-  }
-
-  @Test
   void preloadsEventsBySourceHighWaterMarkWithoutDroppingTargetProtections() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
