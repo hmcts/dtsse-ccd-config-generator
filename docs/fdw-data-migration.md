@@ -78,6 +78,85 @@ You need:
 The application should be shuttered or read-only for the migrating case types before the final
 `--apply` migration run.
 
+## Operational cutover runbook
+
+The FDW setup and initial validation should be completed before the migration window. The final
+migration must run while source writes are frozen so that the source and target cannot diverge
+during cutover.
+
+### Service team preparation
+
+1. Prepare a shuttered CCD definition that blocks normal user access while retaining only the
+   punch-through access needed to verify the migration:
+   * a dedicated test superuser for post-migration smoke tests
+   * `R` access for `caseworker-wa-task-configuration` when Work Allocation verification is required
+2. Prepare any service frontends for shuttering. See the
+   [Platform shuttering guide](https://hmcts.github.io/cloud-native-platform/path-to-live/shutter.html#shutter-implementation-and-design).
+3. Prepare the CCD Flux PR that marks the case types as decentralised, for example the
+   [Special Tribunals cutover PR](https://github.com/hmcts/cnp-flux-config/pull/42025).
+4. Prepare a separate rollback PR that restores the centralised configuration, for example the
+   [Special Tribunals rollback PR](https://github.com/hmcts/cnp-flux-config/pull/42030).
+5. Agree the smoke-test cases, expected Work Allocation behaviour and go/no-go owners before the
+   migration window.
+
+### Platform Operations preparation
+
+1. Complete [Phase 1](#phase-1-set-up-fdw-objects), including the required user mappings and grants,
+   before the migration window.
+2. Make the setup and migration scripts available on the bastion or other approved runner:
+
+   ```bash
+   scp ./scripts/setup-ccd-data-fdw.sh <bastion-host>:
+   scp ./scripts/migrate-ccd-data-fdw.sh <bastion-host>:
+   ```
+
+3. Prepare the destination connection and case type environment variables described in
+   [Phase 2](#phase-2-run-the-migration).
+4. Run the migration script without `--apply` and resolve any validation failures before cutover:
+
+   ```bash
+   ./scripts/migrate-ccd-data-fdw.sh
+   ```
+
+5. Estimate the required shutter window from a representative environment. See
+   [Expected runtime](#expected-runtime) for an example; production runtime depends on the number of
+   cases and events being migrated.
+
+### On the night
+
+1. Create or identify test cases in central CCD for post-migration verification.
+2. Shutter the application and import the prepared shuttered CCD definition.
+3. Confirm writes for the migrating case types are frozen and allow in-flight source transactions
+   to finish.
+4. Run the final FDW migration:
+
+   ```bash
+   unset DELTA_SINCE
+   ./scripts/migrate-ccd-data-fdw.sh --apply
+   ```
+
+   If a full copy has already been performed and an agreed delta timestamp is being used, run the
+   final delta instead:
+
+   ```bash
+   export DELTA_SINCE='2026-04-30 10:00:00'
+   ./scripts/migrate-ccd-data-fdw.sh --apply
+   ```
+
+   Services using `CcdDataMigrationTask` should follow the preload and explicit `CUTOVER` process in
+   the [CCD data migration task guide](ccd-data-migration-task.md) instead of invoking the shell
+   migration script.
+5. Merge the prepared CCD Flux PR to mark the case types as decentralised.
+6. Complete the [post-migration checks](#post-migration-checks), including Work Allocation checks
+   where applicable.
+7. Make the go/no-go decision:
+   * **Go:** unshutter the service.
+   * **No-go:** merge the prepared CCD Flux rollback PR, confirm traffic is routed back to central
+     CCD, and then unshutter the service.
+
+The migration is non-destructive: the source cases remain in central CCD. Rollback changes the CCD
+configuration back to the centralised path; it does not require restoring source case data.
+
 ## Phase 1: Set up FDW objects
 
 Run `setup-ccd-data-fdw.sh` once against the target application database. This is the part likely
@@ -277,6 +356,9 @@ After a successful run, smoke test:
 * edit a migrated case and confirm a new event can be created
 * create a new case
 * confirm search/indexing still works for newly created or edited cases
+* confirm Work Allocation can read the case through the
+  `caseworker-wa-task-configuration` punch-through role, where applicable
+* confirm Work Allocation Service Bus messages are published, where applicable
 
 ## Automated regression test
 
