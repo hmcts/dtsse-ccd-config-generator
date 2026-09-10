@@ -6,8 +6,8 @@ import { buildDoc, createDocEditor } from "../src/index.js";
 
 describe("headless editor", () => {
   it("runs the controller headlessly and restores snapshots", () => {
-    const first = buildDoc((order) => {
-      order.paragraph("deadline", (content) => {
+    const first = buildDoc((doc) => {
+      doc.paragraph("deadline", (content) => {
         content.text("Payment is due by ").fact("date", "1 September");
       });
     });
@@ -16,8 +16,8 @@ describe("headless editor", () => {
     const restored = createDocEditor({
       initialSnapshot: controller.getSnapshot(),
     });
-    const second = buildDoc((order) => {
-      order.paragraph("deadline", (content) => {
+    const second = buildDoc((doc) => {
+      doc.paragraph("deadline", (content) => {
         content.text("Payment is due by ").fact("date", "8 September");
       });
     });

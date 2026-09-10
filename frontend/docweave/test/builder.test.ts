@@ -9,17 +9,17 @@ import {
 } from "../src/builder.js";
 import { editorSchema } from "../src/schema.js";
 
-describe("order builder", () => {
+describe("document builder", () => {
   it("builds paragraphs and independently scoped ordered-list items", () => {
-    const document = buildDoc((order) => {
-      order.paragraph("heading", "IT IS ORDERED THAT:");
-      order.paragraph("attendance", (content) => {
+    const document = buildDoc((doc) => {
+      doc.paragraph("heading", "IT IS ORDERED THAT:");
+      doc.paragraph("attendance", (content) => {
         content
           .text("The Court heard from ")
           .fact("register", "Alex Smith, counsel for the claimant")
           .text(".");
       });
-      order.orderedList("clauses", (list) => {
+      doc.orderedList("clauses", (list) => {
         list.item("possession", (content) => {
           content
             .text("Give up possession by ")
@@ -102,8 +102,8 @@ describe("order builder", () => {
 
   it("only includes list items added by the callback", () => {
     const includeSecondItem = false;
-    const document = buildDoc((order) => {
-      order.orderedList("clauses", (list) => {
+    const document = buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => {
         list.item("first", "First");
         if (includeSecondItem) list.item("second", "Second");
       });
@@ -115,9 +115,9 @@ describe("order builder", () => {
   });
 
   it("exposes an immutable logical clause hierarchy with public IDs", () => {
-    const document = buildDoc((order) => {
-      order.paragraph("heading", "IT IS ORDERED THAT:");
-      order.orderedList("clauses", (list) => {
+    const document = buildDoc((doc) => {
+      doc.paragraph("heading", "IT IS ORDERED THAT:");
+      doc.orderedList("clauses", (list) => {
         list.item("suspended-condition", (content) => {
           content
             .text("The order is suspended while £")
@@ -178,9 +178,9 @@ describe("order builder", () => {
   it("requires paragraph and item IDs to be globally unique", () => {
     assert.throws(
       () =>
-        buildDoc((order) => {
-          order.paragraph("duplicate", "Paragraph");
-          order.orderedList("clauses", (list) => {
+        buildDoc((doc) => {
+          doc.paragraph("duplicate", "Paragraph");
+          doc.orderedList("clauses", (list) => {
             list.item("duplicate", "List item");
           });
         }),
@@ -189,8 +189,8 @@ describe("order builder", () => {
 
     assert.throws(
       () =>
-        buildDoc((order) => {
-          order.orderedList("clauses", (list) => {
+        buildDoc((doc) => {
+          doc.orderedList("clauses", (list) => {
             list.item("duplicate", "Parent", (item) => {
               item.orderedList("nested", (nested) => {
                 nested.item("duplicate", "Child");
@@ -203,8 +203,8 @@ describe("order builder", () => {
   });
 
   it("builds managed nested ordered lists", () => {
-    const document = buildDoc((order) => {
-      order.orderedList("clauses", (list) => {
+    const document = buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => {
         list.item("parent", "Parent clause", (item) => {
           item.orderedList("subclauses", (subclauses) => {
             subclauses.item("subclause-a", "First subclause");
@@ -227,9 +227,9 @@ describe("order builder", () => {
   });
 
   it("omits an ordered list with no items", () => {
-    const document = buildDoc((order) => {
-      order.paragraph("heading", "IT IS ORDERED THAT:");
-      order.orderedList("empty", () => {});
+    const document = buildDoc((doc) => {
+      doc.paragraph("heading", "IT IS ORDERED THAT:");
+      doc.orderedList("empty", () => {});
     });
 
     assert.deepEqual(
@@ -248,8 +248,8 @@ describe("order builder", () => {
   });
 
   it("omits an empty nested ordered list", () => {
-    const document = buildDoc((order) => {
-      order.orderedList("clauses", (list) => {
+    const document = buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => {
         list.item("parent", "Parent", (item) => {
           item.orderedList("empty", () => {});
         });
@@ -262,8 +262,8 @@ describe("order builder", () => {
   });
 
   it("renders generated text with its managed DOM marker", () => {
-    const document = buildDoc((order) => {
-      order.paragraph("date", (content) => {
+    const document = buildDoc((doc) => {
+      doc.paragraph("date", (content) => {
         content.fact("value", "1 September 2026");
       });
     });
@@ -282,14 +282,14 @@ describe("order builder", () => {
   });
 
   it("uses ProseMirror plain-text serialization with block separators", () => {
-    const document = buildDoc((order) => {
-      order.paragraph("attendance", (content) => {
+    const document = buildDoc((doc) => {
+      doc.paragraph("attendance", (content) => {
         content
           .text("The Court heard from ")
           .fact("register", "Alex Smith")
           .text(".");
       });
-      order.orderedList("clauses", (list) => {
+      doc.orderedList("clauses", (list) => {
         list.item("costs", "Costs in the case.");
       });
     });
@@ -301,8 +301,8 @@ describe("order builder", () => {
   });
 
   it("flattens nested list items into successive lines of plain text", () => {
-    const document = buildDoc((order) => {
-      order.orderedList("clauses", (list) => {
+    const document = buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => {
         list.item("condition", "Suspended on payment of:", (item) => {
           item.orderedList("terms", (terms) => {
             terms.item("one-off", "£500 by 1 October;");
@@ -320,8 +320,8 @@ describe("order builder", () => {
   });
 
   it("keeps fact source IDs outside the ProseMirror document", () => {
-    const document = buildDoc((order) => {
-      order.paragraph("payment", (content) => {
+    const document = buildDoc((doc) => {
+      doc.paragraph("payment", (content) => {
         content.fact("amount", "£2342.00", {
           sourceId: "arrears-amount",
         });
@@ -346,8 +346,8 @@ describe("order builder", () => {
     for (const sourceId of ["", "two words", "line\nbreak"]) {
       assert.throws(
         () =>
-          buildDoc((order) => {
-            order.paragraph("payment", (content) => {
+          buildDoc((doc) => {
+            doc.paragraph("payment", (content) => {
               content.fact("amount", "£1", { sourceId });
             });
           }),

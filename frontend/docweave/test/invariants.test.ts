@@ -105,20 +105,20 @@ describe("generated document invariants", () => {
   });
 
   it("rejects moving an existing managed node to another managed parent", () => {
-    const previous = buildDoc((order) => {
-      order.orderedList("first", (list) => {
+    const previous = buildDoc((doc) => {
+      doc.orderedList("first", (list) => {
         list.item("moved", "Moved");
         list.item("first-retained", "First retained");
       });
-      order.orderedList("second", (list) => {
+      doc.orderedList("second", (list) => {
         list.item("second-retained", "Second retained");
       });
     });
-    const target = buildDoc((order) => {
-      order.orderedList("first", (list) => {
+    const target = buildDoc((doc) => {
+      doc.orderedList("first", (list) => {
         list.item("first-retained", "First retained");
       });
-      order.orderedList("second", (list) => {
+      doc.orderedList("second", (list) => {
         list.item("second-retained", "Second retained");
         list.item("moved", "Moved");
       });
@@ -132,8 +132,8 @@ describe("generated document invariants", () => {
 
   it("rejects reordering existing managed siblings", () => {
     const orderWithItems = (ids: readonly string[]) =>
-      buildDoc((order) => {
-        order.orderedList("clauses", (list) => {
+      buildDoc((doc) => {
+        doc.orderedList("clauses", (list) => {
           for (const id of ids) list.item(id, id);
         });
       });
@@ -156,11 +156,11 @@ describe("generated document invariants", () => {
   });
 
   it("rejects adding or removing managed children below an existing non-container", () => {
-    const previous = buildDoc((order) => {
-      order.paragraph("deadline", "Payment is due soon");
+    const previous = buildDoc((doc) => {
+      doc.paragraph("deadline", "Payment is due soon");
     });
-    const target = buildDoc((order) => {
-      order.paragraph("deadline", (content) => {
+    const target = buildDoc((doc) => {
+      doc.paragraph("deadline", (content) => {
         content.text("Payment is due by ").fact("date", "1 October");
       });
     });
@@ -182,14 +182,14 @@ describe("generated document invariants", () => {
   });
 
   it("allows managed children to change at the root and in managed containers", () => {
-    const previous = buildDoc((order) => {
-      order.orderedList("clauses", (list) => {
+    const previous = buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => {
         list.item("parent", "Payment is due soon");
       });
     });
-    const target = buildDoc((order) => {
-      order.paragraph("heading", "IT IS ORDERED THAT:");
-      order.orderedList("clauses", (list) => {
+    const target = buildDoc((doc) => {
+      doc.paragraph("heading", "IT IS ORDERED THAT:");
+      doc.orderedList("clauses", (list) => {
         list.item("parent", (content) => {
           content.text("Payment is due by ").fact("date", "1 October");
         });
@@ -207,8 +207,8 @@ describe("generated document invariants", () => {
 
   it("allows an existing managed node's value to change", () => {
     const orderWithDate = (date: string) =>
-      buildDoc((order) => {
-        order.paragraph("deadline", (content) => {
+      buildDoc((doc) => {
+        doc.paragraph("deadline", (content) => {
           content.fact("date", date);
         });
       });
@@ -222,8 +222,8 @@ describe("generated document invariants", () => {
   });
 
   it("rejects a restored current document with different managed structure", () => {
-    const generated = buildDoc((order) => {
-      order.paragraph("heading", "Generated");
+    const generated = buildDoc((doc) => {
+      doc.paragraph("heading", "Generated");
     });
     const current = editorSchema.node(
       "doc",
@@ -245,8 +245,8 @@ describe("generated document invariants", () => {
   });
 
   it("allows restored current documents to contain ordinary user edits", () => {
-    const generated = buildDoc((order) => {
-      order.orderedList("clauses", (list) => {
+    const generated = buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => {
         list.item("generated", "Generated wording");
       });
     });

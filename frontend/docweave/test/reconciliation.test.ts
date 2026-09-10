@@ -14,16 +14,16 @@ const buildDoc = (
   define: Parameters<typeof buildDocWeaveDocument>[0],
 ) => getDocumentNode(buildDocWeaveDocument(define));
 
-describe("order document reconciliation", () => {
+describe("document reconciliation", () => {
   it("replaces directly edited paragraph wording when reference wording changes", () => {
-    const live = buildDoc((order) => {
-      order.paragraph("heading", "Edited heading");
+    const live = buildDoc((doc) => {
+      doc.paragraph("heading", "Edited heading");
     });
-    const previousTarget = buildDoc((order) => {
-      order.paragraph("heading", "Old heading");
+    const previousTarget = buildDoc((doc) => {
+      doc.paragraph("heading", "Old heading");
     });
-    const target = buildDoc((order) => {
-      order.paragraph("heading", "New heading");
+    const target = buildDoc((doc) => {
+      doc.paragraph("heading", "New heading");
     });
     const transaction = EditorState.create({
       schema: editorSchema,
@@ -43,8 +43,8 @@ describe("order document reconciliation", () => {
 
   it("updates generated text while preserving edited surrounding text", () => {
     const orderWithDate = (prefix: string, date: string) =>
-      buildDoc((order) => {
-        order.paragraph("deadline", (content) => {
+      buildDoc((doc) => {
+        doc.paragraph("deadline", (content) => {
           content.text(prefix).fact("date", date).text(".");
         });
       });
@@ -70,8 +70,8 @@ describe("order document reconciliation", () => {
 
   it("updates generated text while preserving edited list-item wording", () => {
     const orderWithDate = (prefix: string, date: string) =>
-      buildDoc((order) => {
-        order.orderedList("clauses", (list) => {
+      buildDoc((doc) => {
+        doc.orderedList("clauses", (list) => {
           list.item("deadline", (content) => {
             content.text(prefix).fact("date", date).text(".");
           });
@@ -97,8 +97,8 @@ describe("order document reconciliation", () => {
       wording: string,
       generatedText: string | undefined,
     ) =>
-      buildDoc((order) => {
-        order.orderedList("clauses", (list) => {
+      buildDoc((doc) => {
+        doc.orderedList("clauses", (list) => {
           list.item("deadline", (content) => {
             content.text(wording);
             if (generatedText) {
@@ -125,8 +125,8 @@ describe("order document reconciliation", () => {
 
   it("removes generated text when replacing edited list-item wording", () => {
     const withGeneratedText = (wording: string) =>
-      buildDoc((order) => {
-        order.orderedList("clauses", (list) => {
+      buildDoc((doc) => {
+        doc.orderedList("clauses", (list) => {
           list.item("deadline", (content) => {
             content.text(wording).fact("date", "1 September");
           });
@@ -134,8 +134,8 @@ describe("order document reconciliation", () => {
       });
     const previousTarget = withGeneratedText("Old wording: ");
     const live = withGeneratedText("Judge-edited wording: ");
-    const target = buildDoc((order) => {
-      order.orderedList("clauses", (list) => {
+    const target = buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => {
         list.item("deadline", "New wording");
       });
     });
@@ -344,14 +344,14 @@ describe("order document reconciliation", () => {
   });
 
   it("removes user-authored descendants when their generated clause is removed", () => {
-    const previousTarget = buildDoc((order) => {
-      order.orderedList("clauses", (list) => {
+    const previousTarget = buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => {
         list.item("remove", "Generated parent");
         list.item("keep", "Keep");
       });
     });
-    const target = buildDoc((order) => {
-      order.orderedList("clauses", (list) => {
+    const target = buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => {
         list.item("keep", "Keep");
       });
     });
@@ -518,8 +518,8 @@ describe("order document reconciliation", () => {
 
   it("removes the nested list when its final generated subclause is removed", () => {
     const withSubclause = (includeSubclause: boolean) =>
-      buildDoc((order) => {
-        order.orderedList("clauses", (list) => {
+      buildDoc((doc) => {
+        doc.orderedList("clauses", (list) => {
           list.item("parent", "Parent clause", (item) => {
             if (includeSubclause) {
               item.orderedList("subclauses", (subclauses) => {

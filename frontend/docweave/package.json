@@ -1,7 +1,7 @@
 {
   "name": "@hmcts-cft/docweave",
   "version": "0.0.0-local",
-  "description": "Rich-text editor for generated court orders",
+  "description": "Rich-text editor for generated documents that stay editable and machine-readable",
   "type": "module",
   "main": "./dist/lib/index.js",
   "types": "./dist/lib/index.d.ts",

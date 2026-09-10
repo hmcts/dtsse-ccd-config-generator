@@ -64,8 +64,8 @@ describe("numbered clause input rule", () => {
   });
 
   it("leaves a generated clause alone", () => {
-    const generated = buildDoc((order) => {
-      order.paragraph("heading", "1.");
+    const generated = buildDoc((doc) => {
+      doc.paragraph("heading", "1.");
     });
     const state = type(
       stateWithCursorAtEndOfLastParagraph(getDocumentNode(generated)),

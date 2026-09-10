@@ -11,9 +11,9 @@ describe("renderHtml", () => {
 
   it("renders the reader's document as plain HTML with facts as text", () => {
     const controller = createDocEditor();
-    controller.render(buildDoc((order) => {
-      order.paragraph("heading", "IT IS ORDERED THAT:");
-      order.orderedList("clauses", (list) => {
+    controller.render(buildDoc((doc) => {
+      doc.paragraph("heading", "IT IS ORDERED THAT:");
+      doc.orderedList("clauses", (list) => {
         list.item("possession", (content) => {
           content
             .text("Give up possession by ")
@@ -34,7 +34,7 @@ describe("renderHtml", () => {
 
   it("keeps marks, headings and list numbering from the editor document", () => {
     const controller = createDocEditor();
-    controller.render(buildDoc((order) => order.paragraph("p", "x")));
+    controller.render(buildDoc((doc) => doc.paragraph("p", "x")));
     const snapshot = controller.getSnapshot();
     const current = {
       type: "doc",
@@ -66,8 +66,8 @@ describe("renderHtml", () => {
 
   it("renders the current document, not the generated one", () => {
     const controller = createDocEditor();
-    controller.render(buildDoc((order) => {
-      order.paragraph("heading", "Generated wording.");
+    controller.render(buildDoc((doc) => {
+      doc.paragraph("heading", "Generated wording.");
     }));
     const snapshot = controller.getSnapshot();
     const current = structuredClone(snapshot.current) as {
@@ -82,7 +82,7 @@ describe("renderHtml", () => {
 
   it("explains itself when there is no DOM", () => {
     const controller = createDocEditor();
-    controller.render(buildDoc((order) => order.paragraph("p", "x")));
+    controller.render(buildDoc((doc) => doc.paragraph("p", "x")));
     assert.throws(
       () => renderHtml(controller.getSnapshot()),
       /needs a DOM document/,

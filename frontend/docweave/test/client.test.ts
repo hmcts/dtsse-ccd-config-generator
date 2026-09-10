@@ -161,7 +161,7 @@ describe("public editor API", () => {
       };
       if (!configured) ignored();
       for (const extra of [{ ctrlKey: true }, { altKey: true }, { metaKey: true }, { shiftKey: true }, { isComposing: true }]) ignored(extra);
-      controller.render(buildDoc((order) => order.paragraph("existing", "Existing text")));
+      controller.render(buildDoc((doc) => doc.paragraph("existing", "Existing text")));
       surface.focus();
       ignored();
       controller.destroy();
@@ -228,9 +228,9 @@ describe("public editor API", () => {
 
   it("renders, serializes and destroys an editor", async () => {
     const { buildDoc, createDocEditor } = await import("../src/index.js");
-    const target = buildDoc((order) => {
-      order.paragraph("heading", "IT IS ORDERED THAT:");
-      order.orderedList("clauses", (list) => {
+    const target = buildDoc((doc) => {
+      doc.paragraph("heading", "IT IS ORDERED THAT:");
+      doc.orderedList("clauses", (list) => {
         list.item("possession", (content) => {
           content
             .text("Give up possession by ")
@@ -306,8 +306,8 @@ describe("public editor API", () => {
   it("restores edits and reconciles new generated values", async () => {
     const { buildDoc, createDocEditor } = await import("../src/index.js");
     const orderWithDate = (date: string) =>
-      buildDoc((order) => {
-        order.paragraph("deadline", (content) => {
+      buildDoc((doc) => {
+        doc.paragraph("deadline", (content) => {
           content
             .text("Payment is due by ")
             .fact("date", date)
@@ -364,8 +364,8 @@ describe("public editor API", () => {
     };
     dom.window.document.body.append(source);
 
-    const target = buildDoc((order) => {
-      order.paragraph("payment", (content) => {
+    const target = buildDoc((doc) => {
+      doc.paragraph("payment", (content) => {
         content.text("Must pay £").fact("amount", "2342.00", {
           sourceId: "amount-input",
         });
@@ -404,8 +404,8 @@ describe("public editor API", () => {
     };
     dom.window.document.body.append(group);
 
-    const target = buildDoc((order) => {
-      order.paragraph("adjournment", (content) => {
+    const target = buildDoc((doc) => {
+      doc.paragraph("adjournment", (content) => {
         content.fact("defence-date", "1 October 2026", {
           sourceId: "adj-defence-date",
         });
@@ -439,8 +439,8 @@ describe("public editor API", () => {
 
   it("leaves a fact inert when its source does not exist", async () => {
     const { buildDoc, createDocEditor } = await import("../src/index.js");
-    const target = buildDoc((order) => {
-      order.paragraph("payment", (content) => {
+    const target = buildDoc((doc) => {
+      doc.paragraph("payment", (content) => {
         content.fact("amount", "£1", { sourceId: "missing-input" });
       });
     });
@@ -466,8 +466,8 @@ describe("public editor API", () => {
     secondSource.scrollIntoView = () => {};
     dom.window.document.body.append(firstSource, secondSource);
     const orderWithSource = (sourceId: string) =>
-      buildDoc((order) => {
-        order.paragraph("payment", (content) => {
+      buildDoc((doc) => {
+        doc.paragraph("payment", (content) => {
           content.fact("amount", "£1", { sourceId });
         });
       });
@@ -485,9 +485,9 @@ describe("public editor API", () => {
 
   it("creates editor controls in the mount's document", async () => {
     const { buildDoc, createDocEditor } = await import("../src/index.js");
-    const generated = buildDoc((order) => {
-      order.paragraph("heading", "Generated heading");
-      order.paragraph("payment", (content) => {
+    const generated = buildDoc((doc) => {
+      doc.paragraph("heading", "Generated heading");
+      doc.paragraph("payment", (content) => {
         content.fact("amount", "£1", { sourceId: "shared-source" });
       });
     });
@@ -579,9 +579,9 @@ describe("public editor API", () => {
         },
       },
     });
-    const orderWithHeading = (heading: string) => buildDoc((order) => {
-      order.paragraph("heading", heading);
-      order.paragraph("managed", "A generated paragraph.");
+    const orderWithHeading = (heading: string) => buildDoc((doc) => {
+      doc.paragraph("heading", heading);
+      doc.paragraph("managed", "A generated paragraph.");
     });
     controller.render(orderWithHeading("Short heading."));
 

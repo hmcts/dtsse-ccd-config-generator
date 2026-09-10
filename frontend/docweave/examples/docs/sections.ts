@@ -106,8 +106,9 @@ export const sections: readonly DocsSection[] = [
     showSnapshot: true,
     title: "What comes out",
     prose: [
-      "1. Plain HTML: the document as the author left it, which is what you render as their final document.",
-      "2. A structured representation as JSON, for tracking user edits"
+      "Two things come out of the editor. Both come from the snapshot, which is what you store.",
+      "1. Plain HTML: the document as the author left it, which is what you render as their final document. renderHtml produces it from the snapshot.",
+      "2. A structured representation as JSON, for tracking user edits. Generated clauses keep their IDs and facts stay marked, while anything the author inserted carries no ID.",
     ],
     tryThis: [
       "Edit the biscuits clause. The HTML changes, and the paragraph in the snapshot keeps its ID.",
