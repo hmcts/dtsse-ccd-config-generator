@@ -280,6 +280,6 @@ After a successful run, smoke test:
 
 ## Automated regression test
 
-`./gradlew verifyCcdMigration` runs the FDW migration test as well as the classic migration test.
-The FDW test uses the shared fixture under `scripts/migration-test/` to verify setup, full
-migration, delta migration, revision alignment, trigger suppression and constraint restoration.
+`./gradlew verifyCcdMigration` uses the fixture under `scripts/migration-test/` to verify FDW
+setup, full migration, delta migration, revision alignment, trigger suppression and constraint
+restoration.
