@@ -1,7 +1,7 @@
 import { initAll } from "govuk-frontend";
 import {
-  createOrderEditor,
-  type OrderEditorController,
+  createDocEditor,
+  type DocEditorController,
 } from "@hmcts-cft/docweave";
 import "@hmcts-cft/docweave/styles/docweave.css";
 
@@ -32,37 +32,34 @@ const inspector = createInspector(document);
 const templates = window.__DOCWEAVE_TEMPLATES_MODE__ === "backend"
   ? { url: "/docweave/templates" }
   : { provider: createInMemoryTemplateProvider() };
-const listeners = new AbortController();
-let controller: OrderEditorController;
+let controller: DocEditorController;
 
 function render(): void {
   controller.render(buildDemoOrder(readInputs(form!)));
+  inspector.update(controller.getSnapshot());
 }
 
 function initialiseEditor(): void {
   controller?.destroy();
-  controller = createOrderEditor({
+  controller = createDocEditor({
     mount: mount!,
     templates,
-    onChange(snapshot) {
-      inspector.update(snapshot);
-    },
   });
   render();
 }
 
 for (const controlGroup of controlGroups) {
-  controlGroup.addEventListener("input", render, {
-    signal: listeners.signal,
-  });
+  controlGroup.addEventListener("input", render);
 }
 form.addEventListener("reset", () => {
   window.setTimeout(initialiseEditor, 0);
-}, { signal: listeners.signal });
+});
+
+// The inspector pulls the snapshot after each edit rather than the editor pushing it.
+for (const type of ["input", "click"]) {
+  mount.addEventListener(type, () => {
+    inspector.update(controller.getSnapshot());
+  });
+}
 
 initialiseEditor();
-
-import.meta.hot?.dispose(() => {
-  listeners.abort();
-  controller.destroy();
-});

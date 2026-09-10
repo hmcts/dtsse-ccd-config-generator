@@ -17,7 +17,7 @@ import {
   setGeneratedDocument,
 } from "../src/diff-styling.js";
 import { indentListItem, outdentListItem } from "../src/keymap.js";
-import { reconcileOrderDocument } from "../src/reconciliation.js";
+import { reconcileDocument } from "../src/reconciliation.js";
 import { editorSchema } from "../src/schema.js";
 
 function listItem(id: string | null, text: string) {
@@ -846,7 +846,7 @@ describe("diff styling", () => {
       doc: documentWith(liveItem),
       plugins: [plugin],
     });
-    const transaction = reconcileOrderDocument(
+    const transaction = reconcileDocument(
       state.tr,
       previousDocument,
       targetDocument,

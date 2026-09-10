@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 
@@ -62,6 +63,19 @@ export function createApp({
     app.use("/docweave/templates", express.json(), templateProxy);
   }
 
+  // The documentation is a static page rendered by its own script. In
+  // development Vite transforms it; in production the built copy is served.
+  async function documentationPage(url: string): Promise<string> {
+    if (vite) {
+      const source = await readFile(path.join(projectRoot, "index.html"), "utf8");
+      return vite.transformIndexHtml(url, source);
+    }
+    return readFile(
+      path.join(projectRoot, "dist", "public", "index.html"),
+      "utf8",
+    );
+  }
+
   const today = new Date();
   Object.assign(app.locals, {
     assetPath,
@@ -84,7 +98,14 @@ export function createApp({
     },
   });
 
-  app.get("/", (_request, response) => {
+  app.get("/", async (request, response, next) => {
+    try {
+      response.type("html").send(await documentationPage(request.originalUrl));
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.get("/playground/", (_request, response) => {
     response.render("index.njk");
   });
 

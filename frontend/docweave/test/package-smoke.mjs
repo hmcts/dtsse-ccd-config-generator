@@ -48,8 +48,8 @@ try {
       import { createRequire } from "node:module";
       import { fileURLToPath } from "node:url";
       import {
-        buildOrder,
-        createOrderEditor,
+        buildDoc,
+        createDocEditor,
         TemplateRequestError,
       } from "@hmcts-cft/docweave";
       import { createTemplateProxy } from "@hmcts-cft/docweave/express";
@@ -64,10 +64,10 @@ try {
       assert.ok(new commonJs.TemplateRequestError("Conflict", 409) instanceof TemplateRequestError);
 
       for (const [build, createEditor] of [
-        [buildOrder, commonJs.createOrderEditor],
-        [commonJs.buildOrder, createOrderEditor],
+        [buildDoc, commonJs.createDocEditor],
+        [commonJs.buildDoc, createDocEditor],
       ]) {
-        const target = build((order) => order.paragraph("heading", "IT IS ORDERED THAT:"));
+        const target = build((doc) => doc.paragraph("heading", "IT IS ORDERED THAT:"));
         const controller = createEditor();
         controller.render(target);
         assert.equal(controller.getDocument(), target);
@@ -78,9 +78,9 @@ try {
         throw new Error("The installed package did not expose its Express entry point");
       }
 
-      const document = buildOrder((order) => {
-        order.paragraph("heading", "IT IS ORDERED THAT:");
-        order.paragraph("costs", "Costs in the case.");
+      const document = buildDoc((doc) => {
+        doc.paragraph("heading", "IT IS ORDERED THAT:");
+        doc.paragraph("costs", "Costs in the case.");
       });
       if (document.textContent !== "IT IS ORDERED THAT:\\nCosts in the case.") {
         throw new Error("The installed package did not serialize plain text with block separators");
@@ -106,16 +106,16 @@ try {
   writeFileSync(
     path.join(consumerRoot, "consumer.cjs"),
     `
-      const { buildOrder, createOrderEditor } = require("@hmcts-cft/docweave");
+      const { buildDoc, createDocEditor } = require("@hmcts-cft/docweave");
       const { createTemplateProxy } = require("@hmcts-cft/docweave/express");
 
       if (typeof createTemplateProxy !== "function") {
         throw new Error("The installed package did not expose its CommonJS Express entry point");
       }
-      const document = buildOrder((order) => {
-        order.paragraph("heading", "IT IS ORDERED THAT:");
+      const document = buildDoc((doc) => {
+        doc.paragraph("heading", "IT IS ORDERED THAT:");
       });
-      const controller = createOrderEditor();
+      const controller = createDocEditor();
       controller.render(document);
       if (controller.getDocument() !== document) {
         throw new Error("The CommonJS entry point did not expose the headless editor");
@@ -128,16 +128,16 @@ try {
     path.join(consumerRoot, "consumer.ts"),
     `
       import {
-        buildOrder,
-        createOrderEditor,
+        buildDoc,
+        createDocEditor,
         type DocWeaveClause,
         type DocWeaveDocument,
         type DocWeaveSnapshot,
       } from "@hmcts-cft/docweave";
 
       declare const mount: HTMLElement;
-      const target: DocWeaveDocument = buildOrder((order) => {
-        order.paragraph("heading", (content) => {
+      const target: DocWeaveDocument = buildDoc((doc) => {
+        doc.paragraph("heading", (content) => {
           content.fact("heading", "IT IS ORDERED THAT:", {
             sourceId: "heading-input",
           });
@@ -151,15 +151,15 @@ try {
       target.textContent satisfies string;
       // @ts-expect-error ProseMirror is an internal implementation detail.
       target.node;
-      const controller = createOrderEditor({ mount });
+      const controller = createDocEditor({ mount });
       controller.render(target);
       controller.getDocument() satisfies DocWeaveDocument | undefined;
       const saved: DocWeaveSnapshot = controller.getSnapshot();
       saved satisfies DocWeaveSnapshot;
-      createOrderEditor().render(target);
+      createDocEditor().render(target);
 
       // @ts-expect-error Docweave owns its toolbar markup and behaviour.
-      createOrderEditor({ mount, toolbar: mount });
+      createDocEditor({ mount, toolbar: mount });
     `,
   );
   writeFileSync(

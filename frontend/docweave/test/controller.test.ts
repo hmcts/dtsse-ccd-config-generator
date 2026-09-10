@@ -2,22 +2,22 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { getDocumentNode } from "../src/builder.js";
-import { buildOrder, createOrderEditor } from "../src/index.js";
+import { buildDoc, createDocEditor } from "../src/index.js";
 
-describe("headless order editor", () => {
+describe("headless editor", () => {
   it("runs the controller headlessly and restores snapshots", () => {
-    const first = buildOrder((order) => {
-      order.paragraph("deadline", (content) => {
+    const first = buildDoc((doc) => {
+      doc.paragraph("deadline", (content) => {
         content.text("Payment is due by ").fact("date", "1 September");
       });
     });
-    const controller = createOrderEditor();
+    const controller = createDocEditor();
     controller.render(first);
-    const restored = createOrderEditor({
+    const restored = createDocEditor({
       initialSnapshot: controller.getSnapshot(),
     });
-    const second = buildOrder((order) => {
-      order.paragraph("deadline", (content) => {
+    const second = buildDoc((doc) => {
+      doc.paragraph("deadline", (content) => {
         content.text("Payment is due by ").fact("date", "8 September");
       });
     });

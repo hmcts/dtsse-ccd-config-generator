@@ -99,16 +99,16 @@ afterEach(() => {
   }
 });
 
-describe("public order editor API", () => {
+describe("public editor API", () => {
   for (const numbered of [false, true]) {
     it(`opens with slash in an empty ${numbered ? "numbered clause" : "paragraph"}, cancels cleanly and inserts with undo`, async () => {
-      const { createOrderEditor } = await import("../src/index.js");
+      const { createDocEditor } = await import("../src/index.js");
       const store = createInMemoryTemplateProvider();
       await store.create({ title: "Costs wording", content: {
         schema: "docweave-template", version: 1,
         content: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Costs in the case." }] }] },
       } });
-      const controller = createOrderEditor({ mount: "#editor", templates: { provider: store } });
+      const controller = createDocEditor({ mount: "#editor", templates: { provider: store } });
       const surface = dom.window.document.querySelector<HTMLElement>("#editor .ProseMirror")!;
       surface.focus();
       if (numbered) dom.window.document.querySelector<HTMLButtonElement>('[aria-label="Numbered clause"]')!.click();
@@ -148,9 +148,9 @@ describe("public order editor API", () => {
   }
 
   it("leaves slash typing alone without templates, in existing text, and during composition or modifier shortcuts", async () => {
-    const { createOrderEditor, buildOrder } = await import("../src/index.js");
+    const { createDocEditor, buildDoc } = await import("../src/index.js");
     for (const configured of [false, true]) {
-      const controller = createOrderEditor({ mount: "#editor", ...(configured ? { templates: { provider: createInMemoryTemplateProvider() } } : {}) });
+      const controller = createDocEditor({ mount: "#editor", ...(configured ? { templates: { provider: createInMemoryTemplateProvider() } } : {}) });
       const surface = dom.window.document.querySelector<HTMLElement>("#editor .ProseMirror")!;
       surface.focus();
       const ignored = (extra: KeyboardEventInit = {}) => {
@@ -161,7 +161,7 @@ describe("public order editor API", () => {
       };
       if (!configured) ignored();
       for (const extra of [{ ctrlKey: true }, { altKey: true }, { metaKey: true }, { shiftKey: true }, { isComposing: true }]) ignored(extra);
-      controller.render(buildOrder((order) => order.paragraph("existing", "Existing text")));
+      controller.render(buildDoc((doc) => doc.paragraph("existing", "Existing text")));
       surface.focus();
       ignored();
       controller.destroy();
@@ -169,23 +169,23 @@ describe("public order editor API", () => {
   });
 
   it("refuses a mount point that already has an editor", async () => {
-    const { createOrderEditor } = await import("../src/index.js");
-    const controller = createOrderEditor({ mount: "#editor" });
+    const { createDocEditor } = await import("../src/index.js");
+    const controller = createDocEditor({ mount: "#editor" });
 
     assert.throws(
-      () => createOrderEditor({ mount: "#editor" }),
+      () => createDocEditor({ mount: "#editor" }),
       /already has an editor/,
     );
 
     controller.destroy();
-    assert.doesNotThrow(() => createOrderEditor({ mount: "#editor" }).destroy());
+    assert.doesNotThrow(() => createDocEditor({ mount: "#editor" }).destroy());
   });
 
   it("rejects incomplete template configuration before mounting", async () => {
-    const { createOrderEditor } = await import("../src/index.js");
+    const { createDocEditor } = await import("../src/index.js");
 
     assert.throws(
-      () => createOrderEditor({ mount: "#editor", templates: {} }),
+      () => createDocEditor({ mount: "#editor", templates: {} }),
       /Templates require either a provider or URL/,
     );
     assert.equal(
@@ -195,7 +195,7 @@ describe("public order editor API", () => {
   });
 
   it("rejects unsupported snapshot envelopes before mounting", async () => {
-    const { createOrderEditor } = await import("../src/index.js");
+    const { createDocEditor } = await import("../src/index.js");
     const document = { type: "doc" };
 
     for (const snapshot of [
@@ -213,7 +213,7 @@ describe("public order editor API", () => {
       },
     ]) {
       assert.throws(
-        () => createOrderEditor({
+        () => createDocEditor({
           mount: "#editor",
           initialSnapshot: snapshot as never,
         }),
@@ -226,12 +226,11 @@ describe("public order editor API", () => {
     );
   });
 
-  it("renders, reports changes, serializes and destroys an editor", async () => {
-    const { buildOrder, createOrderEditor } = await import("../src/index.js");
-    const changes: unknown[] = [];
-    const target = buildOrder((order) => {
-      order.paragraph("heading", "IT IS ORDERED THAT:");
-      order.orderedList("clauses", (list) => {
+  it("renders, serializes and destroys an editor", async () => {
+    const { buildDoc, createDocEditor } = await import("../src/index.js");
+    const target = buildDoc((doc) => {
+      doc.paragraph("heading", "IT IS ORDERED THAT:");
+      doc.orderedList("clauses", (list) => {
         list.item("possession", (content) => {
           content
             .text("Give up possession by ")
@@ -239,12 +238,7 @@ describe("public order editor API", () => {
         });
       });
     });
-    const controller = createOrderEditor({
-      mount: "#editor",
-      onChange(document) {
-        changes.push(document);
-      },
-    });
+    const controller = createDocEditor({ mount: "#editor" });
 
     controller.render(target);
     assert.equal(controller.getDocument(), target);
@@ -258,7 +252,7 @@ describe("public order editor API", () => {
     assert.equal(toolbar.getAttribute("role"), "toolbar");
     assert.equal(
       toolbar.getAttribute("aria-label"),
-      "Order editor formatting",
+      "Document formatting",
     );
     const toolbarButtons = [
       ...toolbar.querySelectorAll<HTMLButtonElement>(
@@ -287,10 +281,7 @@ describe("public order editor API", () => {
     );
     assert.equal(toolbarButtons[0]!.disabled, true);
     assert.equal(toolbarButtons[2]!.disabled, false);
-    assert.equal(changes.length, 1);
-    const changesBeforeToolbarCommand = changes.length;
     toolbarButtons[2]!.click();
-    assert.equal(changes.length, changesBeforeToolbarCommand + 1);
     assert.match(mount.textContent, /IT IS ORDERED THAT:/);
     assert.match(mount.textContent, /Give up possession by 1 October 2026/);
     assert.equal(
@@ -313,10 +304,10 @@ describe("public order editor API", () => {
   });
 
   it("restores edits and reconciles new generated values", async () => {
-    const { buildOrder, createOrderEditor } = await import("../src/index.js");
+    const { buildDoc, createDocEditor } = await import("../src/index.js");
     const orderWithDate = (date: string) =>
-      buildOrder((order) => {
-        order.paragraph("deadline", (content) => {
+      buildDoc((doc) => {
+        doc.paragraph("deadline", (content) => {
           content
             .text("Payment is due by ")
             .fact("date", date)
@@ -328,7 +319,7 @@ describe("public order editor API", () => {
       getDocumentNode(generated).toJSON(),
     ) as TestDocumentJSON;
     current.content[0]!.content![0]!.text = "The judge requires payment by ";
-    const controller = createOrderEditor({
+    const controller = createDocEditor({
       mount: "#restored-editor",
       initialSnapshot: {
         schema: "docweave-document",
@@ -364,7 +355,7 @@ describe("public order editor API", () => {
   });
 
   it("focuses and scrolls to the source control for a generated fact", async () => {
-    const { buildOrder, createOrderEditor } = await import("../src/index.js");
+    const { buildDoc, createDocEditor } = await import("../src/index.js");
     const source = dom.window.document.createElement("input");
     source.id = "amount-input";
     let scrolls = 0;
@@ -373,14 +364,14 @@ describe("public order editor API", () => {
     };
     dom.window.document.body.append(source);
 
-    const target = buildOrder((order) => {
-      order.paragraph("payment", (content) => {
+    const target = buildDoc((doc) => {
+      doc.paragraph("payment", (content) => {
         content.text("Must pay £").fact("amount", "2342.00", {
           sourceId: "amount-input",
         });
       });
     });
-    const controller = createOrderEditor({ mount: "#editor" });
+    const controller = createDocEditor({ mount: "#editor" });
 
     controller.render(target);
     const fact = dom.window.document.querySelector<HTMLElement>(
@@ -399,7 +390,7 @@ describe("public order editor API", () => {
   });
 
   it("navigates a fact to the first enabled control in a composite source", async () => {
-    const { buildOrder, createOrderEditor } = await import("../src/index.js");
+    const { buildDoc, createDocEditor } = await import("../src/index.js");
     const group = dom.window.document.createElement("div");
     group.id = "adj-defence-date";
     const day = dom.window.document.createElement("input");
@@ -413,14 +404,14 @@ describe("public order editor API", () => {
     };
     dom.window.document.body.append(group);
 
-    const target = buildOrder((order) => {
-      order.paragraph("adjournment", (content) => {
+    const target = buildDoc((doc) => {
+      doc.paragraph("adjournment", (content) => {
         content.fact("defence-date", "1 October 2026", {
           sourceId: "adj-defence-date",
         });
       });
     });
-    const controller = createOrderEditor({ mount: "#editor" });
+    const controller = createDocEditor({ mount: "#editor" });
     controller.render(target);
 
     const fact = dom.window.document.querySelector<HTMLElement>(
@@ -447,13 +438,13 @@ describe("public order editor API", () => {
   });
 
   it("leaves a fact inert when its source does not exist", async () => {
-    const { buildOrder, createOrderEditor } = await import("../src/index.js");
-    const target = buildOrder((order) => {
-      order.paragraph("payment", (content) => {
+    const { buildDoc, createDocEditor } = await import("../src/index.js");
+    const target = buildDoc((doc) => {
+      doc.paragraph("payment", (content) => {
         content.fact("amount", "£1", { sourceId: "missing-input" });
       });
     });
-    const controller = createOrderEditor({ mount: "#editor" });
+    const controller = createDocEditor({ mount: "#editor" });
     controller.render(target);
 
     const fact = dom.window.document.querySelector<HTMLElement>(
@@ -466,7 +457,7 @@ describe("public order editor API", () => {
   });
 
   it("replaces fact source wiring even when its content is unchanged", async () => {
-    const { buildOrder, createOrderEditor } = await import("../src/index.js");
+    const { buildDoc, createDocEditor } = await import("../src/index.js");
     const firstSource = dom.window.document.createElement("input");
     firstSource.id = "first-amount";
     firstSource.scrollIntoView = () => {};
@@ -475,12 +466,12 @@ describe("public order editor API", () => {
     secondSource.scrollIntoView = () => {};
     dom.window.document.body.append(firstSource, secondSource);
     const orderWithSource = (sourceId: string) =>
-      buildOrder((order) => {
-        order.paragraph("payment", (content) => {
+      buildDoc((doc) => {
+        doc.paragraph("payment", (content) => {
           content.fact("amount", "£1", { sourceId });
         });
       });
-    const controller = createOrderEditor({ mount: "#editor" });
+    const controller = createDocEditor({ mount: "#editor" });
 
     controller.render(orderWithSource("first-amount"));
     controller.render(orderWithSource("second-amount"));
@@ -493,10 +484,10 @@ describe("public order editor API", () => {
   });
 
   it("creates editor controls in the mount's document", async () => {
-    const { buildOrder, createOrderEditor } = await import("../src/index.js");
-    const generated = buildOrder((order) => {
-      order.paragraph("heading", "Generated heading");
-      order.paragraph("payment", (content) => {
+    const { buildDoc, createDocEditor } = await import("../src/index.js");
+    const generated = buildDoc((doc) => {
+      doc.paragraph("heading", "Generated heading");
+      doc.paragraph("payment", (content) => {
         content.fact("amount", "£1", { sourceId: "shared-source" });
       });
     });
@@ -519,7 +510,7 @@ describe("public order editor API", () => {
       const globalSource = dom.window.document.createElement("input");
       globalSource.id = "shared-source";
       dom.window.document.body.append(globalSource);
-      const controller = createOrderEditor({
+      const controller = createDocEditor({
         mount,
         initialSnapshot: {
           schema: "docweave-document",
@@ -553,7 +544,7 @@ describe("public order editor API", () => {
   });
 
   it("keeps template insertion at the selected clause across render as one undoable edit", async () => {
-    const { buildOrder, createOrderEditor } = await import("../src/index.js");
+    const { buildDoc, createDocEditor } = await import("../src/index.js");
     const template = {
       id: "11111111-1111-1111-1111-111111111111",
       title: "Standard costs wording",
@@ -571,7 +562,7 @@ describe("public order editor API", () => {
         },
       },
     };
-    const controller = createOrderEditor({
+    const controller = createDocEditor({
       mount: "#editor",
       templates: {
         provider: {
@@ -588,9 +579,9 @@ describe("public order editor API", () => {
         },
       },
     });
-    const orderWithHeading = (heading: string) => buildOrder((order) => {
-      order.paragraph("heading", heading);
-      order.paragraph("managed", "A generated paragraph.");
+    const orderWithHeading = (heading: string) => buildDoc((doc) => {
+      doc.paragraph("heading", heading);
+      doc.paragraph("managed", "A generated paragraph.");
     });
     controller.render(orderWithHeading("Short heading."));
 

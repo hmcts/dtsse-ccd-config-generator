@@ -29,7 +29,7 @@ export interface ListItemBuilder {
   ): void;
 }
 
-export interface OrderBuilder {
+export interface DocBuilder {
   paragraph(id: string, content: ClauseContent): void;
   orderedList(
     id: string,
@@ -120,8 +120,8 @@ function assertValidSourceId(sourceId: string): void {
   }
 }
 
-export function buildOrder(
-  define: (order: OrderBuilder) => void,
+export function buildDoc(
+  define: (doc: DocBuilder) => void,
 ): DocWeaveDocument {
   const nodes: ProseMirrorNode[] = [];
   const factSources = new Map<string, string>();
@@ -261,7 +261,7 @@ export function buildOrder(
     };
   }
 
-  const orderBuilder: OrderBuilder = {
+  const docBuilder: DocBuilder = {
     paragraph(id: string, content: ClauseContent): void {
       assertUniqueClauseId(id);
       const paragraphId = `paragraph:${id}`;
@@ -292,7 +292,7 @@ export function buildOrder(
     },
   };
 
-  define(orderBuilder);
+  define(docBuilder);
   const document = editorSchema.node("doc", null, nodes);
   assertValidGeneratedDocument(document);
   return createDocWeaveDocument(

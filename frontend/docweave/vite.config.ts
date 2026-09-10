@@ -40,9 +40,12 @@ export default defineConfig({
     emptyOutDir: true,
     outDir: "dist/public",
     rollupOptions: {
-      input: path.resolve("examples/court-order/main.ts"),
+      input: {
+        application: path.resolve("examples/court-order/main.ts"),
+        docs: path.resolve("index.html"),
+      },
       output: {
-        entryFileNames: "assets/application.js",
+        entryFileNames: "assets/[name].js",
         assetFileNames: (assetInfo) =>
           assetInfo.names.some((name) => name.endsWith(".css"))
             ? "assets/application.css"
