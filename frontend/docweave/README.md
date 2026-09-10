@@ -7,25 +7,34 @@ every code block on it runs in your browser.
 
 ## API
 
-Create a reference document using code
+Build the reference document in code, then render it whenever the inputs
+change. Docweave reconciles each new version with the reader's edits instead of
+replacing them:
 
 ```ts
+import { buildOrder, createOrderEditor } from "@hmcts-cft/docweave";
+import "@hmcts-cft/docweave/styles/docweave.css";
+
 const controller = createOrderEditor({ mount: "#editor" });
 
-const buildMyDocument: docweavedocument = () => {
-  builder.paragraph("It is ordered that:")
-  if (biscuitsButton.ticked()) {
-    builder.paragraph("Biscuits shall be served")
-  }
-  if (cakebutton.ticked) {
-    builder.paragraph("Cake shall be served")
-  }
-}
+const buildMyDocument = () =>
+  buildOrder((order) => {
+    order.paragraph("ordered", "It is ordered that:");
+    if (biscuits.checked) {
+      order.paragraph("biscuits", "Biscuits shall be served.");
+    }
+    if (cake.checked) {
+      order.paragraph("cake", "Cake shall be served.");
+    }
+  });
 
-form.onChange(() => {
-  controller.render(buildMyDocument())
-});
+form.addEventListener("input", () => controller.render(buildMyDocument()));
+controller.render(buildMyDocument());
 ```
+
+Every clause has an ID, unique within the document. It is how Docweave knows the
+cake clause is the same clause after biscuits are toggled, so edits inside it
+survive.
 Call `getSnapshot()` to persist the current and generated documents, pass that
 snapshot back as `initialSnapshot` when restoring an editor, and call
 `destroy()` when the editor is removed.

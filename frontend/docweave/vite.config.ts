@@ -6,17 +6,11 @@ function reloadNunjucks(): Plugin {
   return {
     name: "reload-nunjucks",
     configureServer(server) {
-      const viewsDirectories = [
-        path.resolve("examples/court-order/views"),
-        path.resolve("examples/docs/views"),
-      ];
+      const viewsDirectory = path.resolve("examples/court-order/views");
 
-      for (const directory of viewsDirectories) server.watcher.add(directory);
+      server.watcher.add(viewsDirectory);
       server.watcher.on("change", (file) => {
-        if (
-          viewsDirectories.some((directory) => file.startsWith(directory)) &&
-          file.endsWith(".njk")
-        ) {
+        if (file.startsWith(viewsDirectory) && file.endsWith(".njk")) {
           server.ws.send({ type: "full-reload", path: "*" });
         }
       });
