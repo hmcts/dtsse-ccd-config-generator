@@ -48,7 +48,6 @@ describe("interactive documentation", () => {
     const html = renderDocs();
     for (const section of sections) {
       assert.match(html, new RegExp(`data-docs-section="${section.id}"`));
-      assert.match(html, new RegExp(`href="#${section.id}"`));
       for (const input of section.inputs) {
         assert.match(
           html,
@@ -202,4 +201,29 @@ describe("interactive documentation scripts", () => {
       assert.equal(mount.querySelector(".ProseMirror"), null);
     });
   }
+});
+
+describe("documentation HTML readout", () => {
+  it("indents block elements and leaves inline markup alone", async () => {
+    const { formatHtml } = await import("../../examples/docs/format-html.js");
+    const { document } = new JSDOM("<!doctype html>").window;
+    const html = '<p>IT IS ORDERED THAT:</p><ol start="2"><li><p>Pay <strong>now</strong>.</p><ol><li><p>Then.</p></li></ol></li></ol>';
+
+    assert.equal(
+      formatHtml(html, document),
+      [
+        "<p>IT IS ORDERED THAT:</p>",
+        '<ol start="2">',
+        "  <li>",
+        "    <p>Pay <strong>now</strong>.</p>",
+        "    <ol>",
+        "      <li>",
+        "        <p>Then.</p>",
+        "      </li>",
+        "    </ol>",
+        "  </li>",
+        "</ol>",
+      ].join("\n"),
+    );
+  });
 });

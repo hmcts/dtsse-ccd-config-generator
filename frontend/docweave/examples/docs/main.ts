@@ -1,6 +1,7 @@
 import { initAll } from "govuk-frontend";
 import {
   createOrderEditor,
+  renderHtml,
   type OrderEditorController,
 } from "@hmcts-cft/docweave";
 import "@hmcts-cft/docweave/styles/docweave.css";
@@ -8,6 +9,7 @@ import "@hmcts-cft/docweave/styles/docweave.css";
 import "../court-order/application.scss";
 import "./docs.scss";
 import { createInMemoryTemplateProvider } from "../court-order/template-provider.js";
+import { formatHtml } from "./format-html.js";
 import { renderDocs } from "./render.js";
 import {
   compileBuild,
@@ -112,12 +114,23 @@ function initBuildSection(section: HTMLElement): void {
   let build: BuildFunction | undefined;
   let controller = createOrderEditor({ mount: elements.mount });
 
+  const snapshotOutput = section.querySelector<HTMLElement>(
+    "[data-docs-snapshot]",
+  );
+
+  function showOutput(): void {
+    const snapshot = controller.getSnapshot();
+    elements.output.textContent = formatHtml(renderHtml(snapshot), document);
+    if (snapshotOutput) {
+      snapshotOutput.textContent = JSON.stringify(snapshot.current, null, 2);
+    }
+  }
+
   function render(): void {
     if (!build) return;
     try {
-      const document = build(readInputs(section));
-      controller.render(document);
-      elements.output.textContent = document.textContent;
+      controller.render(build(readInputs(section)));
+      showOutput();
       clearError(elements);
     } catch (error) {
       showError(elements, error);
@@ -139,6 +152,13 @@ function initBuildSection(section: HTMLElement): void {
   // Only the inputs panel re-renders. Typing in the editor also fires input
   // events, and re-rendering during a keystroke makes ProseMirror discard it.
   section.querySelector("[data-docs-inputs]")?.addEventListener("input", render);
+  // Refresh the readouts after the reader's own edits. keyup and click arrive
+  // after ProseMirror has applied the change, unlike input.
+  for (const type of ["keyup", "click"]) {
+    elements.mount.addEventListener(type, () => {
+      if (controller.getDocument()) showOutput();
+    });
+  }
   section.querySelector("[data-docs-reset-editor]")?.addEventListener(
     "click",
     () => {

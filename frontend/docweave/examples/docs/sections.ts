@@ -39,6 +39,8 @@ interface SectionBase {
  */
 export interface BuildSection extends SectionBase {
   kind: "build";
+  /** Show the snapshot that keeps the document's structure beside the HTML. */
+  showSnapshot?: boolean;
 }
 
 /**
@@ -80,7 +82,7 @@ export const sections: readonly DocsSection[] = [
   {
     id: "first-document",
     kind: "build",
-    title: "Your first document",
+    title: "Document generation",
     prose: [
       "A Docweave document is built in code. Each paragraph has an ID and its wording. The ID is how Docweave recognises the same clause from one build to the next, so it must be unique within the document.",
       "The code below is the body of a function that receives buildOrder and must return the document it builds. Edit it and the editor on the right updates.",
@@ -93,6 +95,33 @@ export const sections: readonly DocsSection[] = [
     code: `return buildOrder((order) => {
   order.paragraph("heading", "IT IS ORDERED THAT:");
   order.paragraph("biscuits", "Biscuits shall be served.");
+});
+`,
+    inputs: [],
+  },
+  {
+    id: "structure",
+    kind: "build",
+    showSnapshot: true,
+    title: "What comes out",
+    prose: [
+      "Two things come out of the editor. The first is plain HTML: the wording as the person left it, with nothing to say which words were generated, which is what you render as their final document. renderHtml produces it from a snapshot.",
+      "The second is the snapshot itself, and it is not a blob of text. Docweave keeps the structure of the document as the person edits it: every generated clause keeps its ID, every fact stays marked as a fact, and anything the person inserted carries no ID. Because that structure survives, the document can be rebuilt against a later set of inputs, and a system reading the snapshot can tell what was generated from what was written by hand.",
+    ],
+    tryThis: [
+      "Edit the biscuits clause. The HTML changes, and the paragraph in the snapshot keeps its ID.",
+      "Put the cursor at the end of a clause, press Enter and type a clause of your own. In the snapshot it is the paragraph with no ID.",
+      "Change the date in the code. The fact updates and your edits around it stay.",
+    ],
+    code: `return buildOrder((order) => {
+  order.paragraph("heading", "IT IS ORDERED THAT:");
+  order.paragraph("biscuits", "Biscuits shall be served.");
+  order.paragraph("deadline", (content) => {
+    content
+      .text("Tea shall be poured by ")
+      .fact("date", "4pm on 1 October 2026")
+      .text(".");
+  });
 });
 `,
     inputs: [],

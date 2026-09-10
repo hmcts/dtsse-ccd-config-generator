@@ -52,6 +52,23 @@ function preamble(section: DocsSection): string {
     : `// (${BUILD_PARAMETERS.join(", ")}) => DocWeaveDocument`;
 }
 
+function output(label: string, attribute: string): string {
+  return `<div class="docs-output">
+        <h3 class="govuk-heading-s">${escapeHtml(label)}</h3>
+        <pre ${attribute}></pre>
+      </div>`;
+}
+
+function outputs(section: DocsSection): string {
+  if (section.kind === "script") {
+    return output("Snapshot after Run", "data-docs-output");
+  }
+  const html = output("renderHtml(controller.getSnapshot())", "data-docs-output");
+  return section.showSnapshot
+    ? html + output("controller.getSnapshot().current", "data-docs-snapshot")
+    : html;
+}
+
 export function renderSection(section: DocsSection): string {
   const script = section.kind === "script";
   const inputs = section.inputs.length === 0 ? "" : `
@@ -82,10 +99,7 @@ export function renderSection(section: DocsSection): string {
     <div class="docs-editor">
       <h3 class="govuk-heading-s">Editor</h3>
       <div class="docs-editor__surface" data-docs-mount></div>
-      <div class="docs-output">
-        <h3 class="govuk-heading-s">${script ? "Snapshot after Run" : "document.textContent"}</h3>
-        <pre data-docs-output></pre>
-      </div>
+      ${outputs(section)}
     </div>
   </div>
   <div class="docs-try">
@@ -100,15 +114,8 @@ export function renderSection(section: DocsSection): string {
 export function renderDocs(): string {
   return `<div class="docs-introduction">
   <h1 class="govuk-heading-xl">Docweave</h1>
-  <p class="govuk-body-l">Docweave generates documents from code that stay editable by people and readable by machines. Every code block on this page runs in your browser. Edit it and watch the editor beside it.</p>
-  <p class="govuk-body">Install it with <code>npm install @hmcts-cft/docweave</code> and import <code>@hmcts-cft/docweave/styles/docweave.css</code> for the editor styles.</p>
+  <p class="govuk-body-l">Docweave generates documents from code that stay editable by people and readable by machines.</p>
 </div>
-<nav class="docs-contents" aria-label="Contents">
-  <h2 class="govuk-heading-s">Contents</h2>
-  <ol class="govuk-list govuk-list--number">
-    ${sections.map((section) => `<li><a class="govuk-link" href="#${section.id}">${escapeHtml(section.title)}</a></li>`).join("\n    ")}
-  </ol>
-</nav>
 ${sections.map(renderSection).join("\n")}
 <p class="govuk-body">The reconciliation rules and the invariants generated documents must obey are described in <a class="govuk-link" href="${ARCHITECTURE_URL}">architecture.md</a>. The <a class="govuk-link" href="./playground/">court order playground</a> is a fuller example.</p>`;
 }
