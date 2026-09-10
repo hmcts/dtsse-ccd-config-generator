@@ -31,6 +31,10 @@ import {
   type EditorToolbarCommands,
 } from "./editor-toolbar.js";
 import {
+  createInputRulesPlugin,
+  selectionTouchesManagedContent,
+} from "./input-rules.js";
+import {
   createKeymapPlugins,
   indentListItem,
   outdentListItem,
@@ -61,18 +65,9 @@ export interface CreateOrderEditorOptions {
 
 const wrapInOrderedList = wrapInList(editorSchema.nodes.ordered_list!);
 
-const createNumberedClause: Command = (state, dispatch, view) => {
-  const selectionTouchesManagedContent = [
-    state.selection.$from,
-    state.selection.$to,
-  ].some(($position) =>
-    $position.depth > 0 &&
-    typeof $position.node(1).attrs.id === "string"
-  );
-
-  return !selectionTouchesManagedContent &&
-    wrapInOrderedList(state, dispatch, view);
-};
+const createNumberedClause: Command = (state, dispatch, view) =>
+  !selectionTouchesManagedContent(state) &&
+  wrapInOrderedList(state, dispatch, view);
 
 const editorCommands = {
   undo,
@@ -141,6 +136,7 @@ export function createOrderEditor(
       createListNumberingPlugin(),
       createDiffStylingPlugin(),
       createFactNavigationPlugin(editor.ownerDocument),
+      createInputRulesPlugin(),
       ...createKeymapPlugins(),
       dropCursor(),
       gapCursor(),
