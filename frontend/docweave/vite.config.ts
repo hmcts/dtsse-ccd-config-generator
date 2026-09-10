@@ -6,11 +6,17 @@ function reloadNunjucks(): Plugin {
   return {
     name: "reload-nunjucks",
     configureServer(server) {
-      const viewsDirectory = path.resolve("examples/court-order/views");
+      const viewsDirectories = [
+        path.resolve("examples/court-order/views"),
+        path.resolve("examples/docs/views"),
+      ];
 
-      server.watcher.add(viewsDirectory);
+      for (const directory of viewsDirectories) server.watcher.add(directory);
       server.watcher.on("change", (file) => {
-        if (file.startsWith(viewsDirectory) && file.endsWith(".njk")) {
+        if (
+          viewsDirectories.some((directory) => file.startsWith(directory)) &&
+          file.endsWith(".njk")
+        ) {
           server.ws.send({ type: "full-reload", path: "*" });
         }
       });
@@ -40,9 +46,12 @@ export default defineConfig({
     emptyOutDir: true,
     outDir: "dist/public",
     rollupOptions: {
-      input: path.resolve("examples/court-order/main.ts"),
+      input: {
+        application: path.resolve("examples/court-order/main.ts"),
+        docs: path.resolve("index.html"),
+      },
       output: {
-        entryFileNames: "assets/application.js",
+        entryFileNames: "assets/[name].js",
         assetFileNames: (assetInfo) =>
           assetInfo.names.some((name) => name.endsWith(".css"))
             ? "assets/application.css"

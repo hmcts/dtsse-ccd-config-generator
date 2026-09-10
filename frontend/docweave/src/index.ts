@@ -1,7 +1,7 @@
 export {
   buildOrder,
   type DocWeaveClause,
-  type DocWeaveDocument,
+  DocWeaveDocument,
   type FactOptions,
   type InlineBuilder,
   type ListItemBuilder,

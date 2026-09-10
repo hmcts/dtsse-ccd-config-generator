@@ -13,7 +13,7 @@ import { createApp } from "../../examples/court-order/server/app.js";
 describe("court-order demo page", () => {
   it("renders the playground controls, editor and collapsed inspector", async () => {
     const response = await request(createApp())
-      .get("/")
+      .get("/playground/")
       .expect(200)
       .expect("content-type", /html/);
 
@@ -53,7 +53,7 @@ describe("court-order demo page", () => {
   });
 
   it("provides every control required to read the default order inputs", async () => {
-    const response = await request(createApp()).get("/").expect(200);
+    const response = await request(createApp()).get("/playground/").expect(200);
     const dom = new JSDOM(response.text);
     const form = dom.window.document.querySelector<HTMLFormElement>(
       "#order-form",

@@ -52,7 +52,6 @@ import { insertTemplate } from "./templates/insertion.js";
 export interface CreateOrderEditorOptions {
   mount?: HTMLElement | string;
   initialSnapshot?: DocWeaveSnapshot;
-  onChange?: (snapshot: DocWeaveSnapshot) => void;
   templates?: {
     url?: string;
     csrfToken?: string | (() => string | undefined);
@@ -137,7 +136,6 @@ export function createOrderEditor(
 
   const runtime = createOrderEditorController({
     initialSnapshot: options.initialSnapshot,
-    onChange: options.onChange,
     plugins: [
       createClipboardPlugin(),
       createListNumberingPlugin(),

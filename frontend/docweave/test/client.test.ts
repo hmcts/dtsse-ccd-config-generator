@@ -226,9 +226,8 @@ describe("public order editor API", () => {
     );
   });
 
-  it("renders, reports changes, serializes and destroys an editor", async () => {
+  it("renders, serializes and destroys an editor", async () => {
     const { buildOrder, createOrderEditor } = await import("../src/index.js");
-    const changes: unknown[] = [];
     const target = buildOrder((order) => {
       order.paragraph("heading", "IT IS ORDERED THAT:");
       order.orderedList("clauses", (list) => {
@@ -239,12 +238,7 @@ describe("public order editor API", () => {
         });
       });
     });
-    const controller = createOrderEditor({
-      mount: "#editor",
-      onChange(document) {
-        changes.push(document);
-      },
-    });
+    const controller = createOrderEditor({ mount: "#editor" });
 
     controller.render(target);
     assert.equal(controller.getDocument(), target);
@@ -287,10 +281,7 @@ describe("public order editor API", () => {
     );
     assert.equal(toolbarButtons[0]!.disabled, true);
     assert.equal(toolbarButtons[2]!.disabled, false);
-    assert.equal(changes.length, 1);
-    const changesBeforeToolbarCommand = changes.length;
     toolbarButtons[2]!.click();
-    assert.equal(changes.length, changesBeforeToolbarCommand + 1);
     assert.match(mount.textContent, /IT IS ORDERED THAT:/);
     assert.match(mount.textContent, /Give up possession by 1 October 2026/);
     assert.equal(

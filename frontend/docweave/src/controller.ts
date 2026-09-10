@@ -32,7 +32,6 @@ export interface OrderEditorController {
 
 interface CreateOrderEditorControllerOptions {
   initialSnapshot?: DocWeaveSnapshot;
-  onChange?: (snapshot: DocWeaveSnapshot) => void;
   plugins?: readonly Plugin[];
   prepareGeneratedTransaction?: (
     transaction: Transaction,
@@ -97,7 +96,6 @@ export function createOrderEditorController(
 
   const notifyChange = (): void => {
     stateListener?.(state);
-    options.onChange?.(getSnapshot());
   };
 
   const controller: OrderEditorController = {
