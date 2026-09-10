@@ -16,7 +16,7 @@ import {
   type InputValues,
   type ScriptSection,
 } from "../../examples/docs/sections.js";
-import { createOrderEditor } from "../../src/index.js";
+import { createDocEditor } from "../../src/index.js";
 import { polyfillBrowserApis } from "../jsdom-polyfills.js";
 
 const buildSections = sections.filter(
@@ -55,7 +55,7 @@ describe("interactive documentation", () => {
         );
       }
     }
-    assert.match(html, /\(buildOrder, inputs\) =&gt; DocWeaveDocument/);
+    assert.match(html, /\(buildDoc, inputs\) =&gt; DocWeaveDocument/);
     assert.match(html, /\(docweave, mount, saved, provider\) =&gt; controller/);
   });
 
@@ -68,7 +68,7 @@ describe("interactive documentation", () => {
   for (const section of buildSections) {
     it(`"${section.title}" builds and reconciles under every input combination`, () => {
       const build = compileBuild(section.code);
-      const controller = createOrderEditor();
+      const controller = createDocEditor();
       for (const inputs of inputCombinations(section)) {
         const document = build(inputs);
         controller.render(document);

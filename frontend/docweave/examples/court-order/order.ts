@@ -1,5 +1,5 @@
 import {
-  buildOrder,
+  buildDoc,
   type DocWeaveDocument,
 } from "@hmcts-cft/docweave";
 
@@ -7,7 +7,7 @@ import { buildAttendanceRegister } from "./attendance.js";
 import type { DemoOrderInputs } from "./inputs.js";
 
 export function buildDemoOrder(inputs: DemoOrderInputs): DocWeaveDocument {
-  return buildOrder((order) => {
+  return buildDoc((order) => {
     const attendance = buildAttendanceRegister(inputs.attendances);
     if (attendance) {
       order.paragraph(

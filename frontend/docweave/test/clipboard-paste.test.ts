@@ -94,7 +94,7 @@ describe("rich-text clipboard paste", () => {
     it(
       `parses captured ${fixture.source} HTML into the expected ProseMirror document`,
       async () => {
-        const [{ createOrderEditor }, html, text, expected, expectedHTML] =
+        const [{ createDocEditor }, html, text, expected, expectedHTML] =
           await Promise.all([
             import("../src/index.js"),
             readFile(new URL(`${fixture.path}.html`, import.meta.url), "utf8"),
@@ -103,7 +103,7 @@ describe("rich-text clipboard paste", () => {
               .then((content) => JSON.parse(content) as unknown),
             readFile(new URL(expectedHTMLPath, import.meta.url), "utf8"),
           ]);
-        const controller = createOrderEditor({ mount: "#editor" });
+        const controller = createDocEditor({ mount: "#editor" });
         const paste = new dom.window.Event("paste", {
           bubbles: true,
           cancelable: true,

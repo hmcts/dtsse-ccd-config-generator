@@ -13,7 +13,7 @@ import {
   assertCurrentDocumentMatchesGenerated,
   assertValidGeneratedDocument,
 } from "./invariants.js";
-import { reconcileOrderDocument } from "./reconciliation.js";
+import { reconcileDocument } from "./reconciliation.js";
 import { editorSchema } from "./schema.js";
 
 export interface DocWeaveSnapshot {
@@ -23,14 +23,14 @@ export interface DocWeaveSnapshot {
   generated: Record<string, unknown>;
 }
 
-export interface OrderEditorController {
+export interface DocEditorController {
   render(document: DocWeaveDocument): void;
   getDocument(): DocWeaveDocument | undefined;
   getSnapshot(): DocWeaveSnapshot;
   destroy(): void;
 }
 
-interface CreateOrderEditorControllerOptions {
+interface CreateDocEditorControllerOptions {
   initialSnapshot?: DocWeaveSnapshot;
   plugins?: readonly Plugin[];
   prepareGeneratedTransaction?: (
@@ -40,17 +40,17 @@ interface CreateOrderEditorControllerOptions {
   ) => Transaction;
 }
 
-export interface OrderEditorRuntime {
-  readonly controller: OrderEditorController;
+export interface DocEditorRuntime {
+  readonly controller: DocEditorController;
   readonly state: EditorState;
   readonly generatedDocument: ProseMirrorNode;
   dispatch(transaction: Transaction): void;
   setStateListener(listener: (state: EditorState) => void): void;
 }
 
-export function createOrderEditorController(
-  options: CreateOrderEditorControllerOptions,
-): OrderEditorRuntime {
+export function createDocEditorController(
+  options: CreateDocEditorControllerOptions,
+): DocEditorRuntime {
   if (options.initialSnapshot &&
     (options.initialSnapshot.schema !== "docweave-document" ||
       options.initialSnapshot.version !== 1)) {
@@ -98,14 +98,14 @@ export function createOrderEditorController(
     stateListener?.(state);
   };
 
-  const controller: OrderEditorController = {
+  const controller: DocEditorController = {
     render(nextDocument: DocWeaveDocument): void {
       const target = getDocumentNode(nextDocument);
       assertValidGeneratedDocument(target);
       let transaction = state.tr;
 
       if (hasGeneratedDocument) {
-        transaction = reconcileOrderDocument(
+        transaction = reconcileDocument(
           transaction,
           generatedDocument,
           target,

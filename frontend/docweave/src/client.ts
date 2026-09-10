@@ -12,9 +12,9 @@ import {
 } from "./builder.js";
 import { createClipboardPlugin } from "./clipboard.js";
 import {
-  createOrderEditorController,
+  createDocEditorController,
   type DocWeaveSnapshot,
-  type OrderEditorController,
+  type DocEditorController,
 } from "./controller.js";
 import {
   createDiffStylingPlugin,
@@ -53,7 +53,7 @@ import {
 } from "./templates/index.js";
 import { insertTemplate } from "./templates/insertion.js";
 
-export interface CreateOrderEditorOptions {
+export interface CreateDocEditorOptions {
   mount?: HTMLElement | string;
   initialSnapshot?: DocWeaveSnapshot;
   templates?: {
@@ -88,14 +88,14 @@ function createTemplateButton(ownerDocument: Document): HTMLButtonElement {
   return button;
 }
 
-export function createOrderEditor(
-  options: CreateOrderEditorOptions = {},
-): OrderEditorController {
+export function createDocEditor(
+  options: CreateDocEditorOptions = {},
+): DocEditorController {
   if (options.templates && options.mount === undefined) {
     throw new Error("Templates require an editor mount");
   }
   if (options.mount === undefined) {
-    return createOrderEditorController(options).controller;
+    return createDocEditorController(options).controller;
   }
 
   const ownerDocument = typeof options.mount === "string"
@@ -105,14 +105,14 @@ export function createOrderEditor(
     ? ownerDocument?.querySelector<HTMLElement>(options.mount)
     : options.mount;
   if (!editor) {
-    throw new Error(`Order editor mount point not found: ${String(options.mount)}`);
+    throw new Error(`Editor mount point not found: ${String(options.mount)}`);
   }
   // Mounting twice silently stacked a second toolbar and surface, which is almost
   // always a caller that forgot to destroy the previous editor (module reloads in
   // particular). Fail loudly rather than leaving two editors over one document.
   if (editor.querySelector(".docweave-editor__surface")) {
     throw new Error(
-      `Order editor mount point already has an editor, destroy it first: ${String(options.mount)}`,
+      `Editor mount point already has an editor, destroy it first: ${String(options.mount)}`,
     );
   }
 
@@ -129,7 +129,7 @@ export function createOrderEditor(
     throw new Error("Templates require either a provider or URL");
   }
 
-  const runtime = createOrderEditorController({
+  const runtime = createDocEditorController({
     initialSnapshot: options.initialSnapshot,
     plugins: [
       createClipboardPlugin(),
@@ -156,7 +156,7 @@ export function createOrderEditor(
 
   const toolbar = createEditorToolbar(
     editor.ownerDocument,
-    "Order editor formatting",
+    "Document formatting",
   );
   const templateButton = options.templates
     ? createTemplateButton(editor.ownerDocument)

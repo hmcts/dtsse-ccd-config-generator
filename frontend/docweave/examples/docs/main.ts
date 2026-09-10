@@ -1,8 +1,8 @@
 import { initAll } from "govuk-frontend";
 import {
-  createOrderEditor,
+  createDocEditor,
   renderHtml,
-  type OrderEditorController,
+  type DocEditorController,
 } from "@hmcts-cft/docweave";
 import "@hmcts-cft/docweave/styles/docweave.css";
 
@@ -112,7 +112,7 @@ function initCodeBlock(
 function initBuildSection(section: HTMLElement): void {
   const elements = sectionElements(section);
   let build: BuildFunction | undefined;
-  let controller = createOrderEditor({ mount: elements.mount });
+  let controller = createDocEditor({ mount: elements.mount });
 
   const snapshotOutput = section.querySelector<HTMLElement>(
     "[data-docs-snapshot]",
@@ -163,7 +163,7 @@ function initBuildSection(section: HTMLElement): void {
     "click",
     () => {
       controller.destroy();
-      controller = createOrderEditor({ mount: elements.mount });
+      controller = createDocEditor({ mount: elements.mount });
       render();
     },
   );
@@ -172,7 +172,7 @@ function initBuildSection(section: HTMLElement): void {
 
 function initScriptSection(section: HTMLElement): void {
   const elements = sectionElements(section);
-  let controller: OrderEditorController | undefined;
+  let controller: DocEditorController | undefined;
 
   function run(): void {
     const saved = controller?.getSnapshot();

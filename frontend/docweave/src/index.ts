@@ -1,20 +1,20 @@
 export {
-  buildOrder,
+  buildDoc,
   type DocWeaveClause,
   DocWeaveDocument,
   type FactOptions,
   type InlineBuilder,
   type ListItemBuilder,
-  type OrderBuilder,
+  type DocBuilder,
   type OrderedListBuilder,
 } from "./builder.js";
 export {
-  createOrderEditor,
-  type CreateOrderEditorOptions,
+  createDocEditor,
+  type CreateDocEditorOptions,
 } from "./client.js";
 export {
   type DocWeaveSnapshot,
-  type OrderEditorController,
+  type DocEditorController,
 } from "./controller.js";
 export { renderHtml, type RenderHtmlOptions } from "./html.js";
 export {

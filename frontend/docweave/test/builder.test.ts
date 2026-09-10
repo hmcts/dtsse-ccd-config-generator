@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
-  buildOrder,
+  buildDoc,
   type DocWeaveClause,
   getDocumentFactSources,
   getDocumentNode,
@@ -11,7 +11,7 @@ import { editorSchema } from "../src/schema.js";
 
 describe("order builder", () => {
   it("builds paragraphs and independently scoped ordered-list items", () => {
-    const document = buildOrder((order) => {
+    const document = buildDoc((order) => {
       order.paragraph("heading", "IT IS ORDERED THAT:");
       order.paragraph("attendance", (content) => {
         content
@@ -102,7 +102,7 @@ describe("order builder", () => {
 
   it("only includes list items added by the callback", () => {
     const includeSecondItem = false;
-    const document = buildOrder((order) => {
+    const document = buildDoc((order) => {
       order.orderedList("clauses", (list) => {
         list.item("first", "First");
         if (includeSecondItem) list.item("second", "Second");
@@ -115,7 +115,7 @@ describe("order builder", () => {
   });
 
   it("exposes an immutable logical clause hierarchy with public IDs", () => {
-    const document = buildOrder((order) => {
+    const document = buildDoc((order) => {
       order.paragraph("heading", "IT IS ORDERED THAT:");
       order.orderedList("clauses", (list) => {
         list.item("suspended-condition", (content) => {
@@ -178,7 +178,7 @@ describe("order builder", () => {
   it("requires paragraph and item IDs to be globally unique", () => {
     assert.throws(
       () =>
-        buildOrder((order) => {
+        buildDoc((order) => {
           order.paragraph("duplicate", "Paragraph");
           order.orderedList("clauses", (list) => {
             list.item("duplicate", "List item");
@@ -189,7 +189,7 @@ describe("order builder", () => {
 
     assert.throws(
       () =>
-        buildOrder((order) => {
+        buildDoc((order) => {
           order.orderedList("clauses", (list) => {
             list.item("duplicate", "Parent", (item) => {
               item.orderedList("nested", (nested) => {
@@ -203,7 +203,7 @@ describe("order builder", () => {
   });
 
   it("builds managed nested ordered lists", () => {
-    const document = buildOrder((order) => {
+    const document = buildDoc((order) => {
       order.orderedList("clauses", (list) => {
         list.item("parent", "Parent clause", (item) => {
           item.orderedList("subclauses", (subclauses) => {
@@ -227,7 +227,7 @@ describe("order builder", () => {
   });
 
   it("omits an ordered list with no items", () => {
-    const document = buildOrder((order) => {
+    const document = buildDoc((order) => {
       order.paragraph("heading", "IT IS ORDERED THAT:");
       order.orderedList("empty", () => {});
     });
@@ -248,7 +248,7 @@ describe("order builder", () => {
   });
 
   it("omits an empty nested ordered list", () => {
-    const document = buildOrder((order) => {
+    const document = buildDoc((order) => {
       order.orderedList("clauses", (list) => {
         list.item("parent", "Parent", (item) => {
           item.orderedList("empty", () => {});
@@ -262,7 +262,7 @@ describe("order builder", () => {
   });
 
   it("renders generated text with its managed DOM marker", () => {
-    const document = buildOrder((order) => {
+    const document = buildDoc((order) => {
       order.paragraph("date", (content) => {
         content.fact("value", "1 September 2026");
       });
@@ -282,7 +282,7 @@ describe("order builder", () => {
   });
 
   it("uses ProseMirror plain-text serialization with block separators", () => {
-    const document = buildOrder((order) => {
+    const document = buildDoc((order) => {
       order.paragraph("attendance", (content) => {
         content
           .text("The Court heard from ")
@@ -301,7 +301,7 @@ describe("order builder", () => {
   });
 
   it("flattens nested list items into successive lines of plain text", () => {
-    const document = buildOrder((order) => {
+    const document = buildDoc((order) => {
       order.orderedList("clauses", (list) => {
         list.item("condition", "Suspended on payment of:", (item) => {
           item.orderedList("terms", (terms) => {
@@ -320,7 +320,7 @@ describe("order builder", () => {
   });
 
   it("keeps fact source IDs outside the ProseMirror document", () => {
-    const document = buildOrder((order) => {
+    const document = buildDoc((order) => {
       order.paragraph("payment", (content) => {
         content.fact("amount", "£2342.00", {
           sourceId: "arrears-amount",
@@ -346,7 +346,7 @@ describe("order builder", () => {
     for (const sourceId of ["", "two words", "line\nbreak"]) {
       assert.throws(
         () =>
-          buildOrder((order) => {
+          buildDoc((order) => {
             order.paragraph("payment", (content) => {
               content.fact("amount", "£1", { sourceId });
             });

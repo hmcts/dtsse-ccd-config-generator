@@ -333,7 +333,7 @@ function reconcileParent(
   }
 }
 
-export function reconcileOrderDocument(
+export function reconcileDocument(
   transaction: Transaction,
   previousTarget: ProseMirrorNode,
   target: ProseMirrorNode,

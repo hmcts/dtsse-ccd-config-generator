@@ -2,7 +2,7 @@ import * as docweave from "@hmcts-cft/docweave";
 import {
   DocWeaveDocument,
   type DocWeaveSnapshot,
-  type OrderEditorController,
+  type DocEditorController,
   type TemplateProvider,
 } from "@hmcts-cft/docweave";
 
@@ -22,7 +22,7 @@ export interface ScriptContext {
 
 export type ScriptFunction = (
   context: ScriptContext,
-) => OrderEditorController;
+) => DocEditorController;
 
 function compile(
   parameters: readonly string[],
@@ -33,14 +33,14 @@ function compile(
   return new Function(...parameters, code) as (...values: unknown[]) => unknown;
 }
 
-/** Compiles the body of `(buildOrder, inputs) => DocWeaveDocument`. */
+/** Compiles the body of `(buildDoc, inputs) => DocWeaveDocument`. */
 export function compileBuild(code: string): BuildFunction {
   const body = compile(BUILD_PARAMETERS, code);
   return (inputs) => {
-    const result = body(docweave.buildOrder, inputs);
+    const result = body(docweave.buildDoc, inputs);
     if (!(result instanceof DocWeaveDocument)) {
       throw new TypeError(
-        "The code must return the document built by buildOrder",
+        "The code must return the document built by buildDoc",
       );
     }
     return result;
@@ -52,17 +52,17 @@ export function compileScript(code: string): ScriptFunction {
   const body = compile(SCRIPT_PARAMETERS, code);
   return ({ mount, saved, provider }) => {
     const result = body(docweave, mount, saved, provider) as
-      | Partial<OrderEditorController>
+      | Partial<DocEditorController>
       | undefined;
     if (
       typeof result?.destroy !== "function" ||
       typeof result.getSnapshot !== "function"
     ) {
       throw new TypeError(
-        "The code must return the controller from createOrderEditor",
+        "The code must return the controller from createDocEditor",
       );
     }
-    return result as OrderEditorController;
+    return result as DocEditorController;
   };
 }
 

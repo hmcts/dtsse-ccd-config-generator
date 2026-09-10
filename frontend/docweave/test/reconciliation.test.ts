@@ -4,25 +4,25 @@ import { describe, it } from "node:test";
 import { EditorState } from "prosemirror-state";
 
 import {
-  buildOrder as buildDocWeaveDocument,
+  buildDoc as buildDocWeaveDocument,
   getDocumentNode,
 } from "../src/builder.js";
-import { reconcileOrderDocument } from "../src/reconciliation.js";
+import { reconcileDocument } from "../src/reconciliation.js";
 import { editorSchema } from "../src/schema.js";
 
-const buildOrder = (
+const buildDoc = (
   define: Parameters<typeof buildDocWeaveDocument>[0],
 ) => getDocumentNode(buildDocWeaveDocument(define));
 
 describe("order document reconciliation", () => {
   it("replaces directly edited paragraph wording when reference wording changes", () => {
-    const live = buildOrder((order) => {
+    const live = buildDoc((order) => {
       order.paragraph("heading", "Edited heading");
     });
-    const previousTarget = buildOrder((order) => {
+    const previousTarget = buildDoc((order) => {
       order.paragraph("heading", "Old heading");
     });
-    const target = buildOrder((order) => {
+    const target = buildDoc((order) => {
       order.paragraph("heading", "New heading");
     });
     const transaction = EditorState.create({
@@ -30,7 +30,7 @@ describe("order document reconciliation", () => {
       doc: live,
     }).tr;
 
-    const result = reconcileOrderDocument(
+    const result = reconcileDocument(
       transaction,
       previousTarget,
       target,
@@ -43,7 +43,7 @@ describe("order document reconciliation", () => {
 
   it("updates generated text while preserving edited surrounding text", () => {
     const orderWithDate = (prefix: string, date: string) =>
-      buildOrder((order) => {
+      buildDoc((order) => {
         order.paragraph("deadline", (content) => {
           content.text(prefix).fact("date", date).text(".");
         });
@@ -56,7 +56,7 @@ describe("order document reconciliation", () => {
       doc: live,
     }).tr;
 
-    reconcileOrderDocument(transaction, previousTarget, target);
+    reconcileDocument(transaction, previousTarget, target);
 
     const paragraph = transaction.doc.firstChild!;
     assert.equal(paragraph.firstChild!.text, "Please pay by ");
@@ -70,7 +70,7 @@ describe("order document reconciliation", () => {
 
   it("updates generated text while preserving edited list-item wording", () => {
     const orderWithDate = (prefix: string, date: string) =>
-      buildOrder((order) => {
+      buildDoc((order) => {
         order.orderedList("clauses", (list) => {
           list.item("deadline", (content) => {
             content.text(prefix).fact("date", date).text(".");
@@ -85,7 +85,7 @@ describe("order document reconciliation", () => {
       doc: live,
     }).tr;
 
-    reconcileOrderDocument(transaction, previousTarget, target);
+    reconcileDocument(transaction, previousTarget, target);
 
     const paragraph = transaction.doc.firstChild!.firstChild!.firstChild!;
     assert.equal(paragraph.firstChild!.text, "Please pay by ");
@@ -97,7 +97,7 @@ describe("order document reconciliation", () => {
       wording: string,
       generatedText: string | undefined,
     ) =>
-      buildOrder((order) => {
+      buildDoc((order) => {
         order.orderedList("clauses", (list) => {
           list.item("deadline", (content) => {
             content.text(wording);
@@ -115,7 +115,7 @@ describe("order document reconciliation", () => {
       doc: live,
     }).tr;
 
-    reconcileOrderDocument(transaction, previousTarget, target);
+    reconcileDocument(transaction, previousTarget, target);
 
     const item = transaction.doc.firstChild!.firstChild!;
     assert.equal(item.childCount, 1);
@@ -125,7 +125,7 @@ describe("order document reconciliation", () => {
 
   it("removes generated text when replacing edited list-item wording", () => {
     const withGeneratedText = (wording: string) =>
-      buildOrder((order) => {
+      buildDoc((order) => {
         order.orderedList("clauses", (list) => {
           list.item("deadline", (content) => {
             content.text(wording).fact("date", "1 September");
@@ -134,7 +134,7 @@ describe("order document reconciliation", () => {
       });
     const previousTarget = withGeneratedText("Old wording: ");
     const live = withGeneratedText("Judge-edited wording: ");
-    const target = buildOrder((order) => {
+    const target = buildDoc((order) => {
       order.orderedList("clauses", (list) => {
         list.item("deadline", "New wording");
       });
@@ -144,7 +144,7 @@ describe("order document reconciliation", () => {
       doc: live,
     }).tr;
 
-    reconcileOrderDocument(transaction, previousTarget, target);
+    reconcileDocument(transaction, previousTarget, target);
 
     const item = transaction.doc.firstChild!.firstChild!;
     assert.equal(item.childCount, 1);
@@ -185,7 +185,7 @@ describe("order document reconciliation", () => {
       doc: editorSchema.node("doc", null, liveList),
     }).tr;
 
-    reconcileOrderDocument(transaction, previous, target);
+    reconcileDocument(transaction, previous, target);
 
     assert.equal(transaction.doc.firstChild!.attrs.order, 3);
     assert.equal(transaction.doc.firstChild!.childCount, 2);
@@ -219,7 +219,7 @@ describe("order document reconciliation", () => {
       doc: editorSchema.node("doc", null, list([previousItem, userItem])),
     }).tr;
 
-    reconcileOrderDocument(transaction, previous, target);
+    reconcileDocument(transaction, previous, target);
 
     assert.equal(
       transaction.doc.firstChild!.firstChild!.textContent,
@@ -268,7 +268,7 @@ describe("order document reconciliation", () => {
       doc: documentWith(liveItem),
     }).tr;
 
-    reconcileOrderDocument(
+    reconcileDocument(
       transaction,
       documentWith(generatedItem("Old wording")),
       documentWith(generatedItem("New wording")),
@@ -326,7 +326,7 @@ describe("order document reconciliation", () => {
       doc: documentWith(liveItem),
     }).tr;
 
-    reconcileOrderDocument(
+    reconcileDocument(
       transaction,
       documentWith(generatedItem("Old generated wording")),
       documentWith(generatedItem("New generated wording")),
@@ -344,13 +344,13 @@ describe("order document reconciliation", () => {
   });
 
   it("removes user-authored descendants when their generated clause is removed", () => {
-    const previousTarget = buildOrder((order) => {
+    const previousTarget = buildDoc((order) => {
       order.orderedList("clauses", (list) => {
         list.item("remove", "Generated parent");
         list.item("keep", "Keep");
       });
     });
-    const target = buildOrder((order) => {
+    const target = buildDoc((order) => {
       order.orderedList("clauses", (list) => {
         list.item("keep", "Keep");
       });
@@ -375,7 +375,7 @@ describe("order document reconciliation", () => {
       doc: live,
     }).tr;
 
-    reconcileOrderDocument(transaction, previousTarget, target);
+    reconcileDocument(transaction, previousTarget, target);
 
     assert.equal(transaction.doc.textContent, "Keep");
   });
@@ -433,7 +433,7 @@ describe("order document reconciliation", () => {
       doc: documentWith(liveItem),
     }).tr;
 
-    reconcileOrderDocument(
+    reconcileDocument(
       transaction,
       documentWith(previousItem),
       documentWith(targetItem),
@@ -501,7 +501,7 @@ describe("order document reconciliation", () => {
       doc: documentWith(liveItem),
     }).tr;
 
-    reconcileOrderDocument(
+    reconcileDocument(
       transaction,
       documentWith(previousItem),
       documentWith(targetItem),
@@ -518,7 +518,7 @@ describe("order document reconciliation", () => {
 
   it("removes the nested list when its final generated subclause is removed", () => {
     const withSubclause = (includeSubclause: boolean) =>
-      buildOrder((order) => {
+      buildDoc((order) => {
         order.orderedList("clauses", (list) => {
           list.item("parent", "Parent clause", (item) => {
             if (includeSubclause) {
@@ -536,7 +536,7 @@ describe("order document reconciliation", () => {
       doc: previous,
     }).tr;
 
-    reconcileOrderDocument(transaction, previous, target);
+    reconcileDocument(transaction, previous, target);
 
     const reconciledItem = transaction.doc.firstChild!.firstChild!;
     assert.equal(reconciledItem.childCount, 1);

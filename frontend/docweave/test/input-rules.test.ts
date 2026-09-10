@@ -5,7 +5,7 @@ import { EditorState, TextSelection } from "prosemirror-state";
 
 import { getDocumentNode } from "../src/builder.js";
 import { createInputRulesPlugin } from "../src/input-rules.js";
-import { buildOrder } from "../src/index.js";
+import { buildDoc } from "../src/index.js";
 import { editorSchema } from "../src/schema.js";
 
 /** Types text at the cursor the way the editor view hands it to input rules. */
@@ -64,7 +64,7 @@ describe("numbered clause input rule", () => {
   });
 
   it("leaves a generated clause alone", () => {
-    const generated = buildOrder((order) => {
+    const generated = buildDoc((order) => {
       order.paragraph("heading", "1.");
     });
     const state = type(

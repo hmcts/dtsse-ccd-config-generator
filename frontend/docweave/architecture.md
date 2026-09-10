@@ -1,4 +1,4 @@
-# Order editor architecture
+# Editor architecture
 
 ## Approach
 
@@ -8,15 +8,15 @@ Docweave privately retains the ProseMirror target node and runtime-only
 interaction metadata:
 
 ```ts
-function buildCurrentOrder(inputs: OrderInputs): DocWeaveDocument {
-  return buildOrder((order) => {
-    order.paragraph("heading", "IT IS ORDERED THAT:");
+function buildCurrentDocument(inputs: Inputs): DocWeaveDocument {
+  return buildDoc((doc) => {
+    doc.paragraph("heading", "IT IS ORDERED THAT:");
 
     if (inputs.includeFoo) {
-      order.paragraph("foo", buildRichText(inputs));
+      doc.paragraph("foo", buildRichText(inputs));
     }
 
-    order.orderedList("clauses", (list) => {
+    doc.orderedList("clauses", (list) => {
       list.item("parent", "Parent clause", (item) => {
         item.orderedList("subclauses", (subclauses) => {
           subclauses.item("first-subclause", "First subclause");
@@ -26,7 +26,7 @@ function buildCurrentOrder(inputs: OrderInputs): DocWeaveDocument {
   });
 }
 
-controller.render(buildCurrentOrder(inputs));
+controller.render(buildCurrentDocument(inputs));
 ```
 
 It is a pure function that builds a ProseMirror target node and its ephemeral
@@ -100,7 +100,7 @@ Generated documents obey these invariants:
   they may be modified, but may not be added or removed.
 
 ProseMirror's schema validates every generated and restored document.
-`buildOrder` additionally rejects duplicate managed IDs. Before reconciliation,
+`buildDoc` additionally rejects duplicate managed IDs. Before reconciliation,
 the editor validates both generated documents and rejects any transition that
 violates the remaining identity and structure invariants. Restored documents
 are also checked against their generated baseline before the editor is created.
@@ -125,7 +125,7 @@ the document root or within managed containers.
 
 ## Reconciliation
 
-When the inputs change, `buildOrder` derives an updated `DocWeaveDocument`.
+When the inputs change, `buildDoc` derives an updated `DocWeaveDocument`.
 
 The reconciliation process then runs to update the view, comparing the existing
 view state, the previous target and the new target:

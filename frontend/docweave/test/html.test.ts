@@ -3,15 +3,15 @@ import { describe, it } from "node:test";
 
 import { JSDOM } from "jsdom";
 
-import { buildOrder, createOrderEditor, renderHtml } from "../src/index.js";
+import { buildDoc, createDocEditor, renderHtml } from "../src/index.js";
 
 describe("renderHtml", () => {
   const dom = new JSDOM("<!doctype html>");
   const document = dom.window.document;
 
   it("renders the reader's document as plain HTML with facts as text", () => {
-    const controller = createOrderEditor();
-    controller.render(buildOrder((order) => {
+    const controller = createDocEditor();
+    controller.render(buildDoc((order) => {
       order.paragraph("heading", "IT IS ORDERED THAT:");
       order.orderedList("clauses", (list) => {
         list.item("possession", (content) => {
@@ -33,8 +33,8 @@ describe("renderHtml", () => {
   });
 
   it("keeps marks, headings and list numbering from the editor document", () => {
-    const controller = createOrderEditor();
-    controller.render(buildOrder((order) => order.paragraph("p", "x")));
+    const controller = createDocEditor();
+    controller.render(buildDoc((order) => order.paragraph("p", "x")));
     const snapshot = controller.getSnapshot();
     const current = {
       type: "doc",
@@ -65,8 +65,8 @@ describe("renderHtml", () => {
   });
 
   it("renders the current document, not the generated one", () => {
-    const controller = createOrderEditor();
-    controller.render(buildOrder((order) => {
+    const controller = createDocEditor();
+    controller.render(buildDoc((order) => {
       order.paragraph("heading", "Generated wording.");
     }));
     const snapshot = controller.getSnapshot();
@@ -81,8 +81,8 @@ describe("renderHtml", () => {
   });
 
   it("explains itself when there is no DOM", () => {
-    const controller = createOrderEditor();
-    controller.render(buildOrder((order) => order.paragraph("p", "x")));
+    const controller = createDocEditor();
+    controller.render(buildDoc((order) => order.paragraph("p", "x")));
     assert.throws(
       () => renderHtml(controller.getSnapshot()),
       /needs a DOM document/,

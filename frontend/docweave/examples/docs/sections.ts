@@ -34,7 +34,7 @@ interface SectionBase {
 }
 
 /**
- * The code is the body of `(buildOrder, inputs) => DocWeaveDocument`. The page
+ * The code is the body of `(buildDoc, inputs) => DocWeaveDocument`. The page
  * owns the editor and re-renders whenever the code or an input changes.
  */
 export interface BuildSection extends SectionBase {
@@ -54,7 +54,7 @@ export interface ScriptSection extends SectionBase {
 
 export type DocsSection = BuildSection | ScriptSection;
 
-export const BUILD_PARAMETERS = ["buildOrder", "inputs"] as const;
+export const BUILD_PARAMETERS = ["buildDoc", "inputs"] as const;
 export const SCRIPT_PARAMETERS = [
   "docweave",
   "mount",
@@ -84,17 +84,18 @@ export const sections: readonly DocsSection[] = [
     kind: "build",
     title: "Document generation",
     prose: [
-      "A Docweave document is built in code. Each paragraph has an ID and its wording. The ID is how Docweave recognises the same clause from one build to the next, so it must be unique within the document.",
-      "The code below is the body of a function that receives buildOrder and must return the document it builds. Edit it and the editor on the right updates.",
+      "Documents are built in code.",
+      "The code below is the body of a function that receives buildDoc and must return the document it builds. Edit it and the editor on the right updates.",
+      "Unique clause IDs are how Docweave recognises the same clause from one build to the next.",
     ],
     tryThis: [
       "Change the wording in the code. The clause in the editor is replaced with the new wording.",
       "Now edit a clause in the editor instead. Your edit stays until the code for that clause changes.",
       "Give both paragraphs the same ID. Docweave rejects the document and says why.",
     ],
-    code: `return buildOrder((order) => {
-  order.paragraph("heading", "IT IS ORDERED THAT:");
-  order.paragraph("biscuits", "Biscuits shall be served.");
+    code: `return buildDoc((doc) => {
+  doc.paragraph("heading", "IT IS ORDERED THAT:");
+  doc.paragraph("biscuits", "Biscuits shall be served.");
 });
 `,
     inputs: [],
@@ -105,18 +106,18 @@ export const sections: readonly DocsSection[] = [
     showSnapshot: true,
     title: "What comes out",
     prose: [
-      "Two things come out of the editor. The first is plain HTML: the wording as the person left it, with nothing to say which words were generated, which is what you render as their final document. renderHtml produces it from a snapshot.",
-      "The second is the snapshot itself, and it is not a blob of text. Docweave keeps the structure of the document as the person edits it: every generated clause keeps its ID, every fact stays marked as a fact, and anything the person inserted carries no ID. Because that structure survives, the document can be rebuilt against a later set of inputs, and a system reading the snapshot can tell what was generated from what was written by hand.",
+      "1. Plain HTML: the document as the author left it, which is what you render as their final document.",
+      "2. A structured representation as JSON, for tracking user edits"
     ],
     tryThis: [
       "Edit the biscuits clause. The HTML changes, and the paragraph in the snapshot keeps its ID.",
       "Put the cursor at the end of a clause, press Enter and type a clause of your own. In the snapshot it is the paragraph with no ID.",
       "Change the date in the code. The fact updates and your edits around it stay.",
     ],
-    code: `return buildOrder((order) => {
-  order.paragraph("heading", "IT IS ORDERED THAT:");
-  order.paragraph("biscuits", "Biscuits shall be served.");
-  order.paragraph("deadline", (content) => {
+    code: `return buildDoc((doc) => {
+  doc.paragraph("heading", "IT IS ORDERED THAT:");
+  doc.paragraph("biscuits", "Biscuits shall be served.");
+  doc.paragraph("deadline", (content) => {
     content
       .text("Tea shall be poured by ")
       .fact("date", "4pm on 1 October 2026")
@@ -138,14 +139,14 @@ export const sections: readonly DocsSection[] = [
       "Edit the biscuits clause in the editor, then tick cake. Your edit survives because the biscuits clause kept its ID.",
       "Untick tea and tick it again. The clause comes back with its generated wording.",
     ],
-    code: `return buildOrder((order) => {
-  order.paragraph("heading", "IT IS ORDERED THAT:");
-  order.paragraph("biscuits", "Biscuits shall be served.");
+    code: `return buildDoc((doc) => {
+  doc.paragraph("heading", "IT IS ORDERED THAT:");
+  doc.paragraph("biscuits", "Biscuits shall be served.");
   if (inputs.cake) {
-    order.paragraph("cake", "Cake shall be served.");
+    doc.paragraph("cake", "Cake shall be served.");
   }
   if (inputs.tea) {
-    order.paragraph("tea", "Tea shall be poured.");
+    doc.paragraph("tea", "Tea shall be poured.");
   }
 });
 `,
@@ -167,9 +168,9 @@ export const sections: readonly DocsSection[] = [
       "Try to type inside a fact. The editor will not let you.",
       "Click the deadline in the editor. Focus moves to the deadline input.",
     ],
-    code: `return buildOrder((order) => {
-  order.paragraph("heading", "IT IS ORDERED THAT:");
-  order.paragraph("possession", (content) => {
+    code: `return buildDoc((doc) => {
+  doc.paragraph("heading", "IT IS ORDERED THAT:");
+  doc.paragraph("possession", (content) => {
     content
       .text("The defendant must give up possession of ")
       .fact("address", inputs.address)
@@ -207,9 +208,9 @@ export const sections: readonly DocsSection[] = [
       "Put the cursor at the end of a clause, press Enter and type a new clause of your own. Then tick costs again: your clause stays where you put it.",
       "Try to delete a generated clause. Docweave keeps it.",
     ],
-    code: `return buildOrder((order) => {
-  order.paragraph("heading", "IT IS ORDERED THAT:");
-  order.orderedList("clauses", (list) => {
+    code: `return buildDoc((doc) => {
+  doc.paragraph("heading", "IT IS ORDERED THAT:");
+  doc.orderedList("clauses", (list) => {
     list.item("possession", "The defendant must give up possession.");
     if (inputs.costs) {
       list.item("costs", "The defendant must pay the claimant's costs:", (item) => {
@@ -231,24 +232,24 @@ export const sections: readonly DocsSection[] = [
     kind: "script",
     title: "The editor and snapshots",
     prose: [
-      "createOrderEditor mounts an editor and returns a controller. Call render with each new document. Call getSnapshot to get a serialisable record of the reader's document and the generated document it was reconciled against, and pass it back as initialSnapshot to restore the editor later. Call destroy when the editor is removed.",
-      "The code below runs when you press Run. The page passes the previous run's snapshot as saved, so your edits survive the editor being destroyed and recreated. Without a mount, createOrderEditor runs headlessly for tests and servers.",
+      "createDocEditor mounts an editor and returns a controller. Call render with each new document. Call getSnapshot to get a serialisable record of the reader's document and the generated document it was reconciled against, and pass it back as initialSnapshot to restore the editor later. Call destroy when the editor is removed.",
+      "The code below runs when you press Run. The page passes the previous run's snapshot as saved, so your edits survive the editor being destroyed and recreated. Without a mount, createDocEditor runs headlessly for tests and servers.",
     ],
     tryThis: [
       "Edit the document, then press Run. The new editor restores your edits.",
       "Remove initialSnapshot and press Run. The editor starts from the generated document.",
       "Look at the snapshot below the editor. It is plain JSON, safe to store with the case.",
     ],
-    code: `const { createOrderEditor, buildOrder } = docweave;
+    code: `const { createDocEditor, buildDoc } = docweave;
 
-const controller = createOrderEditor({
+const controller = createDocEditor({
   mount,
   initialSnapshot: saved,
 });
 
-controller.render(buildOrder((order) => {
-  order.paragraph("heading", "IT IS ORDERED THAT:");
-  order.paragraph("biscuits", "Biscuits shall be served.");
+controller.render(buildDoc((doc) => {
+  doc.paragraph("heading", "IT IS ORDERED THAT:");
+  doc.paragraph("biscuits", "Biscuits shall be served.");
 }));
 
 return controller;
@@ -266,16 +267,16 @@ return controller;
       "Press Insert template in the toolbar, or type / on an empty line, and save the current wording as a template.",
       "Start a new empty line, type / and insert the template.",
     ],
-    code: `const { createOrderEditor, buildOrder } = docweave;
+    code: `const { createDocEditor, buildDoc } = docweave;
 
-const controller = createOrderEditor({
+const controller = createDocEditor({
   mount,
   templates: { provider },
 });
 
-controller.render(buildOrder((order) => {
-  order.paragraph("heading", "IT IS ORDERED THAT:");
-  order.paragraph("biscuits", "Biscuits shall be served.");
+controller.render(buildDoc((doc) => {
+  doc.paragraph("heading", "IT IS ORDERED THAT:");
+  doc.paragraph("biscuits", "Biscuits shall be served.");
 }));
 
 return controller;
@@ -284,7 +285,7 @@ return controller;
   },
 ];
 
-export const templatesInApplicationExample = `createOrderEditor({
+export const templatesInApplicationExample = `createDocEditor({
   mount: "#editor",
   templates: {
     url: "/docweave/templates",

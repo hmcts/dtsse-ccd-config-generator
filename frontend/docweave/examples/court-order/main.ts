@@ -1,7 +1,7 @@
 import { initAll } from "govuk-frontend";
 import {
-  createOrderEditor,
-  type OrderEditorController,
+  createDocEditor,
+  type DocEditorController,
 } from "@hmcts-cft/docweave";
 import "@hmcts-cft/docweave/styles/docweave.css";
 
@@ -32,7 +32,7 @@ const inspector = createInspector(document);
 const templates = window.__DOCWEAVE_TEMPLATES_MODE__ === "backend"
   ? { url: "/docweave/templates" }
   : { provider: createInMemoryTemplateProvider() };
-let controller: OrderEditorController;
+let controller: DocEditorController;
 
 function render(): void {
   controller.render(buildDemoOrder(readInputs(form!)));
@@ -41,7 +41,7 @@ function render(): void {
 
 function initialiseEditor(): void {
   controller?.destroy();
-  controller = createOrderEditor({
+  controller = createDocEditor({
     mount: mount!,
     templates,
   });
