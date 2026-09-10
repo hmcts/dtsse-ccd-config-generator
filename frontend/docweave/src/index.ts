@@ -16,6 +16,7 @@ export {
   type DocWeaveSnapshot,
   type OrderEditorController,
 } from "./controller.js";
+export { renderHtml, type RenderHtmlOptions } from "./html.js";
 export {
   createHttpTemplateProvider,
   createTemplateFragment,
