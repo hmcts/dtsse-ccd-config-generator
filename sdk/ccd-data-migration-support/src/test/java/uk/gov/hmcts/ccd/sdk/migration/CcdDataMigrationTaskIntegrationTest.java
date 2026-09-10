@@ -52,7 +52,7 @@ class CcdDataMigrationTaskIntegrationTest {
     jdbc.getJdbcTemplate().execute("drop schema if exists fdw_stage cascade");
     jdbc.getJdbcTemplate().execute("drop schema if exists source cascade");
     jdbc.getJdbcTemplate().execute("drop server if exists ccd_migration_test_server cascade");
-    jdbc.getJdbcTemplate().execute("delete from ccd.ccd_data_migration_progress");
+    jdbc.getJdbcTemplate().execute("delete from ccd_data_migration.ccd_data_migration_progress");
     jdbc.getJdbcTemplate().execute("truncate table ccd.case_event, ccd.case_data restart identity cascade");
     restoreTargetSchemaState();
     createSourceTables();
@@ -1107,7 +1107,7 @@ class CcdDataMigrationTaskIntegrationTest {
   private void createProgress() {
     jdbc.update(
         """
-        insert into ccd.ccd_data_migration_progress (
+        insert into ccd_data_migration.ccd_data_migration_progress (
           task_name,
           config_hash
         ) values (
@@ -1126,7 +1126,7 @@ class CcdDataMigrationTaskIntegrationTest {
   private void createCompleteProgress(long cutoverEventHwm) {
     jdbc.update(
         """
-        insert into ccd.ccd_data_migration_progress (
+        insert into ccd_data_migration.ccd_data_migration_progress (
           task_name,
           config_hash,
           status,
@@ -1307,7 +1307,7 @@ class CcdDataMigrationTaskIntegrationTest {
 
   private String progressStatus() {
     return jdbc.queryForObject(
-        "select status from ccd.ccd_data_migration_progress where task_name = :taskName",
+        "select status from ccd_data_migration.ccd_data_migration_progress where task_name = :taskName",
         Map.of("taskName", "ccd-data-migration"),
         String.class
     );
@@ -1328,7 +1328,7 @@ class CcdDataMigrationTaskIntegrationTest {
 
   private long sourceEventHwm() {
     return jdbc.queryForObject(
-        "select source_event_hwm from ccd.ccd_data_migration_progress where task_name = :taskName",
+        "select source_event_hwm from ccd_data_migration.ccd_data_migration_progress where task_name = :taskName",
         Map.of("taskName", "ccd-data-migration"),
         Long.class
     );
@@ -1336,7 +1336,7 @@ class CcdDataMigrationTaskIntegrationTest {
 
   private Long cutoverEventHwm() {
     return jdbc.queryForObject(
-        "select cutover_event_hwm from ccd.ccd_data_migration_progress where task_name = :taskName",
+        "select cutover_event_hwm from ccd_data_migration.ccd_data_migration_progress where task_name = :taskName",
         Map.of("taskName", "ccd-data-migration"),
         Long.class
     );
@@ -1344,7 +1344,7 @@ class CcdDataMigrationTaskIntegrationTest {
 
   private long significantItemsHwm() {
     return jdbc.queryForObject(
-        "select significant_items_hwm from ccd.ccd_data_migration_progress where task_name = :taskName",
+        "select significant_items_hwm from ccd_data_migration.ccd_data_migration_progress where task_name = :taskName",
         Map.of("taskName", "ccd-data-migration"),
         Long.class
     );
@@ -1533,6 +1533,7 @@ class CcdDataMigrationTaskIntegrationTest {
   @Configuration
   @ImportAutoConfiguration({
       DecentralisedFlywayAutoConfiguration.class,
+      CcdDataMigrationAutoConfiguration.class,
       DataSourceAutoConfiguration.class,
       DataSourceTransactionManagerAutoConfiguration.class,
       JdbcTemplateAutoConfiguration.class,

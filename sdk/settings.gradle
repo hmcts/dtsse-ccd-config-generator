@@ -1,2 +1,3 @@
-include 'ccd-gradle-plugin', 'ccd-config-generator', 'decentralised-runtime', 'ccd-runtime-indexing', 'ccd-servicebus-support', 'task-management', 'docweave'
+include 'ccd-gradle-plugin', 'ccd-config-generator', 'decentralised-runtime', 'ccd-data-migration-support',
+    'ccd-runtime-indexing', 'ccd-servicebus-support', 'task-management', 'docweave'
 include 'ccd-sdk-bom'

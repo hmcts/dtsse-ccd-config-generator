@@ -117,7 +117,6 @@ public class CcdDataMigrationTask implements Runnable {
     );
 
     validateDecentralisedRuntimeDisabled();
-    validateProgressTableReady();
     Optional<CcdDataMigrationRunResult> result = advisoryLock().runIfAcquired(
         options.taskName(),
         options.canonicalCaseTypeIds(),
@@ -707,7 +706,7 @@ public class CcdDataMigrationTask implements Runnable {
     Long hwm = db.queryForObject(
         """
         select source_event_hwm
-        from ccd.ccd_data_migration_progress
+        from ccd_data_migration.ccd_data_migration_progress
         where task_name = :taskName
         """,
         Map.of("taskName", options.taskName()),
@@ -719,7 +718,7 @@ public class CcdDataMigrationTask implements Runnable {
   private void updateSourceEventProgressHighWaterMark(long sourceEventHwm) {
     db.update(
         """
-        update ccd.ccd_data_migration_progress
+        update ccd_data_migration.ccd_data_migration_progress
         set source_event_hwm = :sourceEventHwm,
             updated_at = now() at time zone 'UTC'
         where task_name = :taskName
@@ -735,7 +734,7 @@ public class CcdDataMigrationTask implements Runnable {
     Long hwm = db.queryForObject(
         """
         select significant_items_hwm
-        from ccd.ccd_data_migration_progress
+        from ccd_data_migration.ccd_data_migration_progress
         where task_name = :taskName
         """,
         Map.of("taskName", options.taskName()),
@@ -768,7 +767,7 @@ public class CcdDataMigrationTask implements Runnable {
   private void updateSignificantItemsProgressHighWaterMark(long significantItemsHwm) {
     db.update(
         """
-        update ccd.ccd_data_migration_progress
+        update ccd_data_migration.ccd_data_migration_progress
         set significant_items_hwm = greatest(significant_items_hwm, :significantItemsHwm),
             updated_at = now() at time zone 'UTC'
         where task_name = :taskName
@@ -810,7 +809,7 @@ public class CcdDataMigrationTask implements Runnable {
     long hwm = sourceEventHighWaterMark();
     db.update(
         """
-        update ccd.ccd_data_migration_progress
+        update ccd_data_migration.ccd_data_migration_progress
         set status = :status,
             cutover_event_hwm = :cutoverEventHwm,
             updated_at = now() at time zone 'UTC'
@@ -828,7 +827,7 @@ public class CcdDataMigrationTask implements Runnable {
   private void reopenPreload() {
     db.update(
         """
-        update ccd.ccd_data_migration_progress
+        update ccd_data_migration.ccd_data_migration_progress
         set status = :status,
             cutover_event_hwm = null,
             updated_at = now() at time zone 'UTC'
@@ -841,7 +840,7 @@ public class CcdDataMigrationTask implements Runnable {
   private void prepareCompleteProgressForNextCutover(long completedCutoverEventHwm) {
     db.update(
         """
-        update ccd.ccd_data_migration_progress
+        update ccd_data_migration.ccd_data_migration_progress
         set source_event_hwm = greatest(source_event_hwm, :completedCutoverEventHwm),
             updated_at = now() at time zone 'UTC'
         where task_name = :taskName
@@ -856,7 +855,7 @@ public class CcdDataMigrationTask implements Runnable {
   private void markComplete() {
     db.update(
         """
-        update ccd.ccd_data_migration_progress
+        update ccd_data_migration.ccd_data_migration_progress
         set status = :status,
             updated_at = now() at time zone 'UTC'
         where task_name = :taskName
@@ -949,38 +948,10 @@ public class CcdDataMigrationTask implements Runnable {
     db.getJdbcTemplate().execute("alter table ccd.case_data enable trigger trigger_enqueue_case_revision");
   }
 
-  private void validateProgressTableReady() {
-    Integer columnCount = db.queryForObject(
-        """
-        select count(*)
-        from information_schema.columns
-        where table_schema = :schema
-          and table_name = 'ccd_data_migration_progress'
-          and column_name in (
-            'task_name',
-            'config_hash',
-            'status',
-            'cutover_event_hwm',
-            'source_event_hwm',
-            'created_at',
-            'updated_at'
-          )
-        """,
-        Map.of("schema", TARGET_SCHEMA),
-        Integer.class
-    );
-    if (columnCount == null || columnCount != 7) {
-      throw new CcdDataMigrationException(
-          "CCD data migration progress table is missing or incomplete. "
-              + "Run the decentralised-runtime Flyway migrations before starting the task."
-      );
-    }
-  }
-
   private Progress getOrCreateProgress() {
     db.update(
         """
-        insert into ccd.ccd_data_migration_progress (
+        insert into ccd_data_migration.ccd_data_migration_progress (
           task_name,
           config_hash
         ) values (
@@ -1002,7 +973,7 @@ public class CcdDataMigrationTask implements Runnable {
                cutover_event_hwm,
                source_event_hwm,
                significant_items_hwm
-        from ccd.ccd_data_migration_progress
+        from ccd_data_migration.ccd_data_migration_progress
         where task_name = :taskName
         """,
         Map.of("taskName", options.taskName()),
@@ -1025,7 +996,8 @@ public class CcdDataMigrationTask implements Runnable {
               + " was created with a different migration configuration. Existing configuration hash: "
               + progress.configHash() + ". Current configuration: "
               + options.migrationConfigSummary()
-              + ". Use a new taskName for a different migration, or reset ccd_data_migration_progress only "
+              + ". Use a new taskName for a different migration, or reset "
+              + "ccd_data_migration.ccd_data_migration_progress only "
               + "after confirming the existing migration state is no longer needed."
       );
     }

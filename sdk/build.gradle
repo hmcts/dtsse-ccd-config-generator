@@ -13,6 +13,35 @@ repositories {
 
 def sdkCheck = tasks.register('check');
 
+def checkMigrationImmutability = tasks.register('checkMigrationImmutability') {
+    group = 'verification'
+    description = 'Fails if existing SDK library database migrations are modified, deleted, or renamed'
+
+    doLast {
+        def stdout = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', 'diff', '--name-status', '--find-renames', '--diff-filter=MDR',
+                'origin/master...HEAD', '--',
+                ':(glob,top)sdk/*/src/main/resources/**/migration/V*.sql'
+            standardOutput = stdout
+        }
+
+        def changedExistingMigrations = stdout.toString('UTF-8').readLines().findAll { it.trim() }
+
+        if (!changedExistingMigrations.isEmpty()) {
+            throw new GradleException(
+                "Existing SDK library database migrations must not be modified, deleted, or renamed. "
+                    + "Add a new migration instead.\n\n"
+                    + changedExistingMigrations.join('\n')
+            )
+        }
+    }
+}
+
+sdkCheck.configure {
+    dependsOn checkMigrationImmutability
+}
+
 subprojects {
     version = System.getenv('RELEASE_VERSION')?.replace('refs/tags/', '') ?: 'DEV-SNAPSHOT'
     group = 'com.github.hmcts'

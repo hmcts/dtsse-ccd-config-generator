@@ -4,6 +4,15 @@ This page covers the SDK `CcdDataMigrationTask`, a reusable Java migration runne
 need to copy large CCD `case_event` history, event significant items and final `case_data` rows into
 their decentralised runtime database.
 
+Add the optional support library alongside the decentralised runtime:
+
+```groovy
+dependencies {
+  implementation 'com.github.hmcts:decentralised-runtime'
+  implementation 'com.github.hmcts:ccd-data-migration-support'
+}
+```
+
 Use this task after the FDW setup in [`fdw-data-migration.md`](fdw-data-migration.md) has created
 the FDW server, user mapping, and at least one of the CCD source foreign tables. The task creates
 any missing `fdw_stage.case_data`, `fdw_stage.case_event`, or
@@ -72,8 +81,8 @@ re-enabled in the same transaction that marks `CUTOVER` complete.
 
 ## Progress
 
-The decentralised runtime Flyway migration creates `ccd.ccd_data_migration_progress` with minimal
-state:
+The support library owns schema `ccd_data_migration` and creates
+`ccd_data_migration.ccd_data_migration_progress` with minimal state:
 
 * `task_name`
 * `config_hash`
@@ -88,6 +97,8 @@ The migration configuration hash covers the migration identity. Runtime limits s
 If the migration identity changes after a task has already created a progress row, the task fails
 fast rather than resuming under different source filters. Operators must either keep the same
 identity configuration or explicitly reset/use a new `task-name` after confirming the target state.
+
+When upgrading from a release where this task was packaged in `decentralised-runtime`, the legacy `ccd.ccd_data_migration_progress` table is dropped.
 
 ## Configuration
 
@@ -189,18 +200,18 @@ they are unbounded on production-scale CCD data.
 ## Performance Harness
 
 The SDK integration tests include a configurable FDW migration harness that seeds a synthetic source
-dataset, runs `PRELOAD_EVENTS` and `CUTOVER` against the real decentralised runtime Flyway schema,
+dataset, runs `PRELOAD_EVENTS` and `CUTOVER` against the real runtime and support Flyway schemas,
 and verifies migrated case/event counts. By default it seeds 100,000 cases and 1,000,000 events.
 
 ```bash
-./gradlew -p sdk :decentralised-runtime:test \
+./gradlew -p sdk :ccd-data-migration-support:test \
   --tests '*CcdDataMigrationTaskIntegrationTest.migratesSeededDatasetWithinPerfHarnessLimit'
 ```
 
 Override the dataset with system properties:
 
 ```bash
-./gradlew -p sdk :decentralised-runtime:test \
+./gradlew -p sdk :ccd-data-migration-support:test \
   --tests '*CcdDataMigrationTaskIntegrationTest.migratesSeededDatasetWithinPerfHarnessLimit' \
   -Dccd.data-migration.perf.cases=10000 \
   -Dccd.data-migration.perf.events-per-case=5 \
