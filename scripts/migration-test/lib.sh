@@ -121,30 +121,6 @@ for each row execute function ccd.fail_if_migration_trigger_fires();
 SQL
 }
 
-assert_target_empty() {
-  local dst_cases dst_events
-
-  dst_cases="$(psql_dst --quiet -tA <<'SQL'
-select count(*)
-from ccd.case_data
-where case_type_id = :'case_type';
-SQL
-)"
-  dst_events="$(psql_dst --quiet -tA <<'SQL'
-select count(*)
-from ccd.case_event ce
-join ccd.case_data cd
-  on cd.id = ce.case_data_id
-where cd.case_type_id = :'case_type';
-SQL
-)"
-
-  if [[ "$dst_cases" != "0" || "$dst_events" != "0" ]]; then
-    echo "Target still has rows after cleanup: ${dst_cases}/${dst_events}" >&2
-    exit 1
-  fi
-}
-
 assert_migrated_counts_match_source() {
   local src_cases src_events src_significant_items dst_cases dst_events dst_significant_items
 
