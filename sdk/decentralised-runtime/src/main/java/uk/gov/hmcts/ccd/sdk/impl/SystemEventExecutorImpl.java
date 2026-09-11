@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.impl;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -88,7 +89,7 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
     var transactionResult = transactionCoordinator.execute(
         caseReference,
         idempotencyKey,
-        EventGuard.Request.unconstrained(),
+        new EventGuard.Request(null, Set.of()),
         () -> prepareSystemEvent(caseReference, actor, idempotencyKey, action)
     );
     return new SystemEventExecutionResult(

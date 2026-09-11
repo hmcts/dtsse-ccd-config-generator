@@ -74,7 +74,7 @@ class EventGuardIntegrationTest {
         assertThat(eventGuard.lockAndCheck(
             idempotencyKey,
             CASE_REFERENCE,
-            EventGuard.Request.unconstrained()
+            new EventGuard.Request(null, Set.of())
         ))
             .isEmpty();
         caseLocked.countDown();
@@ -91,7 +91,7 @@ class EventGuardIntegrationTest {
         return eventGuard.lockAndCheck(
             idempotencyKey,
             CASE_REFERENCE,
-            EventGuard.Request.unconstrained()
+            new EventGuard.Request(null, Set.of())
         );
       }));
 

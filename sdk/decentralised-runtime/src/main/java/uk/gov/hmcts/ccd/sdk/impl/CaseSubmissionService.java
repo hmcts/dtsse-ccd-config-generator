@@ -34,13 +34,17 @@ public class CaseSubmissionService {
     var eventConfig = getEventConfig(event);
     var user = idam.retrieveUser(authorisation);
     var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
+    var conflictingEventIds = resolvedConfigRegistry.eventIdsInConcurrencyGroups(
+        event.getEventDetails().getCaseType(),
+        eventConfig.getConcurrencyGroups()
+    );
 
     try {
       var transactionResult =
           transactionCoordinator.execute(
               event.getCaseDetails().getReference(),
               idempotencyKey,
-              guardRequest(event, eventConfig),
+              new EventGuard.Request(event.getStartRevision(), conflictingEventIds),
               () -> prepareSubmission(event, user, handler)
           );
 
@@ -133,21 +137,6 @@ public class CaseSubmissionService {
     } catch (IllegalArgumentException ex) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
     }
-  }
-
-  private EventGuard.Request guardRequest(
-      DecentralisedCaseEvent event,
-      uk.gov.hmcts.ccd.sdk.api.Event<?, ?, ?> eventConfig
-  ) {
-    var groups = eventConfig.getConcurrencyGroups();
-    if (groups.isEmpty()) {
-      return EventGuard.Request.unconstrained();
-    }
-
-    return new EventGuard.Request(
-        event.getStartRevision(),
-        resolvedConfigRegistry.eventIdsInConcurrencyGroups(event.getEventDetails().getCaseType(), groups)
-    );
   }
 
   private record SubmissionOutcome(

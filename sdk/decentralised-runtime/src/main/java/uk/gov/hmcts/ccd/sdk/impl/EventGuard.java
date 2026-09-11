@@ -165,9 +165,6 @@ class EventGuard {
   }
 
   record Request(Long startRevision, Set<String> conflictingEventIds) {
-    static Request unconstrained() {
-      return new Request(null, Set.of());
-    }
   }
 
   private record GuardResult(
