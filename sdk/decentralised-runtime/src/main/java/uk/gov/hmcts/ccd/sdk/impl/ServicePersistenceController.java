@@ -58,7 +58,7 @@ class ServicePersistenceController {
   public ResponseEntity<DecentralisedSubmitEventResponse> createEvent(
       @RequestBody DecentralisedCaseEvent event,
       @RequestHeader(value = "Authorization") String authorisation,
-      @RequestHeader(value = IdempotencyEnforcer.IDEMPOTENCY_KEY_HEADER) UUID idempotencyKey) {
+      @RequestHeader(value = EventGuard.IDEMPOTENCY_KEY_HEADER) UUID idempotencyKey) {
 
     if (authorisation.isBlank()) {
       var errorResponse = new DecentralisedSubmitEventResponse();

@@ -54,10 +54,10 @@ class CaseSubmissionServiceTest {
         new UserInfo("sub", "uid", "name", "given", "family", List.of("caseworker"))
     ));
     when(legacyHandler.apply(eq(event), eq("Bearer raw-token"))).thenReturn(handlerResult());
-    when(transactionCoordinator.execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any()))
+    when(transactionCoordinator.execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any(), any()))
         .thenAnswer(invocation -> {
           var work = invocation
-              .<Supplier<CaseEventTransactionCoordinator.CaseEventWrite<Supplier<SubmitResponse<?>>>>>getArgument(2);
+              .<Supplier<CaseEventTransactionCoordinator.CaseEventWrite<Supplier<SubmitResponse<?>>>>>getArgument(3);
           var write = work.get();
           return CaseEventTransactionCoordinator.TransactionResult.created(
               42L,
@@ -69,16 +69,12 @@ class CaseSubmissionServiceTest {
     service.submit(event, "raw-token", IDEMPOTENCY_KEY);
 
     verify(legacyHandler).apply(event, "Bearer raw-token");
-    verify(transactionCoordinator).execute(
-        eq(123456789L),
-        eq(IDEMPOTENCY_KEY),
-        any()
-    );
+    verify(transactionCoordinator).execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any(), any());
   }
 
   @Test
   void idempotentReplayDoesNotReserveAnotherEventId() {
-    DecentralisedCaseEvent event = event();
+    final DecentralisedCaseEvent event = event();
     Event<?, ?, ?> eventConfig = mock(Event.class);
     doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("TestCase", "submit");
     when(eventConfig.getSubmitHandler()).thenReturn(null);
@@ -86,7 +82,7 @@ class CaseSubmissionServiceTest {
         "Bearer raw-token",
         new UserInfo("sub", "uid", "name", "given", "family", List.of("caseworker"))
     ));
-    when(transactionCoordinator.execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any()))
+    when(transactionCoordinator.execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any(), any()))
         .thenReturn(CaseEventTransactionCoordinator.TransactionResult.replayed(99L));
     when(caseDataRepository.caseDetailsAtEvent(123456789L, 99L)).thenReturn(savedCaseDetails());
     service.submit(event, "raw-token", IDEMPOTENCY_KEY);

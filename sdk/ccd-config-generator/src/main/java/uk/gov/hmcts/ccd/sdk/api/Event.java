@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.Builder;
@@ -42,6 +43,7 @@ public class Event<T, R extends HasRole, S> {
   private Submit<T, S> submitHandler;
   private Start<T, S> startHandler;
   private FieldCollection fields;
+  private Set<String> concurrencyGroups;
 
   public void name(String s) {
     name = s;
@@ -81,6 +83,7 @@ public class Event<T, R extends HasRole, S> {
       result.dataClass = dataClass;
       result.grants = HashMultimap.create();
       result.historyOnlyRoles = new HashSet<>();
+      result.concurrencyGroups = new HashSet<>();
       result.fieldsBuilder = FieldCollection.FieldCollectionBuilder
           .builder(result, result, dataClass, propertyUtils);
       result.retries = new HashMap<>();
@@ -89,6 +92,9 @@ public class Event<T, R extends HasRole, S> {
     }
 
     public Event<T, R, S> doBuild() {
+      if (!concurrencyGroups.isEmpty() && preState.isEmpty()) {
+        throw new IllegalStateException("Concurrency groups cannot be configured for a case creation event");
+      }
       Event<T, R, S> result = build();
       // Complete the building of the nested builder.
       result.fields = fieldsBuilder.build();
@@ -134,6 +140,29 @@ public class Event<T, R extends HasRole, S> {
 
     public EventBuilder<T, R, S> ttlIncrement(Integer ttlIncrement) {
       this.ttlIncrement = ttlIncrement;
+      return this;
+    }
+
+    /**
+     * Adds this event to one or more case-type-scoped concurrency groups.
+     *
+     * <p>When a decentralised event is submitted from an older case revision, the runtime rejects
+     * it with HTTP 409 if an event sharing any configured group has committed in the meantime.
+     * Events conflict with other group members and with another instance of themselves.</p>
+     *
+     * @param groupNames non-blank group names; repeated calls add to the event's existing groups
+     * @return this event builder
+     * @throws IllegalArgumentException if a group name is null or blank
+     * @throws NullPointerException if {@code groupNames} is null
+     */
+    public EventBuilder<T, R, S> concurrencyGroup(String... groupNames) {
+      Objects.requireNonNull(groupNames, "Concurrency groups are required");
+      for (String groupName : groupNames) {
+        if (groupName == null || groupName.isBlank()) {
+          throw new IllegalArgumentException("Concurrency group names must not be blank");
+        }
+        concurrencyGroups.add(groupName.trim());
+      }
       return this;
     }
 
@@ -229,6 +258,10 @@ public class Event<T, R extends HasRole, S> {
 
     private void historyOnlyRoles(Set<String> value) {
       this.historyOnlyRoles = value;
+    }
+
+    private void concurrencyGroups(Set<String> value) {
+      this.concurrencyGroups = value;
     }
 
     private void setRetries(Webhook hook, int... retries) {

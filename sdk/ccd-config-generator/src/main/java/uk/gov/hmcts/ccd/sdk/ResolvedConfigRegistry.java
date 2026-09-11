@@ -3,10 +3,12 @@ package uk.gov.hmcts.ccd.sdk;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 
@@ -61,6 +63,15 @@ public class ResolvedConfigRegistry {
     }
 
     throw new IllegalArgumentException("No event " + eventId + " defined for case type " + caseType);
+  }
+
+  public Set<String> eventIdsInConcurrencyGroups(String caseType, Set<String> groups) {
+    return find(caseType)
+        .map(config -> config.getEvents().values().stream()
+            .filter(event -> !Collections.disjoint(event.getConcurrencyGroups(), groups))
+            .map(Event::getId)
+            .collect(Collectors.toUnmodifiableSet()))
+        .orElse(Set.of());
   }
 
   public Optional<String> labelForState(String caseType, String stateId) {

@@ -40,6 +40,7 @@ public class CaseSubmissionService {
           transactionCoordinator.execute(
               event.getCaseDetails().getReference(),
               idempotencyKey,
+              guardRequest(event, eventConfig),
               () -> prepareSubmission(event, user, handler)
           );
 
@@ -132,6 +133,21 @@ public class CaseSubmissionService {
     } catch (IllegalArgumentException ex) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
     }
+  }
+
+  private EventGuard.Request guardRequest(
+      DecentralisedCaseEvent event,
+      uk.gov.hmcts.ccd.sdk.api.Event<?, ?, ?> eventConfig
+  ) {
+    var groups = eventConfig.getConcurrencyGroups();
+    if (groups.isEmpty()) {
+      return EventGuard.Request.unconstrained();
+    }
+
+    return new EventGuard.Request(
+        event.getStartRevision(),
+        resolvedConfigRegistry.eventIdsInConcurrencyGroups(event.getEventDetails().getCaseType(), groups)
+    );
   }
 
   private record SubmissionOutcome(
