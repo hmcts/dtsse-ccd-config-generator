@@ -105,7 +105,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerPopulateSearchCriteria;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerSignificantItem;
-import uk.gov.hmcts.divorce.sow014.nfd.ConcurrencyGroupEvents;
+import uk.gov.hmcts.divorce.sow014.nfd.NonConcurrentGroupEvents;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedOverrideEventMetadata;
@@ -605,14 +605,14 @@ public class TestWithCCD extends CftlibTest {
     @Order(35)
     @Test
     void groupedEventRejectsStaleInstanceOfItself() throws Exception {
-        String firstToken = startEventToken(ConcurrencyGroupEvents.FIRST_EVENT);
-        String staleToken = startEventToken(ConcurrencyGroupEvents.FIRST_EVENT);
+        String firstToken = startEventToken(NonConcurrentGroupEvents.FIRST_EVENT);
+        String staleToken = startEventToken(NonConcurrentGroupEvents.FIRST_EVENT);
         String acceptedNote = "group self accepted " + UUID.randomUUID();
         String rejectedNote = "group self rejected " + UUID.randomUUID();
         long revisionBefore = currentCaseRevision();
 
-        assertThat(submitEvent(ConcurrencyGroupEvents.FIRST_EVENT, acceptedNote, firstToken), equalTo(201));
-        assertThat(submitEvent(ConcurrencyGroupEvents.FIRST_EVENT, rejectedNote, staleToken), equalTo(409));
+        assertThat(submitEvent(NonConcurrentGroupEvents.FIRST_EVENT, acceptedNote, firstToken), equalTo(201));
+        assertThat(submitEvent(NonConcurrentGroupEvents.FIRST_EVENT, rejectedNote, staleToken), equalTo(409));
 
         assertThat(noteRows(acceptedNote), equalTo(1));
         assertThat(noteRows(rejectedNote), equalTo(0));
@@ -622,13 +622,13 @@ public class TestWithCCD extends CftlibTest {
     @Order(36)
     @Test
     void groupedEventRejectsDifferentGroupMember() throws Exception {
-        String staleToken = startEventToken(ConcurrencyGroupEvents.FIRST_EVENT);
-        String acceptedToken = startEventToken(ConcurrencyGroupEvents.SECOND_EVENT);
+        String staleToken = startEventToken(NonConcurrentGroupEvents.FIRST_EVENT);
+        String acceptedToken = startEventToken(NonConcurrentGroupEvents.SECOND_EVENT);
         String acceptedNote = "group member accepted " + UUID.randomUUID();
         String rejectedNote = "group member rejected " + UUID.randomUUID();
 
-        assertThat(submitEvent(ConcurrencyGroupEvents.SECOND_EVENT, acceptedNote, acceptedToken), equalTo(201));
-        assertThat(submitEvent(ConcurrencyGroupEvents.FIRST_EVENT, rejectedNote, staleToken), equalTo(409));
+        assertThat(submitEvent(NonConcurrentGroupEvents.SECOND_EVENT, acceptedNote, acceptedToken), equalTo(201));
+        assertThat(submitEvent(NonConcurrentGroupEvents.FIRST_EVENT, rejectedNote, staleToken), equalTo(409));
 
         assertThat(noteRows(acceptedNote), equalTo(1));
         assertThat(noteRows(rejectedNote), equalTo(0));
@@ -637,20 +637,20 @@ public class TestWithCCD extends CftlibTest {
     @Order(37)
     @Test
     void groupedEventAllowsUnrelatedInterveningEvent() throws Exception {
-        String token = startEventToken(ConcurrencyGroupEvents.FIRST_EVENT);
+        String token = startEventToken(NonConcurrentGroupEvents.FIRST_EVENT);
         String note = "group after unrelated " + UUID.randomUUID();
 
         addNote();
 
-        assertThat(submitEvent(ConcurrencyGroupEvents.FIRST_EVENT, note, token), equalTo(201));
+        assertThat(submitEvent(NonConcurrentGroupEvents.FIRST_EVENT, note, token), equalTo(201));
         assertThat(noteRows(note), equalTo(1));
     }
 
     @Order(38)
     @Test
     void concurrentGroupedSubmissionsCommitExactlyOnce() throws Exception {
-        String firstToken = startEventToken(ConcurrencyGroupEvents.FIRST_EVENT);
-        String secondToken = startEventToken(ConcurrencyGroupEvents.SECOND_EVENT);
+        String firstToken = startEventToken(NonConcurrentGroupEvents.FIRST_EVENT);
+        String secondToken = startEventToken(NonConcurrentGroupEvents.SECOND_EVENT);
         String firstNote = "group race first " + UUID.randomUUID();
         String secondNote = "group race second " + UUID.randomUUID();
         CountDownLatch release = new CountDownLatch(1);
@@ -658,11 +658,11 @@ public class TestWithCCD extends CftlibTest {
         try (var executor = Executors.newFixedThreadPool(2)) {
             var first = executor.submit(() -> {
                 release.await();
-                return submitEvent(ConcurrencyGroupEvents.FIRST_EVENT, firstNote, firstToken);
+                return submitEvent(NonConcurrentGroupEvents.FIRST_EVENT, firstNote, firstToken);
             });
             var second = executor.submit(() -> {
                 release.await();
-                return submitEvent(ConcurrencyGroupEvents.SECOND_EVENT, secondNote, secondToken);
+                return submitEvent(NonConcurrentGroupEvents.SECOND_EVENT, secondNote, secondToken);
             });
 
             release.countDown();
@@ -675,18 +675,18 @@ public class TestWithCCD extends CftlibTest {
     @Order(39)
     @Test
     void groupedEventIdempotentReplayBypassesLaterConflict() throws Exception {
-        String replayedToken = startEventToken(ConcurrencyGroupEvents.FIRST_EVENT);
+        String replayedToken = startEventToken(NonConcurrentGroupEvents.FIRST_EVENT);
         String replayedNote = "group replay " + UUID.randomUUID();
-        assertThat(submitEvent(ConcurrencyGroupEvents.FIRST_EVENT, replayedNote, replayedToken), equalTo(201));
+        assertThat(submitEvent(NonConcurrentGroupEvents.FIRST_EVENT, replayedNote, replayedToken), equalTo(201));
 
-        String laterToken = startEventToken(ConcurrencyGroupEvents.SECOND_EVENT);
+        String laterToken = startEventToken(NonConcurrentGroupEvents.SECOND_EVENT);
         assertThat(submitEvent(
-            ConcurrencyGroupEvents.SECOND_EVENT,
+            NonConcurrentGroupEvents.SECOND_EVENT,
             "group replay later " + UUID.randomUUID(),
             laterToken
         ), equalTo(201));
 
-        assertThat(submitEvent(ConcurrencyGroupEvents.FIRST_EVENT, replayedNote, replayedToken), equalTo(201));
+        assertThat(submitEvent(NonConcurrentGroupEvents.FIRST_EVENT, replayedNote, replayedToken), equalTo(201));
         assertThat(noteRows(replayedNote), equalTo(1));
     }
 

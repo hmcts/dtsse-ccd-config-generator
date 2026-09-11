@@ -65,10 +65,10 @@ public class ResolvedConfigRegistry {
     throw new IllegalArgumentException("No event " + eventId + " defined for case type " + caseType);
   }
 
-  public Set<String> eventIdsInConcurrencyGroups(String caseType, Set<String> groups) {
+  public Set<String> eventIdsInNonConcurrentGroups(String caseType, Set<String> groups) {
     return find(caseType)
         .map(config -> config.getEvents().values().stream()
-            .filter(event -> !Collections.disjoint(event.getConcurrencyGroups(), groups))
+            .filter(event -> !Collections.disjoint(event.getNonConcurrentGroups(), groups))
             .map(Event::getId)
             .collect(Collectors.toUnmodifiableSet()))
         .orElse(Set.of());

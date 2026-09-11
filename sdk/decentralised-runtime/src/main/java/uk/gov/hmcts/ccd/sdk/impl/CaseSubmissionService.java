@@ -34,9 +34,9 @@ public class CaseSubmissionService {
     var eventConfig = getEventConfig(event);
     var user = idam.retrieveUser(authorisation);
     var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
-    var conflictingEventIds = resolvedConfigRegistry.eventIdsInConcurrencyGroups(
+    var conflictingEventIds = resolvedConfigRegistry.eventIdsInNonConcurrentGroups(
         event.getEventDetails().getCaseType(),
-        eventConfig.getConcurrencyGroups()
+        eventConfig.getNonConcurrentGroups()
     );
 
     try {

@@ -94,49 +94,49 @@ public class UnitTest {
   }
 
   @Test
-  public void resolvesConcurrencyGroupsWithinCaseType() {
-    class ConcurrencyConfig implements CCDConfig<CaseData, State, UserRole> {
+  public void resolvesNonConcurrentGroupsWithinCaseType() {
+    class NonConcurrentConfig implements CCDConfig<CaseData, State, UserRole> {
       @Override
       public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
         builder.caseType("TEST", "Test", "Test case type");
         builder.event("first")
             .forState(State.Open)
-            .concurrencyGroup("shared", "first-only");
+            .nonConcurrentGroups("shared", "first-only");
         builder.event("second")
             .forState(State.Open)
-            .concurrencyGroup("shared");
+            .nonConcurrentGroups("shared");
       }
     }
 
     ResolvedCCDConfig<CaseData, State, UserRole> resolved =
-        new ConfigResolver<>(List.of(new ConcurrencyConfig())).resolveCCDConfig();
+        new ConfigResolver<>(List.of(new NonConcurrentConfig())).resolveCCDConfig();
     ResolvedConfigRegistry registry = new ResolvedConfigRegistry(List.of(resolved));
 
-    assertThat(registry.eventIdsInConcurrencyGroups("TEST", Set.of("shared")))
+    assertThat(registry.eventIdsInNonConcurrentGroups("TEST", Set.of("shared")))
         .containsExactlyInAnyOrder("first", "second");
-    assertThat(registry.eventIdsInConcurrencyGroups("TEST", Set.of("first-only")))
+    assertThat(registry.eventIdsInNonConcurrentGroups("TEST", Set.of("first-only")))
         .containsExactly("first");
-    assertThat(registry.eventIdsInConcurrencyGroups("OTHER", Set.of("shared"))).isEmpty();
+    assertThat(registry.eventIdsInNonConcurrentGroups("OTHER", Set.of("shared"))).isEmpty();
   }
 
   @Test
-  public void rejectsBlankConcurrencyGroup() {
+  public void rejectsBlankNonConcurrentGroup() {
     assertThatThrownBy(() -> uk.gov.hmcts.ccd.sdk.api.Event.EventBuilder
         .builder("event", CaseData.class, new PropertyUtils(), Set.of(State.Open), Set.of(State.Open))
-        .concurrencyGroup(" "))
+        .nonConcurrentGroups(" "))
         .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage("Concurrency group names must not be blank");
+        .hasMessage("Non-concurrent group names must not be blank");
   }
 
   @Test
-  public void rejectsConcurrencyGroupOnCaseCreationEvent() {
+  public void rejectsNonConcurrentGroupOnCaseCreationEvent() {
     var builder = uk.gov.hmcts.ccd.sdk.api.Event.EventBuilder
         .builder("create", CaseData.class, new PropertyUtils(), Set.of(), Set.of(State.Open))
-        .concurrencyGroup("shared");
+        .nonConcurrentGroups("shared");
 
     assertThatThrownBy(builder::doBuild)
         .isInstanceOf(IllegalStateException.class)
-        .hasMessage("Concurrency groups cannot be configured for a case creation event");
+        .hasMessage("Non-concurrent groups cannot be configured for a case creation event");
   }
 
   @Test

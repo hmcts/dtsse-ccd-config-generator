@@ -20,18 +20,18 @@ import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
 
 @Component
 @RequiredArgsConstructor
-public class ConcurrencyGroupEvents implements CCDConfig<CaseData, State, UserRole> {
+public class NonConcurrentGroupEvents implements CCDConfig<CaseData, State, UserRole> {
 
-    public static final String FIRST_EVENT = "caseworker-concurrency-group-first";
-    public static final String SECOND_EVENT = "caseworker-concurrency-group-second";
+    public static final String FIRST_EVENT = "caseworker-non-concurrent-group-first";
+    public static final String SECOND_EVENT = "caseworker-non-concurrent-group-second";
     private static final String GROUP = "case-notes-exclusive";
 
     private final NamedParameterJdbcTemplate db;
 
     @Override
     public void configureDecentralised(DecentralisedConfigBuilder<CaseData, State, UserRole> configBuilder) {
-        configureEvent(configBuilder, FIRST_EVENT, "concurrencyGroupFirst");
-        configureEvent(configBuilder, SECOND_EVENT, "concurrencyGroupSecond");
+        configureEvent(configBuilder, FIRST_EVENT, "nonConcurrentGroupFirst");
+        configureEvent(configBuilder, SECOND_EVENT, "nonConcurrentGroupSecond");
     }
 
     private void configureEvent(
@@ -43,7 +43,7 @@ public class ConcurrencyGroupEvents implements CCDConfig<CaseData, State, UserRo
             .decentralisedEvent(eventId, this::submit)
             .forAllStates()
             .name("Add exclusive case note")
-            .concurrencyGroup(GROUP)
+            .nonConcurrentGroups(GROUP)
             .grant(CREATE_READ_UPDATE, CASE_WORKER, JUDGE);
 
         new PageBuilder(eventBuilder)
@@ -55,7 +55,7 @@ public class ConcurrencyGroupEvents implements CCDConfig<CaseData, State, UserRo
     private SubmitResponse<State> submit(EventPayload<CaseData, State> payload) {
         var params = new MapSqlParameterSource()
             .addValue("reference", payload.caseReference())
-            .addValue("author", "concurrency-group-test")
+            .addValue("author", "non-concurrent-group-test")
             .addValue("note", payload.caseData().getNote());
 
         db.update(
