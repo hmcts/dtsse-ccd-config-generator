@@ -120,10 +120,14 @@ public class UnitTest {
   }
 
   @Test
-  public void rejectsBlankNonConcurrentGroup() {
-    assertThatThrownBy(() -> uk.gov.hmcts.ccd.sdk.api.Event.EventBuilder
-        .builder("event", CaseData.class, new PropertyUtils(), Set.of(State.Open), Set.of(State.Open))
-        .nonConcurrentGroups(" "))
+  public void rejectsEmptyOrBlankNonConcurrentGroups() {
+    var builder = uk.gov.hmcts.ccd.sdk.api.Event.EventBuilder
+        .builder("event", CaseData.class, new PropertyUtils(), Set.of(State.Open), Set.of(State.Open));
+
+    assertThatThrownBy(() -> builder.nonConcurrentGroups())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("At least one non-concurrent group is required");
+    assertThatThrownBy(() -> builder.nonConcurrentGroups(" "))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessage("Non-concurrent group names must not be blank");
   }

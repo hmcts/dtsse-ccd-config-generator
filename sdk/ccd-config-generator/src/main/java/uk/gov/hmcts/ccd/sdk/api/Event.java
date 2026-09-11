@@ -153,6 +153,9 @@ public class Event<T, R extends HasRole, S> {
      */
     public EventBuilder<T, R, S> nonConcurrentGroups(String... groupNames) {
       Objects.requireNonNull(groupNames, "Non-concurrent groups are required");
+      if (groupNames.length == 0) {
+        throw new IllegalArgumentException("At least one non-concurrent group is required");
+      }
       for (String groupName : groupNames) {
         if (groupName == null || groupName.isBlank()) {
           throw new IllegalArgumentException("Non-concurrent group names must not be blank");
