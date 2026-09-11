@@ -125,6 +125,14 @@ class EventGuard {
   }
 
   record Request(Long startRevision, Set<String> conflictingEventIds) {
+
+    static Request concurrent() {
+      return new Request(null, Set.of());
+    }
+
+    static Request noneCommittedSince(Set<String> eventIds, Long revision) {
+      return new Request(revision, eventIds);
+    }
   }
 
   private record GuardResult(

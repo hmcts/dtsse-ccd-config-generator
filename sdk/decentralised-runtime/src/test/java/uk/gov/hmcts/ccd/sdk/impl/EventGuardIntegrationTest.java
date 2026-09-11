@@ -55,7 +55,6 @@ class EventGuardIntegrationTest {
   @BeforeEach
   void setUp() {
     transaction = new TransactionTemplate(transactionManager);
-    jdbc.update("delete from ccd.case_event where case_data_id = :id", Map.of("id", CASE_ID));
     jdbc.update("delete from ccd.case_data where id = :id", Map.of("id", CASE_ID));
     seedCaseData();
   }
@@ -73,7 +72,7 @@ class EventGuardIntegrationTest {
         assertThat(eventGuard.lockAndCheck(
             idempotencyKey,
             CASE_REFERENCE,
-            new EventGuard.Request(null, Set.of())
+            EventGuard.Request.concurrent()
         ))
             .isEmpty();
         caseLocked.countDown();
@@ -90,7 +89,7 @@ class EventGuardIntegrationTest {
         return eventGuard.lockAndCheck(
             idempotencyKey,
             CASE_REFERENCE,
-            new EventGuard.Request(null, Set.of())
+            EventGuard.Request.concurrent()
         );
       }));
 
@@ -110,7 +109,7 @@ class EventGuardIntegrationTest {
     assertThatThrownBy(() -> transaction.execute(status -> eventGuard.lockAndCheck(
         UUID.randomUUID(),
         CASE_REFERENCE,
-        new EventGuard.Request(null, Set.of("link-case"))
+        EventGuard.Request.noneCommittedSince(Set.of("link-case"), null)
     )))
         .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
             assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.CONFLICT)

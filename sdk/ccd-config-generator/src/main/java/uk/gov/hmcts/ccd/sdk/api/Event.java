@@ -147,13 +147,9 @@ public class Event<T, R extends HasRole, S> {
      * Adds this event to one or more case-type-scoped non-concurrent groups.
      *
      * <p>When a decentralised event is submitted from an older case revision, the runtime rejects
-     * it with HTTP 409 if an event sharing any configured group has committed in the meantime.
-     * Events conflict with other group members and with another instance of themselves.</p>
+     * it with HTTP 409 if an event sharing any configured group has committed in the meantime, including
+     * another instance of itself.</p>
      *
-     * @param groupNames non-blank group names; repeated calls add to the event's existing groups
-     * @return this event builder
-     * @throws IllegalArgumentException if a group name is null or blank
-     * @throws NullPointerException if {@code groupNames} is null
      */
     public EventBuilder<T, R, S> nonConcurrentGroups(String... groupNames) {
       Objects.requireNonNull(groupNames, "Non-concurrent groups are required");
@@ -164,10 +160,6 @@ public class Event<T, R extends HasRole, S> {
         nonConcurrentGroups.add(groupName.trim());
       }
       return this;
-    }
-
-    private void nonConcurrentGroups(Set<String> value) {
-      this.nonConcurrentGroups = value;
     }
 
     // Do not inherit role permissions from states.

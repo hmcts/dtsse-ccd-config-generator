@@ -44,7 +44,7 @@ public class CaseSubmissionService {
           transactionCoordinator.execute(
               event.getCaseDetails().getReference(),
               idempotencyKey,
-              new EventGuard.Request(event.getStartRevision(), conflictingEventIds),
+              EventGuard.Request.noneCommittedSince(conflictingEventIds, event.getStartRevision()),
               () -> prepareSubmission(event, user, handler)
           );
 
