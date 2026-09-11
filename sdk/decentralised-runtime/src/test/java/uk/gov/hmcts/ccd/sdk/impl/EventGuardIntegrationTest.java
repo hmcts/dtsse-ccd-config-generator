@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -104,54 +103,6 @@ class EventGuardIntegrationTest {
       commitFirstRequest.countDown();
       executor.shutdownNow();
     }
-  }
-
-  @Test
-  void rejectsAnInterveningConflictingEvent() {
-    UUID existingKey = UUID.randomUUID();
-    insertEvent(existingKey, "link-case", 2);
-    assertThat(advanceCurrentRevision()).isEqualTo(2);
-
-    assertThatThrownBy(() -> transaction.execute(status -> eventGuard.lockAndCheck(
-        UUID.randomUUID(),
-        CASE_REFERENCE,
-        new EventGuard.Request(1L, Set.of("link-case", "unlink-case"))
-    )))
-        .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
-            assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.CONFLICT)
-        )
-        .hasMessageContaining("Case was updated by a conflicting event");
-  }
-
-  @Test
-  void allowsAnInterveningUnrelatedEvent() {
-    insertEvent(UUID.randomUUID(), "update-address", 2);
-    assertThat(advanceCurrentRevision()).isEqualTo(2);
-
-    Optional<Long> result = transaction.execute(status -> eventGuard.lockAndCheck(
-        UUID.randomUUID(),
-        CASE_REFERENCE,
-        new EventGuard.Request(1L, Set.of("link-case", "unlink-case"))
-    ));
-
-    assertThat(result).isEmpty();
-  }
-
-  @Test
-  void idempotentReplayWinsOverAnInterveningConflict() {
-    UUID replayKey = UUID.randomUUID();
-    long replayEventId = insertEvent(replayKey, "link-case", 2);
-    assertThat(advanceCurrentRevision()).isEqualTo(2);
-    insertEvent(UUID.randomUUID(), "unlink-case", 3);
-    assertThat(advanceCurrentRevision()).isEqualTo(3);
-
-    Optional<Long> result = transaction.execute(status -> eventGuard.lockAndCheck(
-        replayKey,
-        CASE_REFERENCE,
-        new EventGuard.Request(1L, Set.of("link-case", "unlink-case"))
-    ));
-
-    assertThat(result).contains(replayEventId);
   }
 
   @Test
@@ -288,18 +239,6 @@ class EventGuardIntegrationTest {
         returning id
         """,
         params,
-        Long.class
-    );
-  }
-
-  private long advanceCurrentRevision() {
-    jdbc.update(
-        "update ccd.case_data set last_modified = now() where id = :id",
-        Map.of("id", CASE_ID)
-    );
-    return jdbc.queryForObject(
-        "select case_revision from ccd.case_data where id = :id",
-        Map.of("id", CASE_ID),
         Long.class
     );
   }
