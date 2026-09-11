@@ -55,9 +55,9 @@ configBuilder
     .forAllStates()
     .nonConcurrentGroups("case-links");
 ```
-With the above the SDK will, upon event submission:
+With the above the SDK will, upon submission of `addCaseLink`:
 
-1. Using the committing event's `start_revision` from when the event started
+1. Using the `case_revision` from when the `addCaseLink` event started
 2. Look for any event committed to the case since `start_revision` that is part of `case-links`
 3. If found, throw an http 409 `case modified` conflict
 
