@@ -248,7 +248,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     builder.noticeOfChange()
       .challenge("NoCChallenge")
         .question("caseName", "Enter the case name")
-          .answer(LOCAL_AUTHORITY).field(CaseData::getCaseName)
+          .answer(LOCAL_AUTHORITY, CCD_SOLICITOR).field(CaseData::getCaseName)
           .done()
         .question("judgeFullName", "Enter your allocated judge's full name")
           .answer(LOCAL_AUTHORITY, HMCTS_ADMIN).complex(CaseData::getAllocatedJudge).field(Judge::getJudgeFullName)
