@@ -106,7 +106,7 @@ Concurrent changes to these blobs will be rejected as they are now by centralise
 
 > Decentralised services are responsible for implementing appropriate concurrency controls for data persisted outside of this blob.
 
-See [non-concurrent groups for service-managed events](./concurrency.md#non-concurrent-groups-for-service-managed-events)
+See [event-level optimistic locking](./concurrency.md#event-level-optimistic-locking)
 for the concurrency-group API and its transaction semantics.
 
 

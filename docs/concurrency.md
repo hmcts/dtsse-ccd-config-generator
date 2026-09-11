@@ -55,10 +55,10 @@ configBuilder
     .forAllStates()
     .nonConcurrentGroups("case-links");
 ```
-If an event has a non-concurrent group `case-links` configured the SDK will, upon event submission:
+With the above the SDK will, upon event submission:
 
-1. Take the committing event's `start_revision`
-2. Look for any event committed since `start_revision` that is part of `case-links`
+1. Using the committing event's `start_revision` from when the event started
+2. Look for any event committed to the case since `start_revision` that is part of `case-links`
 3. If found, throw an http 409 `case modified` conflict
 
-Non-concurrent groups are only valid for events on existing cases; they cannot be configured on case-creation events. Events with no non-concurrent group retain the behaviour described above.
+Non-concurrent groups are only valid for events on existing cases.

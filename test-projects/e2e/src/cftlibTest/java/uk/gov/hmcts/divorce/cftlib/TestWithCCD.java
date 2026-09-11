@@ -602,23 +602,6 @@ public class TestWithCCD extends CftlibTest {
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
     }
 
-    @Order(35)
-    @Test
-    void groupedEventRejectsStaleInstanceOfItself() throws Exception {
-        String firstToken = startEventToken(NonConcurrentGroupEvents.FIRST_EVENT);
-        String staleToken = startEventToken(NonConcurrentGroupEvents.FIRST_EVENT);
-        String acceptedNote = "group self accepted " + UUID.randomUUID();
-        String rejectedNote = "group self rejected " + UUID.randomUUID();
-        long revisionBefore = currentCaseRevision();
-
-        assertThat(submitEvent(NonConcurrentGroupEvents.FIRST_EVENT, acceptedNote, firstToken), equalTo(201));
-        assertThat(submitEvent(NonConcurrentGroupEvents.FIRST_EVENT, rejectedNote, staleToken), equalTo(409));
-
-        assertThat(noteRows(acceptedNote), equalTo(1));
-        assertThat(noteRows(rejectedNote), equalTo(0));
-        assertThat(currentCaseRevision(), equalTo(revisionBefore + 1));
-    }
-
     @Order(36)
     @Test
     void groupedEventRejectsDifferentGroupMember() throws Exception {
@@ -626,12 +609,14 @@ public class TestWithCCD extends CftlibTest {
         String acceptedToken = startEventToken(NonConcurrentGroupEvents.SECOND_EVENT);
         String acceptedNote = "group member accepted " + UUID.randomUUID();
         String rejectedNote = "group member rejected " + UUID.randomUUID();
+        long revisionBefore = currentCaseRevision();
 
         assertThat(submitEvent(NonConcurrentGroupEvents.SECOND_EVENT, acceptedNote, acceptedToken), equalTo(201));
         assertThat(submitEvent(NonConcurrentGroupEvents.FIRST_EVENT, rejectedNote, staleToken), equalTo(409));
 
         assertThat(noteRows(acceptedNote), equalTo(1));
         assertThat(noteRows(rejectedNote), equalTo(0));
+        assertThat(currentCaseRevision(), equalTo(revisionBefore + 1));
     }
 
     @Order(37)

@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,14 +54,15 @@ class EventGuard {
       return Optional.empty();
     }
 
-    params.addValue("caseDataId", caseIds.get(0));
-    if (request.conflictingEventIds().isEmpty()) {
-      return findReplay(idempotencyKey, caseReference, params);
-    }
-
-    params
+    params.addValue("caseDataId", caseIds.getFirst())
         .addValue("startRevision", request.startRevision())
-        .addValue("conflictingEventIds", request.conflictingEventIds());
+        .addValue(
+            "conflictingEventIds",
+            new SqlArrayValue(
+                "varchar",
+                request.conflictingEventIds().toArray()
+            )
+        );
 
     GuardResult result = db.queryForObject(
         """
@@ -83,8 +85,7 @@ class EventGuard {
           where replay.id is null
             and ce.case_data_id = cd.id
             and ce.case_revision > :startRevision
-            and ce.case_revision <= cd.case_revision
-            and ce.event_id in (:conflictingEventIds)
+            and ce.event_id = any(:conflictingEventIds)
           order by ce.case_revision
           limit 1
         ) conflicting on true
@@ -105,9 +106,10 @@ class EventGuard {
     }
 
     Long startRevision = request.startRevision();
-    if (startRevision == null
-        || startRevision < 1
-        || startRevision > result.currentRevision()) {
+    if (!request.conflictingEventIds().isEmpty()
+        && (startRevision == null
+            || startRevision < 1
+            || startRevision > result.currentRevision())) {
       log.warn(
           "Rejecting event for case {} due to invalid concurrency revisions: startRevision={}, "
               + "currentRevision={}, conflictingEventIds={}",
@@ -117,10 +119,10 @@ class EventGuard {
     }
 
     if (result.conflictingEventId() != null) {
-      log.warn(
+      log.info(
           "Rejecting event for case {}: startRevision={}, currentRevision={}, conflictingEvent={}, "
               + "conflictingRevision={}",
-          caseReference, startRevision, result.currentRevision(), result.conflictingEventId(),
+          caseReference, request.startRevision, result.currentRevision(), result.conflictingEventId(),
           result.conflictingRevision()
       );
       throw conflict();
@@ -129,30 +131,6 @@ class EventGuard {
     log.debug("Event guard passed for case reference {} and idempotency key '{}'.",
         caseReference, idempotencyKey);
     return Optional.empty();
-  }
-
-  private Optional<Long> findReplay(
-      UUID idempotencyKey,
-      long caseReference,
-      MapSqlParameterSource params
-  ) {
-    Optional<Long> existingEventId = db.query(
-        """
-        select ce.id
-        from ccd.case_event ce
-        where ce.case_data_id = :caseDataId
-          and ce.idempotency_key = :idempotencyKey
-        """,
-        params,
-        (rs, rowNum) -> rs.getLong("id")
-    ).stream().findFirst();
-
-    existingEventId.ifPresent(eventId -> logReplay(idempotencyKey, eventId));
-    if (existingEventId.isEmpty()) {
-      log.debug("Idempotency key '{}' not found; continuing processing (case reference {}).",
-          idempotencyKey, caseReference);
-    }
-    return existingEventId;
   }
 
   private void logReplay(UUID idempotencyKey, long eventId) {

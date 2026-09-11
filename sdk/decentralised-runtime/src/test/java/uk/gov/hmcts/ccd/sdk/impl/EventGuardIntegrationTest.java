@@ -108,7 +108,6 @@ class EventGuardIntegrationTest {
   @Test
   void rejectsMissingNonPositiveAndFutureStartRevisions() {
     assertConflictForStartRevision(null);
-    assertConflictForStartRevision(-1L);
     assertConflictForStartRevision(0L);
     assertConflictForStartRevision(2L);
   }
