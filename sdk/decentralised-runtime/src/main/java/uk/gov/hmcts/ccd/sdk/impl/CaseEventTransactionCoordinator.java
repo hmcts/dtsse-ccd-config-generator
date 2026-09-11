@@ -23,7 +23,7 @@ import uk.gov.hmcts.reform.ccd.client.model.SignificantItem;
 @RequiredArgsConstructor
 class CaseEventTransactionCoordinator {
 
-  private final IdempotencyEnforcer idempotencyEnforcer;
+  private final EventGuard eventGuard;
   private final AuditEventService auditEventService;
   private final CaseDataRepository caseDataRepository;
   private final CaseProjectionService caseProjectionService;
@@ -32,11 +32,13 @@ class CaseEventTransactionCoordinator {
   public <T> TransactionResult<T> execute(
       long caseReference,
       UUID idempotencyKey,
+      EventGuard.Request guardRequest,
       Supplier<CaseEventWrite<T>> work
   ) {
-    Optional<Long> existingEventId = idempotencyEnforcer.lockCaseAndGetExistingEvent(
+    Optional<Long> existingEventId = eventGuard.lockAndCheck(
         idempotencyKey,
-        caseReference
+        caseReference,
+        guardRequest
     );
     if (existingEventId.isPresent()) {
       return TransactionResult.replayed(existingEventId.get());

@@ -44,3 +44,21 @@ Viewers still get a coherent, monotonic history (“what happened, and in what o
 If, for example, a blob update and a case note insertion were to race, one acquires the case lock first. The other waits, then runs, and both succeed. The event log reflects the order they committed and accurately reflects the changes each made.
 
 Note that this is a tightening of CCD's current implementation which allows multiple event submissions to run in parallel, only one of which will commit.
+
+## Event-level optimistic locking
+
+The SDK provides a mechanism to guard against the concurrent execution of subsets of events; `non-concurrent groups`:
+
+```java
+configBuilder
+    .decentralisedEvent("addCaseLink", this::submit)
+    .forAllStates()
+    .nonConcurrentGroups("case-links");
+```
+With the above the SDK will, upon submission of `addCaseLink`:
+
+1. Using the `case_revision` from when the `addCaseLink` event started
+2. Look for any event committed to the case since `start_revision` that is part of `case-links`
+3. If found, throw an http 409 `case modified` conflict
+
+Non-concurrent groups are only valid for events on existing cases.

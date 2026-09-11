@@ -34,12 +34,17 @@ public class CaseSubmissionService {
     var eventConfig = getEventConfig(event);
     var user = idam.retrieveUser(authorisation);
     var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
+    var conflictingEventIds = resolvedConfigRegistry.eventIdsInNonConcurrentGroups(
+        event.getEventDetails().getCaseType(),
+        eventConfig.getNonConcurrentGroups()
+    );
 
     try {
       var transactionResult =
           transactionCoordinator.execute(
               event.getCaseDetails().getReference(),
               idempotencyKey,
+              EventGuard.Request.noneCommittedSince(conflictingEventIds, event.getStartRevision()),
               () -> prepareSubmission(event, user, handler)
           );
 

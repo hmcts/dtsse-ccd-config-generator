@@ -33,6 +33,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.HashMap;
@@ -103,6 +105,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerPopulateSearchCriteria;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerSignificantItem;
+import uk.gov.hmcts.divorce.sow014.nfd.NonConcurrentGroupEvents;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedOverrideEventMetadata;
@@ -597,6 +600,79 @@ public class TestWithCCD extends CftlibTest {
             firstEvent);
         var response = HttpClientBuilder.create().build().execute(e);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+    }
+
+    @Order(36)
+    @Test
+    void groupedEventRejectsDifferentGroupMember() throws Exception {
+        String staleToken = startEventToken(NonConcurrentGroupEvents.FIRST_EVENT);
+        String acceptedToken = startEventToken(NonConcurrentGroupEvents.SECOND_EVENT);
+        String acceptedNote = "group member accepted " + UUID.randomUUID();
+        String rejectedNote = "group member rejected " + UUID.randomUUID();
+        long revisionBefore = currentCaseRevision();
+
+        assertThat(submitEvent(NonConcurrentGroupEvents.SECOND_EVENT, acceptedNote, acceptedToken), equalTo(201));
+        assertThat(submitEvent(NonConcurrentGroupEvents.FIRST_EVENT, rejectedNote, staleToken), equalTo(409));
+
+        assertThat(noteRows(acceptedNote), equalTo(1));
+        assertThat(noteRows(rejectedNote), equalTo(0));
+        assertThat(currentCaseRevision(), equalTo(revisionBefore + 1));
+    }
+
+    @Order(37)
+    @Test
+    void groupedEventAllowsUnrelatedInterveningEvent() throws Exception {
+        String token = startEventToken(NonConcurrentGroupEvents.FIRST_EVENT);
+        String note = "group after unrelated " + UUID.randomUUID();
+
+        addNote();
+
+        assertThat(submitEvent(NonConcurrentGroupEvents.FIRST_EVENT, note, token), equalTo(201));
+        assertThat(noteRows(note), equalTo(1));
+    }
+
+    @Order(38)
+    @Test
+    void concurrentGroupedSubmissionsCommitExactlyOnce() throws Exception {
+        String firstToken = startEventToken(NonConcurrentGroupEvents.FIRST_EVENT);
+        String secondToken = startEventToken(NonConcurrentGroupEvents.SECOND_EVENT);
+        String firstNote = "group race first " + UUID.randomUUID();
+        String secondNote = "group race second " + UUID.randomUUID();
+        CountDownLatch release = new CountDownLatch(1);
+
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(() -> {
+                release.await();
+                return submitEvent(NonConcurrentGroupEvents.FIRST_EVENT, firstNote, firstToken);
+            });
+            var second = executor.submit(() -> {
+                release.await();
+                return submitEvent(NonConcurrentGroupEvents.SECOND_EVENT, secondNote, secondToken);
+            });
+
+            release.countDown();
+            assertThat(List.of(first.get(), second.get()), containsInAnyOrder(201, 409));
+        }
+
+        assertThat(noteRows(firstNote) + noteRows(secondNote), equalTo(1));
+    }
+
+    @Order(39)
+    @Test
+    void groupedEventIdempotentReplayBypassesLaterConflict() throws Exception {
+        String replayedToken = startEventToken(NonConcurrentGroupEvents.FIRST_EVENT);
+        String replayedNote = "group replay " + UUID.randomUUID();
+        assertThat(submitEvent(NonConcurrentGroupEvents.FIRST_EVENT, replayedNote, replayedToken), equalTo(201));
+
+        String laterToken = startEventToken(NonConcurrentGroupEvents.SECOND_EVENT);
+        assertThat(submitEvent(
+            NonConcurrentGroupEvents.SECOND_EVENT,
+            "group replay later " + UUID.randomUUID(),
+            laterToken
+        ), equalTo(201));
+
+        assertThat(submitEvent(NonConcurrentGroupEvents.FIRST_EVENT, replayedNote, replayedToken), equalTo(201));
+        assertThat(noteRows(replayedNote), equalTo(1));
     }
 
     @Order(5)
@@ -2021,6 +2097,44 @@ public class TestWithCCD extends CftlibTest {
         );
         var response = HttpClientBuilder.create().build().execute(e);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+    }
+
+    private String startEventToken(String eventId) {
+        return ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            eventId
+        ).getToken();
+    }
+
+    private int submitEvent(String eventId, String note, String token) throws IOException {
+        var request = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            eventId,
+            Map.of("note", note),
+            token
+        );
+        try (var client = HttpClientBuilder.create().build(); var response = client.execute(request)) {
+            EntityUtils.consumeQuietly(response.getEntity());
+            return response.getStatusLine().getStatusCode();
+        }
+    }
+
+    private int noteRows(String note) {
+        return db.queryForObject(
+            "select count(*) from case_notes where reference = :reference and note = :note",
+            Map.of("reference", caseRef, "note", note),
+            Integer.class
+        );
+    }
+
+    private long currentCaseRevision() {
+        return db.queryForObject(
+            "select case_revision from ccd.case_data where reference = :reference",
+            Map.of("reference", caseRef),
+            Long.class
+        );
     }
 
     private record CaseLinkRow(long linkedReference, boolean standardLink) { }
