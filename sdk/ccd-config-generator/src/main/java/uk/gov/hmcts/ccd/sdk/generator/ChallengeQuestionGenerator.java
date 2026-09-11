@@ -39,8 +39,13 @@ public class ChallengeQuestionGenerator<T, S, R extends HasRole> implements Conf
     mergeInto(path, result, new AddMissing(), "CaseTypeID", "ID", "QuestionId");
   }
 
-  private static String bracketRole(String role) {
-    return role.startsWith("[") && role.endsWith("]") ? role : "[" + role + "]";
+  /**
+   * Emit the role exactly as declared. Bracketed CaseRoles (e.g. {@code [DEFENDANTSOLICITOR]})
+   * stay bracketed; group / access-profile roles (e.g. {@code defendant-solicitor}) stay
+   * unbracketed so callers can target either shape once definition-store accepts both.
+   */
+  private static String formatRole(String role) {
+    return role;
   }
 
   private static <R extends HasRole> Map<String, Object> toJson(
@@ -53,7 +58,7 @@ public class ChallengeQuestionGenerator<T, S, R extends HasRole> implements Conf
     row.put("AnswerFieldType", question.getAnswerFieldType());
     row.put("Answer", question.getAnswers().stream()
         .flatMap(a -> a.getRoles().stream()
-            .map(role -> "${" + String.join(".", a.getPathSegments()) + "}:" + bracketRole(role.getRole())))
+            .map(role -> "${" + String.join(".", a.getPathSegments()) + "}:" + formatRole(role.getRole())))
         .collect(joining(",")));
     return row;
   }
