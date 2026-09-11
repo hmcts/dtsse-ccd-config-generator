@@ -47,9 +47,6 @@ class EventGuard {
     );
 
     if (caseIds.isEmpty()) {
-      if (!request.conflictingEventIds().isEmpty()) {
-        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Case not found");
-      }
       log.debug("Case reference {} not found while acquiring event lock; proceeding.", caseReference);
       return Optional.empty();
     }
@@ -67,10 +64,8 @@ class EventGuard {
     GuardResult result = db.queryForObject(
         """
         select
-          cd.case_revision as current_revision,
           replay.id as replay_event_id,
-          conflicting.event_id as conflicting_event_id,
-          conflicting.case_revision as conflicting_revision
+          conflicting.event_id as conflicting_event_id
         from ccd.case_data cd
         left join lateral (
           select ce.id
@@ -80,23 +75,20 @@ class EventGuard {
           limit 1
         ) replay on true
         left join lateral (
-          select ce.event_id, ce.case_revision
+          select ce.event_id
           from ccd.case_event ce
           where replay.id is null
             and ce.case_data_id = cd.id
             and ce.case_revision > :startRevision
             and ce.event_id = any(:conflictingEventIds)
-          order by ce.case_revision
           limit 1
         ) conflicting on true
         where cd.id = :caseDataId
         """,
         params,
         (rs, rowNum) -> new GuardResult(
-            rs.getLong("current_revision"),
             rs.getObject("replay_event_id", Long.class),
-            rs.getString("conflicting_event_id"),
-            rs.getObject("conflicting_revision", Long.class)
+            rs.getString("conflicting_event_id")
         )
     );
 
@@ -105,25 +97,15 @@ class EventGuard {
       return Optional.of(result.replayEventId());
     }
 
-    Long startRevision = request.startRevision();
-    if (!request.conflictingEventIds().isEmpty()
-        && (startRevision == null
-            || startRevision < 1
-            || startRevision > result.currentRevision())) {
-      log.warn(
-          "Rejecting event for case {} due to invalid concurrency revisions: startRevision={}, "
-              + "currentRevision={}, conflictingEventIds={}",
-          caseReference, startRevision, result.currentRevision(), request.conflictingEventIds()
-      );
+    if (!request.conflictingEventIds().isEmpty() && request.startRevision() == null) {
+      log.warn("Rejecting event for case {} due to missing start revision", caseReference);
       throw conflict();
     }
 
     if (result.conflictingEventId() != null) {
       log.info(
-          "Rejecting event for case {}: startRevision={}, currentRevision={}, conflictingEvent={}, "
-              + "conflictingRevision={}",
-          caseReference, request.startRevision, result.currentRevision(), result.conflictingEventId(),
-          result.conflictingRevision()
+          "Rejecting event for case {}: startRevision={}, conflictingEvent={}",
+          caseReference, request.startRevision(), result.conflictingEventId()
       );
       throw conflict();
     }
@@ -146,10 +128,8 @@ class EventGuard {
   }
 
   private record GuardResult(
-      long currentRevision,
       Long replayEventId,
-      String conflictingEventId,
-      Long conflictingRevision
+      String conflictingEventId
   ) {
   }
 }

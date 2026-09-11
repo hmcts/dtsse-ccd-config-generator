@@ -106,25 +106,15 @@ class EventGuardIntegrationTest {
   }
 
   @Test
-  void rejectsMissingNonPositiveAndFutureStartRevisions() {
-    assertConflictForStartRevision(null);
-    assertConflictForStartRevision(0L);
-    assertConflictForStartRevision(2L);
-  }
-
-  @Test
-  void rejectsConstrainedRequestWhenCaseDoesNotExist() {
-    jdbc.update("delete from ccd.case_data where id = :id", Map.of("id", CASE_ID));
-
+  void rejectsMissingStartRevision() {
     assertThatThrownBy(() -> transaction.execute(status -> eventGuard.lockAndCheck(
         UUID.randomUUID(),
         CASE_REFERENCE,
-        new EventGuard.Request(1L, Set.of("link-case"))
+        new EventGuard.Request(null, Set.of("link-case"))
     )))
         .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
-            assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND)
-        )
-        .hasMessageContaining("Case not found");
+            assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.CONFLICT)
+        );
   }
 
   private void waitUntilSecondRequestIsBlocked() throws InterruptedException {
@@ -186,15 +176,9 @@ class EventGuardIntegrationTest {
   }
 
   private long insertEvent(UUID idempotencyKey) {
-    return insertEvent(idempotencyKey, "event", 1);
-  }
-
-  private long insertEvent(UUID idempotencyKey, String eventId, long revision) {
     var params = new MapSqlParameterSource()
         .addValue("case_data_id", CASE_ID)
-        .addValue("idempotency_key", idempotencyKey)
-        .addValue("event_id", eventId)
-        .addValue("case_revision", revision);
+        .addValue("idempotency_key", idempotencyKey);
 
     return jdbc.queryForObject(
         """
@@ -219,7 +203,7 @@ class EventGuardIntegrationTest {
         ) values (
           :case_data_id,
           1,
-          :event_id,
+          'event',
           'summary',
           'description',
           'user',
@@ -232,7 +216,7 @@ class EventGuardIntegrationTest {
           'Submitted',
           'PUBLIC'::ccd.securityclassification,
           1,
-          :case_revision,
+          1,
           :idempotency_key
         )
         returning id
@@ -240,17 +224,6 @@ class EventGuardIntegrationTest {
         params,
         Long.class
     );
-  }
-
-  private void assertConflictForStartRevision(Long startRevision) {
-    assertThatThrownBy(() -> transaction.execute(status -> eventGuard.lockAndCheck(
-        UUID.randomUUID(),
-        CASE_REFERENCE,
-        new EventGuard.Request(startRevision, Set.of("link-case"))
-    )))
-        .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
-            assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.CONFLICT)
-        );
   }
 
   private static void await(CountDownLatch latch) {
