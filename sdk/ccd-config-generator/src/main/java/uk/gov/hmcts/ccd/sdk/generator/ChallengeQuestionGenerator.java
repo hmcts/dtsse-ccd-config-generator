@@ -40,12 +40,16 @@ public class ChallengeQuestionGenerator<T, S, R extends HasRole> implements Conf
   }
 
   /**
-   * Emit the role exactly as declared. Bracketed CaseRoles (e.g. {@code [DEFENDANTSOLICITOR]})
-   * stay bracketed; group / access-profile roles (e.g. {@code defendant-solicitor}) stay
-   * unbracketed so callers can target either shape once definition-store accepts both.
+   * Default behaviour: wrap unbracketed roles so existing services that pass IDAM /
+   * access-profile names keep emitting {@code [role]} Answers that definition-store
+   * already accepts. Opt-in {@code answerAsDeclared} skips wrapping so group roles
+   * like {@code defendant-solicitor} can be emitted once definition-store allows them.
    */
-  private static String formatRole(String role) {
-    return role;
+  private static String formatRole(String role, boolean useRoleAsDeclared) {
+    if (useRoleAsDeclared) {
+      return role;
+    }
+    return role.startsWith("[") && role.endsWith("]") ? role : "[" + role + "]";
   }
 
   private static <R extends HasRole> Map<String, Object> toJson(
@@ -58,7 +62,8 @@ public class ChallengeQuestionGenerator<T, S, R extends HasRole> implements Conf
     row.put("AnswerFieldType", question.getAnswerFieldType());
     row.put("Answer", question.getAnswers().stream()
         .flatMap(a -> a.getRoles().stream()
-            .map(role -> "${" + String.join(".", a.getPathSegments()) + "}:" + formatRole(role.getRole())))
+            .map(role -> "${" + String.join(".", a.getPathSegments()) + "}:"
+                + formatRole(role.getRole(), a.isUseRoleAsDeclared())))
         .collect(joining(",")));
     return row;
   }
