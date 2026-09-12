@@ -1,0 +1,42 @@
+[
+  {
+    "CaseEventID": "create",
+    "CaseFieldID": "contact",
+    "DisplayContext": "OPTIONAL",
+    "EventElementLabel": "Postcode",
+    "FieldDisplayOrder": 5,
+    "ListElementCode": "address.postcode",
+    "LiveFrom": "01/01/2017",
+    "PageID": "2"
+  },
+  {
+    "CaseEventID": "create",
+    "CaseFieldID": "contact",
+    "DisplayContext": "READONLY",
+    "EventElementLabel": "Your reference",
+    "EventHintText": "Shown for reference only",
+    "FieldDisplayOrder": 4,
+    "ListElementCode": "reference",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "CaseEventID": "create",
+    "CaseFieldID": "contact",
+    "DisplayContext": "OPTIONAL",
+    "EventElementLabel": "Your email",
+    "EventHintText": "We only use this to contact you",
+    "FieldDisplayOrder": 3,
+    "FieldShowCondition": "contactName=\"*\"",
+    "ListElementCode": "email",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "CaseEventID": "create",
+    "CaseFieldID": "contact",
+    "DisplayContext": "MANDATORY",
+    "EventElementLabel": "Your full name",
+    "FieldDisplayOrder": 2,
+    "ListElementCode": "name",
+    "LiveFrom": "01/01/2017"
+  }
+]

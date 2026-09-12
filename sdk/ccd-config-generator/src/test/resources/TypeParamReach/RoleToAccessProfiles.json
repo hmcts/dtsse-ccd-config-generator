@@ -1,0 +1,12 @@
+[
+  {
+    "AccessProfiles": "caseworker-approver",
+    "Authorisation": "",
+    "CaseAccessCategories": "",
+    "CaseTypeID": "TypeParamReach",
+    "Disabled": "N",
+    "LiveFrom": "01/01/2017",
+    "ReadOnly": "N",
+    "RoleName": "caseworker-approver"
+  }
+]

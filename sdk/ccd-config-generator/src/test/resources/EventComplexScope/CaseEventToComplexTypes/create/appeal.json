@@ -1,0 +1,26 @@
+[
+  {
+    "CaseEventID": "create",
+    "CaseFieldID": "appeal",
+    "DisplayContext": "COMPLEX",
+    "FieldDisplayOrder": 2,
+    "ListElementCode": "benefitType",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "CaseEventID": "create",
+    "CaseFieldID": "appeal",
+    "DisplayContext": "MANDATORY",
+    "FieldDisplayOrder": 3,
+    "ListElementCode": "benefitType.code",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "CaseEventID": "create",
+    "CaseFieldID": "appeal",
+    "DisplayContext": "OPTIONAL",
+    "FieldDisplayOrder": 4,
+    "ListElementCode": "reference",
+    "LiveFrom": "01/01/2017"
+  }
+]

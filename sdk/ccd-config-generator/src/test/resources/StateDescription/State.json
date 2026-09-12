@@ -1,0 +1,16 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "StateDescription",
+    "ID": "Open",
+    "Name": "Open state",
+    "Description": "Open state"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "StateDescription",
+    "ID": "CaseManagement",
+    "Name": "Case management state",
+    "Description": "The case is under active case management"
+  }
+]

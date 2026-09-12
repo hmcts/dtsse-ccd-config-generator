@@ -1,0 +1,28 @@
+[
+  {
+    "AccessDefault": "Yes",
+    "AccessMandatory": "Yes",
+    "AccessTypeID": "org-policy-access",
+    "CaseTypeID": "InheritedMember",
+    "Description": "Solicitor access type description",
+    "Display": "Yes",
+    "DisplayOrder": 1,
+    "HintText": "Solicitor access type hint",
+    "LiveFrom": "01/01/2017",
+    "LiveTo": "",
+    "OrganisationProfileID": "SOLICITOR_PROFILE"
+  },
+  {
+    "AccessDefault": "Yes",
+    "AccessMandatory": "Yes",
+    "AccessTypeID": "org-policy-access",
+    "CaseTypeID": "InheritedMember",
+    "Description": "Local authority access type description",
+    "Display": "Yes",
+    "DisplayOrder": 2,
+    "HintText": "Local authority access type hint",
+    "LiveFrom": "01/01/2017",
+    "LiveTo": "",
+    "OrganisationProfileID": "LOCALAUTH_PROFILE"
+  }
+]

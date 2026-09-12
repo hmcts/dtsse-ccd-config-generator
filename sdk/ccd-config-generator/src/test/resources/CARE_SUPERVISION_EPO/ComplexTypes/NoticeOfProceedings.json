@@ -8,7 +8,7 @@
   },
   {
     "ID": "NoticeOfProceedings",
-    "FieldType": "Collection",
+    "FieldType": "MultiSelectList",
     "FieldTypeParameter": "ProceedingType",
     "LiveFrom": "01/01/2017",
     "SecurityClassification": "Public",

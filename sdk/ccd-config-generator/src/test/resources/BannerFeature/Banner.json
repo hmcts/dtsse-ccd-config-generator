@@ -1,0 +1,8 @@
+[
+  {
+    "BannerEnabled": "Y",
+    "BannerDescription": "Your system might be running slowly.",
+    "BannerUrl": "https://status.example.com",
+    "BannerUrlText": "Check service status"
+  }
+]

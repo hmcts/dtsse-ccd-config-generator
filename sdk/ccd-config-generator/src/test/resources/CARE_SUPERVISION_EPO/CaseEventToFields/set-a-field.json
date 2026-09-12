@@ -9,6 +9,7 @@
     "PageDisplayOrder": 1,
     "PageFieldDisplayOrder": 1,
     "PageID": "SetAField",
-    "ShowSummaryChangeOption": "Y"
+    "ShowSummaryChangeOption": "Y",
+    "Publish": "Y"
   }
 ]

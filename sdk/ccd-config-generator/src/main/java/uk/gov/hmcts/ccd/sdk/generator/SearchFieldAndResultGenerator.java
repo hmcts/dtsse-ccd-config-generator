@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
@@ -20,21 +21,28 @@ import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 class SearchFieldAndResultGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
 
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
-    generateFields(root, config.getCaseType(), config.getSearchInputFields(), "SearchInputFields");
-    generateFields(root, config.getCaseType(), config.getSearchResultFields(), "SearchResultFields");
+    generateFields(root, config.getCaseType(), config.getSearchInputFields(), "SearchInputFields",
+        config.getGatedOffFieldIds());
+    generateFields(root, config.getCaseType(), config.getSearchResultFields(), "SearchResultFields",
+        config.getGatedOffFieldIds());
   }
 
   protected static <T, R extends HasRole> void generateFields(
           File root,
           String caseType,
           List<Search<T, R>> searchFields,
-          String fileName
+          String fileName,
+          Set<String> gatedOffFieldIds
   ) {
     List<Map<String, Object>> result = Lists.newArrayList();
 
     int displayOrder = 1;
     for (Search<T, R> search : searchFields) {
       for (SearchField<R> field : search.getFields()) {
+        // A gated-off field's CaseField row is suppressed; omit it from search sheets too.
+        if (gatedOffFieldIds.contains(field.getId())) {
+          continue;
+        }
         Map<String, Object> map = buildField(caseType, field.getId(), field.getLabel(),
                 displayOrder++, field.getListElementCode(), field.getShowCondition(),
                 field.getUserRole(), field.getOrder(), field.getDisplayContextParameter());
@@ -44,7 +52,11 @@ class SearchFieldAndResultGenerator<T, S, R extends HasRole> implements ConfigGe
     }
 
     Path output = Paths.get(root.getPath(), fileName + ".json");
-    JsonUtils.mergeInto(output, result, new AddMissing(), "CaseFieldID", "UserRole");
+    // ListElementCode is part of the key: a complex field carries one row per searched leaf, so
+    // several rows legitimately share the same (CaseFieldID, UserRole). Rows that set no
+    // ListElementCode omit the column entirely and still merge on (CaseFieldID, UserRole) exactly as
+    // before, keeping the output byte-identical for configs that do not use the new sub-builder.
+    JsonUtils.mergeInto(output, result, new AddMissing(), "CaseFieldID", "UserRole", "ListElementCode");
   }
 
   protected static Map<String, Object> buildField(String caseType, String fieldId, String label, int displayOrder,

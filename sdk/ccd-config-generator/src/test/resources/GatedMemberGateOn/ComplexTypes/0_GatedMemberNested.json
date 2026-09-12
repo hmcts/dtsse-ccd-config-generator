@@ -1,0 +1,10 @@
+[
+  {
+    "ElementLabel": "A nested detail",
+    "FieldType": "Text",
+    "ID": "GatedMemberNested",
+    "ListElementCode": "nestedDetail",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  }
+]

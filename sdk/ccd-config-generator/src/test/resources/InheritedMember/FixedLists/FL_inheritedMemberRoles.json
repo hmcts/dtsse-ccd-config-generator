@@ -1,0 +1,16 @@
+[
+  {
+    "DisplayOrder": 2,
+    "ID": "FL_inheritedMemberRoles",
+    "ListElement": "I am appealing as a guardian",
+    "ListElementCode": "GUARDIAN",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "DisplayOrder": 1,
+    "ID": "FL_inheritedMemberRoles",
+    "ListElement": "I am appealing for myself",
+    "ListElementCode": "MYSELF",
+    "LiveFrom": "01/01/2017"
+  }
+]

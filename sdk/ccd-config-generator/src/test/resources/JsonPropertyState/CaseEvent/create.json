@@ -1,0 +1,17 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "JsonPropertyState",
+    "ID": "create",
+    "Name": "Create",
+    "Description": "Create",
+    "DisplayOrder": 1,
+    "EndButtonLabel": "Save and continue",
+    "PreConditionState(s)": "Open",
+    "PostConditionState": "PREPARE_FOR_HEARING",
+    "SecurityClassification": "Public",
+    "ShowSummary": "N",
+    "ShowEventNotes": "N",
+    "Publish": "N"
+  }
+]

@@ -1,0 +1,13 @@
+[
+  {
+    "CaseFieldID": "caseHistory",
+    "CaseTypeID": "GatedMember",
+    "Channel": "CaseWorker",
+    "LiveFrom": "01/01/2017",
+    "TabDisplayOrder": 1,
+    "TabFieldDisplayOrder": 1,
+    "TabID": "CaseHistory",
+    "TabLabel": "History",
+    "UserRole": ""
+  }
+]
