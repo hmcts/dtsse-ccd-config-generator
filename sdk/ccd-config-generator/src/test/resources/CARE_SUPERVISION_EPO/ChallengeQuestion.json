@@ -1,6 +1,6 @@
 [
   {
-    "Answer": "${caseName}:caseworker-publiclaw-solicitor,${caseName}:[SOLICITOR]",
+    "Answer": "${caseName}:[caseworker-publiclaw-solicitor]",
     "AnswerFieldType": "Text",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "DisplayOrder": 1,
@@ -10,7 +10,7 @@
     "QuestionText": "Enter the case name"
   },
   {
-    "Answer": "${allocatedJudge.judgeFullName}:caseworker-publiclaw-solicitor,${allocatedJudge.judgeFullName}:caseworker-publiclaw-courtadmin",
+    "Answer": "${allocatedJudge.judgeFullName}:[caseworker-publiclaw-solicitor],${allocatedJudge.judgeFullName}:[caseworker-publiclaw-courtadmin]",
     "AnswerFieldType": "Text",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "DisplayOrder": 2,
