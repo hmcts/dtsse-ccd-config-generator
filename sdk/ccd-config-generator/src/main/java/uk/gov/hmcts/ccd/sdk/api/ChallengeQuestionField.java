@@ -23,6 +23,17 @@ public class ChallengeQuestionField<R extends HasRole> {
   public static class AnswerMapping<R extends HasRole> {
     private final List<String> pathSegments;
     private final List<R> roles;
+    private final boolean useRoleAsDeclared;
+
+    public AnswerMapping(List<String> pathSegments, List<R> roles) {
+      this(pathSegments, roles, false);
+    }
+
+    public AnswerMapping(List<String> pathSegments, List<R> roles, boolean useRoleAsDeclared) {
+      this.pathSegments = pathSegments;
+      this.roles = roles;
+      this.useRoleAsDeclared = useRoleAsDeclared;
+    }
   }
 
   public static class QuestionBuilder<T, R extends HasRole> {
@@ -43,7 +54,17 @@ public class ChallengeQuestionField<R extends HasRole> {
 
     @SafeVarargs
     public final AnswerBuilder<T, T, R> answer(R... roles) {
-      return new AnswerBuilder<>(this, model, propertyUtils, List.of(roles));
+      return new AnswerBuilder<>(this, model, propertyUtils, List.of(roles), false);
+    }
+
+    /**
+     * Like {@link #answer} but emits roles exactly as declared (no auto-bracketing).
+     * Use for Group Access / access-profile roles such as {@code defendant-solicitor}
+     * once definition-store accepts unbracketed ChallengeQuestion Answers.
+     */
+    @SafeVarargs
+    public final AnswerBuilder<T, T, R> answerAsDeclared(R... roles) {
+      return new AnswerBuilder<>(this, model, propertyUtils, List.of(roles), true);
     }
 
     public QuestionBuilder<T, R> displayOrder(int order) {
@@ -60,8 +81,8 @@ public class ChallengeQuestionField<R extends HasRole> {
       return parent;
     }
 
-    void addAnswer(List<String> path, List<R> roles) {
-      question.answers.add(new AnswerMapping<>(List.copyOf(path), List.copyOf(roles)));
+    void addAnswer(List<String> path, List<R> roles, boolean useRoleAsDeclared) {
+      question.answers.add(new AnswerMapping<>(List.copyOf(path), List.copyOf(roles), useRoleAsDeclared));
     }
   }
 }

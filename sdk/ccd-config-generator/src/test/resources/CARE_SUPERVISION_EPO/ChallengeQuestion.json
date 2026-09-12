@@ -20,7 +20,7 @@
     "QuestionText": "Enter your allocated judge's full name"
   },
   {
-    "Answer": "${hearingPreferencesWelsh}:[caseworker-publiclaw-solicitor]",
+    "Answer": "${hearingPreferencesWelsh}:caseworker-publiclaw-solicitor",
     "AnswerFieldType": "Text",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "DisplayOrder": 3,

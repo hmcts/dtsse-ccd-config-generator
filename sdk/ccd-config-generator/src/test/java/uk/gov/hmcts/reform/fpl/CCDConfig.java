@@ -254,7 +254,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
           .answer(LOCAL_AUTHORITY, HMCTS_ADMIN).complex(CaseData::getAllocatedJudge).field(Judge::getJudgeFullName)
           .done()
         .question("welshPreference", "Do you want some Welsh?")
-          .answer(LOCAL_AUTHORITY).complex(CaseData::getHearingPreferences).field(HearingPreferences::getWelsh)
+          .answerAsDeclared(LOCAL_AUTHORITY).complex(CaseData::getHearingPreferences).field(HearingPreferences::getWelsh)
           .done();
 
     builder.grantComplexType(CaseData::getAllocatedJudge, "judgeFullName", CRU,

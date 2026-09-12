@@ -13,12 +13,14 @@ public class AnswerBuilder<U, T, R extends HasRole> {
   private final List<String> path;
   private final List<R> roles;
   private final String pendingPrefix;
+  private final boolean useRoleAsDeclared;
 
   AnswerBuilder(ChallengeQuestionField.QuestionBuilder<T, R> parent,
                 Class<U> currentType,
                 PropertyUtils propertyUtils,
-                List<R> roles) {
-    this(parent, currentType, propertyUtils, roles, Lists.newArrayList(), "");
+                List<R> roles,
+                boolean useRoleAsDeclared) {
+    this(parent, currentType, propertyUtils, roles, Lists.newArrayList(), "", useRoleAsDeclared);
   }
 
   private AnswerBuilder(ChallengeQuestionField.QuestionBuilder<T, R> parent,
@@ -26,13 +28,15 @@ public class AnswerBuilder<U, T, R extends HasRole> {
                         PropertyUtils propertyUtils,
                         List<R> roles,
                         List<String> path,
-                        String pendingPrefix) {
+                        String pendingPrefix,
+                        boolean useRoleAsDeclared) {
     this.parent = parent;
     this.currentType = currentType;
     this.propertyUtils = propertyUtils;
     this.roles = roles;
     this.path = path;
     this.pendingPrefix = pendingPrefix;
+    this.useRoleAsDeclared = useRoleAsDeclared;
   }
 
   public <V> AnswerBuilder<V, T, R> complex(TypedPropertyGetter<U, V> getter) {
@@ -43,12 +47,14 @@ public class AnswerBuilder<U, T, R extends HasRole> {
       String newPrefix = pendingPrefix.isEmpty()
           ? unwrapped.prefix()
           : pendingPrefix + StringUtils.capitalize(unwrapped.prefix());
-      return new AnswerBuilder<>(parent, nextType, propertyUtils, roles, path, newPrefix);
+      return new AnswerBuilder<>(parent, nextType, propertyUtils, roles, path, newPrefix,
+          useRoleAsDeclared);
     }
     String name = applyPrefix(propertyUtils.getPropertyName(currentType, getter));
     List<String> nextPath = Lists.newArrayList(path);
     nextPath.add(name);
-    return new AnswerBuilder<>(parent, nextType, propertyUtils, roles, nextPath, "");
+    return new AnswerBuilder<>(parent, nextType, propertyUtils, roles, nextPath, "",
+        useRoleAsDeclared);
   }
 
   public ChallengeQuestionField.QuestionBuilder<T, R> field(TypedPropertyGetter<U, ?> getter) {
@@ -67,7 +73,7 @@ public class AnswerBuilder<U, T, R extends HasRole> {
   }
 
   private ChallengeQuestionField.QuestionBuilder<T, R> finish() {
-    parent.addAnswer(path, roles);
+    parent.addAnswer(path, roles, useRoleAsDeclared);
     return parent;
   }
 }

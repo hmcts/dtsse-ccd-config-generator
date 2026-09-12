@@ -39,7 +39,16 @@ public class ChallengeQuestionGenerator<T, S, R extends HasRole> implements Conf
     mergeInto(path, result, new AddMissing(), "CaseTypeID", "ID", "QuestionId");
   }
 
-  private static String bracketRole(String role) {
+  /**
+   * Default behaviour: wrap unbracketed roles so existing services that pass IDAM /
+   * access-profile names keep emitting {@code [role]} Answers that definition-store
+   * already accepts. Opt-in {@code answerAsDeclared} skips wrapping so group roles
+   * like {@code defendant-solicitor} can be emitted once definition-store allows them.
+   */
+  private static String formatRole(String role, boolean useRoleAsDeclared) {
+    if (useRoleAsDeclared) {
+      return role;
+    }
     return role.startsWith("[") && role.endsWith("]") ? role : "[" + role + "]";
   }
 
@@ -53,7 +62,8 @@ public class ChallengeQuestionGenerator<T, S, R extends HasRole> implements Conf
     row.put("AnswerFieldType", question.getAnswerFieldType());
     row.put("Answer", question.getAnswers().stream()
         .flatMap(a -> a.getRoles().stream()
-            .map(role -> "${" + String.join(".", a.getPathSegments()) + "}:" + bracketRole(role.getRole())))
+            .map(role -> "${" + String.join(".", a.getPathSegments()) + "}:"
+                + formatRole(role.getRole(), a.isUseRoleAsDeclared())))
         .collect(joining(",")));
     return row;
   }
