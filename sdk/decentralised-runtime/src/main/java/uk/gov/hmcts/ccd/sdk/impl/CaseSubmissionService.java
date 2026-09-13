@@ -35,7 +35,8 @@ public class CaseSubmissionService {
     var eventConfig = getEventConfig(event);
     var user = idam.retrieveUser(authorisation);
     var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
-    var startRevision = eventConfig.isNonConcurrent()
+    // Creation events have no pre-state or start revision to check.
+    var startRevision = eventConfig.isNonConcurrent() && !eventConfig.getPreState().isEmpty()
         ? Objects.requireNonNull(event.getStartRevision(), "Non-concurrent event requires a start revision")
         : null;
 

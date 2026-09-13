@@ -58,6 +58,6 @@ configBuilder
 
 In the above example `amendFlags` will be rejected and return an HTTP 409 if **any** event has committed to the case since `amendFlags` was started.
 
-Mark an event non-concurrent when its submit handler writes potentially stale values, such as a collection edited in XUI and updated as a value eg. CCD/XUI's case flag and link management events.
+Your own custom events that are concurrent-safe, eg. using inserts and merges, may still modify case flags and links and can remain concurrent.
 
-Your own custom events that are concurrent-safe, using eg. inserts and merges, may still modify case flags and links and can remain concurrent.
+Mark an event non-concurrent when its submit handler writes potentially stale values, such as a collection edited in XUI and updated as a value eg. CCD/XUI's case flag and link management events.

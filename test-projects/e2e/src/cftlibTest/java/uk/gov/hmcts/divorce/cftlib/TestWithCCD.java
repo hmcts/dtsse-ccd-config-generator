@@ -370,7 +370,7 @@ public class TestWithCCD extends CftlibTest {
 
     @Order(1)
     @Test
-    public void caseCreation() throws Exception {
+    public void nonConcurrentCaseCreation() throws Exception {
         var start = ccdApi.startCase(getAuthorisation("TEST_SOLICITOR@mailinator.com"),
             getServiceAuth(),
             NoFaultDivorce.getCaseType(),

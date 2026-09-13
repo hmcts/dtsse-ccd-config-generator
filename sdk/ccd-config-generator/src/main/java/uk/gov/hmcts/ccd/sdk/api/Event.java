@@ -141,6 +141,7 @@ public class Event<T, R extends HasRole, S> {
     /**
      * Rejects submission with HTTP 409 if any event committed on the case after this one started.
      * Use when the submit handler writes values taken from the event payload rather than a fresh read.
+     * Has no effect on case-creation events, which have no start revision.
      */
     public EventBuilder<T, R, S> nonConcurrent() {
       this.nonConcurrent = true;
