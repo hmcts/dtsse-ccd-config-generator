@@ -45,20 +45,19 @@ If, for example, a blob update and a case note insertion were to race, one acqui
 
 Note that this is a tightening of CCD's current implementation which allows multiple event submissions to run in parallel, only one of which will commit.
 
-## Event-level optimistic locking
+## Non-concurrent events
 
-The SDK provides a mechanism to guard against the concurrent execution of subsets of events; `non-concurrent groups`:
+The SDK provides a facility to enforce a case-wide optimistic lock on designated events:
 
 ```java
 configBuilder
-    .decentralisedEvent("addCaseLink", this::submit)
+    .decentralisedEvent("amendFlags", this::submit)
     .forAllStates()
-    .nonConcurrentGroups("case-links");
+    .nonConcurrent();
 ```
-With the above the SDK will, upon submission of `addCaseLink`:
 
-1. Using the `case_revision` from when the `addCaseLink` event started
-2. Look for any event committed to the case since `start_revision` that is part of `case-links`
-3. If found, throw an http 409 `case modified` conflict
+In the above example `amendFlags` will be rejected and return an HTTP 409 if **any** event has committed to the case since `amendFlags` was started.
 
-Non-concurrent groups are only valid for events on existing cases.
+Mark an event non-concurrent when its submit handler writes potentially stale values, such as a collection edited in XUI and updated as a value eg. CCD/XUI's case flag and link management events.
+
+Your own custom events that are concurrent-safe, using eg. inserts and merges, may still modify case flags and links and can remain concurrent.

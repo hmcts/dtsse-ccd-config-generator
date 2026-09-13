@@ -1,11 +1,9 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -23,26 +21,24 @@ import org.springframework.boot.autoconfigure.transaction.TransactionAutoConfigu
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.sdk.config.DecentralisedFlywayAutoConfiguration;
 
-@SpringBootTest(classes = EventGuardIntegrationTest.TestConfig.class, properties = {
+@SpringBootTest(classes = IdempotencyEnforcerIntegrationTest.TestConfig.class, properties = {
     "spring.datasource.url=jdbc:tc:postgresql:15-alpine:///ccd",
     "spring.datasource.driver-class-name=org.testcontainers.jdbc.ContainerDatabaseDriver"
 })
-class EventGuardIntegrationTest {
+class IdempotencyEnforcerIntegrationTest {
 
   private static final long CASE_ID = 9876L;
   private static final long CASE_REFERENCE = 9999000000009876L;
-  private static final String BLOCKED_REQUEST_APPLICATION_NAME = "event-guard-concurrent-request";
+  private static final String BLOCKED_REQUEST_APPLICATION_NAME = "idempotency-enforcer-concurrent-request";
 
   @Autowired
-  private EventGuard eventGuard;
+  private IdempotencyEnforcer idempotencyEnforcer;
 
   @Autowired
   private NamedParameterJdbcTemplate jdbc;
@@ -55,7 +51,6 @@ class EventGuardIntegrationTest {
   @BeforeEach
   void setUp() {
     transaction = new TransactionTemplate(transactionManager);
-    jdbc.update("delete from ccd.case_data where id = :id", Map.of("id", CASE_ID));
     seedCaseData();
   }
 
@@ -68,12 +63,8 @@ class EventGuardIntegrationTest {
     var executor = Executors.newFixedThreadPool(2);
 
     try {
-      final var firstRequest = executor.submit(() -> transaction.executeWithoutResult(status -> {
-        assertThat(eventGuard.lockAndCheck(
-            idempotencyKey,
-            CASE_REFERENCE,
-            EventGuard.Request.concurrent()
-        ))
+      var firstRequest = executor.submit(() -> transaction.executeWithoutResult(status -> {
+        assertThat(idempotencyEnforcer.lockCaseAndGetExistingEvent(idempotencyKey, CASE_REFERENCE, null))
             .isEmpty();
         caseLocked.countDown();
         await(commitFirstRequest);
@@ -82,15 +73,11 @@ class EventGuardIntegrationTest {
 
       assertThat(caseLocked.await(10, TimeUnit.SECONDS)).isTrue();
 
-      final var secondRequest = executor.submit(() -> transaction.execute(status -> {
+      var secondRequest = executor.submit(() -> transaction.execute(status -> {
         jdbc.getJdbcTemplate().execute(
             "set local application_name = '" + BLOCKED_REQUEST_APPLICATION_NAME + "'"
         );
-        return eventGuard.lockAndCheck(
-            idempotencyKey,
-            CASE_REFERENCE,
-            EventGuard.Request.concurrent()
-        );
+        return idempotencyEnforcer.lockCaseAndGetExistingEvent(idempotencyKey, CASE_REFERENCE, null);
       }));
 
       waitUntilSecondRequestIsBlocked();
@@ -102,18 +89,6 @@ class EventGuardIntegrationTest {
       commitFirstRequest.countDown();
       executor.shutdownNow();
     }
-  }
-
-  @Test
-  void rejectsMissingStartRevision() {
-    assertThatThrownBy(() -> transaction.execute(status -> eventGuard.lockAndCheck(
-        UUID.randomUUID(),
-        CASE_REFERENCE,
-        EventGuard.Request.noneCommittedSince(Set.of("link-case"), null)
-    )))
-        .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
-            assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.CONFLICT)
-        );
   }
 
   private void waitUntilSecondRequestIsBlocked() throws InterruptedException {
@@ -237,7 +212,7 @@ class EventGuardIntegrationTest {
   }
 
   @Configuration
-  @Import(EventGuard.class)
+  @Import(IdempotencyEnforcer.class)
   @ImportAutoConfiguration({
       DecentralisedFlywayAutoConfiguration.class,
       DataSourceAutoConfiguration.class,

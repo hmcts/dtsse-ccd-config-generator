@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -34,17 +35,16 @@ public class CaseSubmissionService {
     var eventConfig = getEventConfig(event);
     var user = idam.retrieveUser(authorisation);
     var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
-    var conflictingEventIds = resolvedConfigRegistry.eventIdsInNonConcurrentGroups(
-        event.getEventDetails().getCaseType(),
-        eventConfig.getNonConcurrentGroups()
-    );
+    var startRevision = eventConfig.isNonConcurrent()
+        ? Objects.requireNonNull(event.getStartRevision(), "Non-concurrent event requires a start revision")
+        : null;
 
     try {
       var transactionResult =
           transactionCoordinator.execute(
               event.getCaseDetails().getReference(),
               idempotencyKey,
-              EventGuard.Request.noneCommittedSince(conflictingEventIds, event.getStartRevision()),
+              startRevision,
               () -> prepareSubmission(event, user, handler)
           );
 

@@ -69,12 +69,17 @@ class CaseSubmissionServiceTest {
     service.submit(event, "raw-token", IDEMPOTENCY_KEY);
 
     verify(legacyHandler).apply(event, "Bearer raw-token");
-    verify(transactionCoordinator).execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any(), any());
+    verify(transactionCoordinator).execute(
+        eq(123456789L),
+        eq(IDEMPOTENCY_KEY),
+        any(),
+        any()
+    );
   }
 
   @Test
   void idempotentReplayDoesNotReserveAnotherEventId() {
-    final DecentralisedCaseEvent event = event();
+    DecentralisedCaseEvent event = event();
     Event<?, ?, ?> eventConfig = mock(Event.class);
     doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("TestCase", "submit");
     when(eventConfig.getSubmitHandler()).thenReturn(null);
