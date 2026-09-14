@@ -47,7 +47,9 @@ Note that this is a tightening of CCD's current implementation which allows mult
 
 ## Non-concurrent events
 
-The SDK provides a facility to enforce a case-wide optimistic lock on designated events:
+Legacy callback events declared with `event(...)` are non-concurrent by default because they replace
+the case data blob with values captured when the event started. Decentralised events are concurrent
+by default and can opt into a case-wide optimistic lock:
 
 ```java
 configBuilder
