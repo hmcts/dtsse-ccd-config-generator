@@ -1,0 +1,16 @@
+[
+  {
+    "CRUD" : "R",
+    "CaseStateID" : "Open",
+    "CaseTypeID" : "ExplicitStateGrants",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-solicitor"
+  },
+  {
+    "CRUD" : "R",
+    "CaseStateID" : "Submitted",
+    "CaseTypeID" : "ExplicitStateGrants",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-courtadmin"
+  }
+]

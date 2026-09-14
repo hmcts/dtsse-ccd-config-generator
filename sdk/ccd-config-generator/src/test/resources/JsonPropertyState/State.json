@@ -1,0 +1,16 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "JsonPropertyState",
+    "ID": "Open",
+    "Name": "Open state",
+    "Description": "Open state"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "JsonPropertyState",
+    "ID": "PREPARE_FOR_HEARING",
+    "Name": "Case management state",
+    "Description": "Case management state"
+  }
+]

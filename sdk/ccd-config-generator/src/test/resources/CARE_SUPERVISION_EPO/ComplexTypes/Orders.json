@@ -8,7 +8,7 @@
   },
   {
     "ID": "Orders",
-    "FieldType": "Collection",
+    "FieldType": "MultiSelectList",
     "FieldTypeParameter": "OrderType",
     "LiveFrom": "01/01/2017",
     "SecurityClassification": "Public",
@@ -16,7 +16,7 @@
   },
   {
     "ID": "Orders",
-    "FieldType": "Collection",
+    "FieldType": "MultiSelectList",
     "FieldTypeParameter": "EmergencyProtectionOrdersType",
     "LiveFrom": "01/01/2017",
     "SecurityClassification": "Public",
@@ -24,7 +24,7 @@
   },
   {
     "ID": "Orders",
-    "FieldType": "Collection",
+    "FieldType": "MultiSelectList",
     "FieldTypeParameter": "EmergencyProtectionOrderDirectionsType",
     "LiveFrom": "01/01/2017",
     "SecurityClassification": "Public",

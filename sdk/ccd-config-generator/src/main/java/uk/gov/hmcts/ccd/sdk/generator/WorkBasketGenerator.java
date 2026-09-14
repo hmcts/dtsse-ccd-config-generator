@@ -9,8 +9,10 @@ import uk.gov.hmcts.ccd.sdk.api.HasRole;
 class WorkBasketGenerator<T, S, R extends HasRole> extends SearchFieldAndResultGenerator<T, S, R> {
 
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
-    generateFields(root, config.getCaseType(), config.getWorkBasketInputFields(), "WorkBasketInputFields");
-    generateFields(root, config.getCaseType(), config.getWorkBasketResultFields(), "WorkBasketResultFields");
+    generateFields(root, config.getCaseType(), config.getWorkBasketInputFields(), "WorkBasketInputFields",
+        config.getGatedOffFieldIds());
+    generateFields(root, config.getCaseType(), config.getWorkBasketResultFields(), "WorkBasketResultFields",
+        config.getGatedOffFieldIds());
   }
 
 }
