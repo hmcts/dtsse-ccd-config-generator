@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.impl;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -10,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
@@ -49,6 +51,8 @@ class CaseSubmissionServiceTest {
     Event<?, ?, ?> eventConfig = mock(Event.class);
     doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("TestCase", "submit");
     when(eventConfig.getSubmitHandler()).thenReturn(null);
+    when(eventConfig.isConcurrent()).thenReturn(false);
+    doReturn(Set.of("Submitted")).when(eventConfig).getPreState();
     when(idam.retrieveUser("raw-token")).thenReturn(new IdamService.User(
         "Bearer raw-token",
         new UserInfo("sub", "uid", "name", "given", "family", List.of("caseworker"))
@@ -72,7 +76,7 @@ class CaseSubmissionServiceTest {
     verify(transactionCoordinator).execute(
         eq(123456789L),
         eq(IDEMPOTENCY_KEY),
-        any(),
+        isNull(),
         any()
     );
   }

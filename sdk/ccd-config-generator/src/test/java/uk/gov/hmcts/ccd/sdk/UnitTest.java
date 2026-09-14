@@ -31,6 +31,7 @@ public class UnitTest {
       public void configureDecentralised(DecentralisedConfigBuilder<CaseData, State, UserRole> builder) {
         builder.caseType("TEST", "Test", "Test case type");
         builder.event("legacy").forAllStates();
+        builder.event("concurrent-legacy").forAllStates().concurrent();
         builder.decentralisedEvent("decentralised", payload -> SubmitResponse.defaultResponse())
             .forAllStates();
       }
@@ -40,6 +41,7 @@ public class UnitTest {
         new ConfigResolver<>(List.of(new TestConfig())).resolveCCDConfig();
 
     assertThat(resolved.getEvents().get("legacy").isConcurrent()).isFalse();
+    assertThat(resolved.getEvents().get("concurrent-legacy").isConcurrent()).isTrue();
     assertThat(resolved.getEvents().get("decentralised").isConcurrent()).isTrue();
   }
 

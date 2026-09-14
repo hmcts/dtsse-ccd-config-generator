@@ -42,8 +42,7 @@ public class Event<T, R extends HasRole, S> {
   private Submit<T, S> submitHandler;
   private Start<T, S> startHandler;
   private FieldCollection fields;
-  @Builder.Default
-  private boolean concurrent = true;
+  private boolean concurrent;
 
   public void name(String s) {
     name = s;
@@ -72,6 +71,7 @@ public class Event<T, R extends HasRole, S> {
   public static class EventBuilder<T, R extends HasRole, S> {
 
     private FieldCollection.FieldCollectionBuilder<T, S, EventBuilder<T, R, S>> fieldsBuilder;
+    private boolean concurrent = true;
 
     public static <T, R extends HasRole, S> EventBuilder<T, R, S> builder(
         String id, Class dataClass, PropertyUtils propertyUtils,
@@ -145,7 +145,13 @@ public class Event<T, R extends HasRole, S> {
      * Has no effect on case-creation events, which have no start revision.
      */
     public EventBuilder<T, R, S> nonConcurrent() {
-      return concurrent(false);
+      concurrent = false;
+      return this;
+    }
+
+    public EventBuilder<T, R, S> concurrent() {
+      concurrent = true;
+      return this;
     }
 
     // Do not inherit role permissions from states.
