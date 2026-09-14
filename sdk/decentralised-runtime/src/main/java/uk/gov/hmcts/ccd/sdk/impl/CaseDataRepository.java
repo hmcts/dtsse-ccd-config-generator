@@ -196,7 +196,11 @@ class CaseDataRepository {
     try {
       return ndb.queryForObject(sql, params, Long.class);
     } catch (EmptyResultDataAccessException e) {
-      logConcurrentUpdate(event);
+      try {
+        logConcurrentUpdate(event);
+      } catch (RuntimeException diagnosticFailure) {
+        e.addSuppressed(diagnosticFailure);
+      }
       throw e;
     }
   }
