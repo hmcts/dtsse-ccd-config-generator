@@ -32,6 +32,20 @@ describe("renderHtml", () => {
     assert.doesNotMatch(html, /contenteditable|data-generated-text|id=/);
   });
 
+  it("leaves out a fact with no value rather than emitting an empty text node", () => {
+    const controller = createDocEditor();
+    controller.render(buildDoc((doc) => {
+      doc.paragraph("possession", (content) => {
+        content.text("Costs: ").fact("amount", "").text("to be assessed.");
+      });
+    }));
+
+    assert.equal(
+      renderHtml(controller.getSnapshot(), { document }),
+      "<p>Costs: to be assessed.</p>",
+    );
+  });
+
   it("keeps marks, headings and list numbering from the editor document", () => {
     const controller = createDocEditor();
     controller.render(buildDoc((doc) => doc.paragraph("p", "x")));
