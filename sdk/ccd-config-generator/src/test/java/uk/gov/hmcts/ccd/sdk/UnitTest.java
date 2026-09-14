@@ -27,7 +27,7 @@ import static org.assertj.core.groups.Tuple.tuple;
 public class UnitTest {
 
   @Test
-  public void orderedConfigIsAppliedBeforeDefaultConfigRegardlessOfInputOrder() {
+  public void javaEventReplacesOrderedBaselineRegardlessOfInputOrder() {
     class JsonBaseline implements CCDConfig<CaseData, State, UserRole>, Ordered {
       @Override
       public int getOrder() {
@@ -37,7 +37,10 @@ public class UnitTest {
       @Override
       public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
         builder.caseType("TEST", "Test", "Test case type");
-        builder.event("shared-event").forAllStates().name("JSON event");
+        builder.event("shared-event")
+            .forAllStates()
+            .name("JSON event")
+            .aboutToSubmitCallback((details, detailsBefore) -> null);
         builder.event("json-only-event").forAllStates().name("JSON-only event");
       }
     }
@@ -53,38 +56,8 @@ public class UnitTest {
         new ConfigResolver<>(List.of(new JavaEvent(), new JsonBaseline())).resolveCCDConfig();
 
     assertThat(resolved.getEvents().get("shared-event").getName()).isEqualTo("Java event");
-    assertThat(resolved.getEvents().get("json-only-event").getName()).isEqualTo("JSON-only event");
-  }
-
-  @Test
-  public void laterEventCompletelyReplacesEarlierEvent() {
-    class JsonBaseline implements CCDConfig<CaseData, State, UserRole>, Ordered {
-      @Override
-      public int getOrder() {
-        return Ordered.HIGHEST_PRECEDENCE;
-      }
-
-      @Override
-      public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
-        builder.caseType("TEST", "Test", "Test case type");
-        builder.event("shared-event")
-            .forAllStates()
-            .aboutToSubmitCallback((details, detailsBefore) -> null);
-      }
-    }
-
-    class JavaEvent implements CCDConfig<CaseData, State, UserRole> {
-      @Override
-      public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
-        builder.event("shared-event").forAllStates().name("Java event");
-      }
-    }
-
-    ResolvedCCDConfig<CaseData, State, UserRole> resolved =
-        new ConfigResolver<>(List.of(new JavaEvent(), new JsonBaseline())).resolveCCDConfig();
-
-    assertThat(resolved.getEvents().get("shared-event").getName()).isEqualTo("Java event");
     assertThat(resolved.getEvents().get("shared-event").getAboutToSubmitCallback()).isNull();
+    assertThat(resolved.getEvents().get("json-only-event").getName()).isEqualTo("JSON-only event");
   }
 
   @Test
