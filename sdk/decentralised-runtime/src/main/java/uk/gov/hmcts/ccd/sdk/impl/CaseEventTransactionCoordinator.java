@@ -32,11 +32,13 @@ class CaseEventTransactionCoordinator {
   public <T> TransactionResult<T> execute(
       long caseReference,
       UUID idempotencyKey,
+      Long startRevision,
       Supplier<CaseEventWrite<T>> work
   ) {
     Optional<Long> existingEventId = idempotencyEnforcer.lockCaseAndGetExistingEvent(
         idempotencyKey,
-        caseReference
+        caseReference,
+        startRevision
     );
     if (existingEventId.isPresent()) {
       return TransactionResult.replayed(existingEventId.get());

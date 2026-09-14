@@ -15,6 +15,7 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -192,7 +193,49 @@ class CaseDataRepository {
     params.put("enforced_supplementary_data",
         serialiseEnforcedSupplementaryData(event.getCaseDetails().getCaseTypeId()));
 
-    return ndb.queryForObject(sql, params, Long.class);
+    try {
+      return ndb.queryForObject(sql, params, Long.class);
+    } catch (EmptyResultDataAccessException e) {
+      try {
+        logConcurrentUpdate(event);
+      } catch (RuntimeException diagnosticFailure) {
+        e.addSuppressed(diagnosticFailure);
+      }
+      throw e;
+    }
+  }
+
+  private void logConcurrentUpdate(DecentralisedCaseEvent event) {
+    var caseReference = event.getCaseDetails().getReference();
+    var conflictingEvent = ndb.query(
+        """
+        select ce.event_id, ce.case_revision
+        from ccd.case_event ce
+        join ccd.case_data cd on cd.id = ce.case_data_id
+        where cd.reference = :caseReference
+          and ce.version > :submittedVersion
+        order by ce.case_revision asc
+        limit 1
+        """,
+        Map.of("caseReference", caseReference, "submittedVersion", event.getCaseDetails().getVersion()),
+        (rs, rowNum) -> new ConflictingEvent(
+            rs.getString("event_id"),
+            rs.getLong("case_revision")
+        )
+    ).stream().findFirst();
+
+    if (conflictingEvent.isPresent()) {
+      var conflict = conflictingEvent.get();
+      log.info(
+          "Rejecting event {} for case {} due to concurrent update: submittedVersion={}, "
+              + "conflictingEvent={}, conflictingEventRevision={}",
+          event.getEventDetails().getEventId(),
+          caseReference,
+          event.getCaseDetails().getVersion(),
+          conflict.eventId(),
+          conflict.caseRevision()
+      );
+    }
   }
 
   @SneakyThrows
@@ -209,6 +252,9 @@ class CaseDataRepository {
   @SneakyThrows
   private String serialiseJsonNode(JsonNode node) {
     return defaultMapper.writeValueAsString(node);
+  }
+
+  private record ConflictingEvent(String eventId, long caseRevision) {
   }
 
   @SneakyThrows

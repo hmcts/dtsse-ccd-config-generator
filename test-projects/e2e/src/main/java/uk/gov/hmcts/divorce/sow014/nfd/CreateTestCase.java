@@ -91,6 +91,7 @@ public class CreateTestCase implements CCDConfig<CaseData, State, UserRole> {
         new PageBuilder(configBuilder
             .event(TEST_CREATE)
             .initialState(Draft)
+            .nonConcurrent()
             .aboutToStartCallback(this::start)
             .aboutToSubmitCallback(this::submit)
             .submittedCallback(this::submitted)

@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.impl;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -10,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
@@ -49,15 +51,17 @@ class CaseSubmissionServiceTest {
     Event<?, ?, ?> eventConfig = mock(Event.class);
     doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("TestCase", "submit");
     when(eventConfig.getSubmitHandler()).thenReturn(null);
+    when(eventConfig.isConcurrent()).thenReturn(false);
+    doReturn(Set.of("Submitted")).when(eventConfig).getPreState();
     when(idam.retrieveUser("raw-token")).thenReturn(new IdamService.User(
         "Bearer raw-token",
         new UserInfo("sub", "uid", "name", "given", "family", List.of("caseworker"))
     ));
     when(legacyHandler.apply(eq(event), eq("Bearer raw-token"))).thenReturn(handlerResult());
-    when(transactionCoordinator.execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any()))
+    when(transactionCoordinator.execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any(), any()))
         .thenAnswer(invocation -> {
           var work = invocation
-              .<Supplier<CaseEventTransactionCoordinator.CaseEventWrite<Supplier<SubmitResponse<?>>>>>getArgument(2);
+              .<Supplier<CaseEventTransactionCoordinator.CaseEventWrite<Supplier<SubmitResponse<?>>>>>getArgument(3);
           var write = work.get();
           return CaseEventTransactionCoordinator.TransactionResult.created(
               42L,
@@ -72,6 +76,7 @@ class CaseSubmissionServiceTest {
     verify(transactionCoordinator).execute(
         eq(123456789L),
         eq(IDEMPOTENCY_KEY),
+        isNull(),
         any()
     );
   }
@@ -86,7 +91,7 @@ class CaseSubmissionServiceTest {
         "Bearer raw-token",
         new UserInfo("sub", "uid", "name", "given", "family", List.of("caseworker"))
     ));
-    when(transactionCoordinator.execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any()))
+    when(transactionCoordinator.execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any(), any()))
         .thenReturn(CaseEventTransactionCoordinator.TransactionResult.replayed(99L));
     when(caseDataRepository.caseDetailsAtEvent(123456789L, 99L)).thenReturn(savedCaseDetails());
     service.submit(event, "raw-token", IDEMPOTENCY_KEY);
