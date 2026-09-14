@@ -32,16 +32,6 @@ public interface CCDConfig<Case, State, Role extends HasRole> {
   }
 
   /**
-   * Controls the order in which configurations in the same group are applied.
-   *
-   * <p>Higher-priority configurations are applied later and therefore replace duplicate event
-   * definitions from lower-priority configurations.</p>
-   */
-  default int configurationPriority() {
-    return 0;
-  }
-
-  /**
    * Invoked during config generation.
    *
    * @param builder Use to declare your CCD configuration.

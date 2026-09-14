@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk;
 import java.util.List;
 import java.util.Set;
 import org.junit.Test;
+import org.springframework.core.Ordered;
 import uk.gov.hmcts.ccd.sdk.api.AccessType;
 import uk.gov.hmcts.ccd.sdk.api.AccessTypeRole;
 import uk.gov.hmcts.ccd.sdk.api.CCDAccessGroup;
@@ -24,11 +25,11 @@ import static org.assertj.core.groups.Tuple.tuple;
 public class UnitTest {
 
   @Test
-  public void higherPriorityConfigOverridesDuplicateEventRegardlessOfInputOrder() {
-    class JsonBaseline implements CCDConfig<CaseData, State, UserRole> {
+  public void orderedConfigIsAppliedBeforeDefaultConfigRegardlessOfInputOrder() {
+    class JsonBaseline implements CCDConfig<CaseData, State, UserRole>, Ordered {
       @Override
-      public int configurationPriority() {
-        return -1;
+      public int getOrder() {
+        return Ordered.HIGHEST_PRECEDENCE;
       }
 
       @Override
@@ -54,11 +55,11 @@ public class UnitTest {
   }
 
   @Test
-  public void rejectsDuplicateCallbackHandlersForTheSameEvent() {
-    class JsonBaseline implements CCDConfig<CaseData, State, UserRole> {
+  public void laterEventCompletelyReplacesEarlierEvent() {
+    class JsonBaseline implements CCDConfig<CaseData, State, UserRole>, Ordered {
       @Override
-      public int configurationPriority() {
-        return -1;
+      public int getOrder() {
+        return Ordered.HIGHEST_PRECEDENCE;
       }
 
       @Override
@@ -70,33 +71,18 @@ public class UnitTest {
       }
     }
 
-    class MetadataOverride implements CCDConfig<CaseData, State, UserRole> {
-      @Override
-      public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
-        builder.event("shared-event").forAllStates().name("Metadata override");
-      }
-    }
-
     class JavaEvent implements CCDConfig<CaseData, State, UserRole> {
       @Override
-      public int configurationPriority() {
-        return 1;
-      }
-
-      @Override
       public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
-        builder.event("shared-event")
-            .forAllStates()
-            .aboutToSubmitCallback((details, detailsBefore) -> null);
+        builder.event("shared-event").forAllStates().name("Java event");
       }
     }
 
-    ConfigResolver<CaseData, State, UserRole> resolver =
-        new ConfigResolver<>(List.of(new JavaEvent(), new MetadataOverride(), new JsonBaseline()));
+    ResolvedCCDConfig<CaseData, State, UserRole> resolved =
+        new ConfigResolver<>(List.of(new JavaEvent(), new JsonBaseline())).resolveCCDConfig();
 
-    assertThatThrownBy(resolver::resolveCCDConfig)
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessage("Event 'shared-event' declares more than one about-to-submit callback handler");
+    assertThat(resolved.getEvents().get("shared-event").getName()).isEqualTo("Java event");
+    assertThat(resolved.getEvents().get("shared-event").getAboutToSubmitCallback()).isNull();
   }
 
   @Test

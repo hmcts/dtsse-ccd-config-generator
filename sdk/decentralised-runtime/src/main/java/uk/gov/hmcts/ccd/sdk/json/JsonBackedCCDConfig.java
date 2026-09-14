@@ -13,6 +13,7 @@ import java.util.Set;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
+import org.springframework.core.Ordered;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
@@ -23,7 +24,7 @@ import uk.gov.hmcts.ccd.sdk.api.Webhook;
 
 @RequiredArgsConstructor
 public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
-    implements CCDConfig<Case, State, Role> {
+    implements CCDConfig<Case, State, Role>, Ordered {
 
   private static final TypeReference<List<Map<String, Object>>> ROWS = new TypeReference<>() {};
 
@@ -40,8 +41,8 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
   }
 
   @Override
-  public int configurationPriority() {
-    return -1;
+  public int getOrder() {
+    return Ordered.HIGHEST_PRECEDENCE;
   }
 
   @Override
