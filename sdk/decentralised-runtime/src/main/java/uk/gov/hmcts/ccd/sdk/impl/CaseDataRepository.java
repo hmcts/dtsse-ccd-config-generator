@@ -230,14 +230,6 @@ class CaseDataRepository {
           conflict.eventId(),
           conflict.caseRevision()
       );
-    } else {
-      log.info(
-          "Rejecting event {} for case {} due to concurrent update: submittedVersion={}, "
-              + "no committed case event found",
-          event.getEventDetails().getEventId(),
-          caseReference,
-          event.getCaseDetails().getVersion()
-      );
     }
   }
 
