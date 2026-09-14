@@ -16,6 +16,7 @@ import lombok.SneakyThrows;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
+import uk.gov.hmcts.ccd.sdk.ConfigBuilderImpl;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
@@ -64,6 +65,8 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
         configureEvent(builder, event);
       }
     }
+
+    ((ConfigBuilderImpl<Case, State, Role>) builder).onEventReplaced(this::requireCallbacksRetained);
   }
 
   private void configureEvent(ConfigBuilder<Case, State, Role> builder,
@@ -86,6 +89,22 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
           support.callbackBridge().validate(callbackUrl);
           event.submittedCallback(support.callbackBridge().submitted(callbackUrl, id));
         });
+  }
+
+  private void requireCallbacksRetained(Event<Case, Role, State> previous, Event<Case, Role, State> replacement) {
+    List<String> missing = new ArrayList<>();
+    if (previous.getAboutToSubmitCallback() != null && replacement.getAboutToSubmitCallback() == null) {
+      missing.add("about-to-submit");
+    }
+    if (previous.getSubmittedCallback() != null && replacement.getSubmittedCallback() == null) {
+      missing.add("submitted");
+    }
+    if (!missing.isEmpty()) {
+      throw new IllegalStateException(
+          "Replacement for event '%s' in case type '%s' drops callbacks: %s"
+              .formatted(previous.getId(), caseTypeId, String.join(", ", missing))
+      );
+    }
   }
 
   private Map<String, Object> requiredRow(String folder, String idColumn, String id) {

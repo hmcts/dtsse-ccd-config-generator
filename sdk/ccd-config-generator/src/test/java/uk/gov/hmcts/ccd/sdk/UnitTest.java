@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import org.junit.Test;
@@ -28,6 +29,7 @@ public class UnitTest {
 
   @Test
   public void javaEventReplacesOrderedBaselineRegardlessOfInputOrder() {
+    List<String> replacements = new ArrayList<>();
     class JsonBaseline implements CCDConfig<CaseData, State, UserRole>, Ordered {
       @Override
       public int getOrder() {
@@ -42,6 +44,8 @@ public class UnitTest {
             .name("JSON event")
             .aboutToSubmitCallback((details, detailsBefore) -> null);
         builder.event("json-only-event").forAllStates().name("JSON-only event");
+        ((ConfigBuilderImpl<CaseData, State, UserRole>) builder).onEventReplaced((previous, replacement) ->
+            replacements.add(previous.getName() + " -> " + replacement.getName()));
       }
     }
 
@@ -58,6 +62,7 @@ public class UnitTest {
     assertThat(resolved.getEvents().get("shared-event").getName()).isEqualTo("Java event");
     assertThat(resolved.getEvents().get("shared-event").getAboutToSubmitCallback()).isNull();
     assertThat(resolved.getEvents().get("json-only-event").getName()).isEqualTo("JSON-only event");
+    assertThat(replacements).containsExactly("JSON event -> Java event");
   }
 
   @Test

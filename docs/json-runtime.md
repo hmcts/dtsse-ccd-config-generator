@@ -92,8 +92,9 @@ Leave Java overrides at the default Spring order so they run after JSON-backed c
 JSON may overwrite Java.
 
 A Java event applied after JSON with the same ID replaces the complete JSON-derived runtime event, including its
-callbacks and retry settings, so declare everything the replacement needs in Java. Events defined only in JSON
-are retained, and the source JSON definitions are unchanged.
+callbacks and retry settings, so declare everything the replacement needs in Java. A replacement must retain
+every callback phase (about-to-submit and submitted) of the event it replaces; dropping a phase fails
+configuration resolution.
 
 ### Callback invocation
 
