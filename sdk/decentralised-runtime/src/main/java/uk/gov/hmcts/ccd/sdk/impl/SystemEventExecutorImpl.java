@@ -88,6 +88,7 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
     var transactionResult = transactionCoordinator.execute(
         caseReference,
         idempotencyKey,
+        null,
         () -> prepareSystemEvent(caseReference, actor, idempotencyKey, action)
     );
     return new SystemEventExecutionResult(

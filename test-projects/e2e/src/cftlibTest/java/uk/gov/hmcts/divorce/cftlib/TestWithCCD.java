@@ -371,7 +371,7 @@ public class TestWithCCD extends CftlibTest {
 
     @Order(1)
     @Test
-    public void caseCreation() throws Exception {
+    public void nonConcurrentCaseCreation() throws Exception {
         var start = ccdApi.startCase(getAuthorisation("TEST_SOLICITOR@mailinator.com"),
             getServiceAuth(),
             NoFaultDivorce.getCaseType(),
@@ -598,6 +598,31 @@ public class TestWithCCD extends CftlibTest {
             firstEvent);
         var response = HttpClientBuilder.create().build().execute(e);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+    }
+
+    @Order(36)
+    @Test
+    void nonConcurrentEventRejectsStaleStartToken() throws Exception {
+        String staleToken = startNonConcurrentEvent();
+        String note = "non-concurrent stale " + UUID.randomUUID();
+
+        addNote();
+
+        assertThat(submitNonConcurrentEvent(note, staleToken), equalTo(409));
+        assertThat(noteRows(note), equalTo(0));
+    }
+
+    @Order(37)
+    @Test
+    void nonConcurrentEventIdempotentReplayBypassesLaterConflict() throws Exception {
+        String token = startNonConcurrentEvent();
+        String note = "non-concurrent replay " + UUID.randomUUID();
+        assertThat(submitNonConcurrentEvent(note, token), equalTo(201));
+
+        addNote();
+
+        assertThat(submitNonConcurrentEvent(note, token), equalTo(201));
+        assertThat(noteRows(note), equalTo(1));
     }
 
     @Order(5)
@@ -2022,6 +2047,36 @@ public class TestWithCCD extends CftlibTest {
         );
         var response = HttpClientBuilder.create().build().execute(e);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+    }
+
+    private String startNonConcurrentEvent() {
+        return ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE
+        ).getToken();
+    }
+
+    private int submitNonConcurrentEvent(String note, String token) throws IOException {
+        var request = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE,
+            Map.of("note", note),
+            token
+        );
+        try (var client = HttpClientBuilder.create().build(); var response = client.execute(request)) {
+            EntityUtils.consumeQuietly(response.getEntity());
+            return response.getStatusLine().getStatusCode();
+        }
+    }
+
+    private int noteRows(String note) {
+        return db.queryForObject(
+            "select count(*) from case_notes where reference = :reference and note = :note",
+            Map.of("reference", caseRef, "note", note),
+            Integer.class
+        );
     }
 
     private record CaseLinkRow(long linkedReference, boolean standardLink) { }

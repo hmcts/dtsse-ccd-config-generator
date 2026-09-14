@@ -85,8 +85,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}docweave/
     steps:
       - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Deploy demo
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

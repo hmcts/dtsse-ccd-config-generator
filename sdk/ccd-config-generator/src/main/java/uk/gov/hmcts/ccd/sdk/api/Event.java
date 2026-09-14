@@ -42,6 +42,7 @@ public class Event<T, R extends HasRole, S> {
   private Submit<T, S> submitHandler;
   private Start<T, S> startHandler;
   private FieldCollection fields;
+  private boolean concurrent;
 
   public void name(String s) {
     name = s;
@@ -70,6 +71,7 @@ public class Event<T, R extends HasRole, S> {
   public static class EventBuilder<T, R extends HasRole, S> {
 
     private FieldCollection.FieldCollectionBuilder<T, S, EventBuilder<T, R, S>> fieldsBuilder;
+    private boolean concurrent = true;
 
     public static <T, R extends HasRole, S> EventBuilder<T, R, S> builder(
         String id, Class dataClass, PropertyUtils propertyUtils,
@@ -134,6 +136,16 @@ public class Event<T, R extends HasRole, S> {
 
     public EventBuilder<T, R, S> ttlIncrement(Integer ttlIncrement) {
       this.ttlIncrement = ttlIncrement;
+      return this;
+    }
+
+    /**
+     * Rejects submission with HTTP 409 if any event committed on the case after this one started.
+     * Use when the submit handler writes values taken from the event payload rather than a fresh read.
+     * Has no effect on case-creation events, which have no start revision.
+     */
+    public EventBuilder<T, R, S> nonConcurrent() {
+      concurrent = false;
       return this;
     }
 
