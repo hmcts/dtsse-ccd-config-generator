@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import uk.gov.hmcts.ccd.sdk.api.AccessType;
@@ -45,6 +46,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   private final PropertyUtils propertyUtils = new PropertyUtils();
 
   final Map<String, List<Event.EventBuilder<T, R, S>>> events = Maps.newHashMap();
+  private final List<BiConsumer<Event<T, R, S>, Event<T, R, S>>> replacementListeners = Lists.newArrayList();
   final List<TabBuilder<T, R>> tabs = Lists.newArrayList();
   final List<SearchBuilder<T, R>> workBasketResultFields = Lists.newArrayList();
   final List<SearchBuilder<T, R>> workBasketInputFields = Lists.newArrayList();
@@ -372,12 +374,28 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     return builder;
   }
 
+  /**
+   * Internal hook for the JSON runtime; deliberately absent from ConfigBuilder.
+   * Listeners receive the replaced event and its replacement whenever a later
+   * config redefines an event ID.
+   */
+  public void onEventReplaced(BiConsumer<Event<T, R, S>, Event<T, R, S>> listener) {
+    replacementListeners.add(listener);
+  }
+
   ImmutableMap<String, Event<T, R, S>> getEvents() {
     Map<String, Event<T, R, S>> result = Maps.newHashMap();
     for (Map.Entry<String, List<Event.EventBuilder<T, R, S>>> cell : events.entrySet()) {
+      Event<T, R, S> previous = null;
       for (Event.EventBuilder<T, R, S> builder : cell.getValue()) {
         Event<T, R, S> event = builder.doBuild();
+        if (previous != null) {
+          for (BiConsumer<Event<T, R, S>, Event<T, R, S>> listener : replacementListeners) {
+            listener.accept(previous, event);
+          }
+        }
         result.put(event.getId(), event);
+        previous = event;
       }
     }
 

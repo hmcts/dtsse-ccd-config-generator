@@ -74,6 +74,17 @@ public class E2EConfigGenerationTests {
         CcdConfigComparator.assertEquivalent(expected, actual, JSONCompareMode.NON_EXTENSIBLE, "CaseTypeID");
     }
 
+    @Test
+    public void appliesSharedConfigToMultipleCaseTypes() {
+        for (String caseType : new String[] {"MULTI_CASE_TYPE_ONE", "MULTI_CASE_TYPE_TWO"}) {
+            Map<String, File> actual = CcdConfigComparator.dirToMap(
+                new File(tmp.getRoot(), caseType + "/CaseEvent")
+            );
+            Map<String, File> expected = CcdConfigComparator.resourcesDirToMap(caseType + "/CaseEvent");
+            CcdConfigComparator.assertEquivalent(expected, actual);
+        }
+    }
+
     @SneakyThrows
     private File resourceFile(String resourcePath) {
         URL url = Resources.getResource(resourcePath);

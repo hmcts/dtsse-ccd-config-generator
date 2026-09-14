@@ -1,7 +1,10 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.junit.Test;
+import org.springframework.core.Ordered;
 import uk.gov.hmcts.ccd.sdk.api.AccessType;
 import uk.gov.hmcts.ccd.sdk.api.AccessTypeRole;
 import uk.gov.hmcts.ccd.sdk.api.CCDAccessGroup;
@@ -23,6 +26,75 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
 
 public class UnitTest {
+
+  @Test
+  public void javaEventReplacesOrderedBaselineRegardlessOfInputOrder() {
+    List<String> replacements = new ArrayList<>();
+    class JsonBaseline implements CCDConfig<CaseData, State, UserRole>, Ordered {
+      @Override
+      public int getOrder() {
+        return Ordered.HIGHEST_PRECEDENCE;
+      }
+
+      @Override
+      public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
+        builder.caseType("TEST", "Test", "Test case type");
+        builder.event("shared-event")
+            .forAllStates()
+            .name("JSON event")
+            .aboutToSubmitCallback((details, detailsBefore) -> null);
+        builder.event("json-only-event").forAllStates().name("JSON-only event");
+        ((ConfigBuilderImpl<CaseData, State, UserRole>) builder).onEventReplaced((previous, replacement) ->
+            replacements.add(previous.getName() + " -> " + replacement.getName()));
+      }
+    }
+
+    class JavaEvent implements CCDConfig<CaseData, State, UserRole> {
+      @Override
+      public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
+        builder.event("shared-event").forAllStates().name("Java event");
+      }
+    }
+
+    ResolvedCCDConfig<CaseData, State, UserRole> resolved =
+        new ConfigResolver<>(List.of(new JavaEvent(), new JsonBaseline())).resolveCCDConfig();
+
+    assertThat(resolved.getEvents().get("shared-event").getName()).isEqualTo("Java event");
+    assertThat(resolved.getEvents().get("shared-event").getAboutToSubmitCallback()).isNull();
+    assertThat(resolved.getEvents().get("json-only-event").getName()).isEqualTo("JSON-only event");
+    assertThat(replacements).containsExactly("JSON event -> Java event");
+  }
+
+  @Test
+  public void rejectsSharedConfigWhenTargetCaseTypeDoesNotDeclareItsId() {
+    class CaseTypeConfig implements CCDConfig<CaseData, State, UserRole> {
+      @Override
+      public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
+        builder.caseType("TEST", "Test", "Test case type");
+      }
+    }
+
+    class SharedEvent implements CCDConfig<CaseData, State, UserRole> {
+      @Override
+      public Set<String> caseTypeIds() {
+        return Set.of("TEST");
+      }
+
+      @Override
+      public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
+        builder.event("shared-event").forAllStates();
+      }
+    }
+
+    CCDDefinitionGenerator generator = new CCDDefinitionGenerator(
+        List.of(new CaseTypeConfig(), new SharedEvent()),
+        null
+    );
+
+    assertThatThrownBy(generator::loadConfigs)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("No case type configuration found for declared case type 'TEST'");
+  }
 
   @Test
   public void defaultsEventsToConcurrentAndAllowsOptOut() {

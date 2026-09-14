@@ -53,5 +53,18 @@
     "PreConditionState(s)": "*",
     "PostConditionState": "*",
     "CallBackURLSubmittedEvent": "${CCD_DEF_AAC_URL}/case-type-a/external-submitted"
+  },
+  {
+    "ID": "json-legacy-java-override",
+    "Name": "JSON event overridden",
+    "Description": "JSON event overridden",
+    "CaseTypeID": "case-type-a",
+    "DisplayOrder": 104,
+    "EndButtonLabel": "Save and continue",
+    "ShowSummary": "N",
+    "ShowEventNotes": "N",
+    "SecurityClassification": "Public",
+    "PreConditionState(s)": "*",
+    "PostConditionState": "*"
   }
 ]

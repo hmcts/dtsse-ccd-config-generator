@@ -119,6 +119,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
 import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
 import uk.gov.hmcts.divorce.jsonlegacy.BaseJsonLegacyController;
 import uk.gov.hmcts.divorce.jsonlegacy.JsonLegacyCcdConfig;
+import uk.gov.hmcts.divorce.jsonlegacy.JsonLegacyJavaOverrideEvent;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
@@ -3937,6 +3938,27 @@ public class TestWithCCD extends CftlibTest {
             Map<String, Object> createdEvent = auditEvents.getLast();
             assertThat(createdEvent.get("state_id"), equalTo("Submitted"));
             assertThat(createdEvent.get("state_name"), equalTo(JSON_LEGACY_SUBMITTED_STATE_LABEL));
+        }
+    }
+
+    @SneakyThrows
+    @Order(218)
+    @Test
+    void javaEventOverridesMatchingJsonBackedEvent() {
+        for (String caseType : jsonLegacyCaseTypes()) {
+            var response = submitJsonLegacyEventForCaseType(
+                caseType,
+                JsonLegacyJavaOverrideEvent.EVENT_ID,
+                Map.of("setInMidEvent", "submitted-to-java-override"),
+                201
+            );
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = (Map<String, Object>) response.get("data");
+            assertThat(
+                data.get("setInAboutToSubmit"),
+                equalTo(JsonLegacyJavaOverrideEvent.MARKER)
+            );
         }
     }
 
