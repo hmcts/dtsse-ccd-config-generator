@@ -47,7 +47,7 @@ Note that this is a tightening of CCD's current implementation which allows mult
 
 ## Non-concurrent events
 
-Events are concurrent by default, meaning they may still commit if other events that commit between their start and submission.
+Events are concurrent by default, meaning they may still commit even if other events commit between their start and submission.
 
 Note that the legacy ccd.case_data.data json blob is protected by an optimistic lock; its concurrent modification will be rejected regardless of event concurrency settings.
 
