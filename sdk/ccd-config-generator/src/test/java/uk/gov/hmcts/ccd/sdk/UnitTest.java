@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import java.util.List;
+import java.util.Set;
 import org.junit.Test;
 import uk.gov.hmcts.ccd.sdk.api.AccessType;
 import uk.gov.hmcts.ccd.sdk.api.AccessTypeRole;
@@ -21,6 +22,113 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
 
 public class UnitTest {
+
+  @Test
+  public void higherPriorityConfigOverridesDuplicateEventRegardlessOfInputOrder() {
+    class JsonBaseline implements CCDConfig<CaseData, State, UserRole> {
+      @Override
+      public int configurationPriority() {
+        return -1;
+      }
+
+      @Override
+      public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
+        builder.caseType("TEST", "Test", "Test case type");
+        builder.event("shared-event").forAllStates().name("JSON event");
+        builder.event("json-only-event").forAllStates().name("JSON-only event");
+      }
+    }
+
+    class JavaEvent implements CCDConfig<CaseData, State, UserRole> {
+      @Override
+      public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
+        builder.event("shared-event").forAllStates().name("Java event");
+      }
+    }
+
+    ResolvedCCDConfig<CaseData, State, UserRole> resolved =
+        new ConfigResolver<>(List.of(new JavaEvent(), new JsonBaseline())).resolveCCDConfig();
+
+    assertThat(resolved.getEvents().get("shared-event").getName()).isEqualTo("Java event");
+    assertThat(resolved.getEvents().get("json-only-event").getName()).isEqualTo("JSON-only event");
+  }
+
+  @Test
+  public void rejectsDuplicateCallbackHandlersForTheSameEvent() {
+    class JsonBaseline implements CCDConfig<CaseData, State, UserRole> {
+      @Override
+      public int configurationPriority() {
+        return -1;
+      }
+
+      @Override
+      public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
+        builder.caseType("TEST", "Test", "Test case type");
+        builder.event("shared-event")
+            .forAllStates()
+            .aboutToSubmitCallback((details, detailsBefore) -> null);
+      }
+    }
+
+    class MetadataOverride implements CCDConfig<CaseData, State, UserRole> {
+      @Override
+      public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
+        builder.event("shared-event").forAllStates().name("Metadata override");
+      }
+    }
+
+    class JavaEvent implements CCDConfig<CaseData, State, UserRole> {
+      @Override
+      public int configurationPriority() {
+        return 1;
+      }
+
+      @Override
+      public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
+        builder.event("shared-event")
+            .forAllStates()
+            .aboutToSubmitCallback((details, detailsBefore) -> null);
+      }
+    }
+
+    ConfigResolver<CaseData, State, UserRole> resolver =
+        new ConfigResolver<>(List.of(new JavaEvent(), new MetadataOverride(), new JsonBaseline()));
+
+    assertThatThrownBy(resolver::resolveCCDConfig)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("Event 'shared-event' declares more than one about-to-submit callback handler");
+  }
+
+  @Test
+  public void rejectsSharedConfigWhenTargetCaseTypeDoesNotDeclareItsId() {
+    class CaseTypeConfig implements CCDConfig<CaseData, State, UserRole> {
+      @Override
+      public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
+        builder.caseType("TEST", "Test", "Test case type");
+      }
+    }
+
+    class SharedEvent implements CCDConfig<CaseData, State, UserRole> {
+      @Override
+      public Set<String> caseTypeIds() {
+        return Set.of("TEST");
+      }
+
+      @Override
+      public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
+        builder.event("shared-event").forAllStates();
+      }
+    }
+
+    CCDDefinitionGenerator generator = new CCDDefinitionGenerator(
+        List.of(new CaseTypeConfig(), new SharedEvent()),
+        null
+    );
+
+    assertThatThrownBy(generator::loadConfigs)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("No case type configuration found for declared case type 'TEST'");
+  }
 
   @Test
   public void npeBug() {

@@ -6,6 +6,8 @@ import com.google.common.collect.Maps;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import lombok.SneakyThrows;
 import org.springframework.core.ResolvableType;
@@ -31,6 +33,9 @@ class ConfigResolver<T, S, R extends HasRole> {
   @SneakyThrows
   public ResolvedCCDConfig<T, S, R> resolveCCDConfig() {
     CCDConfig<T, S, R> config = this.configs.iterator().next();
+    List<CCDConfig<T, S, R>> orderedConfigs = configs.stream()
+        .sorted(Comparator.comparingInt(CCDConfig::configurationPriority))
+        .toList();
     Class<?> userClass = ClassUtils.getUserClass(config);
     ResolvableType configType = ResolvableType.forClass(userClass).as(CCDConfig.class);
     @SuppressWarnings("unchecked")
@@ -47,7 +52,7 @@ class ConfigResolver<T, S, R extends HasRole> {
     resolvedConfig.resolveStateLabels();
     ConfigBuilderImpl<T, S, R> builder = new ConfigBuilderImpl(resolvedConfig);
 
-    for (CCDConfig<T, S, R> c : configs) {
+    for (CCDConfig<T, S, R> c : orderedConfigs) {
       c.configureDecentralised(builder);
     }
 

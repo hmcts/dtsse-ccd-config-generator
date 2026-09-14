@@ -375,13 +375,39 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   ImmutableMap<String, Event<T, R, S>> getEvents() {
     Map<String, Event<T, R, S>> result = Maps.newHashMap();
     for (Map.Entry<String, List<Event.EventBuilder<T, R, S>>> cell : events.entrySet()) {
+      Event<T, R, S> mergedEvent = null;
       for (Event.EventBuilder<T, R, S> builder : cell.getValue()) {
         Event<T, R, S> event = builder.doBuild();
-        result.put(event.getId(), event);
+        if (mergedEvent != null) {
+          event.setAboutToStartCallback(mergeCallback(
+              mergedEvent.getAboutToStartCallback(), event.getAboutToStartCallback(),
+              event.getId(), "about-to-start"
+          ));
+          event.setAboutToSubmitCallback(mergeCallback(
+              mergedEvent.getAboutToSubmitCallback(), event.getAboutToSubmitCallback(),
+              event.getId(), "about-to-submit"
+          ));
+          event.setSubmittedCallback(mergeCallback(
+              mergedEvent.getSubmittedCallback(), event.getSubmittedCallback(),
+              event.getId(), "submitted"
+          ));
+        }
+        mergedEvent = event;
       }
+      result.put(cell.getKey(), mergedEvent);
     }
 
     return ImmutableMap.copyOf(result);
+  }
+
+  private static <Callback> Callback mergeCallback(Callback existing, Callback replacement,
+                                                   String eventId, String callbackType) {
+    if (existing != null && replacement != null) {
+      throw new IllegalStateException(
+          "Event '%s' declares more than one %s callback handler".formatted(eventId, callbackType)
+      );
+    }
+    return replacement != null ? replacement : existing;
   }
 
 }

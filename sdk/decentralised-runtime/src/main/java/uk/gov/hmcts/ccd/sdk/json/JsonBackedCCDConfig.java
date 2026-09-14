@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
@@ -34,8 +35,13 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
   private final String jsonRoot;
 
   @Override
-  public String groupingKey() {
-    return caseTypeId;
+  public Set<String> caseTypeIds() {
+    return Set.of(caseTypeId);
+  }
+
+  @Override
+  public int configurationPriority() {
+    return -1;
   }
 
   @Override

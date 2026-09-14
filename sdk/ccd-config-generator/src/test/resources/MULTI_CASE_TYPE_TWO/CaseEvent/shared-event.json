@@ -1,0 +1,13 @@
+[
+  {
+    "CaseTypeID": "MULTI_CASE_TYPE_TWO",
+    "Description": "Shared event",
+    "EndButtonLabel": "Save and continue",
+    "ID": "shared-event",
+    "LiveFrom": "01/01/2017",
+    "Name": "Shared event",
+    "PostConditionState": "*",
+    "PreConditionState(s)": "*",
+    "Publish": "N"
+  }
+]
