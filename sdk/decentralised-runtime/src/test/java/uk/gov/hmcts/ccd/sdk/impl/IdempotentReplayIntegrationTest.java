@@ -56,8 +56,8 @@ class IdempotentReplayIntegrationTest {
   private static final long REINDEX_CASE_REFERENCE = 4444000000000000L;
   private static final long LOWER_PRIORITY_REINDEX_CASE_REFERENCE = 5555000000000000L;
   private static final long LIVE_UPDATE_AFTER_REINDEX_CASE_REFERENCE = 6666000000000000L;
-  private static final long CONFLICT_CASE_ID = 9876L;
-  private static final long CONFLICT_CASE_REFERENCE = 9999000000009876L;
+  private static final long CONFLICT_CASE_ID = 7777L;
+  private static final long CONFLICT_CASE_REFERENCE = 7777000000007777L;
 
   @Autowired
   private NamedParameterJdbcTemplate jdbc;
