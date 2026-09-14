@@ -88,8 +88,7 @@ public Set<String> caseTypeIds() {
 Use the same case data, state and role types as the corresponding JSON-backed configs.
 
 Leave Java overrides at the default Spring order so they run after JSON-backed configs, which use
-`Ordered.HIGHEST_PRECEDENCE`. Giving a Java config the same precedence makes the result depend on input order;
-JSON may overwrite Java.
+`Ordered.HIGHEST_PRECEDENCE`.
 
 A Java event applied after JSON with the same ID replaces the complete JSON-derived runtime event, including its
 callbacks and retry settings, so declare everything the replacement needs in Java. Events defined only in JSON
