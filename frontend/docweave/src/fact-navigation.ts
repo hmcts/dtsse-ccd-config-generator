@@ -27,22 +27,24 @@ export interface FactNavigationOptions {
 }
 
 /** The label a screen reader would give the control, if the page has one. */
-function labelForSource(
-  source: HTMLElement,
-  ownerDocument: Document,
-): string | undefined {
+function labelForSource(source: HTMLElement): string | undefined {
   const text = (element: Element | null | undefined): string | undefined =>
     element?.textContent?.replace(/\s+/gu, " ").trim() || undefined;
   const legend = text(source.closest("fieldset")?.querySelector("legend"));
   const type = source.getAttribute("type");
+  // The element's own label list, rather than a selector built from its ID,
+  // which need not be selector-safe.
+  const labels = (source as Partial<HTMLInputElement>).labels;
   const own = source.tagName === "INPUT" &&
       (type === "radio" || type === "checkbox")
     // An option's own label names the choice, not the question.
     ? undefined
-    : text(ownerDocument.querySelector(`label[for="${source.id}"]`)) ??
-      source.getAttribute("aria-label") ??
-      undefined;
+    : text(labels?.[0]) ?? source.getAttribute("aria-label") ?? undefined;
   return own ?? legend;
+}
+
+function isNode(value: unknown): value is Node {
+  return typeof value === "object" && value !== null && "nodeType" in value;
 }
 
 /** "Possession deadline, 1 October 2026", or just the value without a label. */
@@ -198,8 +200,7 @@ function createDecorations(
     const source = fact?.sourceId === undefined
       ? null
       : ownerDocument.getElementById(fact.sourceId);
-    const label = fact?.label ??
-      (source ? labelForSource(source, ownerDocument) : undefined);
+    const label = fact?.label ?? (source ? labelForSource(source) : undefined);
     if (label) labels.set(id, label);
     if (!source) return false;
 
@@ -370,7 +371,8 @@ export function createFactNavigationPlugin(
       }
       function handleFocusIn(event: FocusEvent): void {
         const target = event.target;
-        if (!pending || !(target instanceof Node)) return;
+        // A realm-free check: the target may belong to another document.
+        if (!pending || !isNode(target)) return;
         if (pending.region.contains(target) || target === pending.button) return;
         clearPending();
       }

@@ -112,7 +112,8 @@ describe("editing surface", () => {
     dom.window.document.body.insertAdjacentHTML("beforeend", `
       <fieldset id="when"><legend>When must possession be given?</legend>
         <input type="radio" id="when-now" name="when" checked><label for="when-now">Forthwith</label>
-      </fieldset>`);
+      </fieldset>
+      <label for='odd"]id'>Oddly identified</label><input id='odd"]id'>`);
     const controller = docweave.createDocEditor({ mount: "#editor" });
     controller.render(docweave.buildDoc((doc) => {
       doc.paragraph("possession", (content) => {
@@ -121,7 +122,9 @@ describe("editing surface", () => {
           .text(" or ")
           .fact("when", "forthwith", { sourceId: "when-now" })
           .text(" ")
-          .fact("plain", "unlabelled");
+          .fact("plain", "unlabelled")
+          .text(" ")
+          .fact("odd", "x", { sourceId: 'odd"]id' });
       });
     }));
     const facts = [...editorElements().surface.querySelectorAll("[data-generated-text]")];
@@ -129,6 +132,7 @@ describe("editing surface", () => {
     assert.equal(facts[1]!.getAttribute("aria-description"), "When must possession be given?");
     assert.equal(facts[2]!.getAttribute("aria-description"), null);
     assert.equal(facts[2]!.getAttribute("role"), null, "no source, so nothing to go to");
+    assert.equal(facts[3]!.getAttribute("aria-description"), "Oddly identified", "an ID that is not selector-safe");
     controller.destroy();
   });
 
