@@ -49,7 +49,7 @@ Note that this is a tightening of CCD's current implementation which allows mult
 
 Events are concurrent by default, meaning they may still commit if other events that commit between their start and submission.
 
-Note that the legacy ccd.case_data.data json blob is protected by an optimistic lock; its concurrent modification will be rejected.
+Note that the legacy ccd.case_data.data json blob is protected by an optimistic lock; its concurrent modification will be rejected regardless of event concurrency settings.
 
 An event can still opt into a case-wide optimistic lock:
 
