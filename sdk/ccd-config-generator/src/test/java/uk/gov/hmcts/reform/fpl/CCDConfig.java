@@ -254,7 +254,26 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
           .answer(LOCAL_AUTHORITY, HMCTS_ADMIN).complex(CaseData::getAllocatedJudge).field(Judge::getJudgeFullName)
           .done()
         .question("welshPreference", "Do you want some Welsh?")
-          .answer(LOCAL_AUTHORITY).complex(CaseData::getHearingPreferences).field(HearingPreferences::getWelsh)
+          .answerAsDeclared(LOCAL_AUTHORITY).complex(CaseData::getHearingPreferences).field(HearingPreferences::getWelsh)
+          .done()
+        // A role that is already a bracketed CaseRole must not be double-bracketed. Every service
+        // shipping a hand-written ChallengeQuestion.json uses this shape, so it is the default
+        // path that must not move.
+        .question("bracketedRole", "Enter the case name for an already-bracketed role")
+          .answer(CCD_SOLICITOR).field(CaseData::getCaseName)
+          .done()
+        // answerAsDeclared skips the wrapping entirely, so an already-bracketed role is unchanged.
+        .question("bracketedAsDeclared", "Enter the case name, role as declared")
+          .answerAsDeclared(CCD_SOLICITOR).field(CaseData::getCaseName)
+          .done()
+        // Bracketed and unbracketed roles on the same answer are formatted independently.
+        .question("mixedRoles", "Enter the case name for mixed roles")
+          .answer(CCD_SOLICITOR, LOCAL_AUTHORITY).field(CaseData::getCaseName)
+          .done()
+        // Roles are emitted in declaration order; services declare up to twelve on one question
+        // and a reordering would be a silent definition diff.
+        .question("roleOrder", "Enter the case name for several roles")
+          .answer(LOCAL_AUTHORITY, HMCTS_ADMIN, CAFCASS, CCD_SOLICITOR).field(CaseData::getCaseName)
           .done();
 
     builder.grantComplexType(CaseData::getAllocatedJudge, "judgeFullName", CRU,
