@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableSet;
@@ -10,6 +11,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration;
@@ -18,14 +20,18 @@ import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerA
 import org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration;
 import org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
+import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedEventDetails;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
@@ -33,6 +39,7 @@ import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.config.DecentralisedFlywayAutoConfiguration;
 
+@ExtendWith(OutputCaptureExtension.class)
 @SpringBootTest(classes = IdempotentReplayIntegrationTest.TestConfig.class, properties = {
     "spring.datasource.url=jdbc:tc:postgresql:15-alpine:///ccd",
     "spring.datasource.driver-class-name=org.testcontainers.jdbc.ContainerDatabaseDriver"
@@ -49,6 +56,8 @@ class IdempotentReplayIntegrationTest {
   private static final long REINDEX_CASE_REFERENCE = 4444000000000000L;
   private static final long LOWER_PRIORITY_REINDEX_CASE_REFERENCE = 5555000000000000L;
   private static final long LIVE_UPDATE_AFTER_REINDEX_CASE_REFERENCE = 6666000000000000L;
+  private static final long CONFLICT_CASE_ID = 7777L;
+  private static final long CONFLICT_CASE_REFERENCE = 7777000000007777L;
 
   @Autowired
   private NamedParameterJdbcTemplate jdbc;
@@ -62,7 +71,7 @@ class IdempotentReplayIntegrationTest {
   @Test
   void idempotentReplayReturnsEventVersionAndRevision() {
     seedCaseData(3, 5);
-    long eventId = insertEvent(1, 1, UUID.randomUUID());
+    long eventId = insertEvent(CASE_ID, "ev1", 1, 1, UUID.randomUUID());
 
     DecentralisedCaseDetails replayed = repository.caseDetailsAtEvent(CASE_REFERENCE, eventId);
 
@@ -72,6 +81,23 @@ class IdempotentReplayIntegrationTest {
     DecentralisedCaseDetails latest = repository.getCase(CASE_REFERENCE);
     assertThat(latest.getCaseDetails().getVersion()).isEqualTo(3);
     assertThat(latest.getCaseDetails().getRevision()).isEqualTo(5L);
+  }
+
+  @Test
+  void logsIncomingAndCommittedEventsWhenOptimisticUpdateConflicts(CapturedOutput output) {
+    seedCaseData(CONFLICT_CASE_ID, CONFLICT_CASE_REFERENCE, 3, 3);
+    insertEvent(CONFLICT_CASE_ID, "committed-event", 2, 2, UUID.randomUUID());
+    insertEvent(CONFLICT_CASE_ID, "later-event", 3, 3, UUID.randomUUID());
+
+    assertThatThrownBy(() ->
+        repository.upsertCase(buildEvent(CONFLICT_CASE_REFERENCE, "TestCase"), Optional.empty()))
+        .isInstanceOf(EmptyResultDataAccessException.class);
+
+    assertThat(output)
+        .contains("Rejecting event incoming-event for case " + CONFLICT_CASE_REFERENCE)
+        .contains("submittedVersion=1")
+        .contains("conflictingEvent=committed-event")
+        .contains("conflictingEventRevision=2");
   }
 
   @Test
@@ -314,14 +340,24 @@ class IdempotentReplayIntegrationTest {
     return DecentralisedCaseEvent.builder()
         .caseDetails(caseDetails)
         .internalCaseId(caseReference)
+        .eventDetails(DecentralisedEventDetails.builder()
+            .caseType(caseType)
+            .eventId("incoming-event")
+            .build())
         .build();
   }
 
-  private long insertEvent(int version, long revision, UUID idempotencyKey) {
+  private long insertEvent(
+      long caseId,
+      String eventId,
+      int version,
+      long revision,
+      UUID idempotencyKey
+  ) {
     var params = new MapSqlParameterSource()
-        .addValue("case_data_id", CASE_ID)
+        .addValue("case_data_id", caseId)
         .addValue("case_type_version", 1)
-        .addValue("event_id", "ev1")
+        .addValue("event_id", eventId)
         .addValue("summary", "summary")
         .addValue("description", "description")
         .addValue("user_id", "user-1")
