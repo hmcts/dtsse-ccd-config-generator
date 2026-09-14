@@ -149,11 +149,6 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
-    public EventBuilder<T, R, S> concurrent() {
-      concurrent = true;
-      return this;
-    }
-
     // Do not inherit role permissions from states.
     public EventBuilder<T, R, S> explicitGrants() {
       this.explicitGrants = true;

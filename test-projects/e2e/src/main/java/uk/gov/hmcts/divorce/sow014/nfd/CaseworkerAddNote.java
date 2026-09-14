@@ -45,7 +45,6 @@ public class CaseworkerAddNote implements CCDConfig<CaseData, State, UserRole> {
         new PageBuilder(configBuilder
             .event(CASEWORKER_ADD_NOTE)
             .forAllStates()
-            .concurrent()
             .name("Add note")
             .description("Add note")
             .aboutToSubmitCallback(this::aboutToSubmit)

@@ -25,24 +25,28 @@ import static org.assertj.core.groups.Tuple.tuple;
 public class UnitTest {
 
   @Test
-  public void defaultsLegacyEventsToNonConcurrentAndDecentralisedEventsToConcurrent() {
+  public void defaultsEventsToConcurrentAndAllowsOptOut() {
     class TestConfig implements CCDConfig<CaseData, State, UserRole> {
       @Override
       public void configureDecentralised(DecentralisedConfigBuilder<CaseData, State, UserRole> builder) {
         builder.caseType("TEST", "Test", "Test case type");
         builder.event("legacy").forAllStates();
-        builder.event("concurrent-legacy").forAllStates().concurrent();
+        builder.event("non-concurrent-legacy").forAllStates().nonConcurrent();
         builder.decentralisedEvent("decentralised", payload -> SubmitResponse.defaultResponse())
             .forAllStates();
+        builder.decentralisedEvent("non-concurrent-decentralised", payload -> SubmitResponse.defaultResponse())
+            .forAllStates()
+            .nonConcurrent();
       }
     }
 
     ResolvedCCDConfig<CaseData, State, UserRole> resolved =
         new ConfigResolver<>(List.of(new TestConfig())).resolveCCDConfig();
 
-    assertThat(resolved.getEvents().get("legacy").isConcurrent()).isFalse();
-    assertThat(resolved.getEvents().get("concurrent-legacy").isConcurrent()).isTrue();
+    assertThat(resolved.getEvents().get("legacy").isConcurrent()).isTrue();
+    assertThat(resolved.getEvents().get("non-concurrent-legacy").isConcurrent()).isFalse();
     assertThat(resolved.getEvents().get("decentralised").isConcurrent()).isTrue();
+    assertThat(resolved.getEvents().get("non-concurrent-decentralised").isConcurrent()).isFalse();
   }
 
   @Test
