@@ -20,9 +20,13 @@ public class ChallengeQuestionAnswerContractTest {
   private static final String STORE_MATCHER_BRACKETED_ONLY =
       "^\\$\\{\\S.{1,}.\\S.{1,}}$|^\\$\\{\\S.{1,}.\\S.{1,}}:\\[\\S{1,}\\]$";
 
-  /** The relaxed pattern from ccd-definition-store-api#1861, which also accepts unbracketed. */
+  /**
+   * The pattern from ccd-definition-store-api#1861, copied verbatim. It accepts an unbracketed
+   * role but still rejects one containing the separator, because only the first segment after
+   * the separator is looked up as a role.
+   */
   private static final String STORE_MATCHER_UNBRACKETED_ALLOWED =
-      "^\\$\\{\\S.{1,}.\\S.{1,}}$|^\\$\\{\\S.{1,}.\\S.{1,}}:\\S{1,}$";
+      "^\\$\\{\\S.+.\\S.+}$|^\\$\\{\\S.+.\\S.+}:[^:\\s]+$";
 
   private static final List<String> DEFAULT_PATH_ANSWERS = List.of(
       "${caseName}:[caseworker-publiclaw-solicitor]",
@@ -50,6 +54,19 @@ public class ChallengeQuestionAnswerContractTest {
     assertThat(asDeclared)
         .as("answerAsDeclared output is accepted once #1861 is deployed")
         .matches(STORE_MATCHER_UNBRACKETED_ALLOWED);
+  }
+
+  /**
+   * The relaxed pattern is not "anything after the separator". A trailing segment must still be
+   * rejected, so this asserts the store rule rather than assuming the looser form it briefly had.
+   */
+  @Test
+  public void aRoleContainingTheSeparatorIsRejectedByTheStore() {
+    String malformed = "${OrganisationField.OrganisationID}:defendant-solicitor:extra";
+
+    assertThat(malformed)
+        .as("a trailing segment must not import: only the first segment is looked up as a role")
+        .doesNotMatch(STORE_MATCHER_UNBRACKETED_ALLOWED);
   }
 
   @Test
