@@ -4,7 +4,19 @@ import { assertValidGeneratedDocument } from "./invariants.js";
 import { editorSchema } from "./schema.js";
 
 export interface FactOptions {
+  /** The DOM ID of the control that supplies the fact's value. */
   sourceId?: string;
+  /**
+   * What the field is called when announced: "Possession deadline". Without
+   * one the editor uses the source control's label or legend on the page.
+   */
+  label?: string;
+}
+
+/** @internal */
+export interface FactMetadata {
+  sourceId?: string;
+  label?: string;
 }
 
 export interface InlineBuilder {
@@ -45,7 +57,7 @@ export interface DocWeaveClause {
 
 interface DocWeaveDocumentInternals {
   node: ProseMirrorNode;
-  factSources: ReadonlyMap<string, string>;
+  facts: ReadonlyMap<string, FactMetadata>;
 }
 
 interface BuiltOrderedList {
@@ -59,7 +71,7 @@ const documentInternals = new WeakMap<
 >();
 let createDocWeaveDocument: (
   node: ProseMirrorNode,
-  factSources: ReadonlyMap<string, string>,
+  facts: ReadonlyMap<string, FactMetadata>,
   children: readonly DocWeaveClause[],
   clausesById: ReadonlyMap<string, DocWeaveClause>,
 ) => DocWeaveDocument;
@@ -72,7 +84,7 @@ export class DocWeaveDocument {
 
   private constructor(
     node: ProseMirrorNode,
-    factSources: ReadonlyMap<string, string>,
+    facts: ReadonlyMap<string, FactMetadata>,
     children: readonly DocWeaveClause[],
     clausesById: ReadonlyMap<string, DocWeaveClause>,
   ) {
@@ -81,14 +93,14 @@ export class DocWeaveDocument {
     this.#clausesById = new Map(clausesById);
     documentInternals.set(this, {
       node,
-      factSources: new Map(factSources),
+      facts: new Map(facts),
     });
     Object.freeze(this);
   }
 
   static {
-    createDocWeaveDocument = (node, factSources, children, clausesById) =>
-      new DocWeaveDocument(node, factSources, children, clausesById);
+    createDocWeaveDocument = (node, facts, children, clausesById) =>
+      new DocWeaveDocument(node, facts, children, clausesById);
   }
 
   getClause(id: string): DocWeaveClause | undefined {
@@ -97,12 +109,23 @@ export class DocWeaveDocument {
 }
 
 /** @internal */
+export function getDocumentFacts(
+  document: DocWeaveDocument,
+): ReadonlyMap<string, FactMetadata> {
+  const internals = documentInternals.get(document);
+  if (!internals) throw new TypeError("Invalid DocWeaveDocument");
+  return internals.facts;
+}
+
+/** @internal */
 export function getDocumentFactSources(
   document: DocWeaveDocument,
 ): ReadonlyMap<string, string> {
-  const internals = documentInternals.get(document);
-  if (!internals) throw new TypeError("Invalid DocWeaveDocument");
-  return internals.factSources;
+  const sources = new Map<string, string>();
+  for (const [id, fact] of getDocumentFacts(document)) {
+    if (fact.sourceId !== undefined) sources.set(id, fact.sourceId);
+  }
+  return sources;
 }
 
 /** @internal */
@@ -124,7 +147,7 @@ export function buildDoc(
   define: (doc: DocBuilder) => void,
 ): DocWeaveDocument {
   const nodes: ProseMirrorNode[] = [];
-  const factSources = new Map<string, string>();
+  const facts = new Map<string, FactMetadata>();
   const documentClauses: DocWeaveClause[] = [];
   const clausesById = new Map<string, DocWeaveClause>();
   const clauseIds = new Set<string>();
@@ -176,7 +199,9 @@ export function buildDoc(
         );
         if (options.sourceId !== undefined) {
           assertValidSourceId(options.sourceId);
-          factSources.set(factId, options.sourceId);
+        }
+        if (options.sourceId !== undefined || options.label !== undefined) {
+          facts.set(factId, { sourceId: options.sourceId, label: options.label });
         }
         return inlineBuilder;
       },
@@ -297,7 +322,7 @@ export function buildDoc(
   assertValidGeneratedDocument(document);
   return createDocWeaveDocument(
     document,
-    factSources,
+    facts,
     documentClauses,
     clausesById,
   );

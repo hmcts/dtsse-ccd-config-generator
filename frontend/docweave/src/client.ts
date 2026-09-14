@@ -11,13 +11,14 @@ import { createAnnouncer } from "./announcer.js";
 
 import {
   type DocWeaveDocument,
-  getDocumentFactSources,
+  getDocumentFacts,
 } from "./builder.js";
 import { createClipboardPlugin } from "./clipboard.js";
 import {
   createDocEditorController,
   type DocWeaveSnapshot,
   type DocEditorController,
+  type RenderChange,
 } from "./controller.js";
 import {
   createDiffStylingPlugin,
@@ -26,7 +27,10 @@ import {
 } from "./diff-styling.js";
 import {
   createFactNavigationPlugin,
-  setFactNavigationSources,
+  getFactLabel,
+  selectNextFact,
+  selectPreviousFact,
+  setFactNavigationFacts,
 } from "./fact-navigation.js";
 import {
   connectEditorToolbar,
@@ -94,6 +98,22 @@ const editorCommands = {
 } satisfies EditorToolbarCommands;
 
 const DEFAULT_LABEL = "Document";
+
+/** One sentence on what a form change did to the document. */
+export function describeRenderChange(
+  name: string,
+  change: RenderChange,
+  labelOf: (factId: string) => string | undefined,
+): string | undefined {
+  if (!change.docChanged) return undefined;
+  const [first] = change.changedFacts;
+  if (!first) return `${name} updated.`;
+  const label = labelOf(first.id);
+  const detail = `${label ?? "A field"} is now ${first.value}.`;
+  return change.changedFacts.length === 1
+    ? `${name} updated: ${detail}`
+    : `${name} updated: ${change.changedFacts.length} fields changed. ${detail}`;
+}
 
 function createTemplateButton(ownerDocument: Document): HTMLButtonElement {
   const button = ownerDocument.createElement("button");
@@ -176,6 +196,8 @@ export function createDocEditor(
           return true;
         },
         "Mod-Alt-z": revertClauseAtSelection,
+        "Alt-Shift-ArrowDown": selectNextFact,
+        "Alt-Shift-ArrowUp": selectPreviousFact,
       }),
       ...createKeymapPlugins(),
       dropCursor(),
@@ -185,12 +207,17 @@ export function createDocEditor(
     prepareGeneratedTransaction(transaction, generated, document) {
       setGeneratedDocument(transaction, generated);
       if (document) {
-        setFactNavigationSources(
-          transaction,
-          getDocumentFactSources(document),
-        );
+        setFactNavigationFacts(transaction, getDocumentFacts(document));
       }
       return transaction;
+    },
+    onRender(change) {
+      const message = describeRenderChange(
+        options.label ?? DEFAULT_LABEL,
+        change,
+        (factId) => getFactLabel(view.state, factId),
+      );
+      if (message) announcer.announce(message);
     },
   });
 

@@ -115,7 +115,15 @@ the mouse is the whole story:
   comes from the `label` editor option.
 - A fact with a source control is a link with the role description "generated
   field", and its `aria-details` names the source control so a screen reader
-  can read the control's label without leaving the document.
+  can read the control's label without leaving the document. Its
+  `aria-description` is the field's name: the fact's `label` option, or else
+  the label or fieldset legend of its source control on the page (a radio or
+  checkbox is named after its legend, not its own option label).
+- Alt+Shift+Down and Alt+Shift+Up select the next or previous fact, wrapping
+  round, and announce its name, value and position ("Field 2 of 5").
+- Each `render()` after the first reports which facts changed value, and the
+  editor announces it: "Order updated: Possession deadline is now 2 October
+  2026.
 - Going to a source control offers a way back: a "Return to document" button
   inserted after the control, and Mod+Alt+D anywhere on the page. Either
   reselects the fact by its managed ID, which reconciliation preserves, so the

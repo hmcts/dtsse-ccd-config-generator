@@ -102,7 +102,33 @@ describe("editing surface", () => {
     assert.equal(fact.getAttribute("role"), "link");
     assert.equal(fact.getAttribute("aria-roledescription"), "generated field");
     assert.equal(fact.getAttribute("aria-details"), "deadline");
+    assert.equal(fact.getAttribute("aria-description"), "Possession deadline", "named after the page's label");
     assert.equal(fact.textContent, "1 October 2026");
+    controller.destroy();
+  });
+
+  it("prefers a fact's own label, and names a radio after its question", async () => {
+    const docweave = await import("../src/index.js");
+    dom.window.document.body.insertAdjacentHTML("beforeend", `
+      <fieldset id="when"><legend>When must possession be given?</legend>
+        <input type="radio" id="when-now" name="when" checked><label for="when-now">Forthwith</label>
+      </fieldset>`);
+    const controller = docweave.createDocEditor({ mount: "#editor" });
+    controller.render(docweave.buildDoc((doc) => {
+      doc.paragraph("possession", (content) => {
+        content
+          .fact("deadline", "1 October 2026", { sourceId: "deadline", label: "Deadline for possession" })
+          .text(" or ")
+          .fact("when", "forthwith", { sourceId: "when-now" })
+          .text(" ")
+          .fact("plain", "unlabelled");
+      });
+    }));
+    const facts = [...editorElements().surface.querySelectorAll("[data-generated-text]")];
+    assert.equal(facts[0]!.getAttribute("aria-description"), "Deadline for possession");
+    assert.equal(facts[1]!.getAttribute("aria-description"), "When must possession be given?");
+    assert.equal(facts[2]!.getAttribute("aria-description"), null);
+    assert.equal(facts[2]!.getAttribute("role"), null, "no source, so nothing to go to");
     controller.destroy();
   });
 
@@ -317,7 +343,7 @@ describe("return journey from a source control", () => {
     assert.equal(document.activeElement, surface);
     assert.ok(fact().classList.contains("ProseMirror-selectednode"));
     assert.equal(fact().textContent, "2 October 2026");
-    assert.equal(status.textContent, "Returned to generated field, 2 October 2026.");
+    assert.equal(status.textContent, "Returned to Possession deadline, 2 October 2026.");
     assert.equal(returnButton(), null, "the offer is withdrawn once used");
     assert.ok(surface.contains(document.activeElement));
     controller.destroy();
@@ -332,7 +358,7 @@ describe("return journey from a source control", () => {
     assert.equal(event.defaultPrevented, true);
     assert.equal(document.activeElement, surface);
     assert.ok(fact().classList.contains("ProseMirror-selectednode"));
-    assert.equal(status.textContent, "Returned to generated field, 1 October 2026.");
+    assert.equal(status.textContent, "Returned to Possession deadline, 1 October 2026.");
     assert.equal(returnButton(), null);
     assert.equal(keydown(input, "d", { ctrlKey: true, altKey: true }).defaultPrevented, false, "nothing to return to");
     controller.destroy();
@@ -378,6 +404,84 @@ describe("return journey from a source control", () => {
     keydown(fact, "Enter");
     assert.equal(returnButton(), null);
     assert.equal(dom.window.document.activeElement, fact);
+    controller.destroy();
+  });
+});
+
+describe("walking the fields and hearing the document change", () => {
+  async function twoFieldEditor() {
+    const docweave = await import("../src/index.js");
+    const controller = docweave.createDocEditor({ mount: "#editor", label: "Order" });
+    const render = (deadline: string, other = "£300") =>
+      controller.render(docweave.buildDoc((doc) => {
+        doc.paragraph("heading", "IT IS ORDERED THAT:");
+        doc.paragraph("possession", (content) => {
+          content
+            .text("Possession by ")
+            .fact("deadline", deadline, { sourceId: "deadline" })
+            .text(" and costs of ")
+            .fact("costs", other, { sourceId: "other" })
+            .text(".");
+        });
+      }));
+    render("1 October 2026");
+    const { surface, status } = editorElements();
+    return { controller, render, surface, status };
+  }
+
+  it("moves between fields from the keyboard and says which field it is", async () => {
+    const { controller, surface, status } = await twoFieldEditor();
+    surface.focus();
+    const next = () => keydown(surface, "ArrowDown", { altKey: true, shiftKey: true });
+    const previous = () => keydown(surface, "ArrowUp", { altKey: true, shiftKey: true });
+    const selected = () => surface.querySelector(".ProseMirror-selectednode")?.textContent;
+
+    // The first render leaves the cursor at the end, so next wraps to the start.
+    assert.equal(next().defaultPrevented, true);
+    assert.equal(selected(), "1 October 2026");
+    assert.equal(status.textContent, "Possession deadline, 1 October 2026. Field 1 of 2.");
+    next();
+    assert.equal(selected(), "£300");
+    assert.equal(status.textContent, "Another answer, £300. Field 2 of 2.");
+    next();
+    assert.equal(selected(), "1 October 2026", "wraps around");
+    previous();
+    assert.equal(selected(), "£300", "and back the other way");
+    assert.equal(status.textContent, "Another answer, £300. Field 2 of 2.");
+    previous();
+    assert.equal(selected(), "1 October 2026");
+    controller.destroy();
+  });
+
+  it("announces what a re-render changed, and stays quiet when nothing did", async () => {
+    const { controller, render, status } = await twoFieldEditor();
+    assert.equal(status.textContent, "", "the first render is not a change");
+
+    render("1 October 2026");
+    assert.equal(status.textContent, "");
+
+    render("2 October 2026");
+    assert.equal(status.textContent, "Order updated: Possession deadline is now 2 October 2026.");
+
+    render("3 October 2026", "£450");
+    assert.equal(
+      status.textContent,
+      "Order updated: 2 fields changed. Possession deadline is now 3 October 2026.",
+    );
+    controller.destroy();
+  });
+
+  it("announces a document that changed shape without any field changing", async () => {
+    const docweave = await import("../src/index.js");
+    const controller = docweave.createDocEditor({ mount: "#editor" });
+    const render = (costs: boolean) =>
+      controller.render(docweave.buildDoc((doc) => {
+        doc.paragraph("heading", "IT IS ORDERED THAT:");
+        if (costs) doc.paragraph("costs", "Costs in the case.");
+      }));
+    render(false);
+    render(true);
+    assert.equal(editorElements().status.textContent, "Document updated.");
     controller.destroy();
   });
 });

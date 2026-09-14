@@ -1,5 +1,7 @@
 import { type Node as ProseMirrorNode } from "prosemirror-model";
 import {
+  type Command,
+  type EditorState,
   NodeSelection,
   Plugin,
   PluginKey,
@@ -7,14 +9,52 @@ import {
 } from "prosemirror-state";
 import { Decoration, DecorationSet, type EditorView } from "prosemirror-view";
 
+import { type FactMetadata } from "./builder.js";
+
+type Announce = (message: string) => void;
+
 interface FactNavigationState {
   decorations: DecorationSet;
-  sources: ReadonlyMap<string, string>;
+  facts: ReadonlyMap<string, FactMetadata>;
+  /** What each fact is called, from its options or the page. */
+  labels: ReadonlyMap<string, string>;
+  announce?: Announce;
 }
 
 export interface FactNavigationOptions {
-  /** Told where the reader has landed on returning to the document. */
-  announce?: (message: string) => void;
+  /** Told where the reader has landed: on a field, or back in the document. */
+  announce?: Announce;
+}
+
+/** The label a screen reader would give the control, if the page has one. */
+function labelForSource(
+  source: HTMLElement,
+  ownerDocument: Document,
+): string | undefined {
+  const text = (element: Element | null | undefined): string | undefined =>
+    element?.textContent?.replace(/\s+/gu, " ").trim() || undefined;
+  const legend = text(source.closest("fieldset")?.querySelector("legend"));
+  const type = source.getAttribute("type");
+  const own = source.tagName === "INPUT" &&
+      (type === "radio" || type === "checkbox")
+    // An option's own label names the choice, not the question.
+    ? undefined
+    : text(ownerDocument.querySelector(`label[for="${source.id}"]`)) ??
+      source.getAttribute("aria-label") ??
+      undefined;
+  return own ?? legend;
+}
+
+/** "Possession deadline, 1 October 2026", or just the value without a label. */
+export function describeFact(state: EditorState, node: ProseMirrorNode): string {
+  const label = factNavigationKey.getState(state)?.labels.get(node.attrs.id as string);
+  const value = node.attrs.text as string;
+  return label ? `${label}, ${value}` : value;
+}
+
+/** @internal */
+export function getFactLabel(state: EditorState, factId: string): string | undefined {
+  return factNavigationKey.getState(state)?.labels.get(factId);
 }
 
 export const RETURN_TO_DOCUMENT_LABEL = "Return to document";
@@ -76,8 +116,58 @@ function returnToFact(
   // selection while its own element is focused, and the node selection and
   // announcement together say where the reader has landed.
   view.focus();
-  announce?.(`Returned to generated field, ${fact.node.attrs.text as string}.`);
+  const label = getFactLabel(view.state, factId);
+  announce?.(
+    `Returned to ${label ? describeFact(view.state, fact.node) : `generated field, ${fact.node.attrs.text as string}`}.`,
+  );
 }
+
+function allFacts(
+  doc: ProseMirrorNode,
+): Array<{ position: number; node: ProseMirrorNode }> {
+  const facts: Array<{ position: number; node: ProseMirrorNode }> = [];
+  doc.descendants((node, position) => {
+    if (node.type.name === "generated_text") facts.push({ position, node });
+    return node.type.name !== "generated_text";
+  });
+  return facts;
+}
+
+/**
+ * Moves the selection to the next or previous fact, so the document can be
+ * walked field by field the way a form is walked control by control. Past
+ * the last field it wraps to the first, as Word's next-field does; the
+ * announced position keeps the reader oriented.
+ */
+function selectFact(direction: 1 | -1): Command {
+  return (state, dispatch) => {
+    const facts = allFacts(state.doc);
+    const { from, to } = state.selection;
+    const announce = factNavigationKey.getState(state)?.announce;
+    if (facts.length === 0) {
+      announce?.("This document has no fields.");
+      return true;
+    }
+    const found = direction === 1
+      ? facts.findIndex((fact) => fact.position >= to)
+      : facts.findLastIndex((fact) => fact.position < from);
+    const index = found !== -1 ? found : direction === 1 ? 0 : facts.length - 1;
+    if (!dispatch) return true;
+    const fact = facts[index]!;
+    dispatch(
+      state.tr
+        .setSelection(NodeSelection.create(state.doc, fact.position))
+        .scrollIntoView(),
+    );
+    announce?.(
+      `${describeFact(state, fact.node)}. Field ${index + 1} of ${facts.length}.`,
+    );
+    return true;
+  };
+}
+
+export const selectNextFact: Command = selectFact(1);
+export const selectPreviousFact: Command = selectFact(-1);
 
 const factNavigationKey = new PluginKey<FactNavigationState>(
   "fact-navigation",
@@ -94,34 +184,42 @@ const focusableSelector = [
 
 function createDecorations(
   document: ProseMirrorNode,
-  sources: ReadonlyMap<string, string>,
+  facts: ReadonlyMap<string, FactMetadata>,
   ownerDocument: Document,
-): DecorationSet {
+): Pick<FactNavigationState, "decorations" | "labels"> {
   const decorations: Decoration[] = [];
+  const labels = new Map<string, string>();
 
   document.descendants((node, position) => {
     if (node.type.name !== "generated_text") return true;
 
-    const id = node.attrs.id;
-    const sourceId = typeof id === "string" ? sources.get(id) : undefined;
-    if (!sourceId || !ownerDocument.getElementById(sourceId)) return false;
+    const id = node.attrs.id as string;
+    const fact = facts.get(id);
+    const source = fact?.sourceId === undefined
+      ? null
+      : ownerDocument.getElementById(fact.sourceId);
+    const label = fact?.label ??
+      (source ? labelForSource(source, ownerDocument) : undefined);
+    if (label) labels.set(id, label);
+    if (!source) return false;
 
     decorations.push(
       // A screen reader reads the value as ordinary text; the role description
-      // marks where the field starts and ends, and aria-details lets it read
-      // the source control's label without leaving the document.
+      // marks where the field starts and ends, the description names it, and
+      // aria-details lets it read the source control without leaving.
       Decoration.node(position, position + node.nodeSize, {
         class: "docweave-editor__fact-link",
         role: "link",
         tabindex: "0",
         "aria-roledescription": "generated field",
-        "aria-details": sourceId,
+        "aria-details": source.id,
+        ...(label ? { "aria-description": label } : {}),
       }),
     );
     return false;
   });
 
-  return DecorationSet.create(document, decorations);
+  return { decorations: DecorationSet.create(document, decorations), labels };
 }
 
 function sourceForEvent(
@@ -141,7 +239,7 @@ function sourceForEvent(
   const id = fact.dataset.generatedText;
   const sourceId = id === undefined
     ? undefined
-    : factNavigationKey.getState(view.state)?.sources.get(id);
+    : factNavigationKey.getState(view.state)?.facts.get(id)?.sourceId;
   return sourceId === undefined
     ? undefined
     : view.dom.ownerDocument.getElementById(sourceId) ?? undefined;
@@ -178,11 +276,11 @@ function factIdForEvent(event: Event): string | undefined {
     .generatedText;
 }
 
-export function setFactNavigationSources(
+export function setFactNavigationFacts(
   transaction: Transaction,
-  sources: ReadonlyMap<string, string>,
+  facts: ReadonlyMap<string, FactMetadata>,
 ): Transaction {
-  return transaction.setMeta(factNavigationKey, new Map(sources));
+  return transaction.setMeta(factNavigationKey, new Map(facts));
 }
 
 export function createFactNavigationPlugin(
@@ -193,21 +291,23 @@ export function createFactNavigationPlugin(
     key: factNavigationKey,
     state: {
       init(_config, state) {
-        const sources = new Map<string, string>();
+        const facts = new Map<string, FactMetadata>();
         return {
-          sources,
-          decorations: createDecorations(state.doc, sources, ownerDocument),
+          facts,
+          announce: options.announce,
+          ...createDecorations(state.doc, facts, ownerDocument),
         };
       },
       apply(transaction, pluginState) {
-        const sources = transaction.getMeta(factNavigationKey) as
-          ReadonlyMap<string, string> | undefined ?? pluginState.sources;
+        const facts = transaction.getMeta(factNavigationKey) as
+          ReadonlyMap<string, FactMetadata> | undefined ?? pluginState.facts;
+        const unchanged = !transaction.docChanged && facts === pluginState.facts;
         return {
-          sources,
-          decorations: transaction.docChanged ||
-              sources !== pluginState.sources
-            ? createDecorations(transaction.doc, sources, ownerDocument)
-            : pluginState.decorations,
+          facts,
+          announce: pluginState.announce,
+          ...(unchanged
+            ? { decorations: pluginState.decorations, labels: pluginState.labels }
+            : createDecorations(transaction.doc, facts, ownerDocument)),
         };
       },
     },

@@ -38,6 +38,10 @@ export function editorShortcuts(
       description: "Go to the input that supplies the field's value",
     },
     {
+      keys: "Alt+Shift+Down or Alt+Shift+Up",
+      description: "Go to the next or previous generated field",
+    },
+    {
       keys: "Mod+Alt+D",
       description:
         "Return to the generated field you left, from anywhere on the page",

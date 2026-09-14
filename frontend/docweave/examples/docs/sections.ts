@@ -233,7 +233,8 @@ export const sections: readonly DocsSection[] = [
     kind: "build",
     title: "Accessibility",
     prose: [
-      "Docweave is used by judges who may read with a screen reader or work from the keyboard alone, so what the editor shows in colour it also says in words. The editing surface is a named text box. A fact is announced as a generated field: pressing Enter on it moves to the input that supplies its value, and aria-details lets a screen reader read that input's label without leaving the document.",
+      "Docweave is used by judges who may read with a screen reader or work from the keyboard alone, so what the editor shows in colour it also says in words. The editing surface is a named text box. A fact is announced as a generated field with a name: the label or legend of its source control on the page, or the label option if you give one. Pressing Enter on a fact moves to the input that supplies its value.",
+      "Alt+Shift+Down and Alt+Shift+Up walk the document field by field, announcing each field's name, value and position, and wrapping round at the end. When an input changes and the document is rebuilt, the editor says what changed: which field, and its new value.",
       "Leaving the document for an input is only half a journey. A Return to document button appears beside the input, and Ctrl+Alt+D works from anywhere on the page; either puts you back on the field you left and announces its value, which may have changed while you were away.",
       "A clause you insert or change is announced as such before its wording. When the invariants refuse an edit, the editor says so in a polite live region rather than silently keeping the clause.",
       "Alt+F10 moves to the toolbar, where the arrow keys move between buttons and Tab leaves it. Ctrl+Alt+Z, or Cmd+Alt+Z on a Mac, undoes your changes to the clause at the cursor or removes a clause you inserted. Alt+0 lists every shortcut.",
@@ -243,13 +244,18 @@ export const sections: readonly DocsSection[] = [
       "Put the cursor at the start of the possession clause and press Backspace. Nothing is deleted, and a screen reader hears why.",
       "Press Enter at the end of a clause and type a clause of your own. It is marked as inserted; press Ctrl+Alt+Z inside it to remove it again.",
       "Press Enter on the deadline in the document. Focus moves to the deadline input, with a Return to document button beside it. Change the date, then press the button or Ctrl+Alt+D: you are back on the deadline, and hear its new value.",
+      "Put the cursor anywhere in the document and press Alt+Shift+Down. The deadline is selected and announced as field 1 of 1.",
+      "Change the deadline input. A screen reader hears that the document was updated and what the deadline is now.",
     ],
     code: `return buildDoc((doc) => {
   doc.paragraph("heading", "IT IS ORDERED THAT:");
   doc.paragraph("possession", (content) => {
     content
       .text("The defendant must give up possession on or before ")
-      .fact("deadline", inputs.deadline, { sourceId: "accessibility-deadline" })
+      .fact("deadline", inputs.deadline, {
+        sourceId: "accessibility-deadline",
+        label: "Possession deadline",
+      })
       .text(".");
   });
 });
