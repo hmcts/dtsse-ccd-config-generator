@@ -71,6 +71,9 @@ public class EventTypeBuilderImpl<T, R extends HasRole, S> implements EventTypeB
         .builder(id, config.caseClass, new PropertyUtils(), preStates, postStates);
     result.submitHandler(this.submitHandler);
     result.startHandler(this.startHandler);
+    if (this.submitHandler == null) {
+      result.nonConcurrent();
+    }
     if (!events.containsKey(id)) {
       events.put(id, Lists.newArrayList());
     }
@@ -78,4 +81,3 @@ public class EventTypeBuilderImpl<T, R extends HasRole, S> implements EventTypeB
     return result;
   }
 }
-
