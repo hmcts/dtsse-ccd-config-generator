@@ -229,11 +229,46 @@ export const sections: readonly DocsSection[] = [
     ],
   },
   {
+    id: "accessibility",
+    kind: "build",
+    title: "Accessibility",
+    prose: [
+      "Docweave is used by judges who may read with a screen reader or work from the keyboard alone, so what the editor shows in colour it also says in words. The editing surface is a named text box. A fact is announced as a generated field: pressing Enter on it moves to the input that supplies its value, and aria-details lets a screen reader read that input's label without leaving the document.",
+      "Leaving the document for an input is only half a journey. A Return to document button appears beside the input, and Ctrl+Alt+D works from anywhere on the page; either puts you back on the field you left and announces its value, which may have changed while you were away.",
+      "A clause you insert or change is announced as such before its wording. When the invariants refuse an edit, the editor says so in a polite live region rather than silently keeping the clause.",
+      "Alt+F10 moves to the toolbar, where the arrow keys move between buttons and Tab leaves it. Ctrl+Alt+Z, or Cmd+Alt+Z on a Mac, undoes your changes to the clause at the cursor or removes a clause you inserted. Alt+0 lists every shortcut.",
+    ],
+    tryThis: [
+      "Press Alt+0 in the editor for the list of keyboard shortcuts, then close it: focus returns to where you were.",
+      "Put the cursor at the start of the possession clause and press Backspace. Nothing is deleted, and a screen reader hears why.",
+      "Press Enter at the end of a clause and type a clause of your own. It is marked as inserted; press Ctrl+Alt+Z inside it to remove it again.",
+      "Press Enter on the deadline in the document. Focus moves to the deadline input, with a Return to document button beside it. Change the date, then press the button or Ctrl+Alt+D: you are back on the deadline, and hear its new value.",
+    ],
+    code: `return buildDoc((doc) => {
+  doc.paragraph("heading", "IT IS ORDERED THAT:");
+  doc.paragraph("possession", (content) => {
+    content
+      .text("The defendant must give up possession on or before ")
+      .fact("deadline", inputs.deadline, { sourceId: "accessibility-deadline" })
+      .text(".");
+  });
+});
+`,
+    inputs: [
+      {
+        kind: "text",
+        name: "deadline",
+        label: "Possession deadline",
+        value: "1 October 2026",
+      },
+    ],
+  },
+  {
     id: "editor",
     kind: "script",
     title: "The editor and snapshots",
     prose: [
-      "createDocEditor mounts an editor and returns a controller. Call render with each new document. Call getSnapshot to get a serialisable record of the reader's document and the generated document it was reconciled against, and pass it back as initialSnapshot to restore the editor later. Call destroy when the editor is removed.",
+      "createDocEditor mounts an editor and returns a controller. Give it a label: that is the accessible name of the editing surface, read out when it receives focus. Call render with each new document. Call getSnapshot to get a serialisable record of the reader's document and the generated document it was reconciled against, and pass it back as initialSnapshot to restore the editor later. Call destroy when the editor is removed.",
       "The code below runs when you press Run. The page passes the previous run's snapshot as saved, so your edits survive the editor being destroyed and recreated. Without a mount, createDocEditor runs headlessly for tests and servers.",
     ],
     tryThis: [
@@ -245,6 +280,7 @@ export const sections: readonly DocsSection[] = [
 
 const controller = createDocEditor({
   mount,
+  label: "Order",
   initialSnapshot: saved,
 });
 

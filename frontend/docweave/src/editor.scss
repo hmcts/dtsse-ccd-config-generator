@@ -204,6 +204,87 @@
   height: 1.25rem;
 }
 
+// Read by screen readers, invisible to everyone else.
+.docweave-editor__visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.docweave-help {
+  box-sizing: border-box;
+  width: min(640px, calc(100vw - 64px));
+  max-height: 80vh;
+  margin: auto;
+  padding: 24px;
+  border: 0;
+  overflow: auto;
+  background: #fff;
+  color: #0b0c0c;
+  font-family: arial, sans-serif;
+  font-size: 19px;
+  line-height: 1.31579;
+  box-shadow: 0 8px 40px rgb(0 0 0 / 30%);
+}
+
+.docweave-help::backdrop {
+  background: rgb(11 12 12 / 55%);
+}
+
+.docweave-help__heading {
+  margin: 0 0 16px;
+  font-size: 24px;
+}
+
+.docweave-help__table {
+  width: 100%;
+  margin-bottom: 20px;
+  border-collapse: collapse;
+}
+
+.docweave-help__table th,
+.docweave-help__table td {
+  padding: 8px 12px 8px 0;
+  border-bottom: 1px solid #b1b4b6;
+  text-align: left;
+  vertical-align: top;
+}
+
+.docweave-help__table thead th {
+  border-bottom-color: #0b0c0c;
+}
+
+.docweave-help__table tbody th {
+  width: 40%;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.docweave-help__close {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 2px solid transparent;
+  background: #00703c;
+  box-shadow: 0 2px 0 #002d18;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.docweave-help__close:hover {
+  background: #005a30;
+}
+
+.docweave-help__close:focus {
+  outline: 3px solid #ffdd00;
+  outline-offset: 0;
+}
+
 .docweave-editor__clause,
 li.docweave-editor__clause > p {
   box-sizing: border-box;
@@ -258,6 +339,32 @@ li.docweave-editor__clause--modified > p {
 .docweave-editor__fact-link:focus {
   outline: 3px solid #ffdd00;
   outline-offset: 1px;
+}
+
+// Offered beside the control a fact led to, until the reader is back.
+.docweave-editor__return {
+  display: inline-block;
+  margin: 8px 0 0;
+  padding: 6px 10px;
+  border: 2px solid #0b0c0c;
+  background: #f3f2f1;
+  box-shadow: 0 2px 0 #929191;
+  color: #0b0c0c;
+  font-family: arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.docweave-editor__return:hover {
+  background: #dbdad9;
+}
+
+.docweave-editor__return:focus {
+  outline: 3px solid #ffdd00;
+  outline-offset: 0;
+  background: #ffdd00;
+  box-shadow: 0 2px 0 #0b0c0c;
 }
 
 // Template picker: keep the search and footer visible while each pane scrolls.

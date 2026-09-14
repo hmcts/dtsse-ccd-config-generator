@@ -2,9 +2,12 @@ import { dropCursor } from "prosemirror-dropcursor";
 import { gapCursor } from "prosemirror-gapcursor";
 import { toggleMark } from "prosemirror-commands";
 import { closeHistory, history, redo, undo } from "prosemirror-history";
+import { keymap } from "prosemirror-keymap";
 import { wrapInList } from "prosemirror-schema-list";
 import { type Command } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
+
+import { createAnnouncer } from "./announcer.js";
 
 import {
   type DocWeaveDocument,
@@ -18,6 +21,7 @@ import {
 } from "./controller.js";
 import {
   createDiffStylingPlugin,
+  revertClauseAtSelection,
   setGeneratedDocument,
 } from "./diff-styling.js";
 import {
@@ -34,6 +38,11 @@ import {
   createInputRulesPlugin,
   selectionTouchesManagedContent,
 } from "./input-rules.js";
+import {
+  createKeyboardHelpDialog,
+  editorShortcuts,
+  type KeyboardHelpDialog,
+} from "./keyboard-help.js";
 import {
   createKeymapPlugins,
   indentListItem,
@@ -55,6 +64,11 @@ import { insertTemplate } from "./templates/insertion.js";
 
 export interface CreateDocEditorOptions {
   mount?: HTMLElement | string;
+  /**
+   * The accessible name of the editing surface, read out when it receives
+   * focus. Say what the document is: "Order", "Directions".
+   */
+  label?: string;
   initialSnapshot?: DocWeaveSnapshot;
   templates?: {
     url?: string;
@@ -79,12 +93,24 @@ const editorCommands = {
   indent: indentListItem,
 } satisfies EditorToolbarCommands;
 
+const DEFAULT_LABEL = "Document";
+
 function createTemplateButton(ownerDocument: Document): HTMLButtonElement {
   const button = ownerDocument.createElement("button");
   button.type = "button";
   button.className = "docweave-editor__toolbar-button";
   button.setAttribute("aria-label", "Insert template");
   button.textContent = "Insert template";
+  return button;
+}
+
+function createHelpButton(ownerDocument: Document): HTMLButtonElement {
+  const button = ownerDocument.createElement("button");
+  button.type = "button";
+  button.className = "docweave-editor__toolbar-button";
+  button.setAttribute("aria-label", "Keyboard shortcuts");
+  button.title = "Keyboard shortcuts";
+  button.textContent = "?";
   return button;
 }
 
@@ -129,14 +155,28 @@ export function createDocEditor(
     throw new Error("Templates require either a provider or URL");
   }
 
+  const announcer = createAnnouncer(editor.ownerDocument);
+  let connectedToolbar: ConnectedEditorToolbar | undefined;
+  let templateDialog: TemplateDialog | undefined;
+  let helpDialog: KeyboardHelpDialog | undefined;
+
   const runtime = createDocEditorController({
     initialSnapshot: options.initialSnapshot,
     plugins: [
       createClipboardPlugin(),
       createListNumberingPlugin(),
-      createDiffStylingPlugin(),
-      createFactNavigationPlugin(editor.ownerDocument),
+      createDiffStylingPlugin({ announce: announcer.announce }),
+      createFactNavigationPlugin(editor.ownerDocument, {
+        announce: announcer.announce,
+      }),
       createInputRulesPlugin(),
+      keymap({
+        "Alt-F10": () => {
+          connectedToolbar?.focus();
+          return true;
+        },
+        "Mod-Alt-z": revertClauseAtSelection,
+      }),
       ...createKeymapPlugins(),
       dropCursor(),
       gapCursor(),
@@ -164,14 +204,13 @@ export function createDocEditor(
   if (templateButton) {
     toolbar.append(templateButton);
   }
+  const helpButton = createHelpButton(editor.ownerDocument);
+  toolbar.append(helpButton);
   const editorSurface = editor.ownerDocument.createElement("div");
   editorSurface.className = "docweave-editor__surface";
   const mountAlreadyStyled = editor.classList.contains("docweave-editor");
   editor.classList.add("docweave-editor");
-  editor.append(toolbar, editorSurface);
-
-  let connectedToolbar: ConnectedEditorToolbar | undefined;
-  let templateDialog: TemplateDialog | undefined;
+  editor.append(toolbar, editorSurface, announcer.element);
 
   function openTemplateDialog(): void {
     if (!templateDialog) return;
@@ -180,7 +219,22 @@ export function createDocEditor(
 
   const view = new EditorView(editorSurface, {
     state: runtime.state,
+    // The surface is a text box to assistive technology; without a role and a
+    // name it is announced as nothing more than "editable".
+    attributes: {
+      role: "textbox",
+      "aria-multiline": "true",
+      "aria-label": options.label ?? DEFAULT_LABEL,
+    },
     handleKeyDown(editorView, event) {
+      // Only the digit row: a Windows Alt code such as Alt+0233 starts with
+      // Numpad0, which a keymap binding on "Alt-0" would swallow.
+      if (event.code === "Digit0" && event.altKey && !event.ctrlKey &&
+        !event.metaKey && !event.shiftKey) {
+        event.preventDefault();
+        helpDialog?.open();
+        return true;
+      }
       const { empty, $from } = editorView.state.selection;
       if (!templateDialog || !editorView.editable || event.defaultPrevented ||
         event.key !== "/" || event.altKey || event.ctrlKey || event.metaKey ||
@@ -201,6 +255,14 @@ export function createDocEditor(
   });
 
   connectedToolbar = connectEditorToolbar(toolbar, view, editorCommands);
+
+  helpDialog = createKeyboardHelpDialog(
+    editor.ownerDocument,
+    editorShortcuts({ templates: options.templates !== undefined }),
+    () => view.focus(),
+  );
+  editor.append(helpDialog.element);
+  helpButton.addEventListener("click", () => helpDialog?.open());
 
   if (templateProvider && templateButton) {
     templateDialog = createTemplateDialog({
@@ -234,6 +296,8 @@ export function createDocEditor(
     destroy(): void {
       connectedToolbar?.destroy();
       templateDialog?.destroy();
+      helpDialog?.destroy();
+      announcer.destroy();
       view.destroy();
       toolbar.remove();
       editorSurface.remove();
