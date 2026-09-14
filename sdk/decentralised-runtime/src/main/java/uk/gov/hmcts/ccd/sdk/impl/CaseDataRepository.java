@@ -209,10 +209,11 @@ class CaseDataRepository {
         from ccd.case_event ce
         join ccd.case_data cd on cd.id = ce.case_data_id
         where cd.reference = :caseReference
-        order by ce.case_revision desc
+          and ce.version > :submittedVersion
+        order by ce.case_revision asc
         limit 1
         """,
-        Map.of("caseReference", caseReference),
+        Map.of("caseReference", caseReference, "submittedVersion", event.getCaseDetails().getVersion()),
         (rs, rowNum) -> new ConflictingEvent(
             rs.getString("event_id"),
             rs.getLong("case_revision")

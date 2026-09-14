@@ -85,8 +85,9 @@ class IdempotentReplayIntegrationTest {
 
   @Test
   void logsIncomingAndCommittedEventsWhenOptimisticUpdateConflicts(CapturedOutput output) {
-    seedCaseData(CONFLICT_CASE_ID, CONFLICT_CASE_REFERENCE, 2, 2);
+    seedCaseData(CONFLICT_CASE_ID, CONFLICT_CASE_REFERENCE, 3, 3);
     insertEvent(CONFLICT_CASE_ID, "committed-event", 2, 2, UUID.randomUUID());
+    insertEvent(CONFLICT_CASE_ID, "later-event", 3, 3, UUID.randomUUID());
 
     assertThatThrownBy(() ->
         repository.upsertCase(buildEvent(CONFLICT_CASE_REFERENCE, "TestCase"), Optional.empty()))
