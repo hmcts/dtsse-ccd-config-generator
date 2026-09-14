@@ -1,5 +1,6 @@
 import { type Node as ProseMirrorNode } from "prosemirror-model";
 import {
+  type Command,
   type EditorState,
   Plugin,
   PluginKey,
@@ -8,15 +9,28 @@ import {
 import {
   Decoration,
   DecorationSet,
+  type EditorView,
 } from "prosemirror-view";
 
+import { isElement } from "./dom.js";
 import { createUndoIcon } from "./icons.js";
 import { hasSameManagedStructure } from "./invariants.js";
+
+type Announce = (message: string) => void;
 
 interface DiffStylingState {
   decorations: DecorationSet;
   generatedDocument?: ProseMirrorNode;
+  announce?: Announce;
 }
+
+export interface DiffStylingOptions {
+  /** Told about edits the invariants refuse and about reverted clauses. */
+  announce?: Announce;
+}
+
+export const BLOCKED_EDIT_MESSAGE =
+  "That edit was not made. Generated clauses and facts cannot be deleted or moved, but their wording can be edited.";
 
 interface ClauseSnapshot {
   node: ProseMirrorNode;
@@ -113,22 +127,51 @@ export function getGeneratedDocument(
   return diffStylingKey.getState(state)?.generatedDocument;
 }
 
-function createRevertButton(
-  ownerDocument: Document,
-  label: string,
-): HTMLButtonElement {
-  const button = ownerDocument.createElement("button");
+interface ClauseMarker {
+  /** Spoken before the clause, since its colour says nothing to a screen reader. */
+  description: string;
+  /** The gutter button's name. */
+  revertLabel: string;
+  /** Announced once the revert has happened. */
+  revertedMessage: string;
+}
 
+const MARKERS: Record<"inserted" | "modified", ClauseMarker> = {
+  inserted: {
+    description: "Inserted clause.",
+    revertLabel: "Undo inserted clause",
+    revertedMessage: "Inserted clause removed.",
+  },
+  modified: {
+    description: "Modified clause.",
+    revertLabel: "Undo changes to clause",
+    revertedMessage: "Clause restored to its generated wording.",
+  },
+};
+
+function createClauseMarker(
+  ownerDocument: Document,
+  marker: ClauseMarker,
+): HTMLElement {
+  const container = ownerDocument.createElement("span");
+  container.className = "docweave-editor__clause-marker";
+  container.contentEditable = "false";
+
+  const description = ownerDocument.createElement("span");
+  description.className = "docweave-editor__visually-hidden";
+  description.textContent = `${marker.description} `;
+
+  const button = ownerDocument.createElement("button");
   button.type = "button";
   button.className = "docweave-editor__revert";
-  button.contentEditable = "false";
-  button.setAttribute("aria-label", label);
-  button.title = label;
+  button.setAttribute("aria-label", marker.revertLabel);
+  button.title = marker.revertLabel;
   button.append(
     createUndoIcon(ownerDocument, "docweave-editor__revert-icon"),
   );
 
-  return button;
+  container.append(description, button);
+  return container;
 }
 
 function clauseSnapshotsById(
@@ -193,14 +236,12 @@ function createDiffDecorations(
         }),
         Decoration.widget(
           position + 1,
-          (view) => createRevertButton(
-            view.dom.ownerDocument,
-            "Undo inserted clause",
-          ),
+          (view) => createClauseMarker(view.dom.ownerDocument, MARKERS.inserted),
           {
             side: -1,
             revert: (state: EditorState) =>
               deleteUserAuthoredNode(state, position),
+            revertedMessage: MARKERS.inserted.revertedMessage,
           },
         ),
       );
@@ -226,14 +267,12 @@ function createDiffDecorations(
         }),
         Decoration.widget(
           position + 1,
-          (view) => createRevertButton(
-            view.dom.ownerDocument,
-            "Undo changes to clause",
-          ),
+          (view) => createClauseMarker(view.dom.ownerDocument, MARKERS.modified),
           {
             side: -1,
             revert: (state: EditorState) =>
               restoreGeneratedNode(state, position, generatedNode),
+            revertedMessage: MARKERS.modified.revertedMessage,
           },
         ),
       );
@@ -243,19 +282,74 @@ function createDiffDecorations(
   return DecorationSet.create(doc, decorations);
 }
 
-export function createDiffStylingPlugin(): Plugin<DiffStylingState> {
+/** Reverts the clause whose marker sits at the given position, if any. */
+function revertAt(
+  state: EditorState,
+  position: number,
+  dispatch?: (transaction: Transaction) => void,
+): boolean {
+  const pluginState = diffStylingKey.getState(state);
+  const decoration = pluginState?.decorations.find(
+    position,
+    position,
+    (spec) => typeof spec.revert === "function",
+  )[0];
+  const revert = decoration?.spec.revert as Revert | undefined;
+  const transaction = revert?.(state);
+  if (!transaction) return false;
+
+  if (dispatch) {
+    dispatch(transaction);
+    pluginState?.announce?.(decoration!.spec.revertedMessage as string);
+  }
+  return true;
+}
+
+/**
+ * Reverts the innermost inserted or modified clause around the selection. This
+ * is the keyboard route to the gutter buttons, which sit inside the editable
+ * region where Tab is taken by indentation.
+ */
+export const revertClauseAtSelection: Command = (state, dispatch) => {
+  const { $from } = state.selection;
+  for (let depth = $from.depth; depth >= 1; depth -= 1) {
+    const node = $from.node(depth);
+    if (!isClauseNode(node, $from.node(depth - 1), state.doc)) continue;
+    if (revertAt(state, $from.before(depth) + 1, dispatch)) return true;
+  }
+  return false;
+};
+
+function revertForButton(view: EditorView, target: EventTarget | null): boolean {
+  if (!isElement(target)) return false;
+  const button = target.closest<HTMLButtonElement>(".docweave-editor__revert");
+  if (!button || !view.dom.contains(button)) return false;
+
+  const reverted = revertAt(view.state, view.posAtDOM(button, 0), view.dispatch);
+  if (reverted) view.focus();
+  return reverted;
+}
+
+export function createDiffStylingPlugin(
+  options: DiffStylingOptions = {},
+): Plugin<DiffStylingState> {
   return new Plugin<DiffStylingState>({
     key: diffStylingKey,
     // Ordinary edits must preserve the complete managed structure.
     filterTransaction(transaction, state) {
       if (transaction.getMeta(diffStylingKey)) return true;
 
-      return hasSameManagedStructure(state.doc, transaction.doc);
+      const allowed = hasSameManagedStructure(state.doc, transaction.doc);
+      // A refused keystroke is otherwise silent: the document simply does not
+      // change, which a screen reader user cannot see.
+      if (!allowed) options.announce?.(BLOCKED_EDIT_MESSAGE);
+      return allowed;
     },
     state: {
       init(_config, state) {
         return {
           decorations: createDiffDecorations(state.doc),
+          announce: options.announce,
         };
       },
       apply(transaction, pluginState) {
@@ -264,6 +358,7 @@ export function createDiffStylingPlugin(): Plugin<DiffStylingState> {
 
         return {
           generatedDocument,
+          announce: pluginState.announce,
           decorations: transaction.docChanged ||
               generatedDocument !== pluginState.generatedDocument
             ? createDiffDecorations(transaction.doc, generatedDocument)
@@ -275,29 +370,28 @@ export function createDiffStylingPlugin(): Plugin<DiffStylingState> {
       decorations(state) {
         return diffStylingKey.getState(state)?.decorations;
       },
-      handleClick(view, _position, event) {
-        if (!(event.target instanceof Element)) return false;
-
-        const button = event.target.closest<HTMLButtonElement>(
-          ".docweave-editor__revert",
-        );
-        if (!button || !view.dom.contains(button)) return false;
-
-        const widgetPosition = view.posAtDOM(button, 0);
-        const decoration = diffStylingKey.getState(view.state)?.decorations.find(
-          widgetPosition,
-          widgetPosition,
-          (spec) => typeof spec.revert === "function",
-        )[0];
-        const revert = decoration?.spec.revert as Revert | undefined;
-        const transaction = revert?.(view.state);
-
-        if (!transaction) return false;
-
-        view.dispatch(transaction);
-        view.focus();
-        return true;
-      },
+    },
+    view(editorView) {
+      // ProseMirror's own click handling only sees real mouse clicks, so a
+      // button activated from the keyboard needs ordinary DOM listeners.
+      const handleClick = (event: MouseEvent): void => {
+        if (revertForButton(editorView, event.target)) event.preventDefault();
+      };
+      const handleKeyDown = (event: KeyboardEvent): void => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        if (revertForButton(editorView, event.target)) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      };
+      editorView.dom.addEventListener("click", handleClick, true);
+      editorView.dom.addEventListener("keydown", handleKeyDown, true);
+      return {
+        destroy(): void {
+          editorView.dom.removeEventListener("click", handleClick, true);
+          editorView.dom.removeEventListener("keydown", handleKeyDown, true);
+        },
+      };
     },
   });
 }

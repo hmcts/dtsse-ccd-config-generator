@@ -4,6 +4,7 @@ import {
   type TemplateProvider,
 } from "../provider.js";
 
+import { isElement, isFocusable } from "../../dom.js";
 import { createTemplateDraft, type TemplateDraft } from "./editor.js";
 import { createTemplateDialogView } from "./view.js";
 
@@ -250,7 +251,7 @@ export function createTemplateDialog(
 
   // One handler for the whole dialog, including rows rendered after each search.
   dialog.addEventListener("click", (event) => {
-    if (destroyed || !dialog.open || !(event.target instanceof Element)) return;
+    if (destroyed || !dialog.open || !isElement(event.target)) return;
     const button = event.target.closest<HTMLButtonElement>("button[data-action]");
     if (!button || button.disabled) return;
     const row = button.closest<HTMLLIElement>("li[data-index]");
@@ -262,7 +263,7 @@ export function createTemplateDialog(
   dialog.addEventListener("keydown", (event) => {
     if (destroyed || !dialog.open || draft || busy || stale || event.isComposing ||
       event.altKey || event.ctrlKey || event.metaKey || event.shiftKey ||
-      !(event.target instanceof Element)) return;
+      !isElement(event.target)) return;
     const row = event.target.matches('[data-action="select"]')
       ? event.target.closest<HTMLLIElement>("li[data-index]")
       : null;
@@ -297,9 +298,8 @@ export function createTemplateDialog(
   return {
     open(): void {
       if (destroyed || dialog.open) return;
-      returnFocus = document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
+      const active = document.activeElement;
+      returnFocus = isFocusable(active) ? active : null;
       supersede();
       selected = undefined;
       view.showPreview();

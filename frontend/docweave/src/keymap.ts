@@ -18,7 +18,7 @@ import {
 
 import { editorSchema } from "./schema.js";
 
-const mac = typeof navigator !== "undefined" &&
+export const mac = typeof navigator !== "undefined" &&
   /Mac|iP(hone|[oa]d)/.test(navigator.platform);
 
 export const indentListItem = sinkListItem(
