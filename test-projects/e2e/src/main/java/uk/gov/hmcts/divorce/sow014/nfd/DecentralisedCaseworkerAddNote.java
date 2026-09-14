@@ -46,6 +46,7 @@ public class DecentralisedCaseworkerAddNote implements CCDConfig<CaseData, State
         EventBuilder<CaseData, UserRole, State> eventBuilder = configBuilder
             .decentralisedEvent(CASEWORKER_DECENTRALISED_ADD_NOTE, this::submit, this::start)
             .forAllStates()
+            .nonConcurrent()
             .name("Add note (decentralised)")
             .showEventNotes()
             .grant(CREATE_READ_UPDATE, CASE_WORKER, JUDGE)

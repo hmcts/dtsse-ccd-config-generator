@@ -7,7 +7,9 @@ import uk.gov.hmcts.ccd.sdk.api.AccessTypeRole;
 import uk.gov.hmcts.ccd.sdk.api.CCDAccessGroup;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
+import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.noc.NocOrganisation;
 import uk.gov.hmcts.ccd.sdk.api.noc.NocSubmissionResponse;
 import uk.gov.hmcts.example.missingcomplex.Applicant;
@@ -21,6 +23,31 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
 
 public class UnitTest {
+
+  @Test
+  public void defaultsEventsToConcurrentAndAllowsOptOut() {
+    class TestConfig implements CCDConfig<CaseData, State, UserRole> {
+      @Override
+      public void configureDecentralised(DecentralisedConfigBuilder<CaseData, State, UserRole> builder) {
+        builder.caseType("TEST", "Test", "Test case type");
+        builder.event("legacy").forAllStates();
+        builder.event("non-concurrent-legacy").forAllStates().nonConcurrent();
+        builder.decentralisedEvent("decentralised", payload -> SubmitResponse.defaultResponse())
+            .forAllStates();
+        builder.decentralisedEvent("non-concurrent-decentralised", payload -> SubmitResponse.defaultResponse())
+            .forAllStates()
+            .nonConcurrent();
+      }
+    }
+
+    ResolvedCCDConfig<CaseData, State, UserRole> resolved =
+        new ConfigResolver<>(List.of(new TestConfig())).resolveCCDConfig();
+
+    assertThat(resolved.getEvents().get("legacy").isConcurrent()).isTrue();
+    assertThat(resolved.getEvents().get("non-concurrent-legacy").isConcurrent()).isFalse();
+    assertThat(resolved.getEvents().get("decentralised").isConcurrent()).isTrue();
+    assertThat(resolved.getEvents().get("non-concurrent-decentralised").isConcurrent()).isFalse();
+  }
 
   @Test
   public void npeBug() {
