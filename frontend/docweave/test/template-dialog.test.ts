@@ -415,6 +415,9 @@ describe("template dialog", () => {
     const editor = dom.window.document.querySelector<HTMLElement>(
       ".docweave-templates__editor .ProseMirror",
     )!;
+    assert.equal(editor.getAttribute("role"), "textbox");
+    assert.equal(editor.getAttribute("aria-multiline"), "true");
+    assert.equal(editor.getAttribute("aria-label"), "Template wording");
     title.value = "Unsaved title";
     title.dispatchEvent(new dom.window.Event("input"));
     button("Save template").click();

@@ -10,6 +10,7 @@ import {
 import { Decoration, DecorationSet, type EditorView } from "prosemirror-view";
 
 import { type FactMetadata } from "./builder.js";
+import { isNode } from "./dom.js";
 
 type Announce = (message: string) => void;
 
@@ -43,10 +44,6 @@ function labelForSource(source: HTMLElement): string | undefined {
   return own ?? legend;
 }
 
-function isNode(value: unknown): value is Node {
-  return typeof value === "object" && value !== null && "nodeType" in value;
-}
-
 /** "Possession deadline, 1 October 2026", or just the value without a label. */
 export function describeFact(state: EditorState, node: ProseMirrorNode): string {
   const label = factNavigationKey.getState(state)?.labels.get(node.attrs.id as string);
@@ -70,12 +67,11 @@ interface PendingReturn {
 }
 
 /**
- * The control's own surroundings: a fieldset for a date input's three fields
- * or a group of radios, otherwise the element wrapping the control.
+ * The control itself, or the group it belongs to: a fieldset for a date
+ * input's three fields or a set of radios.
  */
 function regionAround(source: HTMLElement): HTMLElement {
-  return source.closest<HTMLElement>("fieldset") ?? source.parentElement ??
-    source;
+  return source.closest<HTMLElement>("fieldset, [role=group]") ?? source;
 }
 
 function factPosition(

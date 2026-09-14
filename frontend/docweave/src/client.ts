@@ -251,7 +251,7 @@ export function createDocEditor(
     attributes: {
       role: "textbox",
       "aria-multiline": "true",
-      "aria-label": options.label ?? DEFAULT_LABEL,
+      "aria-label": options.label?.trim() || DEFAULT_LABEL,
     },
     handleKeyDown(editorView, event) {
       // Only the digit row: a Windows Alt code such as Alt+0233 starts with

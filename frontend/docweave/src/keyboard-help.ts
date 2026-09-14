@@ -1,3 +1,4 @@
+import { isFocusable } from "./dom.js";
 import { mac } from "./keymap.js";
 
 export interface KeyboardShortcut {
@@ -123,8 +124,7 @@ export function createKeyboardHelpDialog(
     element: dialog,
     open() {
       const active = ownerDocument.activeElement;
-      // Not instanceof: the document may belong to another realm.
-      opener = active && "focus" in active ? active as HTMLElement : undefined;
+      opener = isFocusable(active) ? active : undefined;
       dialog.showModal();
       close.focus();
     },

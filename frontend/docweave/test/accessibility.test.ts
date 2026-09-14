@@ -80,7 +80,7 @@ function snapshotWith(
 }
 
 describe("editing surface", () => {
-  it("is a named multiline text box, and the template editor is too", async () => {
+  it("is a named multiline text box, named Document unless told otherwise", async () => {
     const docweave = await import("../src/index.js");
     const controller = docweave.createDocEditor({ mount: "#editor", label: "Order" });
     const { surface } = editorElements();
@@ -92,6 +92,10 @@ describe("editing surface", () => {
     const unnamed = docweave.createDocEditor({ mount: "#editor" });
     assert.equal(editorElements().surface.getAttribute("aria-label"), "Document");
     unnamed.destroy();
+
+    const blank = docweave.createDocEditor({ mount: "#editor", label: "  " });
+    assert.equal(editorElements().surface.getAttribute("aria-label"), "Document", "a blank label is no name");
+    blank.destroy();
   });
 
   it("marks a fact as a generated field that details its source control", async () => {

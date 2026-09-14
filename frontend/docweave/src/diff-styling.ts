@@ -12,6 +12,7 @@ import {
   type EditorView,
 } from "prosemirror-view";
 
+import { isElement } from "./dom.js";
 import { createUndoIcon } from "./icons.js";
 import { hasSameManagedStructure } from "./invariants.js";
 
@@ -320,7 +321,7 @@ export const revertClauseAtSelection: Command = (state, dispatch) => {
 };
 
 function revertForButton(view: EditorView, target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) return false;
+  if (!isElement(target)) return false;
   const button = target.closest<HTMLButtonElement>(".docweave-editor__revert");
   if (!button || !view.dom.contains(button)) return false;
 

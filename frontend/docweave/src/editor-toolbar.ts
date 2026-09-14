@@ -1,6 +1,7 @@
 import { type Command } from "prosemirror-state";
 import { type EditorView } from "prosemirror-view";
 
+import { isElement } from "./dom.js";
 import { createRedoIcon, createUndoIcon } from "./icons.js";
 
 export interface EditorToolbarCommands {
@@ -152,14 +153,14 @@ export function connectEditorToolbar(
   };
 
   const handleMouseDown = (event: MouseEvent): void => {
-    if (event.target instanceof Element &&
+    if (isElement(event.target) &&
       event.target.closest("[data-editor-command]")) {
       event.preventDefault();
     }
   };
 
   const handleClick = (event: MouseEvent): void => {
-    if (!(event.target instanceof Element)) return;
+    if (!isElement(event.target)) return;
 
     const button = event.target.closest<HTMLButtonElement>(
       "[data-editor-command]",
