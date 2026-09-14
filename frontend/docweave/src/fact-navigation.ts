@@ -10,7 +10,7 @@ import {
 import { Decoration, DecorationSet, type EditorView } from "prosemirror-view";
 
 import { type FactMetadata } from "./builder.js";
-import { isNode } from "./dom.js";
+import { isElement, isNode } from "./dom.js";
 
 type Announce = (message: string) => void;
 
@@ -70,8 +70,17 @@ interface PendingReturn {
  * The control itself, or the group it belongs to: a fieldset for a date
  * input's three fields or a set of radios.
  */
-function regionAround(source: HTMLElement): HTMLElement {
-  return source.closest<HTMLElement>("fieldset, [role=group]") ?? source;
+/**
+ * The whole control as the page lays it out: a fieldset or group for a date
+ * input or radios, else the GOV.UK form group, else the control itself. The
+ * return button goes after it, so it never lands between a radio and its
+ * label, whose adjacent-sibling styling would break, nor inside an input's
+ * prefix wrapper.
+ */
+function controlAround(source: HTMLElement): HTMLElement {
+  return source.closest<HTMLElement>(
+    "fieldset, [role=group], .govuk-form-group",
+  ) ?? source;
 }
 
 function factPosition(
@@ -219,24 +228,26 @@ function createDecorations(
   return { decorations: DecorationSet.create(document, decorations), labels };
 }
 
-function sourceForEvent(
-  view: EditorView,
-  event: Event,
-): HTMLElement | undefined {
-  const target = event.target as Element | null;
-  if (!target || typeof target.closest !== "function") {
-    return undefined;
-  }
+/** The fact under the event's target, if any. */
+function factIdAtTarget(view: EditorView, event: Event): string | undefined {
+  const target = event.target;
+  if (!isElement(target)) return undefined;
+  const fact = target.closest<HTMLElement>("[data-generated-text]");
+  return fact && view.dom.contains(fact) ? fact.dataset.generatedText : undefined;
+}
 
-  const fact = target.closest<HTMLElement>(
-    "[data-generated-text]",
-  );
-  if (!fact || !view.dom.contains(fact)) return undefined;
+/** The fact the selection sits on, as after keyboard field navigation. */
+function selectedFactId(view: EditorView): string | undefined {
+  const { selection } = view.state;
+  return selection instanceof NodeSelection &&
+      selection.node.type.name === "generated_text"
+    ? selection.node.attrs.id as string
+    : undefined;
+}
 
-  const id = fact.dataset.generatedText;
-  const sourceId = id === undefined
-    ? undefined
-    : factNavigationKey.getState(view.state)?.facts.get(id)?.sourceId;
+function sourceForFact(view: EditorView, factId: string): HTMLElement | undefined {
+  const sourceId = factNavigationKey.getState(view.state)?.facts.get(factId)
+    ?.sourceId;
   return sourceId === undefined
     ? undefined
     : view.dom.ownerDocument.getElementById(sourceId) ?? undefined;
@@ -245,8 +256,9 @@ function sourceForEvent(
 function navigateToSource(
   view: EditorView,
   event: Event,
+  factId: string,
 ): HTMLElement | undefined {
-  const source = sourceForEvent(view, event);
+  const source = sourceForFact(view, factId);
   if (!source) return undefined;
 
   const focusTarget = source.matches(focusableSelector)
@@ -265,12 +277,6 @@ function navigateToSource(
   // Without a control to focus the reader has not left the document, so there
   // is nothing to return from.
   return focusTarget ? source : undefined;
-}
-
-function factIdForEvent(event: Event): string | undefined {
-  const target = event.target as Element | null;
-  return target?.closest<HTMLElement>("[data-generated-text]")?.dataset
-    .generatedText;
 }
 
 export function setFactNavigationFacts(
@@ -342,22 +348,29 @@ export function createFactNavigationPlugin(
         button.className = "docweave-editor__return";
         button.textContent = RETURN_TO_DOCUMENT_LABEL;
         button.addEventListener("click", goBack);
-        source.insertAdjacentElement("afterend", button);
-        pending = { factId, button, region: regionAround(source) };
+        const control = controlAround(source);
+        control.insertAdjacentElement("afterend", button);
+        pending = { factId, button, region: control };
         ownerDocument.addEventListener("keydown", handleReturnShortcut, true);
         ownerDocument.addEventListener("focusin", handleFocusIn);
       };
 
-      const leaveForSource = (event: Event): void => {
-        const factId = factIdForEvent(event);
-        const source = navigateToSource(editorView, event);
-        if (factId && source) offerReturn(factId, source);
+      const leaveForSource = (event: Event, factId: string | undefined): void => {
+        if (factId === undefined) return;
+        const source = navigateToSource(editorView, event, factId);
+        if (source) offerReturn(factId, source);
       };
       const handleClick = (event: MouseEvent): void => {
-        leaveForSource(event);
+        leaveForSource(event, factIdAtTarget(editorView, event));
       };
+      // Enter works on a focused fact span and on a fact reached by keyboard
+      // field navigation, which selects the node while the editor keeps focus.
       const handleKeyDown = (event: KeyboardEvent): void => {
-        if (event.key === "Enter") leaveForSource(event);
+        if (event.key !== "Enter") return;
+        leaveForSource(
+          event,
+          factIdAtTarget(editorView, event) ?? selectedFactId(editorView),
+        );
       };
       function handleReturnShortcut(event: KeyboardEvent): void {
         if (!pending || event.key.toLowerCase() !== "d" || !event.altKey ||

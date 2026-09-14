@@ -125,7 +125,8 @@ the mouse is the whole story:
   editor announces it: "Order updated: Possession deadline is now 2 October
   2026.
 - Going to a source control offers a way back: a "Return to document" button
-  inserted after the control, and Mod+Alt+D anywhere on the page. Either
+  inserted after the whole control (its fieldset, group or GOV.UK form group,
+  so a radio keeps its label beside it), and Mod+Alt+D anywhere on the page. Either
   reselects the fact by its managed ID, which reconciliation preserves, so the
   reader lands on the same field with its new value announced.
 - Inserted and modified clauses carry a visually hidden marker ("Inserted

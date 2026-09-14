@@ -14,7 +14,7 @@ let restoreGlobals: () => void;
 beforeEach(() => {
   dom = new JSDOM(
     `<!doctype html>
-      <div class="form-group">
+      <div class="govuk-form-group" id="deadline-group">
         <label for="deadline">Possession deadline</label>
         <input id="deadline" value="1 October 2026">
       </div>
@@ -328,7 +328,7 @@ describe("return journey from a source control", () => {
     assert.equal(document.activeElement, input);
     const button = returnButton()!;
     assert.equal(button.textContent, "Return to document");
-    assert.equal(input.nextElementSibling, button);
+    assert.equal(button.previousElementSibling?.id, "deadline-group", "after the whole form group");
     return { docweave, controller, surface, status, input, button, fact };
   }
 
@@ -396,6 +396,40 @@ describe("return journey from a source control", () => {
     assert.ok(returnButton());
     controller.destroy();
     assert.equal(returnButton(), null);
+  });
+
+  it("leaves from a fact reached by keyboard field navigation, and places the button after a radio group", async () => {
+    const docweave = await import("../src/index.js");
+    const { document } = dom.window;
+    document.body.insertAdjacentHTML("beforeend", `
+      <fieldset id="when" class="govuk-fieldset"><legend>When?</legend>
+        <div class="govuk-radios__item">
+          <input class="govuk-radios__input" type="radio" id="when-now" name="when" checked>
+          <label class="govuk-label govuk-radios__label" for="when-now">Forthwith</label>
+        </div>
+      </fieldset>`);
+    const controller = docweave.createDocEditor({ mount: "#editor" });
+    controller.render(docweave.buildDoc((doc) => {
+      doc.paragraph("possession", (content) => {
+        content.text("Possession ").fact("when", "forthwith", { sourceId: "when-now" }).text(".");
+      });
+    }));
+    const { surface } = editorElements();
+
+    surface.focus();
+    keydown(surface, "ArrowDown", { altKey: true, shiftKey: true });
+    const enter = keydown(surface, "Enter");
+
+    assert.equal(enter.defaultPrevented, true);
+    assert.equal(document.activeElement?.id, "when-now");
+    const button = returnButton()!;
+    assert.ok(button);
+    assert.equal(document.querySelector("#when-now")!.nextElementSibling?.tagName, "LABEL", "input and label stay adjacent");
+    assert.equal(button.previousElementSibling?.id, "when", "after the fieldset");
+
+    keydown(document.querySelector("#when-now")!, "d", { ctrlKey: true, altKey: true });
+    assert.equal(document.activeElement, surface);
+    controller.destroy();
   });
 
   it("makes no offer when the source has nothing to focus", async () => {
