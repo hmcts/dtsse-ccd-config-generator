@@ -7,6 +7,7 @@ source "${SCRIPT_DIR}/migration-test/lib.sh"
 
 SETUP_SCRIPT="${SCRIPT_DIR}/setup-ccd-data-fdw.sh"
 MIGRATION_SCRIPT="${SCRIPT_DIR}/migrate-ccd-data-fdw.sh"
+CLEANUP_SCRIPT="${SCRIPT_DIR}/cleanup-ccd-data-fdw.sh"
 DELTA_SINCE="${DELTA_SINCE:-2026-01-01 00:00:00}"
 FAILURE_LOG="/tmp/test-migrate-ccd-data-fdw-failure-$$.log"
 
@@ -87,6 +88,7 @@ run_fdw_migration() {
 assert_fdw_setup() {
   local extension_count foreign_server_count foreign_table_count source_case_count additional_role_case_count
   local additional_mapping_count
+  local expected_source_case_count="${1:-2}"
 
   echo "Validating FDW setup"
   extension_count="$(psql_dst --quiet -tA <<'SQL'
@@ -142,11 +144,59 @@ SQL
 )"
 
   if [[ "$extension_count" != "2" || "$foreign_server_count" != "1" || "$foreign_table_count" != "3" \
-      || "$source_case_count" != "2" || "$additional_mapping_count" != "1" || "$additional_role_case_count" != "2" ]]; then
+      || "$source_case_count" != "$expected_source_case_count" || "$additional_mapping_count" != "1" \
+      || "$additional_role_case_count" != "$expected_source_case_count" ]]; then
     echo "FDW setup validation failed:" \
       "extensions=${extension_count}, server=${foreign_server_count}," \
       "tables=${foreign_table_count}, source_cases=${source_case_count}," \
       "additional_mapping=${additional_mapping_count}, additional_role_cases=${additional_role_case_count}" >&2
+    exit 1
+  fi
+}
+
+assert_fdw_cleanup() {
+  local extension_count foreign_server_count user_mapping_count foreign_table_count schema_count
+
+  echo "Validating FDW cleanup"
+  extension_count="$(psql_dst --quiet -tA <<'SQL'
+select count(*)
+from pg_extension
+where extname in ('postgres_fdw', 'pgcrypto');
+SQL
+)"
+  foreign_server_count="$(psql_dst --quiet -tA --set=fdw_server="$FDW_SERVER" <<'SQL'
+select count(*)
+from pg_foreign_server
+where srvname = :'fdw_server';
+SQL
+)"
+  user_mapping_count="$(psql_dst --quiet -tA --set=fdw_server="$FDW_SERVER" <<'SQL'
+select count(*)
+from pg_user_mapping um
+join pg_foreign_server s on s.oid = um.umserver
+where s.srvname = :'fdw_server';
+SQL
+)"
+  foreign_table_count="$(psql_dst --quiet -tA --set=fdw_schema="$FDW_SCHEMA" <<'SQL'
+select count(*)
+from pg_foreign_table ft
+join pg_class c on c.oid = ft.ftrelid
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = :'fdw_schema';
+SQL
+)"
+  schema_count="$(psql_dst --quiet -tA --set=fdw_schema="$FDW_SCHEMA" <<'SQL'
+select count(*)
+from pg_namespace
+where nspname = :'fdw_schema';
+SQL
+)"
+
+  if [[ "$extension_count" != "2" || "$foreign_server_count" != "0" || "$user_mapping_count" != "0" \
+      || "$foreign_table_count" != "0" || "$schema_count" != "0" ]]; then
+    echo "FDW cleanup validation failed:" \
+      "extensions=${extension_count}, server=${foreign_server_count}, mappings=${user_mapping_count}," \
+      "tables=${foreign_table_count}, schema=${schema_count}" >&2
     exit 1
   fi
 }
@@ -240,4 +290,18 @@ run_fdw_migration "DELTA_SINCE=${DELTA_SINCE}"
 assert_delta_rows_migrated
 assert_common_migration_state
 
-echo "FDW migration test (setup + validate + apply + delta) completed successfully."
+echo "Running FDW cleanup script (validation mode only)"
+DST_DSN="$DST_DSN" \
+  FDW_SCHEMA="$FDW_SCHEMA" \
+  FDW_SERVER="$FDW_SERVER" \
+  "$CLEANUP_SCRIPT"
+assert_fdw_setup 3
+
+echo "Running FDW cleanup script (apply mode)"
+DST_DSN="$DST_DSN" \
+  FDW_SCHEMA="$FDW_SCHEMA" \
+  FDW_SERVER="$FDW_SERVER" \
+  "$CLEANUP_SCRIPT" --apply
+assert_fdw_cleanup
+
+echo "FDW migration test (setup + validate + apply + delta + cleanup) completed successfully."
