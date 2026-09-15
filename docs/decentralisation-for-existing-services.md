@@ -66,48 +66,83 @@ describe loading an individual case; search is covered [below](#case-search).
 
 ## CCD Event submission
 
-### As-is recap
+The following diagrams show a successful submission with AboutToSubmit and Submitted callbacks configured. Both
+callbacks are optional. AboutToStart and MidEvent continue through their existing CCD callback paths.
+
+### As-is: CCD saves to its database
+
+XUI submits the event to CCD. CCD enforces the configured access and event rules, calls the service's AboutToSubmit
+callback, and saves the returned case data and event history in the central database. Once that transaction commits,
+CCD calls Submitted and returns the result to XUI.
 
 ```mermaid
-graph LR
-    CCDNode[CCD]
-    ServiceNode[Service]
-    CCDDatabase[(CCD database)]
+sequenceDiagram
+    participant XUI
+    participant CCD
+    participant Service
+    participant CCDDB as CCD database
 
-    CCDNode -- AboutToSubmit --> ServiceNode
-    CCDNode -- Submitted --> ServiceNode
-    CCDNode -. Save case data .-> CCDDatabase
+    XUI->>CCD: Submit event
+    CCD->>Service: AboutToSubmit with case JSON
+    Service-->>CCD: Validated / updated case JSON
+    CCD->>CCDDB: Save case data and event history
+    CCD->>CCDDB: Commit
+    CCDDB-->>CCD: Committed
+    CCD->>Service: Submitted
+    Service-->>CCD: Confirmation
+    CCD-->>XUI: Event result
 ```
 
-#### AboutToSubmit callbacks
+The service supplies the updated JSON, but CCD owns the case commit. Any writes the callback makes to the service's
+own database are in a separate transaction from CCD's case persistence.
 
-During event submission, CCD invokes the service's AboutToSubmit callback (if defined).
+### Decentralised: your service saves to its database
 
-The callback is passed the complete case data as the payload, and the modified response is persisted by CCD verbatim.
-
-#### Submitted callbacks
-
-Submitted callbacks (if defined) are invoked by CCD after CCD's database transaction commits.
-
-### Decentralised
+XUI still submits the event to CCD, which continues to enforce the configured access and event rules. CCD delegates
+persistence through a single Submit operation. The SDK runs the existing callbacks around the service's database
+transaction: AboutToSubmit before the commit, then Submitted after it.
 
 ```mermaid
-graph LR
-    CCDNode[CCD]
-    ServiceNode[Service]
-    ServiceDatabase[(Service database)]
+sequenceDiagram
+    participant XUI
+    participant CCD
+    participant Service as Service + SDK
+    participant ServiceDB as Service database
 
-    CCDNode -- Submit --> ServiceNode
-    ServiceNode -->|Submitted callback| ServiceNode
-    ServiceNode -->|AboutToSubmit| ServiceNode
-    ServiceNode -. Save case data .-> ServiceDatabase
+    XUI->>CCD: Submit event
+    CCD->>Service: Submit with case JSON and idempotency key
+    Service->>ServiceDB: Begin transaction
+    Note over Service,ServiceDB: Lock existing case and check idempotency key
+    Service->>Service: Run local AboutToSubmit
+    Service->>ServiceDB: Save case data and metadata
+    Service->>Service: Build CaseView snapshot
+    Service->>ServiceDB: Record event history and indexing / configured outbox work
+    Service->>ServiceDB: Commit
+    ServiceDB-->>Service: Committed
+    Service->>Service: Run local Submitted
+    Service-->>CCD: Saved case and confirmation
+    CCD-->>XUI: Event result
 ```
 
-AboutToSubmit and Submitted callbacks are consolidated into a single 'Submit' operation.
+This shows callbacks implemented in the service itself. For JSON-backed services such as ET, the SDK invokes local
+controller methods directly so AboutToSubmit can share the persistence transaction. Callbacks to other services remain
+HTTP calls. See [JSON runtime](./json-runtime.md#local-and-external-callbacks).
 
+### Your service now owns the case commit
 
-Submit combines validation and persistence in a single step; services can validate the incoming event payload, rejecting it or accepting and persisting it.
+* Service-owned table writes made in the same transaction as AboutToSubmit can commit or roll back with case data and
+  history. Validation errors or persistence failures roll back that transaction.
+* Keep work inside the transaction short: existing-case submissions hold a case lock, so slow callbacks can delay other
+  events on the same case. Stale updates to the shared JSON blob still receive a 409 conflict; moving persistence does
+  not remove that protection. See [concurrency](./concurrency.md).
+* Submitted runs after the case has committed. Its failure cannot undo the saved case. External effects such as emails
+  or remote API calls are outside the database transaction and need their own retry and recovery handling.
+* Indexing and message delivery happen asynchronously after commit. A successful save does not mean search or a
+  downstream consumer has caught up.
 
+The SDK checks the idempotency key so a retry of a committed submission can return the saved event result without
+running the callbacks again. This prevents repeating the case change; it does not guarantee completion of external
+work from Submitted. See [the decentralised runtime](./decentralised-runtime.md#idempotency).
 
 ## Case search
 
