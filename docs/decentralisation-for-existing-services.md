@@ -1,7 +1,72 @@
 
-# CCD Event submission
+# Decentralisation for existing services
 
-## As-is recap
+Decentralisation changes both how CCD saves a case and how it reads one. Your service becomes part of the read path,
+including when a user simply opens a case in XUI without triggering an event or callback.
+
+## Reading case data
+
+### As-is: CCD reads from its database
+
+When a user opens a case, XUI requests it from CCD. CCD loads the case data from its own database and returns the
+authorised case view to XUI. The service is not involved in this case-data read; it is called separately when an event
+requires a callback.
+
+```mermaid
+sequenceDiagram
+    participant XUI
+    participant CCD
+    participant CCDDB as CCD database
+    participant Service
+
+    XUI->>CCD: Open case
+    CCD->>CCDDB: Load case data
+    CCDDB-->>CCD: Case data
+    CCD-->>XUI: Authorised case view
+    Note over Service: Not involved in this read
+```
+
+### Decentralised: CCD reads through your service
+
+XUI continues to request the case from CCD. For a decentralised case type, CCD delegates the case-data read to your
+service's persistence API. The SDK loads the stored case and uses your `CaseView` to produce the case JSON that CCD
+needs. CCD continues to enforce access rules before returning the case view to XUI.
+
+```mermaid
+sequenceDiagram
+    participant XUI
+    participant CCD
+    participant Service as Service + SDK
+    participant ServiceDB as Service database
+
+    XUI->>CCD: Open case
+    CCD->>Service: Read case data
+    Service->>ServiceDB: Load stored case data
+    ServiceDB-->>Service: Case data
+    Note over Service: CaseView produces the CCD case JSON
+    Service-->>CCD: Case JSON
+    CCD-->>XUI: Authorised case view
+```
+
+An existing service can initially have its `CaseView` return the stored JSON unchanged. It can later assemble the same
+CCD JSON shape from service-owned tables. See [Case views](./decentralised-runtime.md#case-views).
+
+### Your service is now in the read path
+
+Case reads now depend on your service, its database and its `CaseView` implementation, even when no callback is running.
+
+* Service or database downtime can prevent users from opening cases, even if CCD is healthy.
+* Slow database queries or additional dependencies in `CaseView` affect how quickly users can open a case. Keep views
+  read-only and account for read traffic when sizing the service and its database connection pool.
+* Monitor case-read errors and latency alongside callback and submission failures. Include existing-case reads in
+  release checks alongside callback tests.
+
+CCD's [routing configuration](./routing-configuration.md) determines which case types use this path. These diagrams
+describe loading an individual case; search is covered [below](#case-search).
+
+## CCD Event submission
+
+### As-is recap
 
 ```mermaid
 graph LR
@@ -14,17 +79,17 @@ graph LR
     CCDNode -. Save case data .-> CCDDatabase
 ```
 
-### AboutToSubmit callbacks
+#### AboutToSubmit callbacks
 
 During event submission, CCD invokes the service's AboutToSubmit callback (if defined).
 
 The callback is passed the complete case data as the payload, and the modified response is persisted by CCD verbatim.
 
-### Submitted callbacks
+#### Submitted callbacks
 
 Submitted callbacks (if defined) are invoked by CCD after CCD's database transaction commits.
 
-## Decentralised
+### Decentralised
 
 ```mermaid
 graph LR
