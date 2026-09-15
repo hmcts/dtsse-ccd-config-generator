@@ -4,6 +4,7 @@ This page covers the FDW-based CCD data migration scripts:
 
 * `scripts/setup-ccd-data-fdw.sh`
 * `scripts/migrate-ccd-data-fdw.sh`
+* `scripts/cleanup-ccd-data-fdw.sh`
 
 Use this approach when the target application database can read the central CCD database through
 `postgres_fdw`. The setup script creates the FDW objects once. The migration script then assumes
@@ -236,6 +237,12 @@ schema usage, foreign server usage, and table select. The role must already have
 the FDW server; create it during setup with `FDW_ADDITIONAL_GRANTEE` or have Platform Operations
 create it manually. The Java task does not create user mappings because they contain source database
 credentials. Leave it blank to skip the extra grant.
+
+## Post-migration FDW cleanup
+
+After migration and cutover have completed, follow the
+[CCD data migration cleanup guide](ccd-data-migration-cleanup.md) to remove the temporary FDW
+connection from the application database.
 
 For services using the Java task, `case_event_significant_items` is copied during `CUTOVER` after
 events have caught up. It uses one set-based insert query joined through the migrated target events
