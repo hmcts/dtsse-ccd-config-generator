@@ -176,6 +176,14 @@ class CaseDataRepository {
                                          else case_data.last_state_modified_date
                                        end
             where case_data.version = excluded.version
+               or (
+                 case_data.state is not distinct from excluded.state
+                 and case_data.resolved_ttl is not distinct from excluded.resolved_ttl
+                 and not :has_data
+                 and case_data.supplementary_data is not distinct from
+                   (case_data.supplementary_data || :enforced_supplementary_data::jsonb)
+                 and case_data.security_classification is not distinct from excluded.security_classification
+               )
             returning id;
         """;
 

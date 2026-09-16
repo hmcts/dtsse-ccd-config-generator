@@ -625,6 +625,23 @@ public class TestWithCCD extends CftlibTest {
         assertThat(noteRows(note), equalTo(1));
     }
 
+    @Order(38)
+    @Test
+    void legacyBlobMutatingEventDoesNotBlockConcurrentDecentralisedEvent() throws Exception {
+        String staleToken = startConcurrentAddNoteEvent();
+        String note = "stale after legacy blob update " + UUID.randomUUID();
+        Long revisionBefore = caseDataRevision();
+        Integer blobVersionBefore = caseDataVersion();
+
+        updateDueDate();
+
+        assertThat(caseDataVersion(), equalTo(blobVersionBefore + 1));
+        assertThat(caseDataRevision(), equalTo(revisionBefore + 1));
+        assertThat(readCaseDataFromDb().get("dueDate"), equalTo("2020-01-01"));
+        assertThat(submitConcurrentEvent(note, staleToken), equalTo(201));
+        assertThat(noteRows(note), equalTo(1));
+    }
+
     @Order(5)
     @Test
     public void testOptimisticLockOnJsonBlob() throws Exception {
@@ -2071,10 +2088,48 @@ public class TestWithCCD extends CftlibTest {
         }
     }
 
+    private String startConcurrentAddNoteEvent() {
+        return ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            DecentralisedCaseworkerAddNote.CONCURRENT_CASEWORKER_DECENTRALISED_ADD_NOTE
+        ).getToken();
+    }
+
+    private int submitConcurrentEvent(String note, String token) throws IOException {
+        var request = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            DecentralisedCaseworkerAddNote.CONCURRENT_CASEWORKER_DECENTRALISED_ADD_NOTE,
+            Map.of("note", note),
+            token
+        );
+        try (var client = HttpClientBuilder.create().build(); var response = client.execute(request)) {
+            EntityUtils.consumeQuietly(response.getEntity());
+            return response.getStatusLine().getStatusCode();
+        }
+    }
+
     private int noteRows(String note) {
         return db.queryForObject(
             "select count(*) from case_notes where reference = :reference and note = :note",
             Map.of("reference", caseRef, "note", note),
+            Integer.class
+        );
+    }
+
+    private Long caseDataRevision() {
+        return db.queryForObject(
+            "select case_revision from ccd.case_data where reference = :reference",
+            Map.of("reference", caseRef),
+            Long.class
+        );
+    }
+
+    private Integer caseDataVersion() {
+        return db.queryForObject(
+            "select version from ccd.case_data where reference = :reference",
+            Map.of("reference", caseRef),
             Integer.class
         );
     }

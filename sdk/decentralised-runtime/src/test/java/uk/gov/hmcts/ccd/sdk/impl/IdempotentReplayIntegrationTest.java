@@ -58,12 +58,17 @@ class IdempotentReplayIntegrationTest {
   private static final long LIVE_UPDATE_AFTER_REINDEX_CASE_REFERENCE = 6666000000000000L;
   private static final long CONFLICT_CASE_ID = 7777L;
   private static final long CONFLICT_CASE_REFERENCE = 7777000000007777L;
+  private static final long STALE_NOOP_CASE_ID = 8888L;
+  private static final long STALE_NOOP_CASE_REFERENCE = 8888000000008888L;
 
   @Autowired
   private NamedParameterJdbcTemplate jdbc;
 
   @Autowired
   private CaseDataRepository repository;
+
+  @Autowired
+  private ObjectMapper mapper;
 
   @Autowired
   private CaseReindexingService reindexingService;
@@ -90,7 +95,10 @@ class IdempotentReplayIntegrationTest {
     insertEvent(CONFLICT_CASE_ID, "later-event", 3, 3, UUID.randomUUID());
 
     assertThatThrownBy(() ->
-        repository.upsertCase(buildEvent(CONFLICT_CASE_REFERENCE, "TestCase"), Optional.empty()))
+        repository.upsertCase(
+            buildEvent(CONFLICT_CASE_REFERENCE, "TestCase"),
+            Optional.of(mapper.createObjectNode().put("updated", true))
+        ))
         .isInstanceOf(EmptyResultDataAccessException.class);
 
     assertThat(output)
@@ -98,6 +106,29 @@ class IdempotentReplayIntegrationTest {
         .contains("submittedVersion=1")
         .contains("conflictingEvent=committed-event")
         .contains("conflictingEventRevision=2");
+  }
+
+  @Test
+  void staleVersionIsAllowedWhenCaseDataAndMetadataAreUnchanged() {
+    seedCaseData(STALE_NOOP_CASE_ID, STALE_NOOP_CASE_REFERENCE, 3, 3);
+
+    long caseId = repository.upsertCase(
+        buildEvent(STALE_NOOP_CASE_REFERENCE, "UnknownCaseType"),
+        Optional.empty()
+    );
+
+    assertThat(caseId).isEqualTo(STALE_NOOP_CASE_ID);
+    Map<String, Object> persisted = jdbc.queryForMap(
+        """
+            select version, case_revision, data::text as data
+            from ccd.case_data
+            where reference = :ref
+            """,
+        Map.of("ref", STALE_NOOP_CASE_REFERENCE)
+    );
+    assertThat(persisted.get("version")).isEqualTo(3);
+    assertThat(persisted.get("case_revision")).isEqualTo(4L);
+    assertThat(persisted.get("data")).isEqualTo("{}");
   }
 
   @Test
