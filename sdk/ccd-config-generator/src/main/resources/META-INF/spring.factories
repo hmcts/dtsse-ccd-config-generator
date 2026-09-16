@@ -1,2 +1,0 @@
-org.springframework.boot.env.EnvironmentPostProcessor=\
-uk.gov.hmcts.ccd.sdk.config.CcdSdkJacksonEnvironmentPostProcessor

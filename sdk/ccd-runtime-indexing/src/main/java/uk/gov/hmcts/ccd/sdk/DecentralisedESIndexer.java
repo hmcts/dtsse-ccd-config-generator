@@ -6,13 +6,12 @@ import co.elastic.clients.elasticsearch._types.Time;
 import co.elastic.clients.elasticsearch._types.VersionType;
 import co.elastic.clients.elasticsearch.core.bulk.BulkOperation;
 import co.elastic.clients.elasticsearch.core.bulk.BulkResponseItem;
-import co.elastic.clients.json.jackson.JacksonJsonpMapper;
+import co.elastic.clients.json.jackson.Jackson3JsonpMapper;
 import co.elastic.clients.transport.ElasticsearchTransport;
 import co.elastic.clients.transport.rest5_client.Rest5ClientTransport;
 import co.elastic.clients.transport.rest5_client.low_level.Node;
 import co.elastic.clients.transport.rest5_client.low_level.Rest5Client;
 import co.elastic.clients.util.BinaryData;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
@@ -43,6 +42,7 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.json.JsonMapper;
 
 @ConditionalOnProperty(
     name = "ccd.sdk.decentralised.es-indexer.enabled",
@@ -68,7 +68,7 @@ class DecentralisedESIndexer implements SmartLifecycle, DisposableBean {
   private final ExecutorService workerExecutor;
   private final ElasticsearchTransport transport;
   private final ElasticsearchClient client;
-  private final ObjectMapper mapper = new ObjectMapper();
+  private final JsonMapper mapper = JsonMapper.builder().build();
   private final int queueLockSeconds;
   private final int batchSize;
   private final int drainDelayMs;
@@ -133,7 +133,7 @@ class DecentralisedESIndexer implements SmartLifecycle, DisposableBean {
           }
         })
         .build();
-    this.transport = new Rest5ClientTransport(restClient, new JacksonJsonpMapper(mapper));
+    this.transport = new Rest5ClientTransport(restClient, new Jackson3JsonpMapper(mapper));
     this.client = new ElasticsearchClient(transport);
 
     log.info("Starting decentralised ES indexer targeting {}", Arrays.toString(hosts));

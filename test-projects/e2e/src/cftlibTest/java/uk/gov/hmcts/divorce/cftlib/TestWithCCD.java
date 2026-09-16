@@ -1,9 +1,9 @@
 package uk.gov.hmcts.divorce.cftlib;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
@@ -3630,7 +3630,7 @@ public class TestWithCCD extends CftlibTest {
     }
 
     private void pushElasticsearchDocument(long caseDataId, int revision, JsonNode document) throws IOException {
-        ObjectNode payload = document.deepCopy();
+        ObjectNode payload = (ObjectNode) document.deepCopy();
         payload.put("case_revision", revision);
 
         var request = new HttpPut(String.format(

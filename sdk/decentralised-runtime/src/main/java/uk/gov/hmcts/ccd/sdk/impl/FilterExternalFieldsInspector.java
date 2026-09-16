@@ -1,7 +1,8 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
-import com.fasterxml.jackson.databind.introspect.AnnotatedMember;
-import com.fasterxml.jackson.databind.introspect.JacksonAnnotationIntrospector;
+import tools.jackson.databind.cfg.MapperConfig;
+import tools.jackson.databind.introspect.AnnotatedMember;
+import tools.jackson.databind.introspect.JacksonAnnotationIntrospector;
 import uk.gov.hmcts.ccd.sdk.External;
 
 /**
@@ -19,11 +20,11 @@ class FilterExternalFieldsInspector extends JacksonAnnotationIntrospector {
    * with {@link External}. Falls back to the default behaviour otherwise.
    */
   @Override
-  public boolean hasIgnoreMarker(AnnotatedMember a) {
+  public boolean hasIgnoreMarker(MapperConfig<?> config, AnnotatedMember a) {
     if (a.hasAnnotation(External.class)) {
       return true;
     }
-    return super.hasIgnoreMarker(a);
+    return super.hasIgnoreMarker(config, a);
   }
 
 }

@@ -1,10 +1,10 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPayload;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.ReconfigureTaskOutboxPayload;
@@ -35,7 +35,7 @@ public class TaskOutboxService {
     try {
       String payload = objectMapper.writeValueAsString(request);
       repository.enqueue(task.getCaseId(), payload, TaskAction.INITIATE.getId(), nextAttemptAt);
-    } catch (IOException ex) {
+    } catch (JacksonException ex) {
       throw new IllegalStateException("Failed to enqueue task outbox entry", ex);
     }
   }
@@ -51,7 +51,7 @@ public class TaskOutboxService {
           objectMapper.writeValueAsString(payload),
           TaskAction.COMPLETE.getId()
       );
-    } catch (IOException ex) {
+    } catch (JacksonException ex) {
       throw new IllegalStateException("Failed to enqueue task outbox entry", ex);
     }
   }
@@ -67,7 +67,7 @@ public class TaskOutboxService {
           objectMapper.writeValueAsString(payload),
           TaskAction.CANCEL.getId()
       );
-    } catch (IOException ex) {
+    } catch (JacksonException ex) {
       throw new IllegalStateException("Failed to enqueue task outbox entry", ex);
     }
   }
@@ -82,7 +82,7 @@ public class TaskOutboxService {
           objectMapper.writeValueAsString(payload),
           TaskAction.RECONFIGURE.getId()
       );
-    } catch (IOException ex) {
+    } catch (JacksonException ex) {
       throw new IllegalStateException("Failed to enqueue task outbox entry", ex);
     }
   }

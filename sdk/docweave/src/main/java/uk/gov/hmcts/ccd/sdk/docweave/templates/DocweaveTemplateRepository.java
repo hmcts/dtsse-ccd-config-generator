@@ -2,8 +2,6 @@ package uk.gov.hmcts.ccd.sdk.docweave.templates;
 
 import static java.util.stream.Collectors.joining;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.Array;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -18,6 +16,8 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 @RequiredArgsConstructor
 public class DocweaveTemplateRepository {

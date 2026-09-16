@@ -2,15 +2,15 @@ package uk.gov.hmcts.ccd.sdk.taskmanagement.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import lombok.Builder;
 import lombok.Value;
 import lombok.extern.jackson.Jacksonized;
+import tools.jackson.databind.PropertyNamingStrategies;
+import tools.jackson.databind.annotation.JsonDeserialize;
+import tools.jackson.databind.annotation.JsonNaming;
 
 /**
  * Immutable SDK representation of the API-first task-management {@code /tasks} payload shape.

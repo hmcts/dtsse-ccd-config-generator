@@ -1,9 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import lombok.SneakyThrows;
@@ -11,6 +8,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
@@ -39,7 +40,6 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
 
   private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
-
   private final ResolvedConfigRegistry registry;
   private final CcdCallbackExecutor executor;
   private final ObjectMapper mapper;
@@ -54,7 +54,9 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     this.registry = registry;
     this.executor = executor;
     this.mapper = mapper;
-    this.filteredMapper = mapper.copy().setAnnotationIntrospector(new FilterExternalFieldsInspector());
+    this.filteredMapper = mapper.rebuild()
+        .annotationIntrospector(new FilterExternalFieldsInspector())
+        .build();
     this.cdamAttachService = cdamAttachService;
   }
 
@@ -178,15 +180,38 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   }
 
   private CallbackRequest buildCallbackRequest(DecentralisedCaseEvent event) {
-    CaseDetails caseDetails = mapper.convertValue(event.getCaseDetails(), CaseDetails.class);
+    CaseDetails caseDetails = toClientCaseDetails(event.getCaseDetails());
     CaseDetails caseDetailsBefore = event.getCaseDetailsBefore() == null
         ? null
-        : mapper.convertValue(event.getCaseDetailsBefore(), CaseDetails.class);
+        : toClientCaseDetails(event.getCaseDetailsBefore());
 
     return CallbackRequest.builder()
         .caseDetails(caseDetails)
         .caseDetailsBefore(caseDetailsBefore)
         .eventId(event.getEventDetails().getEventId())
+        .build();
+  }
+
+  private CaseDetails toClientCaseDetails(
+      uk.gov.hmcts.ccd.domain.model.definition.CaseDetails source) {
+    Classification classification = source.getSecurityClassification() == null
+        ? null
+        : Classification.valueOf(source.getSecurityClassification().name());
+    Map<String, Object> data = source.getData() == null
+        ? null
+        : new LinkedHashMap<>(source.getData());
+
+    return CaseDetails.builder()
+        .id(source.getReference())
+        .jurisdiction(source.getJurisdiction())
+        .caseTypeId(source.getCaseTypeId())
+        .createdDate(source.getCreatedDate())
+        .lastModified(source.getLastModified())
+        .state(source.getState())
+        .data(data)
+        .securityClassification(classification)
+        .callbackResponseStatus(source.getCallbackResponseStatus())
+        .version(source.getVersion())
         .build();
   }
 

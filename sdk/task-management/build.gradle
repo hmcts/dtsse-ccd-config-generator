@@ -15,15 +15,15 @@ dependencies {
     implementation 'org.springframework:spring-context-support'
     api 'org.springframework:spring-web'
     api 'org.springframework.cloud:spring-cloud-starter-openfeign'
-    api 'com.github.hmcts:service-auth-provider-java-client:5.3.5'
+    api 'com.github.hmcts:service-auth-provider-java-client:6.0.1'
     api 'org.slf4j:slf4j-api'
 
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
     implementation 'org.springframework.boot:spring-boot-http-converter'
+    implementation 'org.springframework.boot:spring-boot-jackson'
 
     implementation 'com.github.ben-manes.caffeine:caffeine'
-    implementation 'com.fasterxml.jackson.core:jackson-databind'
-    implementation 'org.springframework.boot:spring-boot-jackson2'
+    implementation 'tools.jackson.core:jackson-databind'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

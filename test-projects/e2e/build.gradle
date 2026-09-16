@@ -2,11 +2,11 @@ import uk.gov.hmcts.rse.AuthMode
 import uk.gov.hmcts.rse.CftlibExec
 
 plugins {
-  id 'org.springframework.boot' version '3.5.9'
+  id 'org.springframework.boot' version '4.0.8'
   id 'io.spring.dependency-management' version '1.1.7'
   id 'jacoco'
   id 'hmcts.ccd.sdk'
-  id 'com.github.hmcts.rse-cft-lib' version '0.19.2377'
+  id 'com.github.hmcts.rse-cft-lib' version '0.19.2391'
 }
 
 group = 'uk.gov.hmcts'
@@ -61,33 +61,34 @@ repositories {
 
 dependencies {
   implementation 'org.springframework.boot:spring-boot-starter-actuator'
-  implementation 'org.springframework.boot:spring-boot-starter-aop'
+  implementation 'org.springframework.boot:spring-boot-starter-aspectj'
   implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+  implementation 'org.springframework.boot:spring-boot-starter-jackson'
   implementation 'org.springframework.boot:spring-boot-starter-web'
 
-  implementation 'org.springframework.retry:spring-retry'
+  implementation 'org.springframework.retry:spring-retry:2.0.13'
 
   implementation 'org.flywaydb:flyway-database-postgresql'
   implementation 'org.postgresql:postgresql:42.7.13'
 
 
-  implementation 'com.github.hmcts:ccd-case-document-am-client:1.59.2'
-  implementation 'com.github.hmcts:core-case-data-store-client:5.3.0'
-  implementation 'com.github.hmcts:idam-java-client:3.0.5'
+  implementation 'com.github.hmcts:ccd-case-document-am-client:2.0.0'
+  implementation 'com.github.hmcts:core-case-data-store-client:6.1.0'
+  implementation 'com.github.hmcts:idam-java-client:4.0.0'
   implementation 'com.github.hmcts.java-logging:logging:8.0.0'
-  implementation 'com.github.hmcts:service-auth-provider-java-client:5.3.5'
+  implementation 'com.github.hmcts:service-auth-provider-java-client:6.0.1'
   testImplementation 'com.github.hmcts:ccd-data-migration-support'
   implementation 'com.github.hmcts:task-management'
 
-  implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.9.1'
+  implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
 
   implementation 'com.github.ben-manes.caffeine:caffeine:3.2.4'
   implementation 'com.google.guava:guava:33.7.1-jre'
 
-  implementation 'org.projectlombok:lombok'
-  annotationProcessor 'org.projectlombok:lombok'
-  cftlibAnnotationProcessor 'org.projectlombok:lombok'
-  cftlibTestAnnotationProcessor 'org.projectlombok:lombok'
+  implementation 'org.projectlombok:lombok:1.18.46'
+  annotationProcessor 'org.projectlombok:lombok:1.18.46'
+  cftlibAnnotationProcessor 'org.projectlombok:lombok:1.18.46'
+  cftlibTestAnnotationProcessor 'org.projectlombok:lombok:1.18.46'
 
   testImplementation('org.springframework.boot:spring-boot-starter-test') {
     exclude module: 'commons-logging'
@@ -107,6 +108,18 @@ dependencies {
   cftlibTestImplementation 'org.junit.platform:junit-platform-console'
   cftlibTestImplementation 'jakarta.jms:jakarta.jms-api:3.1.0'
   cftlibTestImplementation 'com.github.hmcts:task-management'
+}
+
+tasks.named('manifestTest') {
+  doLast {
+    def manifest = layout.buildDirectory.file('cftlib/libTest').get().asFile
+    def lines = manifest.readLines()
+    lines[0] = lines[0].replace(
+      'org.junit.platform.console.ConsoleLauncher --select-package=',
+      'org.junit.platform.console.ConsoleLauncher execute --select-package='
+    )
+    manifest.text = lines.join(System.lineSeparator()) + System.lineSeparator()
+  }
 }
 
 springBoot {

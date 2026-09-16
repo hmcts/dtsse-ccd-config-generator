@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
+import tools.jackson.databind.ObjectMapper;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
 
@@ -24,7 +25,8 @@ public class ServicePersistenceControllerTest {
       submissionService,
       auditEventService,
       supplementaryDataService,
-      caseProjectionService
+      caseProjectionService,
+      new ObjectMapper()
   );
 
   @Test

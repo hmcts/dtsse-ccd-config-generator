@@ -1,8 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.servicebus;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -14,6 +11,9 @@ import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 @Repository
 @RequiredArgsConstructor
@@ -84,7 +84,7 @@ public class CcdMessageQueueRepository {
   private JsonNode toJsonNode(String rawJson) {
     try {
       return objectMapper.readTree(rawJson);
-    } catch (JsonProcessingException e) {
+    } catch (JacksonException e) {
       throw new DataRetrievalFailureException("Unable to parse message_information JSON", e);
     }
   }

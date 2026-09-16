@@ -35,8 +35,7 @@ dependencies {
             prefer elasticsearchClientVersion
         }
     }
-    implementation 'com.fasterxml.jackson.core:jackson-databind'
-    implementation 'org.springframework.boot:spring-boot-jackson2'
+    implementation 'tools.jackson.core:jackson-databind'
 
     compileOnly 'org.projectlombok:lombok:1.18.48'
     annotationProcessor 'org.projectlombok:lombok:1.18.48'

@@ -1,7 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.servicebus;
 
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.jms.ConnectionFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -9,9 +7,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jms.core.JmsTemplate;
-import org.springframework.jms.support.converter.MappingJackson2MessageConverter;
 import org.springframework.jms.support.converter.MessageConverter;
 import org.springframework.jms.support.converter.MessageType;
+import tools.jackson.core.StreamReadFeature;
+import tools.jackson.databind.json.JsonMapper;
 
 @Configuration
 @EnableConfigurationProperties(CcdServiceBusProperties.class)
@@ -28,12 +27,11 @@ public class CcdServiceBusJmsConfiguration {
   }
 
   @Bean
-  @SuppressWarnings("removal")
-  public MessageConverter ccdServiceBusMessageConverter(ObjectMapper objectMapper) {
-    MappingJackson2MessageConverter converter = new CcdMessageConverter();
-    ObjectMapper mapper = objectMapper.copy();
-    mapper.enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
-    converter.setObjectMapper(mapper);
+  public MessageConverter ccdServiceBusMessageConverter(JsonMapper objectMapper) {
+    JsonMapper mapper = objectMapper.rebuild()
+        .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+        .build();
+    CcdMessageConverter converter = new CcdMessageConverter(mapper);
     converter.setTargetType(MessageType.BYTES);
     converter.setTypeIdPropertyName("_type");
     return converter;

@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement.delay.internal.calendar;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Ticker;
 import java.time.Duration;
@@ -11,6 +10,8 @@ import org.springframework.cache.CacheManager;
 import org.springframework.cache.caffeine.CaffeineCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 @Configuration
 public class DelayUntilCalendarConfiguration {
@@ -32,9 +33,12 @@ public class DelayUntilCalendarConfiguration {
   @Bean
   @ConditionalOnMissingBean
   PublicHolidayService publicHolidayService(ObjectMapper objectMapper) {
+    if (!(objectMapper instanceof JsonMapper jsonMapper)) {
+      throw new IllegalStateException("The calendar client requires a Jackson JsonMapper");
+    }
     return new PublicHolidayService(
-        SnakeCaseFeignConfiguration.calendarFeignDecoder(objectMapper),
-        SnakeCaseFeignConfiguration.calendarFeignEncoder(objectMapper)
+        SnakeCaseFeignConfiguration.calendarFeignDecoder(jsonMapper),
+        SnakeCaseFeignConfiguration.calendarFeignEncoder(jsonMapper)
     );
   }
 

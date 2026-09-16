@@ -2,7 +2,6 @@ package uk.gov.hmcts.ccd.sdk.servicebus;
 
 import static uk.gov.hmcts.ccd.sdk.servicebus.CcdMessageQueueRepository.MessageQueueCandidate;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.jms.JMSException;
 import jakarta.jms.Message;
 import java.time.LocalDateTime;
@@ -15,6 +14,7 @@ import org.springframework.jms.core.JmsTemplate;
 import org.springframework.jms.core.MessagePostProcessor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.JsonNode;
 
 @Component
 @Slf4j

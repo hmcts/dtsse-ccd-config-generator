@@ -3,10 +3,9 @@ package uk.gov.hmcts.ccd.sdk.impl.json;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.sun.net.httpserver.HttpServer;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.net.http.HttpTimeoutException;
 import java.util.Map;
@@ -20,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import tools.jackson.databind.ObjectMapper;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
@@ -27,7 +27,9 @@ import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
 class JsonCallbackBridgeTest {
 
   private final ObjectMapper mapper = new CcdCaseDataMapperConfiguration()
-      .ccdCaseDataObjectMapper(new ObjectMapper().setSerializationInclusion(JsonInclude.Include.NON_EMPTY));
+      .ccdCaseDataObjectMapper(new ObjectMapper().rebuild()
+          .changeDefaultPropertyInclusion(inclusion -> inclusion.withValueInclusion(JsonInclude.Include.NON_EMPTY))
+          .build());
 
   @AfterEach
   void resetRequestContext() {

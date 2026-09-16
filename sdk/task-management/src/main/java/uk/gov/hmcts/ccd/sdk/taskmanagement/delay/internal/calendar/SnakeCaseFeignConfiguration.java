@@ -4,7 +4,6 @@ import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.http.MediaType.TEXT_PLAIN;
 import static org.springframework.http.MediaType.TEXT_PLAIN_VALUE;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.codec.Decoder;
 import feign.codec.Encoder;
 import java.util.Arrays;
@@ -17,28 +16,29 @@ import org.springframework.cloud.openfeign.support.ResponseEntityDecoder;
 import org.springframework.cloud.openfeign.support.SpringDecoder;
 import org.springframework.cloud.openfeign.support.SpringEncoder;
 import org.springframework.http.MediaType;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
+import tools.jackson.databind.json.JsonMapper;
 
-@SuppressWarnings({"PMD.DataflowAnomalyAnalysis", "removal"})
+@SuppressWarnings("PMD.DataflowAnomalyAnalysis")
 final class SnakeCaseFeignConfiguration {
 
   private SnakeCaseFeignConfiguration() {
     // utility class
   }
 
-  static Decoder calendarFeignDecoder(ObjectMapper objectMapper) {
+  static Decoder calendarFeignDecoder(JsonMapper objectMapper) {
     return new ResponseEntityDecoder(new SpringDecoder(messageConverters(objectMapper, true)));
   }
 
-  static Encoder calendarFeignEncoder(ObjectMapper objectMapper) {
+  static Encoder calendarFeignEncoder(JsonMapper objectMapper) {
     return new SpringEncoder(messageConverters(objectMapper, false));
   }
 
   private static ObjectProvider<FeignHttpMessageConverters> messageConverters(
-      ObjectMapper objectMapper,
+      JsonMapper objectMapper,
       boolean acceptTextPlain) {
-    MappingJackson2HttpMessageConverter jacksonConverter =
-        new MappingJackson2HttpMessageConverter(objectMapper);
+    JacksonJsonHttpMessageConverter jacksonConverter =
+        new JacksonJsonHttpMessageConverter(objectMapper);
     if (acceptTextPlain) {
       jacksonConverter.setSupportedMediaTypes(Arrays.asList(
           MediaType.valueOf(TEXT_PLAIN_VALUE + ";charset=utf-8"),
@@ -50,7 +50,7 @@ final class SnakeCaseFeignConfiguration {
 
     StaticListableBeanFactory clientCustomizers = new StaticListableBeanFactory();
     StaticListableBeanFactory cloudCustomizers = new StaticListableBeanFactory();
-    cloudCustomizers.addBean("calendarJackson2Converter", (HttpMessageConverterCustomizer) converters -> {
+    cloudCustomizers.addBean("calendarJacksonConverter", (HttpMessageConverterCustomizer) converters -> {
       converters.clear();
       converters.add(jacksonConverter);
     });

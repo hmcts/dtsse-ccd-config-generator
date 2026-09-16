@@ -3,7 +3,6 @@ package uk.gov.hmcts.ccd.sdk.taskmanagement;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.codec.Decoder;
 import feign.codec.Encoder;
 import org.junit.jupiter.api.Test;
@@ -13,6 +12,7 @@ import org.springframework.cloud.openfeign.FeignAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import tools.jackson.databind.ObjectMapper;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
 
 class TaskManagementAutoConfigurationTest {

@@ -10,17 +10,17 @@ dependencies {
     implementation platform(SpringBootPlugin.BOM_COORDINATES)
     implementation project(':ccd-config-generator')
     // A filtered set of useful CCD POJOs including DTOs and other utilities.
-    implementation ('com.github.hmcts.rse-cft-lib:ccd-lib:0.19.2186') {
+    implementation ('com.github.hmcts.rse-cft-lib:ccd-lib:0.19.2391') {
         transitive = false
     }
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-webmvc'
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-jdbc'
     implementation 'org.springframework.boot:spring-boot-starter-flyway'
-    implementation('com.github.hmcts:idam-java-client:3.0.5') {
+    implementation('com.github.hmcts:idam-java-client:4.0.0') {
         transitive = false
     }
-    implementation 'com.github.hmcts:ccd-case-document-am-client:1.59.2'
-    implementation 'com.github.hmcts:service-auth-provider-java-client:5.3.5'
+    implementation 'com.github.hmcts:ccd-case-document-am-client:2.0.0'
+    implementation 'com.github.hmcts:service-auth-provider-java-client:6.0.1'
     implementation group: 'com.github.ben-manes.caffeine', name: 'caffeine'
     compileOnly 'io.github.openfeign:feign-core:13.15'
     compileOnly 'org.projectlombok:lombok:1.18.48'
@@ -28,7 +28,6 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok:1.18.48'
 
     implementation "org.springframework.boot:spring-boot-autoconfigure"
-    implementation 'org.springframework.boot:spring-boot-jackson2'
     runtimeOnly 'org.flywaydb:flyway-database-postgresql'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation group: 'org.testcontainers', name: 'testcontainers'

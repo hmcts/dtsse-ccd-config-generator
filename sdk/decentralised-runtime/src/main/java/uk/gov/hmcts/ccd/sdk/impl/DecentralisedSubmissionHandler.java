@@ -1,11 +1,11 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
+import tools.jackson.databind.ObjectMapper;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.Event;

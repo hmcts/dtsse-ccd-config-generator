@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.FeignException;
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -9,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.util.CollectionUtils;
+import tools.jackson.databind.ObjectMapper;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPayload;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskReconfigurePayload;

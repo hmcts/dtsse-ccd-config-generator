@@ -1,7 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.impl.cdam;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -9,6 +7,8 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 import uk.gov.hmcts.reform.ccd.document.am.model.DocumentHashToken;
 
 @Component
@@ -64,7 +64,7 @@ public class CaseDocumentHashScanner {
       if (isDocumentNode(objectNode)) {
         documentNodes.add(objectNode);
       }
-      objectNode.fields().forEachRemaining(entry -> collectDocumentNodes(entry.getValue(), documentNodes));
+      objectNode.values().forEach(child -> collectDocumentNodes(child, documentNodes));
       return;
     }
 

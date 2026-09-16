@@ -21,7 +21,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.springframework.web.util.ContentCachingResponseWrapper;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 @Slf4j
 @Component
@@ -45,7 +46,8 @@ public class CallbackLoggingFilter extends OncePerRequestFilter {
         HttpServletResponse response,
         FilterChain filterChain
     ) throws ServletException, IOException {
-        ContentCachingRequestWrapper cachingRequest = new ContentCachingRequestWrapper(request);
+        ContentCachingRequestWrapper cachingRequest =
+            new ContentCachingRequestWrapper(request, Integer.MAX_VALUE);
         ContentCachingResponseWrapper cachingResponse = new ContentCachingResponseWrapper(response);
         long start = System.nanoTime();
 
@@ -76,7 +78,7 @@ public class CallbackLoggingFilter extends OncePerRequestFilter {
         byte[] line;
         try {
             line = (OBJECT_MAPPER.writeValueAsString(entry) + System.lineSeparator()).getBytes(StandardCharsets.UTF_8);
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             log.warn("Failed to serialise HTTP traffic log entry", e);
             return;
         }

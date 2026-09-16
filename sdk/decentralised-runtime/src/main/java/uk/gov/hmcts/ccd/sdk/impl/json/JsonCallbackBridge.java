@@ -1,10 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.impl.json;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
@@ -42,6 +38,10 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
@@ -78,9 +78,10 @@ public class JsonCallbackBridge {
                      Environment environment) {
     this.applicationContext = applicationContext;
     this.mapper = mapper;
-    this.requestMapper = mapper.copy()
-        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-        .setSerializationInclusion(JsonInclude.Include.ALWAYS);
+    this.requestMapper = mapper.rebuild()
+        .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+        .changeDefaultPropertyInclusion(inclusion -> inclusion.withValueInclusion(JsonInclude.Include.ALWAYS))
+        .build();
     this.externalCallbackTimeout = externalCallbackTimeout(environment);
     // Application Gateway rejects the h2c upgrade attempted by the default client for HTTP URLs.
     this.httpClient = HttpClient.newBuilder()
@@ -151,7 +152,20 @@ public class JsonCallbackBridge {
   }
 
   private SignificantItem significantItem(Object value) {
-    return value == null ? null : mapper.convertValue(value, SignificantItem.class);
+    if (value == null) {
+      return null;
+    }
+    if (value instanceof SignificantItem significantItem) {
+      return significantItem;
+    }
+    if (!(value instanceof Map<?, ?> map)) {
+      throw new IllegalArgumentException("significant_item must be a JSON object");
+    }
+    return SignificantItem.builder()
+        .type((String) map.get("type"))
+        .description((String) map.get("description"))
+        .url((String) map.get("url"))
+        .build();
   }
 
   private Object invoke(String callbackUrl,

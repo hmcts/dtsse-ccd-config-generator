@@ -1,35 +1,25 @@
 package uk.gov.hmcts.ccd.sdk.serializer;
 
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.databind.SerializerProvider;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 
-import java.io.IOException;
 import java.time.LocalDateTime;
+import org.junit.Test;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.module.SimpleModule;
 
-import static org.mockito.Mockito.verify;
-
-@RunWith(MockitoJUnitRunner.class)
 public class LocalDateTimeSerializerTest {
 
-    @Mock
-    private JsonGenerator jsonGenerator;
-
-    @Mock
-    private SerializerProvider serializerProvider;
-
     @Test
-    public void shouldAssertSerializationMethodCalled() throws IOException {
+    public void shouldSerializeDateTimeWithoutMilliSeconds() throws Exception {
 
         LocalDateTime date = LocalDateTime.of(2022, 4, 21, 10, 22, 33 );
-        String dateTimeWithNoMilliSeconds = "2022-04-21T10:22:33";
+        var module = new SimpleModule()
+            .addSerializer(LocalDateTime.class, new LocalDateTimeSerializer());
+        var mapper = JsonMapper.builder()
+            .addModule(module)
+            .build();
 
-        LocalDateTimeSerializer serializer = new LocalDateTimeSerializer();
-        serializer.serialize(date, jsonGenerator, serializerProvider);
-
-        verify(jsonGenerator).writeString(dateTimeWithNoMilliSeconds);
+        assertThat(mapper.writeValueAsString(date), equalTo("\"2022-04-21T10:22:33\""));
     }
 }

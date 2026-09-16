@@ -1,15 +1,13 @@
 package uk.gov.hmcts.ccd.sdk.diff;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.type.CollectionType;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.MapDifference;
 import com.google.common.collect.MapDifference.ValueDifference;
+import com.google.common.collect.MapDifference;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.google.common.collect.Sets.SetView;
+import com.google.common.collect.Sets;
 import com.google.common.io.Resources;
 import java.io.File;
 import java.io.IOException;
@@ -29,6 +27,8 @@ import org.apache.commons.lang3.StringUtils;
 import org.skyscreamer.jsonassert.JSONCompare;
 import org.skyscreamer.jsonassert.JSONCompareMode;
 import org.skyscreamer.jsonassert.JSONCompareResult;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.type.CollectionType;
 import uk.gov.hmcts.ccd.sdk.generator.JsonUtils;
 
 /**

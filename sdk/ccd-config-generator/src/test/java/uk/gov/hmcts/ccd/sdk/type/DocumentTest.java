@@ -2,8 +2,8 @@ package uk.gov.hmcts.ccd.sdk.type;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.Test;
+import tools.jackson.databind.ObjectMapper;
 
 public class DocumentTest {
 

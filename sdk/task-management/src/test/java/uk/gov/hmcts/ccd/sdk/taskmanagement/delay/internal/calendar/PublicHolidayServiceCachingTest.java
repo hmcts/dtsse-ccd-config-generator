@@ -6,7 +6,6 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.Ticker;
 import jakarta.annotation.Resource;
 import java.time.Duration;
@@ -23,6 +22,8 @@ import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.AopTestUtils;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.delay.DelayUntilAutoConfiguration;
 
 @SpringBootTest(classes = PublicHolidayServiceCachingTest.TestApplication.class)
@@ -96,7 +97,7 @@ class PublicHolidayServiceCachingTest {
 
     @Bean
     ObjectMapper objectMapper() {
-      return new ObjectMapper();
+      return JsonMapper.builder().build();
     }
 
     @Bean("calendarTicker")

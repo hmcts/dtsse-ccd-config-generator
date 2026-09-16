@@ -1,8 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -15,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.EmptyResultDataAccessException;
@@ -26,6 +22,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedAuditEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
@@ -35,7 +34,6 @@ import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 
 @Slf4j
-@RequiredArgsConstructor
 @Service(value = "uk.gov.hmcts.ccd.sdk.impl.AuditEventService")
 class AuditEventService {
 
@@ -89,6 +87,17 @@ class AuditEventService {
   private final ObjectMapper defaultMapper;
   private final Optional<MessagePublisher> publisher;
   private final ResolvedConfigRegistry registry;
+
+  AuditEventService(
+      NamedParameterJdbcTemplate ndb,
+      ObjectMapper defaultMapper,
+      Optional<MessagePublisher> publisher,
+      ResolvedConfigRegistry registry) {
+    this.ndb = ndb;
+    this.defaultMapper = defaultMapper;
+    this.publisher = publisher;
+    this.registry = registry;
+  }
 
   @Transactional(propagation = Propagation.MANDATORY)
   long reserveCaseEventId() {

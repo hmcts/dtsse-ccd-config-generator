@@ -1,12 +1,13 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement.delay;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.delay.internal.DelayUntilCalculator;
 
 /**
@@ -63,12 +64,12 @@ public class DelayUntilResolver {
 
   private static void logInput(DelayUntilRequest delayUntilRequest) {
     try {
-      ObjectMapper objectMapper = new ObjectMapper();
+      ObjectMapper objectMapper = JsonMapper.builder().build();
       log.info(
           "Delay until value for calculation is : {}",
           objectMapper.writeValueAsString(delayUntilRequest)
       );
-    } catch (JsonProcessingException jpe) {
+    } catch (JacksonException jpe) {
       log.error(jpe.getMessage());
     }
   }

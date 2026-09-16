@@ -1,7 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.runtime;
 
-import com.fasterxml.jackson.databind.JavaType;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
 import java.util.Map;
 import lombok.SneakyThrows;
@@ -11,6 +9,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.JavaType;
+import tools.jackson.databind.MapperFeature;
+import tools.jackson.databind.ObjectMapper;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
@@ -33,10 +34,12 @@ public class CcdCallbackExecutor {
   @Autowired
   public CcdCallbackExecutor(ResolvedConfigRegistry registry, ObjectMapper mapper) {
     this.registry = registry;
-    this.mapper = mapper;
+    this.mapper = mapper.rebuild()
+        .enable(MapperFeature.ALLOW_FINAL_FIELDS_AS_MUTATORS)
+        .build();
     for (ResolvedCCDConfig<?, ?, ?> config : registry.getAll()) {
       this.caseTypeToJavaType.put(config.getCaseType(),
-          mapper.getTypeFactory().constructParametricType(CaseDetails.class, config.getCaseClass(),
+          this.mapper.getTypeFactory().constructParametricType(CaseDetails.class, config.getCaseClass(),
               config.getStateClass()));
     }
   }
