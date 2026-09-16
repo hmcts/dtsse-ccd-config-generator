@@ -56,6 +56,28 @@ class CcdDataMigrationFdwCleanupExampleIntegrationTest {
   }
 
   @Test
+  void removesServerAndMappingWhenStagingSchemaWasAlreadyRemoved() throws IOException {
+    jdbc.execute("drop schema fdw_stage cascade");
+
+    assertThat(count("select count(*) from pg_foreign_server where srvname = 'src_ccd_server'"))
+        .isOne();
+    assertThat(count("""
+        select count(*)
+        from pg_user_mappings m
+        join pg_foreign_server s on s.oid = m.srvid
+        where s.srvname = 'src_ccd_server'
+        """))
+        .isOne();
+
+    jdbc.execute(cleanupSql());
+
+    assertThat(count("select count(*) from pg_foreign_server where srvname = 'src_ccd_server'"))
+        .isZero();
+    assertThat(count("select count(*) from pg_namespace where nspname = 'fdw_stage'"))
+        .isZero();
+  }
+
+  @Test
   void refusesCleanupWhileMigrationProgressIsIncomplete() throws IOException {
     jdbc.update("""
         insert into ccd_data_migration.ccd_data_migration_progress (
