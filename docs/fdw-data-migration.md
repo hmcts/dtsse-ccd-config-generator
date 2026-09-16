@@ -237,6 +237,12 @@ the FDW server; create it during setup with `FDW_ADDITIONAL_GRANTEE` or have Pla
 create it manually. The Java task does not create user mappings because they contain source database
 credentials. Leave it blank to skip the extra grant.
 
+## Post-migration FDW cleanup
+
+After migration and cutover have completed, follow the
+[CCD data migration cleanup guide](ccd-data-migration-cleanup.md) to remove the temporary FDW
+connection from the application database.
+
 For services using the Java task, `case_event_significant_items` is copied during `CUTOVER` after
 events have caught up. It uses one set-based insert query joined through the migrated target events
 up to the captured cutover event high-water mark, so the preload event walk is not restarted.
