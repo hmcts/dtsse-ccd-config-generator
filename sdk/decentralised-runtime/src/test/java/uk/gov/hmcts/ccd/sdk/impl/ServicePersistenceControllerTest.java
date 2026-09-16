@@ -37,7 +37,7 @@ public class ServicePersistenceControllerTest {
         UUID.randomUUID()
     );
 
-    assertThat(response.getStatusCodeValue()).isEqualTo(401);
+    assertThat(response.getStatusCode().value()).isEqualTo(401);
     assertThat(response.getBody()).isNotNull();
     assertThat(response.getBody().getErrors())
         .containsExactly("Authorization header is required");
@@ -55,7 +55,7 @@ public class ServicePersistenceControllerTest {
         UUID.randomUUID()
     );
 
-    assertThat(response.getStatusCodeValue()).isEqualTo(401);
+    assertThat(response.getStatusCode().value()).isEqualTo(401);
     assertThat(response.getBody()).isNotNull();
     assertThat(response.getBody().getErrors())
         .containsExactly("Authorization header is required");
@@ -76,7 +76,7 @@ public class ServicePersistenceControllerTest {
         idempotencyKey
     );
 
-    assertThat(response.getStatusCodeValue()).isEqualTo(200);
+    assertThat(response.getStatusCode().value()).isEqualTo(200);
     assertThat(response.getBody()).isSameAs(expectedResponse);
 
     verify(submissionService).submit(event, "Bearer token", idempotencyKey);

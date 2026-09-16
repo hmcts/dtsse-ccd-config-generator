@@ -4,16 +4,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.codec.Decoder;
 import feign.codec.Encoder;
 import java.time.Duration;
-import org.springframework.beans.factory.ObjectFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.autoconfigure.http.HttpMessageConverters;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.openfeign.EnableFeignClients;
+import org.springframework.cloud.openfeign.support.FeignHttpMessageConverters;
 import org.springframework.cloud.openfeign.support.ResponseEntityDecoder;
 import org.springframework.cloud.openfeign.support.SpringDecoder;
 import org.springframework.cloud.openfeign.support.SpringEncoder;
@@ -38,7 +38,7 @@ public class TaskManagementAutoConfiguration {
       havingValue = "true",
       matchIfMissing = true
   )
-  public Encoder compatibilityFeignEncoder(ObjectFactory<HttpMessageConverters> converters) {
+  public Encoder compatibilityFeignEncoder(ObjectProvider<FeignHttpMessageConverters> converters) {
     return new SpringEncoder(converters);
   }
 
@@ -51,7 +51,7 @@ public class TaskManagementAutoConfiguration {
       havingValue = "true",
       matchIfMissing = true
   )
-  public Decoder compatibilityFeignDecoder(ObjectFactory<HttpMessageConverters> converters) {
+  public Decoder compatibilityFeignDecoder(ObjectProvider<FeignHttpMessageConverters> converters) {
     return new ResponseEntityDecoder(new SpringDecoder(converters));
   }
 

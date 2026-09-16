@@ -36,6 +36,7 @@ dependencies {
         }
     }
     implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'org.springframework.boot:spring-boot-jackson2'
 
     compileOnly 'org.projectlombok:lombok:1.18.48'
     annotationProcessor 'org.projectlombok:lombok:1.18.48'
@@ -46,11 +47,11 @@ dependencies {
     chaosTestImplementation project(':decentralised-runtime')
     chaosTestImplementation 'org.springframework.boot:spring-boot-starter-test'
     chaosTestImplementation 'org.testcontainers:testcontainers'
-    chaosTestImplementation 'org.testcontainers:junit-jupiter'
-    chaosTestImplementation 'org.testcontainers:postgresql'
+    chaosTestImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    chaosTestImplementation 'org.testcontainers:testcontainers-postgresql'
     chaosTestImplementation 'org.testcontainers:testcontainers-elasticsearch'
     chaosTestImplementation 'org.testcontainers:toxiproxy'
-    chaosTestImplementation 'org.flywaydb:flyway-core'
+    chaosTestImplementation 'org.springframework.boot:spring-boot-starter-flyway'
     chaosTestImplementation 'org.awaitility:awaitility'
     chaosTestRuntimeOnly 'org.flywaydb:flyway-database-postgresql'
     chaosTestRuntimeOnly 'org.postgresql:postgresql'
