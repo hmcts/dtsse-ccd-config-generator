@@ -176,6 +176,7 @@ class CaseDataRepository {
                                          else case_data.last_state_modified_date
                                        end
             where case_data.version = excluded.version
+               -- Allow decentralised events that do not mutate the case record
                or (
                  case_data.state is not distinct from excluded.state
                  and case_data.resolved_ttl is not distinct from excluded.resolved_ttl
