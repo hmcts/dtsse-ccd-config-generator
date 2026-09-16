@@ -12,6 +12,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration;
@@ -129,6 +131,44 @@ class IdempotentReplayIntegrationTest {
     assertThat(persisted.get("version")).isEqualTo(3);
     assertThat(persisted.get("case_revision")).isEqualTo(4L);
     assertThat(persisted.get("data")).isEqualTo("{}");
+  }
+
+  @ParameterizedTest
+  @EnumSource(MetadataChange.class)
+  void staleVersionIsRejectedWhenMetadataWouldChange(MetadataChange change) {
+    long caseId = STALE_NOOP_CASE_ID + 1 + change.ordinal();
+    long caseReference = STALE_NOOP_CASE_REFERENCE + 1 + change.ordinal();
+    seedCaseData(caseId, caseReference, 3, 3);
+    var params = Map.of("ref", caseReference);
+    if (change != MetadataChange.SUPPLEMENTARY_DATA) {
+      jdbc.update(
+          """
+          update ccd.case_data
+          set supplementary_data = '{"HMCTSServiceId":"ABA1"}'::jsonb
+          where reference = :ref
+          """,
+          params
+      );
+    }
+
+    var event = buildEvent(caseReference, "TestCase");
+    switch (change) {
+      case STATE -> event.getCaseDetails().setState("Closed");
+      case TTL -> event.setResolvedTtl(LocalDate.of(2030, 1, 1));
+      case SECURITY_CLASSIFICATION -> event.getCaseDetails().setSecurityClassification(SecurityClassification.PRIVATE);
+      case SUPPLEMENTARY_DATA -> {
+        // The configured HMCTSServiceId would be added to the stored empty object.
+      }
+      default -> throw new IllegalArgumentException("Unsupported metadata change: " + change);
+    }
+
+    String selectCase = "select * from ccd.case_data where reference = :ref";
+    Map<String, Object> before = jdbc.queryForMap(selectCase, params);
+
+    assertThatThrownBy(() -> repository.upsertCase(event, Optional.empty()))
+        .isInstanceOf(EmptyResultDataAccessException.class);
+
+    assertThat(jdbc.queryForMap(selectCase, params)).isEqualTo(before);
   }
 
   @Test
@@ -489,6 +529,13 @@ class IdempotentReplayIntegrationTest {
 
       return new ResolvedConfigRegistry(List.of(resolved));
     }
+  }
+
+  private enum MetadataChange {
+    STATE,
+    TTL,
+    SUPPLEMENTARY_DATA,
+    SECURITY_CLASSIFICATION
   }
 
   private enum TestState {
