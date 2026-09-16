@@ -73,7 +73,7 @@
     "chokidar": "^3.6.0",
     "esbuild": "0.28.2",
     "express": "5.2.1",
-    "govuk-frontend": "6.5.0",
+    "govuk-frontend": "6.5.1",
     "jsdom": "28.1.0",
     "nunjucks": "3.2.4",
     "sass-embedded": "1.104.1",
