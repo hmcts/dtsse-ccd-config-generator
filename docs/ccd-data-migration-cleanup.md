@@ -57,6 +57,18 @@ After reviewing the validation output, apply the cleanup:
 The operation is idempotent, so it is safe when an application's Flyway migration has already
 removed its staging foreign tables and schema.
 
+## Apply through application Flyway
+
+For cleanup as part of an application deployment, copy the SDK's
+[`VXXXX__remove_ccd_migration_fdw.sql`](../sdk/ccd-data-migration-support/src/main/resources/ccd-data-migration-db/examples/VXXXX__remove_ccd_migration_fdw.sql)
+example into the application's Flyway migration directory and replace `VXXXX` with its next
+migration version. The example applies the same ownership, shared-object, unexpected-relation and
+incomplete-progress checks before removing the server, mappings, foreign tables and staging schema.
+
+The example is outside the SDK's configured Flyway migration location, so consuming the library
+does not run the cleanup automatically. Each application must opt in after its reconciliation and
+rollback window are complete.
+
 Source database accounts, network allow-list entries and Azure extension allow-list settings remain
 separate Platform Operations cleanup actions. Remove `postgres_fdw` from `azure.extensions` only if
 no database on that PostgreSQL server uses it; extension allow-list changes are server-wide.

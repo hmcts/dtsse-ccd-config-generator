@@ -78,6 +78,7 @@ declare
   external_server_relations text;
   wrong_server_relations text;
   incomplete_tasks text;
+  progress_table text;
 begin
   if exists (
     select 1 from pg_foreign_server s
@@ -134,17 +135,23 @@ begin
     raise exception 'Migration schema contains tables on a different FDW server: %', wrong_server_relations;
   end if;
 
-  if to_regclass('ccd.ccd_data_migration_progress') is not null then
-    execute $query$
-      select string_agg(task_name || '=' || status, ', ' order by task_name)
-      from ccd.ccd_data_migration_progress
-      where status <> 'COMPLETE'
-    $query$ into incomplete_tasks;
+  foreach progress_table in array array[
+    'ccd_data_migration.ccd_data_migration_progress',
+    'ccd.ccd_data_migration_progress'
+  ] loop
+    if to_regclass(progress_table) is not null then
+      execute format(
+        'select string_agg(task_name || ''='' || status, '', '' order by task_name) '
+        'from %s where status <> ''COMPLETE''',
+        progress_table
+      ) into incomplete_tasks;
 
-    if incomplete_tasks is not null then
-      raise exception 'CCD data migration has incomplete progress rows: %', incomplete_tasks;
+      if incomplete_tasks is not null then
+        raise exception 'CCD data migration has incomplete progress rows in %: %',
+          progress_table, incomplete_tasks;
+      end if;
     end if;
-  end if;
+  end loop;
 end $$;
 
 select s.srvname as fdw_server,
