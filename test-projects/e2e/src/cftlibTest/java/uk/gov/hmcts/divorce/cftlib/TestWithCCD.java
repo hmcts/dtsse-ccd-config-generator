@@ -630,15 +630,21 @@ public class TestWithCCD extends CftlibTest {
     void legacyBlobMutatingEventDoesNotBlockConcurrentDecentralisedEvent() throws Exception {
         String staleToken = startConcurrentAddNoteEvent();
         String note = "stale after legacy blob update " + UUID.randomUUID();
+        String dueDate = "2040-01-01";
         Long revisionBefore = caseDataRevision();
         Integer blobVersionBefore = caseDataVersion();
 
-        updateDueDate();
+        updateDueDate(dueDate);
 
-        assertThat(caseDataVersion(), equalTo(blobVersionBefore + 1));
-        assertThat(caseDataRevision(), equalTo(revisionBefore + 1));
-        assertThat(readCaseDataFromDb().get("dueDate"), equalTo("2020-01-01"));
+        Integer blobVersionAfterLegacyUpdate = caseDataVersion();
+        Long revisionAfterLegacyUpdate = caseDataRevision();
+        assertThat(blobVersionAfterLegacyUpdate, equalTo(blobVersionBefore + 1));
+        assertThat(revisionAfterLegacyUpdate, equalTo(revisionBefore + 1));
+        assertThat(readCaseDataFromDb().get("dueDate"), equalTo(dueDate));
         assertThat(submitConcurrentEvent(note, staleToken), equalTo(201));
+        assertThat(caseDataVersion(), equalTo(blobVersionAfterLegacyUpdate));
+        assertThat(caseDataRevision(), equalTo(revisionAfterLegacyUpdate + 1));
+        assertThat(readCaseDataFromDb().get("dueDate"), equalTo(dueDate));
         assertThat(noteRows(note), equalTo(1));
     }
 
@@ -2046,10 +2052,14 @@ public class TestWithCCD extends CftlibTest {
     }
 
     private void updateDueDate() throws Exception {
+        updateDueDate("2020-01-01");
+    }
+
+    private void updateDueDate(String dueDate) throws Exception {
         var e = prepareEventRequest(
             "TEST_CASE_WORKER_USER@mailinator.com",
             "caseworker-update-due-date",
-            Map.of("dueDate", "2020-01-01")
+            Map.of("dueDate", dueDate)
         );
         var response = HttpClientBuilder.create().build().execute(e);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
