@@ -4,7 +4,6 @@ This page covers the FDW-based CCD data migration scripts:
 
 * `scripts/setup-ccd-data-fdw.sh`
 * `scripts/migrate-ccd-data-fdw.sh`
-* `scripts/cleanup-ccd-data-fdw.sh`
 
 Use this approach when the target application database can read the central CCD database through
 `postgres_fdw`. The setup script creates the FDW objects once. The migration script then assumes
