@@ -415,6 +415,9 @@ describe("template dialog", () => {
     const editor = dom.window.document.querySelector<HTMLElement>(
       ".docweave-templates__editor .ProseMirror",
     )!;
+    assert.equal(editor.getAttribute("role"), "textbox");
+    assert.equal(editor.getAttribute("aria-multiline"), "true");
+    assert.equal(editor.getAttribute("aria-label"), "Template wording");
     title.value = "Unsaved title";
     title.dispatchEvent(new dom.window.Event("input"));
     button("Save template").click();
@@ -442,6 +445,16 @@ describe("template dialog", () => {
       false,
     );
     assert.equal(button("Save template").disabled, false);
+
+    // The draft's toolbar is one Tab stop, reached from the wording by Alt+F10.
+    editor.focus();
+    const altF10 = new dom.window.KeyboardEvent("keydown", { key: "F10", altKey: true, bubbles: true, cancelable: true });
+    editor.dispatchEvent(altF10);
+    assert.equal(altF10.defaultPrevented, true);
+    assert.ok(
+      dom.window.document.activeElement?.closest(".docweave-templates__editor [role=toolbar]"),
+      "focus moved into the draft toolbar",
+    );
     dialog.destroy();
   });
 

@@ -105,6 +105,44 @@ the editor validates both generated documents and rejects any transition that
 violates the remaining identity and structure invariants. Restored documents
 are also checked against their generated baseline before the editor is created.
 
+### Accessibility
+
+The editor is used by judges, some of whom read with a screen reader or work
+from the keyboard alone, so nothing the editor shows only in colour or only to
+the mouse is the whole story:
+
+- The ProseMirror surface is exposed as a named multiline text box; the name
+  comes from the `label` editor option.
+- A fact with a source control is a link with the role description "generated
+  field", and its `aria-details` names the source control so a screen reader
+  can read the control's label without leaving the document. Its
+  `aria-description` is the field's name: the fact's `label` option, or else
+  the label or fieldset legend of its source control on the page (a radio or
+  checkbox is named after its legend, not its own option label).
+- Alt+Shift+Down and Alt+Shift+Up select the next or previous fact, wrapping
+  round, and announce its name, value and position ("Field 2 of 5").
+- Each `render()` after the first reports which facts changed value, and the
+  editor announces it: "Order updated: Possession deadline is now 2 October
+  2026.
+- Going to a source control offers a way back: a "Return to document" button
+  inserted after the whole control (its fieldset, group or GOV.UK form group,
+  so a radio keeps its label beside it), and Mod+Alt+D anywhere on the page. Either
+  reselects the fact by its managed ID, which reconciliation preserves, so the
+  reader lands on the same field with its new value announced.
+- Inserted and modified clauses carry a visually hidden marker ("Inserted
+  clause.", "Modified clause.") before their wording, beside the gutter button
+  that reverts them. The button works from the keyboard, and the shortcut
+  Mod+Alt+Z reverts the clause at the cursor, since a button inside the
+  editable region is awkward to reach when Tab indents.
+- A polite live region under the surface announces an edit the invariants
+  refused, and a clause that was reverted.
+- The toolbar follows the toolbar pattern: one Tab stop, arrow keys between
+  buttons, Alt+F10 to reach it from the document. Alt+0 opens a dialog listing
+  every shortcut.
+
+The interactive documentation runs axe-core over every section with its editor
+mounted, so a regression in the markup fails the build.
+
 ### Editing generated clauses
 
 Users may edit the content of generated clauses but may not delete, reparent or

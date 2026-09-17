@@ -1,6 +1,7 @@
 import { type Command } from "prosemirror-state";
 import { type EditorView } from "prosemirror-view";
 
+import { isElement } from "./dom.js";
 import { createRedoIcon, createUndoIcon } from "./icons.js";
 
 export interface EditorToolbarCommands {
@@ -90,6 +91,8 @@ export function createEditorToolbar(
 
 export interface ConnectedEditorToolbar {
   update(): void;
+  /** Moves focus into the toolbar, onto its current button. */
+  focus(): void;
   destroy(): void;
 }
 
@@ -101,6 +104,21 @@ export function connectEditorToolbar(
   const buttons = toolbar.querySelectorAll<HTMLButtonElement>(
     "[data-editor-command]",
   );
+  // Every button, including any the caller appended, takes part in the
+  // toolbar pattern: one Tab stop, with the arrow keys moving between buttons.
+  const allButtons = [...toolbar.querySelectorAll<HTMLButtonElement>("button")];
+  let current = allButtons[0];
+
+  function enabledButtons(): HTMLButtonElement[] {
+    return allButtons.filter((button) => !button.disabled);
+  }
+
+  function setCurrent(button: HTMLButtonElement | undefined): void {
+    current = button;
+    for (const candidate of allButtons) {
+      candidate.tabIndex = candidate === current ? 0 : -1;
+    }
+  }
 
   function update(): void {
     for (const button of buttons) {
@@ -110,17 +128,39 @@ export function connectEditorToolbar(
         commands[commandName](view.state);
       button.disabled = !enabled;
     }
+    const enabled = enabledButtons();
+    setCurrent(
+      current && !current.disabled ? current : enabled[0] ?? allButtons[0],
+    );
   }
 
+  const handleKeyDown = (event: KeyboardEvent): void => {
+    const enabled = enabledButtons();
+    const index = enabled.findIndex((button) => button === event.target);
+    if (index === -1 || enabled.length === 0) return;
+    const moves: Record<string, number> = {
+      ArrowRight: index + 1,
+      ArrowLeft: index - 1,
+      Home: 0,
+      End: enabled.length - 1,
+    };
+    const next = moves[event.key];
+    if (next === undefined) return;
+    event.preventDefault();
+    const target = enabled[(next + enabled.length) % enabled.length]!;
+    setCurrent(target);
+    target.focus();
+  };
+
   const handleMouseDown = (event: MouseEvent): void => {
-    if (event.target instanceof Element &&
+    if (isElement(event.target) &&
       event.target.closest("[data-editor-command]")) {
       event.preventDefault();
     }
   };
 
   const handleClick = (event: MouseEvent): void => {
-    if (!(event.target instanceof Element)) return;
+    if (!isElement(event.target)) return;
 
     const button = event.target.closest<HTMLButtonElement>(
       "[data-editor-command]",
@@ -135,13 +175,18 @@ export function connectEditorToolbar(
 
   toolbar.addEventListener("mousedown", handleMouseDown);
   toolbar.addEventListener("click", handleClick);
+  toolbar.addEventListener("keydown", handleKeyDown);
   update();
 
   return {
     update,
+    focus(): void {
+      current?.focus();
+    },
     destroy(): void {
       toolbar.removeEventListener("mousedown", handleMouseDown);
       toolbar.removeEventListener("click", handleClick);
+      toolbar.removeEventListener("keydown", handleKeyDown);
     },
   };
 }

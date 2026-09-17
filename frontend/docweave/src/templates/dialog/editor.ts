@@ -1,5 +1,6 @@
 import { toggleMark } from "prosemirror-commands";
 import { history, redo, undo } from "prosemirror-history";
+import { keymap } from "prosemirror-keymap";
 import { wrapInList } from "prosemirror-schema-list";
 import { EditorState } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
@@ -42,10 +43,24 @@ export function createTemplateDraft(
   let connected: ConnectedEditorToolbar | undefined;
 
   const view = new EditorView(mount, {
+    attributes: {
+      role: "textbox",
+      "aria-multiline": "true",
+      "aria-label": "Template wording",
+    },
     state: EditorState.create({
       schema: editorSchema,
       doc,
-      plugins: [...createKeymapPlugins(), history()],
+      plugins: [
+        keymap({
+          "Alt-F10": () => {
+            connected?.focus();
+            return true;
+          },
+        }),
+        ...createKeymapPlugins(),
+        history(),
+      ],
     }),
     editable: () => editable,
     dispatchTransaction(transaction) {
