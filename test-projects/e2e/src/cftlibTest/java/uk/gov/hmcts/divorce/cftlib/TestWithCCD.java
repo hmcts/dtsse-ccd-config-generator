@@ -977,11 +977,85 @@ public class TestWithCCD extends CftlibTest {
         assertThat(storedCaseData(reference).get("labelledStatus"), equalTo("STORED_NAME"));
     }
 
+    @Test
+    @Order(205)
+    void caseProjectionShouldOmitNullMapEntries() throws Exception {
+        long reference = 1888000000000008L;
+
+        db.update(
+            """
+                insert into ccd.case_data (
+                    id, reference, version, security_classification, jurisdiction, case_type_id, state, data
+                ) values (
+                    :reference, :reference, 1, 'PUBLIC', :jurisdiction, :caseType, :state, cast(:data as jsonb)
+                )
+                """,
+            Map.of(
+                "reference", reference,
+                "jurisdiction", NoFaultDivorce.JURISDICTION,
+                "caseType", NoFaultDivorce.getCaseType(),
+                "state", State.Submitted.name(),
+                "data", mapper.writeValueAsString(Map.of("nullableValues", nullableValues()))
+            )
+        );
+
+        var request = new HttpGet(SERVICE_BASE_URL + "/ccd-persistence/cases?case-refs=" + reference);
+        try (var httpClient = HttpClientBuilder.create().build();
+             var response = httpClient.execute(request)) {
+            assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
+            JsonNode body = mapper.readTree(EntityUtils.toString(response.getEntity()));
+            Map<String, Object> projectedMap = mapper.convertValue(
+                body.path(0).path("case_details").path("case_data").path("nullableValues"),
+                new TypeReference<>() {}
+            );
+            assertThat(projectedMap, equalTo(Map.of("v", "x")));
+        }
+    }
+
+    @Test
+    @Order(206)
+    void legacySubmissionShouldOmitNullMapEntries() throws Exception {
+        long reference = 1888000000000009L;
+
+        submitDirectPersistenceEvent(
+            reference,
+            NoFaultDivorce.getCaseType(),
+            CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA,
+            Map.of("nullableValues", nullableValues())
+        );
+
+        assertThat(storedCaseData(reference).get("nullableValues"), equalTo(Map.of("v", "x")));
+    }
+
+    @Test
+    @Order(207)
+    void jsonCallbackShouldReceiveAndThenOmitNullMapEntries() throws Exception {
+        long reference = 1888000000000010L;
+        BaseJsonLegacyController.reset();
+
+        submitDirectPersistenceEvent(
+            reference,
+            JsonLegacyCcdConfig.CASE_TYPE_A,
+            JSON_LEGACY_EVENT_ID,
+            Map.of("nullableValues", nullableValues())
+        );
+
+        assertThat(BaseJsonLegacyController.aboutToSubmitSawNullMapEntry, is(true));
+        assertThat(storedCaseData(reference).get("nullableValues"), equalTo(Map.of("v", "x")));
+    }
+
     private Map<String, Object> immutableCaseData() {
         return Map.of(
             "firstValue", "first",
             "secondValue", "second"
         );
+    }
+
+    private Map<String, String> nullableValues() {
+        Map<String, String> values = new LinkedHashMap<>();
+        values.put("v", "x");
+        values.put("n", null);
+        return values;
     }
 
     private JsonNode submitDirectPersistenceEvent(long reference,
