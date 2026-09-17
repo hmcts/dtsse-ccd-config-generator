@@ -70,7 +70,7 @@
     "@types/node": "26.6.1",
     "@types/nunjucks": "3.2.6",
     "@types/supertest": "7.2.1",
-    "chokidar": "^3.6.0",
+    "chokidar": "^5.0.0",
     "esbuild": "0.28.2",
     "express": "5.2.1",
     "govuk-frontend": "6.5.1",
