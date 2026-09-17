@@ -36,10 +36,7 @@ public class DelayUntilCalendarConfiguration {
     if (!(objectMapper instanceof JsonMapper jsonMapper)) {
       throw new IllegalStateException("The calendar client requires a Jackson JsonMapper");
     }
-    return new PublicHolidayService(
-        SnakeCaseFeignConfiguration.calendarFeignDecoder(jsonMapper),
-        SnakeCaseFeignConfiguration.calendarFeignEncoder(jsonMapper)
-    );
+    return new PublicHolidayService(SnakeCaseFeignConfiguration.calendarFeignDecoder(jsonMapper));
   }
 
   @Bean(name = "calendarCacheManager", autowireCandidate = false)
