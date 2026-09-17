@@ -66,7 +66,7 @@ jobs:
 
       - name: Upload demo for GitHub Pages
         if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
           path: frontend/docweave/dist/pages
 
