@@ -155,6 +155,7 @@ import uk.gov.hmcts.rse.ccd.lib.test.CftlibTest;
     "ccd.decentralised-runtime.system-user.username=e2e-system-user",
     "ccd.decentralised-runtime.system-user.first-name=E2E",
     "ccd.decentralised-runtime.system-user.last-name=System",
+    "spring.jackson.deserialization.fail-on-unknown-properties=true",
     "spring.autoconfigure.exclude=com.azure.spring.cloud.autoconfigure.implementation.jms.ServiceBusJmsAutoConfiguration"
 })
 @Slf4j
@@ -781,7 +782,7 @@ public class TestWithCCD extends CftlibTest {
 
     @Test
     @Order(198)
-    void persistenceUpsertShouldInjectHmctsServiceIdIntoElasticsearch() throws Exception {
+    void persistenceUpsertShouldTolerateUnknownCaseDetailsFieldsAndInjectHmctsServiceId() throws Exception {
         long directCaseRef = 1888000000000001L;
         long internalCaseId = 2888000000000001L;
         String expectedHmctsServiceId = "ABA1";
