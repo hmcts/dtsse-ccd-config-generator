@@ -18,6 +18,7 @@ public final class CcdCaseDataMapper {
   public static void configure(MapperBuilder<? extends ObjectMapper, ?> builder) {
     builder.enable(MapperFeature.ALLOW_FINAL_FIELDS_AS_MUTATORS);
     builder.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES);
+    builder.disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY);
     builder.disable(EnumFeature.READ_ENUMS_USING_TO_STRING);
     builder.disable(EnumFeature.WRITE_ENUMS_USING_TO_STRING);
   }

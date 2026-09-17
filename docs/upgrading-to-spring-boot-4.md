@@ -13,7 +13,7 @@ but your service's global `ObjectMapper` and any Jackson 2 code on your case mod
 | `org.flywaydb:flyway-core` | `spring-boot-starter-flyway` |
 | `org.testcontainers:junit-jupiter` / `postgresql` | `testcontainers-junit-jupiter` / `testcontainers-postgresql` |
 | `com.fasterxml.jackson.core:jackson-databind` | `tools.jackson.core:jackson-databind` |
-| `idam-java-client` 3.x, `service-auth-provider-java-client` 5.x, `ccd-case-document-am-client` 1.x, `core-case-data-store-client` 5.x | 4.0.0, 6.0.1, 2.0.0, 6.1.0 |
+| `idam-java-client` 3.x, `service-auth-provider-java-client` 5.x, `ccd-case-document-am-client` 1.x, `core-case-data-store-client` 5.x | 4.0.0, 6.1.2, 2.0.0, 6.1.0 |
 | Spring Cloud 2025.0.x, spring-cloud-azure 6.x | 2025.1.x, 7.x |
 
 Flyway auto-configuration classes moved from `org.springframework.boot.autoconfigure.flyway`
@@ -98,4 +98,3 @@ something in your Jackson configuration is leaking into the generator; raise it 
 - [ ] `spring-boot-jackson2` and `preferred-json-mapper` removed
 - [ ] `lombok.jacksonized.jacksonVersion += 3` in `lombok.config`
 - [ ] Regenerated definitions show no diff
-
