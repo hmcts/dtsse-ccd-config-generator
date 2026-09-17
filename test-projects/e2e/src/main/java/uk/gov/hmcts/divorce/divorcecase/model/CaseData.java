@@ -52,6 +52,9 @@ public class CaseData {
     @CCD(access = {DefaultAccess.class})
     private String setInAboutToSubmit;
 
+    @CCD(access = {DefaultAccess.class})
+    private LabelledStatus labelledStatus;
+
     @CCD(
         label = "A Field",
         access = {DefaultAccess.class}
