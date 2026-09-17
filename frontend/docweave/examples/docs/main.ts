@@ -111,8 +111,9 @@ function initCodeBlock(
 
 function initBuildSection(section: HTMLElement): void {
   const elements = sectionElements(section);
+  const label = required<HTMLElement>(section, "h2").textContent ?? "Document";
   let build: BuildFunction | undefined;
-  let controller = createDocEditor({ mount: elements.mount });
+  let controller = createDocEditor({ mount: elements.mount, label });
 
   const snapshotOutput = section.querySelector<HTMLElement>(
     "[data-docs-snapshot]",
@@ -163,7 +164,7 @@ function initBuildSection(section: HTMLElement): void {
     "click",
     () => {
       controller.destroy();
-      controller = createDocEditor({ mount: elements.mount });
+      controller = createDocEditor({ mount: elements.mount, label });
       render();
     },
   );

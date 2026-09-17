@@ -121,24 +121,28 @@ describe("public editor API", () => {
       };
       slash();
       await new Promise((resolve) => setTimeout(resolve, 0));
-      assert.equal(dom.window.document.querySelector("dialog")!.open, true);
+      assert.equal(dom.window.document.querySelector<HTMLDialogElement>("dialog.docweave-templates")!.open, true);
       assert.deepEqual(controller.getSnapshot().current, original);
-      dom.window.document.querySelector("dialog")!.dispatchEvent(new dom.window.Event("cancel", { cancelable: true }));
+      dom.window.document.querySelector<HTMLDialogElement>("dialog.docweave-templates")!.dispatchEvent(new dom.window.Event("cancel", { cancelable: true }));
       assert.equal(dom.window.document.activeElement, surface);
       assert.deepEqual(controller.getSnapshot().current, original);
       slash();
       await new Promise((resolve) => setTimeout(resolve, 0));
       dom.window.document.querySelector('input[type="search"]')!.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
-      assert.equal(surface.textContent, "Costs in the case.");
-      assert.equal(dom.window.document.querySelector("dialog")!.open, false);
+      // The inserted clause carries a spoken marker before its wording.
+      assert.equal(surface.textContent, "Inserted clause. Costs in the case.");
+      assert.equal(dom.window.document.querySelector<HTMLDialogElement>("dialog.docweave-templates")!.open, false);
       assert.equal(dom.window.document.activeElement, surface);
       const inserted = controller.getSnapshot().current;
       // Let ProseMirror observe typing immediately after insertion, without a
       // history timeout separating the two edits.
-      const text = dom.window.document.createTreeWalker(surface, dom.window.NodeFilter.SHOW_TEXT).nextNode() as Text;
+      const walker = dom.window.document.createTreeWalker(surface, dom.window.NodeFilter.SHOW_TEXT);
+      let text = walker.nextNode() as Text;
+      // Skip the spoken clause marker, which is not part of the document.
+      while (text.parentElement?.closest(".docweave-editor__clause-marker")) text = walker.nextNode() as Text;
       text.appendData(" More wording.");
       await new Promise((resolve) => setTimeout(resolve, 0));
-      assert.equal(surface.textContent, "Costs in the case. More wording.");
+      assert.equal(surface.textContent, "Inserted clause. Costs in the case. More wording.");
       dom.window.document.querySelector<HTMLButtonElement>('[aria-label="Undo"]')!.click();
       assert.deepEqual(controller.getSnapshot().current, inserted);
       dom.window.document.querySelector<HTMLButtonElement>('[aria-label="Undo"]')!.click();
@@ -157,7 +161,7 @@ describe("public editor API", () => {
         const event = new dom.window.KeyboardEvent("keydown", { key: "/", bubbles: true, cancelable: true, ...extra });
         surface.dispatchEvent(event);
         assert.equal(event.defaultPrevented, false);
-        assert.equal(dom.window.document.querySelector("dialog")?.open ?? false, false);
+        assert.equal(dom.window.document.querySelector<HTMLDialogElement>("dialog.docweave-templates")?.open ?? false, false);
       };
       if (!configured) ignored();
       for (const extra of [{ ctrlKey: true }, { altKey: true }, { metaKey: true }, { shiftKey: true }, { isComposing: true }]) ignored(extra);
@@ -616,7 +620,7 @@ describe("public editor API", () => {
 
     const mount = dom.window.document.querySelector<HTMLElement>("#editor")!;
     assert.match(mount.textContent, /Costs in the case\./);
-    assert.equal(dom.window.document.querySelector("dialog")!.open, false);
+    assert.equal(dom.window.document.querySelector<HTMLDialogElement>("dialog.docweave-templates")!.open, false);
     assert.equal(dom.window.document.activeElement, mount.querySelector(".ProseMirror"));
     const current = controller.getSnapshot().current as {
       content: Array<{ attrs?: { id?: string | null } }>;

@@ -30,9 +30,39 @@ export interface DocEditorController {
   destroy(): void;
 }
 
+/** What a render changed, for telling the reader. */
+export interface RenderChange {
+  docChanged: boolean;
+  /** Facts whose value differs from the previous generated document. */
+  changedFacts: ReadonlyArray<{ id: string; value: string }>;
+}
+
+function factValues(doc: ProseMirrorNode): Map<string, string> {
+  const values = new Map<string, string>();
+  doc.descendants((node) => {
+    if (node.type.name === "generated_text") {
+      values.set(node.attrs.id as string, node.attrs.text as string);
+    }
+    return node.type.name !== "generated_text";
+  });
+  return values;
+}
+
+function changedFacts(
+  previous: ProseMirrorNode,
+  next: ProseMirrorNode,
+): Array<{ id: string; value: string }> {
+  const before = factValues(previous);
+  return [...factValues(next)]
+    .filter(([id, value]) => before.has(id) && before.get(id) !== value)
+    .map(([id, value]) => ({ id, value }));
+}
+
 interface CreateDocEditorControllerOptions {
   initialSnapshot?: DocWeaveSnapshot;
   plugins?: readonly Plugin[];
+  /** Called after each render that follows a previous generated document. */
+  onRender?: (change: RenderChange) => void;
   prepareGeneratedTransaction?: (
     transaction: Transaction,
     generated: ProseMirrorNode,
@@ -123,11 +153,18 @@ export function createDocEditorController(
         target,
         nextDocument,
       ) ?? transaction;
+      const change: RenderChange | undefined = hasGeneratedDocument
+        ? {
+          docChanged: transaction.docChanged,
+          changedFacts: changedFacts(generatedDocument, target),
+        }
+        : undefined;
       state = state.apply(transaction.setMeta("addToHistory", false));
       generatedDocument = target;
       hasGeneratedDocument = true;
       document = nextDocument;
       notifyChange();
+      if (change) options.onRender?.(change);
     },
     getDocument(): DocWeaveDocument | undefined {
       return document;

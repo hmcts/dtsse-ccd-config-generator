@@ -16,7 +16,7 @@ import {
   type InputValues,
   type ScriptSection,
 } from "../../examples/docs/sections.js";
-import { createDocEditor } from "../../src/index.js";
+import { createDocEditor, type DocEditorController } from "../../src/index.js";
 import { polyfillBrowserApis } from "../jsdom-polyfills.js";
 
 const buildSections = sections.filter(
@@ -80,16 +80,18 @@ describe("interactive documentation", () => {
     });
   }
 
-  it("names a fact's source control after a real input on the page", () => {
-    const facts = buildSections.find((section) => section.id === "facts");
-    assert.ok(facts);
-    const deadline = facts.inputs.find((input) => input.name === "deadline");
-    assert.ok(deadline);
-    assert.match(
-      facts.code,
-      new RegExp(`sourceId: "${inputControlId(facts.id, deadline.name)}"`),
-    );
-  });
+  for (const id of ["facts", "accessibility"]) {
+    it(`"${id}" names a fact's source control after a real input on the page`, () => {
+      const section = buildSections.find((candidate) => candidate.id === id);
+      assert.ok(section);
+      const deadline = section.inputs.find((input) => input.name === "deadline");
+      assert.ok(deadline);
+      assert.match(
+        section.code,
+        new RegExp(`sourceId: "${inputControlId(section.id, deadline.name)}"`),
+      );
+    });
+  }
 
   it("rejects code that does not return a document", () => {
     const build = compileBuild("return 42;");
@@ -181,6 +183,46 @@ describe("interactive documentation scripts", () => {
       if (descriptor) Object.defineProperty(globalThis, name, descriptor);
       else Reflect.deleteProperty(globalThis, name);
     }
+  });
+
+  it("has no axe violations with every section's editor mounted, nor in the shortcut help", async () => {
+    const { document } = dom.window;
+    document.body.innerHTML = `<a href="#main-content" class="govuk-skip-link">Skip to main content</a>
+      <main id="main-content">${renderDocs()}</main>`;
+    const controllers: DocEditorController[] = [];
+    for (const section of sections) {
+      const mount = document.querySelector<HTMLElement>(
+        `[data-docs-section="${section.id}"] [data-docs-mount]`,
+      )!;
+      if (section.kind === "build") {
+        const controller = createDocEditor({ mount, label: section.title });
+        controller.render(
+          compileBuild(section.code)(defaultInputValues(section.inputs)),
+        );
+        controllers.push(controller);
+      } else {
+        controllers.push(compileScript(section.code)({
+          mount,
+          saved: undefined,
+          provider: createInMemoryTemplateProvider(),
+        }));
+      }
+    }
+    const axe = (await import("axe-core")).default;
+    // jsdom does no layout, so contrast cannot be measured here.
+    const options = { rules: { "color-contrast": { enabled: false } } };
+    const describe = (violation: { id: string; nodes: Array<{ target: unknown[] }> }) =>
+      `${violation.id}: ${violation.nodes.map((node) => node.target.join(" ")).join(", ")}`;
+
+    const page = await axe.run(document.body, options);
+    assert.deepEqual(page.violations.map(describe), []);
+
+    document.querySelector<HTMLButtonElement>('[aria-label="Keyboard shortcuts"]')!.click();
+    const help = document.querySelector<HTMLDialogElement>("dialog.docweave-help[open]")!;
+    const dialog = await axe.run(help, options);
+    assert.deepEqual(dialog.violations.map(describe), []);
+
+    for (const controller of controllers) controller.destroy();
   });
 
   for (const section of scriptSections) {
