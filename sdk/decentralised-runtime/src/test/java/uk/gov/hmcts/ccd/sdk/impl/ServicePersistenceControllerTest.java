@@ -6,11 +6,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import tools.jackson.databind.ObjectMapper;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
 
@@ -25,9 +29,22 @@ public class ServicePersistenceControllerTest {
       submissionService,
       auditEventService,
       supplementaryDataService,
-      caseProjectionService,
-      new ObjectMapper()
+      caseProjectionService
   );
+
+  private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+
+  @Test
+  void malformedEventJsonReturnsBadRequest() throws Exception {
+    mockMvc.perform(post("/ccd-persistence/cases")
+            .contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "******")
+            .header(IdempotencyEnforcer.IDEMPOTENCY_KEY_HEADER, UUID.randomUUID())
+            .content("{"))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(submissionService);
+  }
 
   @Test
   void createEventWithEmptyAuthorizationReturnsUnauthorized() {
