@@ -29,6 +29,7 @@ import tools.jackson.databind.ObjectMapper;
 public class CallbackLoggingFilter extends OncePerRequestFilter {
 
     private static final Path LOG_FILE = Paths.get("build", "logs", "http-traffic.log");
+    private static final int MAX_REQUEST_BODY_BYTES = 16 * 1024 * 1024;
     private static final ReentrantLock FILE_LOCK = new ReentrantLock();
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -47,7 +48,7 @@ public class CallbackLoggingFilter extends OncePerRequestFilter {
         FilterChain filterChain
     ) throws ServletException, IOException {
         ContentCachingRequestWrapper cachingRequest =
-            new ContentCachingRequestWrapper(request, Integer.MAX_VALUE);
+            new ContentCachingRequestWrapper(request, MAX_REQUEST_BODY_BYTES);
         ContentCachingResponseWrapper cachingResponse = new ContentCachingResponseWrapper(response);
         long start = System.nanoTime();
 

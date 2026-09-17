@@ -3177,10 +3177,10 @@ public class TestWithCCD extends CftlibTest {
                 equalTo(revisionBefore)
             ));
 
-        JsonNode originalDoc = fetchElasticsearchDocument(caseDataId);
+        ObjectNode originalDoc = fetchElasticsearchDocument(caseDataId);
 
-        JsonNode corruptedDoc = originalDoc.deepCopy();
-        ((ObjectNode) corruptedDoc).put("state", "MutatedState");
+        ObjectNode corruptedDoc = originalDoc.deepCopy();
+        corruptedDoc.put("state", "MutatedState");
         pushElasticsearchDocument(caseDataId, revisionBefore, corruptedDoc);
 
         await()
@@ -3616,7 +3616,7 @@ public class TestWithCCD extends CftlibTest {
         );
     }
 
-    private JsonNode fetchElasticsearchDocument(long caseDataId) throws IOException {
+    private ObjectNode fetchElasticsearchDocument(long caseDataId) throws IOException {
         var request = new HttpGet(ELASTICSEARCH_BASE_URL + "/e2e_cases/_doc/" + caseDataId);
         try (var response = HttpClientBuilder.create().build().execute(request)) {
             int statusCode = response.getStatusLine().getStatusCode();
@@ -3625,12 +3625,13 @@ public class TestWithCCD extends CftlibTest {
             var payload = mapper.readTree(EntityUtils.toString(response.getEntity()));
             var source = payload.path("_source");
             assertThat("Elasticsearch document should contain _source", source.isMissingNode(), is(false));
-            return source;
+            assertThat("Elasticsearch document _source should be an object", source.isObject(), is(true));
+            return (ObjectNode) source;
         }
     }
 
-    private void pushElasticsearchDocument(long caseDataId, int revision, JsonNode document) throws IOException {
-        ObjectNode payload = (ObjectNode) document.deepCopy();
+    private void pushElasticsearchDocument(long caseDataId, int revision, ObjectNode document) throws IOException {
+        ObjectNode payload = document.deepCopy();
         payload.put("case_revision", revision);
 
         var request = new HttpPut(String.format(

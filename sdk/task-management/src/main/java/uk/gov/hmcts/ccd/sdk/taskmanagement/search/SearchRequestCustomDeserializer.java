@@ -29,7 +29,7 @@ public class SearchRequestCustomDeserializer extends StdDeserializer<TaskSearchP
     final JsonNode operatorNode = searchNode.get("operator");
 
     if (operatorNode == null) {
-      throw new RuntimeException(ERROR_MESSAGE);
+      return ctxt.reportInputMismatch(TaskSearchParameter.class, ERROR_MESSAGE);
     }
 
     if (TaskSearchOperator.BOOLEAN.getValue().equals(operatorNode.asText())) {
@@ -37,7 +37,7 @@ public class SearchRequestCustomDeserializer extends StdDeserializer<TaskSearchP
     } else if (TaskSearchOperator.IN.getValue().equals(operatorNode.asText())) {
       return ctxt.readTreeAsValue(searchNode, TaskSearchParameterList.class);
     } else {
-      throw new RuntimeException(ERROR_MESSAGE);
+      return ctxt.reportInputMismatch(TaskSearchParameter.class, ERROR_MESSAGE);
     }
   }
 }
