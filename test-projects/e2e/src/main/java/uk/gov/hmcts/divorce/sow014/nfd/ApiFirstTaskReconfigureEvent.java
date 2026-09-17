@@ -65,7 +65,7 @@ public class ApiFirstTaskReconfigureEvent implements CCDConfig<CaseData, State, 
 
     String caseId = String.valueOf(details.getId());
     List<String> taskTypeNames = taskTypes.stream().map(Enum::name).toList();
-    var getTasksResponse = taskManagementApiClient.getTasks(caseId, taskTypeNames, NoFaultDivorce.getCaseType());
+    var getTasksResponse = taskManagementApiClient.getTasks(caseId, taskTypeNames);
     if (!getTasksResponse.getStatusCode().is2xxSuccessful() || getTasksResponse.getBody() == null) {
       throw new IllegalStateException("Failed to retrieve tasks for reconfiguration");
     }
