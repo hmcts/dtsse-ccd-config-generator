@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import lombok.SneakyThrows;
@@ -180,38 +179,15 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   }
 
   private CallbackRequest buildCallbackRequest(DecentralisedCaseEvent event) {
-    CaseDetails caseDetails = toClientCaseDetails(event.getCaseDetails());
+    CaseDetails caseDetails = mapper.convertValue(event.getCaseDetails(), CaseDetails.class);
     CaseDetails caseDetailsBefore = event.getCaseDetailsBefore() == null
         ? null
-        : toClientCaseDetails(event.getCaseDetailsBefore());
+        : mapper.convertValue(event.getCaseDetailsBefore(), CaseDetails.class);
 
     return CallbackRequest.builder()
         .caseDetails(caseDetails)
         .caseDetailsBefore(caseDetailsBefore)
         .eventId(event.getEventDetails().getEventId())
-        .build();
-  }
-
-  private CaseDetails toClientCaseDetails(
-      uk.gov.hmcts.ccd.domain.model.definition.CaseDetails source) {
-    Classification classification = source.getSecurityClassification() == null
-        ? null
-        : Classification.valueOf(source.getSecurityClassification().name());
-    Map<String, Object> data = source.getData() == null
-        ? null
-        : new LinkedHashMap<>(source.getData());
-
-    return CaseDetails.builder()
-        .id(source.getReference())
-        .jurisdiction(source.getJurisdiction())
-        .caseTypeId(source.getCaseTypeId())
-        .createdDate(source.getCreatedDate())
-        .lastModified(source.getLastModified())
-        .state(source.getState())
-        .data(data)
-        .securityClassification(classification)
-        .callbackResponseStatus(source.getCallbackResponseStatus())
-        .version(source.getVersion())
         .build();
   }
 

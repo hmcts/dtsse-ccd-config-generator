@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.EmptyResultDataAccessException;
@@ -34,6 +35,7 @@ import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 
 @Slf4j
+@RequiredArgsConstructor
 @Service(value = "uk.gov.hmcts.ccd.sdk.impl.AuditEventService")
 class AuditEventService {
 
@@ -87,17 +89,6 @@ class AuditEventService {
   private final ObjectMapper defaultMapper;
   private final Optional<MessagePublisher> publisher;
   private final ResolvedConfigRegistry registry;
-
-  AuditEventService(
-      NamedParameterJdbcTemplate ndb,
-      ObjectMapper defaultMapper,
-      Optional<MessagePublisher> publisher,
-      ResolvedConfigRegistry registry) {
-    this.ndb = ndb;
-    this.defaultMapper = defaultMapper;
-    this.publisher = publisher;
-    this.registry = registry;
-  }
 
   @Transactional(propagation = Propagation.MANDATORY)
   long reserveCaseEventId() {

@@ -152,20 +152,7 @@ public class JsonCallbackBridge {
   }
 
   private SignificantItem significantItem(Object value) {
-    if (value == null) {
-      return null;
-    }
-    if (value instanceof SignificantItem significantItem) {
-      return significantItem;
-    }
-    if (!(value instanceof Map<?, ?> map)) {
-      throw new IllegalArgumentException("significant_item must be a JSON object");
-    }
-    return SignificantItem.builder()
-        .type((String) map.get("type"))
-        .description((String) map.get("description"))
-        .url((String) map.get("url"))
-        .build();
+    return value == null ? null : mapper.convertValue(value, SignificantItem.class);
   }
 
   private Object invoke(String callbackUrl,

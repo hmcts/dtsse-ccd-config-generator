@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.EmptyResultDataAccessException;
@@ -27,6 +28,7 @@ import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 class CaseDataRepository {
   private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
   private static final String HMCTS_SERVICE_ID_FIELD = "HMCTSServiceId";
@@ -34,15 +36,6 @@ class CaseDataRepository {
   private final NamedParameterJdbcTemplate ndb;
   private final ObjectMapper defaultMapper;
   private final ResolvedConfigRegistry configRegistry;
-
-  CaseDataRepository(
-      NamedParameterJdbcTemplate ndb,
-      ObjectMapper defaultMapper,
-      ResolvedConfigRegistry configRegistry) {
-    this.ndb = ndb;
-    this.defaultMapper = defaultMapper;
-    this.configRegistry = configRegistry;
-  }
 
   public List<DecentralisedCaseDetails> getCases(List<Long> caseRefs) {
     if (caseRefs == null || caseRefs.isEmpty()) {
