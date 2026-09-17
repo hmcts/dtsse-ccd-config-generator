@@ -119,6 +119,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
 import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
 import uk.gov.hmcts.divorce.jsonlegacy.BaseJsonLegacyController;
 import uk.gov.hmcts.divorce.jsonlegacy.JsonLegacyCcdConfig;
+import uk.gov.hmcts.divorce.jsonlegacy.JsonLegacyJavaOverrideEvent;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
@@ -370,7 +371,7 @@ public class TestWithCCD extends CftlibTest {
 
     @Order(1)
     @Test
-    public void caseCreation() throws Exception {
+    public void nonConcurrentCaseCreation() throws Exception {
         var start = ccdApi.startCase(getAuthorisation("TEST_SOLICITOR@mailinator.com"),
             getServiceAuth(),
             NoFaultDivorce.getCaseType(),
@@ -597,6 +598,54 @@ public class TestWithCCD extends CftlibTest {
             firstEvent);
         var response = HttpClientBuilder.create().build().execute(e);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+    }
+
+    @Order(36)
+    @Test
+    void nonConcurrentEventRejectsStaleStartToken() throws Exception {
+        String staleToken = startNonConcurrentEvent();
+        String note = "non-concurrent stale " + UUID.randomUUID();
+
+        addNote();
+
+        assertThat(submitNonConcurrentEvent(note, staleToken), equalTo(409));
+        assertThat(noteRows(note), equalTo(0));
+    }
+
+    @Order(37)
+    @Test
+    void nonConcurrentEventIdempotentReplayBypassesLaterConflict() throws Exception {
+        String token = startNonConcurrentEvent();
+        String note = "non-concurrent replay " + UUID.randomUUID();
+        assertThat(submitNonConcurrentEvent(note, token), equalTo(201));
+
+        addNote();
+
+        assertThat(submitNonConcurrentEvent(note, token), equalTo(201));
+        assertThat(noteRows(note), equalTo(1));
+    }
+
+    @Order(38)
+    @Test
+    void legacyBlobMutatingEventDoesNotBlockConcurrentDecentralisedEvent() throws Exception {
+        String staleToken = startConcurrentAddNoteEvent();
+        String note = "stale after legacy blob update " + UUID.randomUUID();
+        String dueDate = "2040-01-01";
+        Long revisionBefore = caseDataRevision();
+        Integer blobVersionBefore = caseDataVersion();
+
+        updateDueDate(dueDate);
+
+        Integer blobVersionAfterLegacyUpdate = caseDataVersion();
+        Long revisionAfterLegacyUpdate = caseDataRevision();
+        assertThat(blobVersionAfterLegacyUpdate, equalTo(blobVersionBefore + 1));
+        assertThat(revisionAfterLegacyUpdate, equalTo(revisionBefore + 1));
+        assertThat(readCaseDataFromDb().get("dueDate"), equalTo(dueDate));
+        assertThat(submitConcurrentEvent(note, staleToken), equalTo(201));
+        assertThat(caseDataVersion(), equalTo(blobVersionAfterLegacyUpdate));
+        assertThat(caseDataRevision(), equalTo(revisionAfterLegacyUpdate + 1));
+        assertThat(readCaseDataFromDb().get("dueDate"), equalTo(dueDate));
+        assertThat(noteRows(note), equalTo(1));
     }
 
     @Order(5)
@@ -2003,10 +2052,14 @@ public class TestWithCCD extends CftlibTest {
     }
 
     private void updateDueDate() throws Exception {
+        updateDueDate("2020-01-01");
+    }
+
+    private void updateDueDate(String dueDate) throws Exception {
         var e = prepareEventRequest(
             "TEST_CASE_WORKER_USER@mailinator.com",
             "caseworker-update-due-date",
-            Map.of("dueDate", "2020-01-01")
+            Map.of("dueDate", dueDate)
         );
         var response = HttpClientBuilder.create().build().execute(e);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
@@ -2021,6 +2074,74 @@ public class TestWithCCD extends CftlibTest {
         );
         var response = HttpClientBuilder.create().build().execute(e);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+    }
+
+    private String startNonConcurrentEvent() {
+        return ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE
+        ).getToken();
+    }
+
+    private int submitNonConcurrentEvent(String note, String token) throws IOException {
+        var request = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE,
+            Map.of("note", note),
+            token
+        );
+        try (var client = HttpClientBuilder.create().build(); var response = client.execute(request)) {
+            EntityUtils.consumeQuietly(response.getEntity());
+            return response.getStatusLine().getStatusCode();
+        }
+    }
+
+    private String startConcurrentAddNoteEvent() {
+        return ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            DecentralisedCaseworkerAddNote.CONCURRENT_CASEWORKER_DECENTRALISED_ADD_NOTE
+        ).getToken();
+    }
+
+    private int submitConcurrentEvent(String note, String token) throws IOException {
+        var request = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            DecentralisedCaseworkerAddNote.CONCURRENT_CASEWORKER_DECENTRALISED_ADD_NOTE,
+            Map.of("note", note),
+            token
+        );
+        try (var client = HttpClientBuilder.create().build(); var response = client.execute(request)) {
+            EntityUtils.consumeQuietly(response.getEntity());
+            return response.getStatusLine().getStatusCode();
+        }
+    }
+
+    private int noteRows(String note) {
+        return db.queryForObject(
+            "select count(*) from case_notes where reference = :reference and note = :note",
+            Map.of("reference", caseRef, "note", note),
+            Integer.class
+        );
+    }
+
+    private Long caseDataRevision() {
+        return db.queryForObject(
+            "select case_revision from ccd.case_data where reference = :reference",
+            Map.of("reference", caseRef),
+            Long.class
+        );
+    }
+
+    private Integer caseDataVersion() {
+        return db.queryForObject(
+            "select version from ccd.case_data where reference = :reference",
+            Map.of("reference", caseRef),
+            Integer.class
+        );
     }
 
     private record CaseLinkRow(long linkedReference, boolean standardLink) { }
@@ -3882,6 +4003,27 @@ public class TestWithCCD extends CftlibTest {
             Map<String, Object> createdEvent = auditEvents.getLast();
             assertThat(createdEvent.get("state_id"), equalTo("Submitted"));
             assertThat(createdEvent.get("state_name"), equalTo(JSON_LEGACY_SUBMITTED_STATE_LABEL));
+        }
+    }
+
+    @SneakyThrows
+    @Order(218)
+    @Test
+    void javaEventOverridesMatchingJsonBackedEvent() {
+        for (String caseType : jsonLegacyCaseTypes()) {
+            var response = submitJsonLegacyEventForCaseType(
+                caseType,
+                JsonLegacyJavaOverrideEvent.EVENT_ID,
+                Map.of("setInMidEvent", "submitted-to-java-override"),
+                201
+            );
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = (Map<String, Object>) response.get("data");
+            assertThat(
+                data.get("setInAboutToSubmit"),
+                equalTo(JsonLegacyJavaOverrideEvent.MARKER)
+            );
         }
     }
 

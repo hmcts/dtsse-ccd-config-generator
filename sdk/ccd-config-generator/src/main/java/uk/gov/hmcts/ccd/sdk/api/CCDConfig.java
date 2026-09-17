@@ -1,5 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
+import java.util.Set;
+
 /**
  * The main Config Generator interface.
  *
@@ -19,13 +21,14 @@ package uk.gov.hmcts.ccd.sdk.api;
 public interface CCDConfig<Case, State, Role extends HasRole> {
 
   /**
-   * Optional discriminator used when multiple independent case type configurations share the same case data class.
+   * Case types to which this configuration should be applied.
    *
-   * <p>By default, configs with the same case data class are resolved together as one case type. Override this when
-   * configs should instead be resolved as separate case types despite sharing the same data class.</p>
+   * <p>Leave empty for the default configuration associated with a case data class. Configurations
+   * sharing a case data class across multiple case types must declare the same case type IDs as the
+   * corresponding case type definitions.</p>
    */
-  default String groupingKey() {
-    return "";
+  default Set<String> caseTypeIds() {
+    return Set.of();
   }
 
   /**

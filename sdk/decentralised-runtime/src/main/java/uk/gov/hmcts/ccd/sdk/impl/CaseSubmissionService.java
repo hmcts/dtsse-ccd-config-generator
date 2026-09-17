@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -34,12 +35,17 @@ public class CaseSubmissionService {
     var eventConfig = getEventConfig(event);
     var user = idam.retrieveUser(authorisation);
     var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
+    // Creation events have no pre-state or start revision to check.
+    var startRevision = !eventConfig.isConcurrent() && event.getCaseDetailsBefore() != null
+        ? Objects.requireNonNull(event.getStartRevision(), "Non-concurrent event requires a start revision")
+        : null;
 
     try {
       var transactionResult =
           transactionCoordinator.execute(
               event.getCaseDetails().getReference(),
               idempotencyKey,
+              startRevision,
               () -> prepareSubmission(event, user, handler)
           );
 

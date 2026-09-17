@@ -99,6 +99,9 @@ Only declare the libraries you need, including `ccd-data-migration-support` when
 `ccd-config-generator` and `task-management`.
 It supplies version constraints, not forced versions: normal Gradle conflict resolution still applies.
 
+After completing a CCD data migration, follow the
+[CCD data migration cleanup guide](docs/ccd-data-migration-cleanup.md) to remove migration-only FDW access.
+
 If indexing should run only in the local cftlib stack, use this instead of the indexer's `implementation` declaration:
 
 ```groovy

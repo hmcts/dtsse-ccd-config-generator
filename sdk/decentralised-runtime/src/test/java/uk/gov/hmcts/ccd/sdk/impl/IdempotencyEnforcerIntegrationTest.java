@@ -64,7 +64,7 @@ class IdempotencyEnforcerIntegrationTest {
 
     try {
       var firstRequest = executor.submit(() -> transaction.executeWithoutResult(status -> {
-        assertThat(idempotencyEnforcer.lockCaseAndGetExistingEvent(idempotencyKey, CASE_REFERENCE))
+        assertThat(idempotencyEnforcer.lockCaseAndGetExistingEvent(idempotencyKey, CASE_REFERENCE, null))
             .isEmpty();
         caseLocked.countDown();
         await(commitFirstRequest);
@@ -77,7 +77,7 @@ class IdempotencyEnforcerIntegrationTest {
         jdbc.getJdbcTemplate().execute(
             "set local application_name = '" + BLOCKED_REQUEST_APPLICATION_NAME + "'"
         );
-        return idempotencyEnforcer.lockCaseAndGetExistingEvent(idempotencyKey, CASE_REFERENCE);
+        return idempotencyEnforcer.lockCaseAndGetExistingEvent(idempotencyKey, CASE_REFERENCE, null);
       }));
 
       waitUntilSecondRequestIsBlocked();
