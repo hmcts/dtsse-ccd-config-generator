@@ -16,6 +16,7 @@ import lombok.AllArgsConstructor;
 import lombok.SneakyThrows;
 import tools.jackson.core.util.DefaultIndenter;
 import tools.jackson.core.util.DefaultPrettyPrinter;
+import tools.jackson.core.util.Separators;
 import tools.jackson.databind.SerializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.type.CollectionType;
@@ -34,6 +35,11 @@ public class JsonUtils {
   @SneakyThrows
   public static String serialise(List<Map<String, Object>> data, boolean sort, String... primaryKeys) {
     class CustomPrinter extends DefaultPrettyPrinter {
+      CustomPrinter() {
+        super(Separators.createDefaultInstance()
+            .withObjectNameValueSpacing(Separators.Spacing.AFTER));
+      }
+
       @Override
       public DefaultPrettyPrinter createInstance() {
         CustomPrinter result = new CustomPrinter();

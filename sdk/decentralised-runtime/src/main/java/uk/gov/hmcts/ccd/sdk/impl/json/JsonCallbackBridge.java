@@ -80,7 +80,10 @@ public class JsonCallbackBridge {
     this.mapper = mapper;
     this.requestMapper = mapper.rebuild()
         .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-        .changeDefaultPropertyInclusion(inclusion -> inclusion.withValueInclusion(JsonInclude.Include.ALWAYS))
+        .changeDefaultPropertyInclusion(inclusion -> JsonInclude.Value.construct(
+            JsonInclude.Include.ALWAYS,
+            JsonInclude.Include.ALWAYS
+        ))
         .build();
     this.externalCallbackTimeout = externalCallbackTimeout(environment);
     // Application Gateway rejects the h2c upgrade attempted by the default client for HTTP URLs.
@@ -488,12 +491,14 @@ public class JsonCallbackBridge {
   }
 
   private Map<String, Object> toCcdCaseDetails(CaseDetails<?, ?> details) {
-    JsonNode node = mapper.valueToTree(details);
-    Map<String, Object> callbackDetails = mapper.convertValue(
+    JsonNode node = requestMapper.valueToTree(details);
+    Map<String, Object> callbackDetails = requestMapper.convertValue(
         node,
-        mapper.getTypeFactory().constructMapType(Map.class, String.class, Object.class)
+        requestMapper.getTypeFactory().constructMapType(Map.class, String.class, Object.class)
     );
-    Object caseData = details.getData() == null ? Map.of() : mapper.convertValue(details.getData(), Object.class);
+    Object caseData = details.getData() == null
+        ? Map.of()
+        : requestMapper.convertValue(details.getData(), Object.class);
     callbackDetails.put("data", caseData);
     callbackDetails.put("case_data", caseData);
     return callbackDetails;

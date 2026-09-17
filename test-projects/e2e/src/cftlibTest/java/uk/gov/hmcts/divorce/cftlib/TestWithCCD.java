@@ -971,7 +971,7 @@ public class TestWithCCD extends CftlibTest {
             reference,
             NoFaultDivorce.getCaseType(),
             CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA,
-            Map.of("labelledStatus", "Display label")
+            Map.of("aField", CaseworkerRoundTripData.SET_LABELLED_STATUS_MARKER)
         );
 
         assertThat(storedCaseData(reference).get("labelledStatus"), equalTo("STORED_NAME"));
@@ -979,6 +979,39 @@ public class TestWithCCD extends CftlibTest {
 
     @Test
     @Order(205)
+    void legacySubmissionShouldReadStoredEnumNames() throws Exception {
+        long reference = 1888000000000011L;
+
+        submitDirectPersistenceEvent(
+            reference,
+            NoFaultDivorce.getCaseType(),
+            CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA,
+            Map.of("labelledStatus", "STORED_NAME")
+        );
+
+        assertThat(storedCaseData(reference).get("labelledStatus"), equalTo("STORED_NAME"));
+    }
+
+    @Test
+    @Order(206)
+    void legacySubmissionShouldTolerateStoredNullsForPrimitiveFields() throws Exception {
+        long reference = 1888000000000012L;
+        Map<String, Object> input = new LinkedHashMap<>(immutableCaseData());
+        input.put("primitiveNumber", null);
+        input.put("primitiveFlag", null);
+
+        submitDirectPersistenceEvent(
+            reference,
+            ImmutableCaseConfiguration.CASE_TYPE,
+            ImmutableCaseConfiguration.LEGACY_EVENT,
+            input
+        );
+
+        assertThat(storedCaseData(reference), equalTo(immutableCaseData()));
+    }
+
+    @Test
+    @Order(207)
     void caseProjectionShouldOmitNullMapEntries() throws Exception {
         long reference = 1888000000000008L;
 
@@ -1013,7 +1046,7 @@ public class TestWithCCD extends CftlibTest {
     }
 
     @Test
-    @Order(206)
+    @Order(208)
     void legacySubmissionShouldOmitNullMapEntries() throws Exception {
         long reference = 1888000000000009L;
 
@@ -1028,7 +1061,7 @@ public class TestWithCCD extends CftlibTest {
     }
 
     @Test
-    @Order(207)
+    @Order(209)
     void jsonCallbackShouldReceiveAndThenOmitNullMapEntries() throws Exception {
         long reference = 1888000000000010L;
         BaseJsonLegacyController.reset();

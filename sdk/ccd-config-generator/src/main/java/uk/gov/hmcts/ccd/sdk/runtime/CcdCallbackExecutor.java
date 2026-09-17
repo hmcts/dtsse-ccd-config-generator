@@ -10,8 +10,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.JavaType;
-import tools.jackson.databind.MapperFeature;
 import tools.jackson.databind.ObjectMapper;
+import uk.gov.hmcts.ccd.sdk.CcdCaseDataMapper;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
@@ -34,9 +34,9 @@ public class CcdCallbackExecutor {
   @Autowired
   public CcdCallbackExecutor(ResolvedConfigRegistry registry, ObjectMapper mapper) {
     this.registry = registry;
-    this.mapper = mapper.rebuild()
-        .enable(MapperFeature.ALLOW_FINAL_FIELDS_AS_MUTATORS)
-        .build();
+    var caseDataMapperBuilder = mapper.rebuild();
+    CcdCaseDataMapper.configure(caseDataMapperBuilder);
+    this.mapper = caseDataMapperBuilder.build();
     for (ResolvedCCDConfig<?, ?, ?> config : registry.getAll()) {
       this.caseTypeToJavaType.put(config.getCaseType(),
           this.mapper.getTypeFactory().constructParametricType(CaseDetails.class, config.getCaseClass(),

@@ -8,6 +8,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.divorce.common.ccd.PageBuilder;
 import uk.gov.hmcts.divorce.divorcecase.model.Applicant;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
+import uk.gov.hmcts.divorce.divorcecase.model.LabelledStatus;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
 import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
 
@@ -25,6 +26,7 @@ public class CaseworkerRoundTripData implements CCDConfig<CaseData, State, UserR
     public static final String START_CALLBACK_MARKER = "set-in-about-to-start";
     public static final String MID_EVENT_MARKER = "set-in-mid-event";
     public static final String SUBMIT_CALLBACK_MARKER = "set-in-about-to-submit";
+    public static final String SET_LABELLED_STATUS_MARKER = "set-labelled-status";
 
     @Override
     public void configure(final ConfigBuilder<CaseData, State, UserRole> configBuilder) {
@@ -79,6 +81,9 @@ public class CaseworkerRoundTripData implements CCDConfig<CaseData, State, UserR
         CaseDetails<CaseData, State> before
     ) {
         details.getData().setSetInAboutToSubmit(SUBMIT_CALLBACK_MARKER);
+        if (SET_LABELLED_STATUS_MARKER.equals(details.getData().getAField())) {
+            details.getData().setLabelledStatus(LabelledStatus.STORED_NAME);
+        }
         return AboutToStartOrSubmitResponse.<CaseData, State>builder()
             .data(details.getData())
             .state(details.getState())
