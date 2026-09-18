@@ -1,6 +1,8 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import java.io.File;
 import java.util.Arrays;
+import java.util.HashSet;
 import lombok.Data;
 import org.gradle.api.Action;
 import org.gradle.api.Plugin;
@@ -16,6 +18,7 @@ import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.SourceSetContainer;
+import org.gradle.api.tasks.compile.JavaCompile;
 
 public class CcdSdkPlugin implements Plugin<Project> {
 
@@ -42,6 +45,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
     SourceSetContainer ssc = project.getExtensions()
         .getByType(JavaPluginExtension.class)
         .getSourceSets();
+    registerJacksonCompatibilityCheck(project, ssc);
     generate.setClasspath(
         ssc.getByName("main").getRuntimeClasspath()
             .plus(configGeneration));
@@ -114,6 +118,36 @@ public class CcdSdkPlugin implements Plugin<Project> {
       }
     });
   }
+
+  private void registerJacksonCompatibilityCheck(Project project, SourceSetContainer sourceSets) {
+    var check = project.getTasks().register("jackson3CompatibilityGuard", JacksonCompatibilityCheck.class, task -> {
+      task.setGroup("verification");
+      task.setDescription("Rejects Jackson 2 API usage in project sources and mapper configuration");
+      task.getProjectDirectory().set(project.getLayout().getProjectDirectory());
+      task.getReportFile().convention(project.getLayout().getBuildDirectory()
+          .file("reports/jackson-compatibility/report.txt"));
+      // Include every registered source set without depending on compilation or source generation tasks.
+      task.getScanFiles().from(project.provider(() -> sourceSets.stream()
+          .flatMap(sourceSet -> sourceSet.getAllSource().getSrcDirs().stream())
+          .map(dir -> JacksonCompatibilityCheck.sourceTree(project, dir)).toList()));
+      task.getLombokConfigs().from(project.provider(() -> {
+        var directories = new HashSet<File>();
+        directories.add(project.getProjectDir());
+        sourceSets.forEach(sourceSet -> directories.addAll(sourceSet.getAllSource().getSrcDirs()));
+        return directories.stream().flatMap(dir -> JacksonCompatibilityCheck.ancestorConfigs(dir).stream()).toList();
+      }));
+      task.getLombokProcessors().set(project.provider(() -> sourceSets.stream()
+          .map(sourceSet -> project.getConfigurations().getByName(sourceSet.getAnnotationProcessorConfigurationName()))
+          .flatMap(configuration -> configuration.getAllDependencies().stream()
+              .filter(dependency -> "org.projectlombok".equals(dependency.getGroup())
+                  && "lombok".equals(dependency.getName()) && dependency.getVersion() != null)
+              .map(dependency -> configuration.getName() + "=" + dependency.getVersion()))
+          .sorted().toList()));
+    });
+    project.getTasks().named("check").configure(task -> task.dependsOn(check));
+    project.getTasks().withType(JavaCompile.class).configureEach(task -> task.mustRunAfter(check));
+  }
+
 
   private boolean hasRuntimeDependency(Project project, String module) {
     return project.getConfigurations().getByName("runtimeClasspath").getAllDependencies().stream()
