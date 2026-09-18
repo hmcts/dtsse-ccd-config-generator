@@ -979,17 +979,25 @@ public class TestWithCCD extends CftlibTest {
 
     @Test
     @Order(205)
-    void legacySubmissionShouldReadStoredEnumNames() throws Exception {
+    void legacySubmissionShouldPreserveStoredEnumAndPropertyNames() throws Exception {
         long reference = 1888000000000011L;
 
+        // Jackson 2 wrote CaseData.aField (getAField/setAField) as "afield"; Jackson 3 has no setting that
+        // reproduces that exact casing on write, only ACCEPT_CASE_INSENSITIVE_PROPERTIES for reading it back.
+        // A value submitted under the old key still binds and survives, but a full round trip through the
+        // typed CaseData normalises the persisted key to the canonical "aField".
         submitDirectPersistenceEvent(
             reference,
             NoFaultDivorce.getCaseType(),
             CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA,
-            Map.of("labelledStatus", "STORED_NAME")
+            Map.of("labelledStatus", "STORED_NAME", "afield", "must survive the upgrade")
         );
 
-        assertThat(storedCaseData(reference).get("labelledStatus"), equalTo("STORED_NAME"));
+        Map<String, Object> stored = storedCaseData(reference);
+        assertThat(stored.get("labelledStatus"), equalTo("STORED_NAME"));
+        assertThat("Jackson 2 property values submitted under the old key name must survive persistence, "
+                + "even though the key itself normalises to the canonical property name",
+            stored.get("aField"), equalTo("must survive the upgrade"));
     }
 
     @Test
@@ -1082,6 +1090,103 @@ public class TestWithCCD extends CftlibTest {
             "firstValue", "first",
             "secondValue", "second"
         );
+    }
+
+    @Test
+    @Order(209)
+    void legacySubmissionShouldPreserveGetterOnlyCollections() throws Exception {
+        Map<String, Object> evidence = Map.of(
+            "documentIds", List.of("court-order-document-id", "witness-statement-document-id"),
+            "recordedAnswers", Map.of("consent", "Yes", "served", "Yes")
+        );
+
+        assertLegacyCompatibilityDataSurvives(1888000000000013L, Map.of("evidence", evidence));
+    }
+
+    @Test
+    @Order(209)
+    void legacySubmissionShouldPreserveLowercaseAccessors() throws Exception {
+        assertLegacyCompatibilityDataSurvives(
+            1888000000000014L,
+            Map.of("legacyReference", Map.of("reference", "COURT-2026-00123"))
+        );
+    }
+
+    @Test
+    @Order(209)
+    void legacySubmissionShouldNotApplyConstructorRoundingToStoredAmounts() throws Exception {
+        assertLegacyCompatibilityDataSurvives(
+            1888000000000015L,
+            Map.of("monetaryAmount", Map.of("amount", "123.4567"))
+        );
+    }
+
+    @Test
+    @Order(209)
+    void legacySubmissionShouldPreserveStoredMonthNames() throws Exception {
+        assertLegacyCompatibilityDataSurvives(1888000000000016L, Map.of("hearingMonth", "FEBRUARY"));
+    }
+
+    @Test
+    @Order(209)
+    void classicCallbackShouldPreserveStoredEnumNames() throws Exception {
+        var caseDetails = Map.of(
+            "id", 1888000000000017L,
+            "case_type_id", NoFaultDivorce.getCaseType(),
+            "state", State.Submitted.name(),
+            "case_data", Map.of("labelledStatus", "STORED_NAME")
+        );
+        var payload = Map.of(
+            "case_details", caseDetails,
+            "case_details_before", caseDetails,
+            "event_id", CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA
+        );
+        var request = new HttpPost(SERVICE_BASE_URL + "/callbacks/about-to-submit");
+        request.addHeader("ServiceAuthorization", getServiceAuth());
+        request.addHeader("Authorization", getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"));
+        request.setEntity(new StringEntity(mapper.writeValueAsString(payload), ContentType.APPLICATION_JSON));
+
+        try (var httpClient = HttpClientBuilder.create().build();
+             var response = httpClient.execute(request)) {
+            String responseBody = EntityUtils.toString(response.getEntity());
+            assertThat("Classic callback should succeed. Response: " + responseBody,
+                response.getStatusLine().getStatusCode(), equalTo(200));
+            assertThat("Classic callbacks must return the stored enum name to CCD",
+                mapper.readTree(responseBody).path("data").path("labelledStatus").asText(),
+                equalTo("STORED_NAME"));
+        }
+    }
+
+    private void assertLegacyCompatibilityDataSurvives(long reference, Map<String, Object> expected) throws Exception {
+        Map<String, Object> existingData = Map.of("jacksonCompatibilityData", expected);
+        db.update(
+            """
+                insert into ccd.case_data (
+                    id, reference, version, security_classification, jurisdiction, case_type_id, state, data
+                ) values (
+                    :id, :reference, 1, 'PUBLIC', :jurisdiction, :caseType, :state, cast(:data as jsonb)
+                )
+                """,
+            Map.of(
+                "id", reference + 1000000000000000L,
+                "reference", reference,
+                "jurisdiction", NoFaultDivorce.JURISDICTION,
+                "caseType", NoFaultDivorce.getCaseType(),
+                "state", State.Submitted.name(),
+                "data", mapper.writeValueAsString(existingData)
+            )
+        );
+        assertThat("The legacy values must be present before the event", storedCaseData(reference), equalTo(existingData));
+
+        submitDirectPersistenceEvent(
+            reference,
+            NoFaultDivorce.getCaseType(),
+            CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA,
+            existingData
+        );
+
+        assertThat("Existing case data must survive an unrelated legacy event unchanged",
+            storedCaseData(reference).get("jacksonCompatibilityData"), equalTo(expected));
     }
 
     private Map<String, String> nullableValues() {

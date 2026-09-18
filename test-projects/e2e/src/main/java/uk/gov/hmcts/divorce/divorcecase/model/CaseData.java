@@ -59,6 +59,9 @@ public class CaseData {
     @CCD(ignore = true)
     private Map<String, String> nullableValues;
 
+    @CCD(ignore = true)
+    private JacksonCompatibilityData jacksonCompatibilityData;
+
     @CCD(
         label = "A Field",
         access = {DefaultAccess.class}
