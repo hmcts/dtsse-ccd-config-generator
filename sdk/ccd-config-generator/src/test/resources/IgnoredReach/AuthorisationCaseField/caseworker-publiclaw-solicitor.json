@@ -1,0 +1,23 @@
+[
+  {
+    "CRUD": "CRU",
+    "CaseFieldID": "baseField",
+    "CaseTypeID": "IgnoredReach",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseFieldID": "caseHistory",
+    "CaseTypeID": "IgnoredReach",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseFieldID": "sharedField",
+    "CaseTypeID": "IgnoredReach",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor"
+  }
+]

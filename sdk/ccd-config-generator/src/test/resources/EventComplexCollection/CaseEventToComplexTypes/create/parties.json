@@ -1,0 +1,37 @@
+[
+  {
+    "CaseEventID": "create",
+    "CaseFieldID": "parties",
+    "DisplayContext": "MANDATORY",
+    "FieldDisplayOrder": 5,
+    "HintText": "The child's full name",
+    "ListElementCode": "children.childName",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "CaseEventID": "create",
+    "CaseFieldID": "parties",
+    "DisplayContext": "MANDATORY",
+    "FieldDisplayOrder": 2,
+    "HintText": "An overriding hint",
+    "ListElementCode": "partyName",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "CaseEventID": "create",
+    "CaseFieldID": "parties",
+    "DisplayContext": "READONLY",
+    "FieldDisplayOrder": 4,
+    "ListElementCode": "reference",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "CaseEventID": "create",
+    "CaseFieldID": "parties",
+    "DisplayContext": "OPTIONAL",
+    "FieldDisplayOrder": 3,
+    "HintText": "The declared role hint",
+    "ListElementCode": "role",
+    "LiveFrom": "01/01/2017"
+  }
+]
