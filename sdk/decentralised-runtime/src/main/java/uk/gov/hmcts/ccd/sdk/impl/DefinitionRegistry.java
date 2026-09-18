@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Optional;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseTypeDefinition;
@@ -16,14 +17,30 @@ import uk.gov.hmcts.ccd.domain.model.definition.CaseTypeDefinition;
 class DefinitionRegistry {
 
   private final ObjectMapper mapper;
+  private final File snapshotDirectory;
   private Map<String, CaseTypeDefinition> definitions = Map.of();
 
+  @Autowired
   DefinitionRegistry(@Qualifier("ccd_mapper") ObjectMapper definitionMapper) {
+    this(definitionMapper, new File("build/cftlib/definition-snapshots"));
+  }
+
+  DefinitionRegistry(ObjectMapper definitionMapper, File snapshotDirectory) {
     this.mapper = definitionMapper;
+    this.snapshotDirectory = snapshotDirectory;
   }
 
   Optional<CaseTypeDefinition> find(String caseTypeId) {
     return Optional.ofNullable(loadDefinitions().get(caseTypeId));
+  }
+
+  void requireDefinitions() {
+    if (loadDefinitions().isEmpty()) {
+      throw new IllegalStateException(
+          "CCD messaging is enabled but no definition snapshots were found in "
+              + snapshotDirectory.getAbsolutePath()
+      );
+    }
   }
 
   /**
@@ -34,10 +51,8 @@ class DefinitionRegistry {
     if (!this.definitions.isEmpty()) {
       return this.definitions;
     }
-
     var loaded = new HashMap<String, CaseTypeDefinition>();
-    File[] jsonFiles = new File("build/cftlib/definition-snapshots")
-        .listFiles((dir, name) -> name.endsWith(".json"));
+    File[] jsonFiles = snapshotDirectory.listFiles((dir, name) -> name.endsWith(".json"));
 
     if (jsonFiles != null) {
       for (File file : jsonFiles) {
