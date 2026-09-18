@@ -20,6 +20,8 @@ repositories {
 }
 
 dependencies {
+    implementation 'org.ow2.asm:asm:9.9.1'
+
     // Ensure we run the plugin's tests when the libraries are modified.
     testImplementation project(':ccd-config-generator')
 
