@@ -36,11 +36,6 @@ tasks.register('publishToAzureArtifacts') { task ->
             task.dependsOn(included.task(':publishToAzureArtifacts'))
         }
     }
-    subprojects.each { subproject ->
-        task.dependsOn(
-            subproject.tasks.matching { it.name.endsWith('ToAzureArtifactsRepository') }
-        )
-    }
 }
 
 def configurePostgresClientTools = { task ->
