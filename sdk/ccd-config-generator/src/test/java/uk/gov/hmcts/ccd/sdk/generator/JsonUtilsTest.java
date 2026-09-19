@@ -15,6 +15,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class JsonUtilsTest {
 
   @Test
+  public void serialisesUsingCheckedInDefinitionSpacing() {
+    List<Map<String, Object>> data = Lists.newArrayList(Map.of("Field", "value"));
+
+    assertThat(JsonUtils.serialise(data, false)).contains("\"Field\": \"value\"");
+  }
+
+  @Test
   public void setsOverwriteFields() {
     Map<String, Object> existing = Maps.newHashMap(Map.of(
         "id", "foo",

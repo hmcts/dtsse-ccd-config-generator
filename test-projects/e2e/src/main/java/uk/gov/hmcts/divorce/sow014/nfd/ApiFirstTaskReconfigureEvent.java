@@ -83,4 +83,3 @@ public class ApiFirstTaskReconfigureEvent implements CCDConfig<CaseData, State, 
         .build();
   }
 }
-

@@ -1,4 +1,6 @@
 
+import org.springframework.boot.gradle.plugin.SpringBootPlugin
+
 group = 'com.github.hmcts'
 
 repositories {
@@ -6,13 +8,16 @@ repositories {
 }
 
 dependencies {
+    api platform(SpringBootPlugin.BOM_COORDINATES)
+
     // Use JUnit test framework for unit tests
     testImplementation 'junit:junit:4.13.2'
     annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.48'
     compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.48'
     implementation "org.springframework.boot:spring-boot-autoconfigure"
-    implementation "org.springframework.boot:spring-boot-starter-web"
-    api(group: 'com.github.hmcts', name: 'core-case-data-store-client', version: '5.3.0') {
+    implementation "org.springframework.boot:spring-boot-starter-webmvc"
+    implementation "org.springframework.boot:spring-boot-jackson2"
+    api(group: 'com.github.hmcts', name: 'core-case-data-store-client', version: '6.1.0') {
         // The config generator needs only the types defined in the CCD client library,
         // not all the runtime spring dependencies used by the CCD client.
         transitive = false
@@ -27,12 +32,13 @@ dependencies {
     testImplementation group: 'commons-io', name: 'commons-io', version: '2.22.0'
     testImplementation group: 'org.assertj', name: 'assertj-core', version: '3.27.7'
     testImplementation group: 'org.springframework.boot', name: 'spring-boot-starter-test'
+    testImplementation group: 'org.springframework.boot', name: 'spring-boot-starter-webmvc-test'
 
 
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
     api 'com.google.guava:guava:33.7.1-jre'
 
-    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'tools.jackson.core:jackson-databind'
 }
 
 tasks.register('ccdConfigDiff', JavaExec) {

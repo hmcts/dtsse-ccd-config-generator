@@ -3,12 +3,12 @@ package uk.gov.hmcts.ccd.sdk.impl.json;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.sun.net.httpserver.HttpServer;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.net.http.HttpTimeoutException;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import tools.jackson.databind.ObjectMapper;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
@@ -27,7 +28,9 @@ import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
 class JsonCallbackBridgeTest {
 
   private final ObjectMapper mapper = new CcdCaseDataMapperConfiguration()
-      .ccdCaseDataObjectMapper(new ObjectMapper().setSerializationInclusion(JsonInclude.Include.NON_EMPTY));
+      .ccdCaseDataObjectMapper(new ObjectMapper().rebuild()
+          .changeDefaultPropertyInclusion(inclusion -> inclusion.withValueInclusion(JsonInclude.Include.NON_EMPTY))
+          .build());
 
   @AfterEach
   void resetRequestContext() {
@@ -90,6 +93,26 @@ class JsonCallbackBridgeTest {
 
     NocCaseData responseData = (NocCaseData) response.getData();
     assertThat(responseData.changeOrganisationRequestField().OrganisationToAdd()).isNotNull();
+  }
+
+  @Test
+  void preservesNullMapEntriesSentToLocalCallbacks() {
+    NullMapCallbackController controller = new NullMapCallbackController();
+    JsonCallbackBridge bridge = bridgeWith(
+        new MockEnvironment().withProperty("decentralisation.local-callback-placeholder", "ET_COS_URL"),
+        controller
+    );
+    Map<String, String> values = new LinkedHashMap<>();
+    values.put("v", "x");
+    values.put("n", null);
+    CaseDetails<Object, Object> caseDetails = CaseDetails.builder()
+        .data(new NullableMapCaseData(values))
+        .build();
+
+    bridge.aboutToSubmit("${ET_COS_URL}/callbacks/null-map", "local")
+        .handle(caseDetails, null);
+
+    assertThat(controller.sawNullMapEntry).isTrue();
   }
 
   @Test
@@ -166,6 +189,7 @@ class JsonCallbackBridgeTest {
       return new JsonCallbackBridge(
           applicationContext,
           mapper,
+          java.util.Optional.of(new com.fasterxml.jackson.databind.ObjectMapper()),
           handlerMapping,
           environment
       );
@@ -203,7 +227,27 @@ class JsonCallbackBridgeTest {
     }
   }
 
+  @RestController
+  @RequestMapping("/callbacks")
+  private static class NullMapCallbackController {
+    private boolean sawNullMapEntry;
+
+    @PostMapping("/null-map")
+    Map<String, Object> nullMap(@RequestBody Map<String, Object> request) {
+      Map<?, ?> details = (Map<?, ?>) request.get("case_details");
+      Map<?, ?> data = (Map<?, ?>) details.get("data");
+      Map<?, ?> values = (Map<?, ?>) data.get("nullableValues");
+      sawNullMapEntry = values.containsKey("n") && values.get("n") == null;
+      Map<String, Object> response = new LinkedHashMap<>();
+      response.put("data", data);
+      return response;
+    }
+  }
+
   private record NocCallbackResponse(NocCaseData data) {
+  }
+
+  private record NullableMapCaseData(Map<String, String> nullableValues) {
   }
 
   private record NocCaseData(ChangeOrganisationRequestField changeOrganisationRequestField) {

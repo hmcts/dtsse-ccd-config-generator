@@ -1,12 +1,11 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Optional;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
+import uk.gov.hmcts.ccd.sdk.Jackson2CaseDataMapper;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
@@ -17,11 +16,20 @@ import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
 
   private final ResolvedConfigRegistry registry;
-  private final ObjectMapper mapper;
+  private final com.fasterxml.jackson.databind.ObjectMapper mapper;
+  private final tools.jackson.databind.ObjectMapper sdkMapper;
+
+  DecentralisedSubmissionHandler(
+      ResolvedConfigRegistry registry,
+      Optional<com.fasterxml.jackson.databind.ObjectMapper> mapper,
+      tools.jackson.databind.ObjectMapper sdkMapper) {
+    this.registry = registry;
+    this.mapper = Jackson2CaseDataMapper.configured(mapper);
+    this.sdkMapper = sdkMapper;
+  }
 
   @Override
   public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, String authorisation) {
@@ -57,10 +65,7 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
 
     var config = registry.getRequired(caseType);
 
-    Object domainCaseData = mapper.convertValue(
-        event.getCaseDetails().getData(),
-        config.getCaseClass()
-    );
+    Object domainCaseData = toDomainCaseData(event.getCaseDetails().getData(), config.getCaseClass());
     long caseRef = event.getCaseDetails().getReference();
 
     // TODO: revisit when CCD resumes sending query params; referer header is absent at the moment.
@@ -68,5 +73,10 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
 
     return eventConfig.getSubmitHandler()
         .submit(new uk.gov.hmcts.ccd.sdk.api.EventPayload(caseRef, domainCaseData, urlParams));
+  }
+
+  @lombok.SneakyThrows
+  private Object toDomainCaseData(Object data, Class<?> caseClass) {
+    return mapper.readValue(sdkMapper.writeValueAsBytes(data), caseClass);
   }
 }

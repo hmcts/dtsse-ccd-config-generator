@@ -103,10 +103,13 @@ import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerPopulateSearchCriteria;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerSignificantItem;
+import uk.gov.hmcts.divorce.immutable.ImmutableCaseConfiguration;
+import uk.gov.hmcts.divorce.immutable.ImmutableCaseDecentralisedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
+import uk.gov.hmcts.divorce.sow014.nfd.LabelledStatusDecentralisedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerRoundTripData;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCancelEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCompleteEvent;
@@ -155,10 +158,13 @@ import uk.gov.hmcts.rse.ccd.lib.test.CftlibTest;
     "ccd.decentralised-runtime.system-user.username=e2e-system-user",
     "ccd.decentralised-runtime.system-user.first-name=E2E",
     "ccd.decentralised-runtime.system-user.last-name=System",
+    "spring.jackson2.deserialization.fail-on-unknown-properties=true",
     "spring.autoconfigure.exclude=com.azure.spring.cloud.autoconfigure.implementation.jms.ServiceBusJmsAutoConfiguration"
 })
 @Slf4j
 public class TestWithCCD extends CftlibTest {
+
+    private static final ObjectMapper CCD_WIRE_MAPPER = new ObjectMapper();
 
     @Autowired
     private IdamClient idam;
@@ -781,7 +787,7 @@ public class TestWithCCD extends CftlibTest {
 
     @Test
     @Order(198)
-    void persistenceUpsertShouldInjectHmctsServiceIdIntoElasticsearch() throws Exception {
+    void persistenceUpsertShouldTolerateUnknownCaseDetailsFieldsAndInjectHmctsServiceId() throws Exception {
         long directCaseRef = 1888000000000001L;
         long internalCaseId = 2888000000000001L;
         String expectedHmctsServiceId = "ABA1";
@@ -853,6 +859,390 @@ public class TestWithCCD extends CftlibTest {
                     }
                 });
         }
+    }
+
+    @Test
+    @Order(199)
+    void caseProjectionShouldPreserveImmutableCaseData() throws Exception {
+        long reference = 1888000000000002L;
+        Map<String, Object> expected = immutableCaseData();
+
+        db.update(
+            """
+                insert into ccd.case_data (
+                    id, reference, version, security_classification, jurisdiction, case_type_id, state, data
+                ) values (
+                    :reference, :reference, 1, 'PUBLIC', :jurisdiction, :caseType, :state, cast(:data as jsonb)
+                )
+                """,
+            Map.of(
+                "reference", reference,
+                "jurisdiction", NoFaultDivorce.JURISDICTION,
+                "caseType", ImmutableCaseConfiguration.CASE_TYPE,
+                "state", State.Submitted.name(),
+                "data", mapper.writeValueAsString(expected)
+            )
+        );
+
+        var request = new HttpGet(SERVICE_BASE_URL + "/ccd-persistence/cases?case-refs=" + reference);
+        try (var httpClient = HttpClientBuilder.create().build();
+             var response = httpClient.execute(request)) {
+            assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
+            JsonNode body = mapper.readTree(EntityUtils.toString(response.getEntity()));
+            Map<String, Object> projected = mapper.convertValue(
+                body.path(0).path("case_details").path("case_data"),
+                new TypeReference<>() {}
+            );
+            assertThat(projected, equalTo(expected));
+        }
+    }
+
+    @Test
+    @Order(200)
+    void decentralisedSubmissionShouldPreserveImmutableCaseData() throws Exception {
+        JsonNode response = submitDirectPersistenceEvent(
+            1888000000000003L,
+            ImmutableCaseConfiguration.CASE_TYPE,
+            ImmutableCaseDecentralisedEvent.EVENT_ID,
+            immutableCaseData()
+        );
+
+        assertThat(
+            response.path("case_details").path("after_submit_callback_response")
+                .path("confirmation_header").asText(),
+            equalTo("first:second")
+        );
+    }
+
+    @Test
+    @Order(201)
+    void legacySubmissionShouldPreserveImmutableCaseData() throws Exception {
+        long reference = 1888000000000004L;
+        Map<String, Object> expected = immutableCaseData();
+
+        submitDirectPersistenceEvent(
+            reference,
+            ImmutableCaseConfiguration.CASE_TYPE,
+            ImmutableCaseConfiguration.LEGACY_EVENT,
+            expected
+        );
+
+        assertThat(storedCaseData(reference), equalTo(expected));
+    }
+
+    @Test
+    @Order(202)
+    void jsonCallbackShouldPreserveImmutableCaseData() throws Exception {
+        long reference = 1888000000000005L;
+        Map<String, Object> expected = immutableCaseData();
+
+        submitDirectPersistenceEvent(
+            reference,
+            JsonLegacyCcdConfig.CASE_TYPE_A,
+            JSON_LEGACY_EVENT_ID,
+            Map.of("immutableCaseData", expected)
+        );
+
+        Map<String, Object> stored = storedCaseData(reference);
+        assertThat(stored.get("immutableCaseData"), equalTo(expected));
+    }
+
+    @Test
+    @Order(203)
+    void decentralisedSubmissionShouldReadStoredEnumNames() throws Exception {
+        JsonNode response = submitDirectPersistenceEvent(
+            1888000000000006L,
+            NoFaultDivorce.getCaseType(),
+            LabelledStatusDecentralisedEvent.EVENT_ID,
+            Map.of("labelledStatus", "STORED_NAME")
+        );
+
+        assertThat(
+            response.path("case_details").path("after_submit_callback_response")
+                .path("confirmation_body").asText(),
+            equalTo("STORED_NAME")
+        );
+    }
+
+    @Test
+    @Order(204)
+    void legacySubmissionShouldWriteEnumNamesRatherThanLabels() throws Exception {
+        long reference = 1888000000000007L;
+
+        submitDirectPersistenceEvent(
+            reference,
+            NoFaultDivorce.getCaseType(),
+            CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA,
+            Map.of("afield", CaseworkerRoundTripData.SET_LABELLED_STATUS_MARKER)
+        );
+
+        assertThat(storedCaseData(reference).get("labelledStatus"), equalTo("STORED_NAME"));
+    }
+
+    @Test
+    @Order(205)
+    void legacySubmissionShouldPreserveStoredEnumAndPropertyNames() throws Exception {
+        long reference = 1888000000000011L;
+
+        // Jackson 2 writes CaseData.aField (getAField/setAField) as "afield". Preserve that established
+        // wire name when loading and persisting existing case data.
+        submitDirectPersistenceEvent(
+            reference,
+            NoFaultDivorce.getCaseType(),
+            CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA,
+            Map.of("labelledStatus", "STORED_NAME", "afield", "must survive the upgrade")
+        );
+
+        Map<String, Object> stored = storedCaseData(reference);
+        assertThat(stored.get("labelledStatus"), equalTo("STORED_NAME"));
+        assertThat("Jackson 2 property names and values must survive persistence",
+            stored.get("afield"), equalTo("must survive the upgrade"));
+    }
+
+    @Test
+    @Order(206)
+    void legacySubmissionShouldTolerateStoredNullsForPrimitiveFields() throws Exception {
+        long reference = 1888000000000012L;
+        Map<String, Object> input = new LinkedHashMap<>(immutableCaseData());
+        input.put("primitiveNumber", null);
+        input.put("primitiveFlag", null);
+
+        submitDirectPersistenceEvent(
+            reference,
+            ImmutableCaseConfiguration.CASE_TYPE,
+            ImmutableCaseConfiguration.LEGACY_EVENT,
+            input
+        );
+
+        assertThat(storedCaseData(reference), equalTo(immutableCaseData()));
+    }
+
+    @Test
+    @Order(207)
+    void caseProjectionShouldOmitNullMapEntries() throws Exception {
+        long reference = 1888000000000008L;
+
+        db.update(
+            """
+                insert into ccd.case_data (
+                    id, reference, version, security_classification, jurisdiction, case_type_id, state, data
+                ) values (
+                    :reference, :reference, 1, 'PUBLIC', :jurisdiction, :caseType, :state, cast(:data as jsonb)
+                )
+                """,
+            Map.of(
+                "reference", reference,
+                "jurisdiction", NoFaultDivorce.JURISDICTION,
+                "caseType", NoFaultDivorce.getCaseType(),
+                "state", State.Submitted.name(),
+                "data", mapper.writeValueAsString(Map.of("nullableValues", nullableValues()))
+            )
+        );
+
+        var request = new HttpGet(SERVICE_BASE_URL + "/ccd-persistence/cases?case-refs=" + reference);
+        try (var httpClient = HttpClientBuilder.create().build();
+             var response = httpClient.execute(request)) {
+            assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
+            JsonNode body = mapper.readTree(EntityUtils.toString(response.getEntity()));
+            Map<String, Object> projectedMap = mapper.convertValue(
+                body.path(0).path("case_details").path("case_data").path("nullableValues"),
+                new TypeReference<>() {}
+            );
+            assertThat(projectedMap, equalTo(Map.of("v", "x")));
+        }
+    }
+
+    @Test
+    @Order(208)
+    void legacySubmissionShouldOmitNullMapEntries() throws Exception {
+        long reference = 1888000000000009L;
+
+        submitDirectPersistenceEvent(
+            reference,
+            NoFaultDivorce.getCaseType(),
+            CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA,
+            Map.of("nullableValues", nullableValues())
+        );
+
+        assertThat(storedCaseData(reference).get("nullableValues"), equalTo(Map.of("v", "x")));
+    }
+
+    @Test
+    @Order(209)
+    void jsonCallbackShouldReceiveAndThenOmitNullMapEntries() throws Exception {
+        long reference = 1888000000000010L;
+        BaseJsonLegacyController.reset();
+
+        submitDirectPersistenceEvent(
+            reference,
+            JsonLegacyCcdConfig.CASE_TYPE_A,
+            JSON_LEGACY_EVENT_ID,
+            Map.of("nullableValues", nullableValues())
+        );
+
+        assertThat(BaseJsonLegacyController.aboutToSubmitSawNullMapEntry, is(true));
+        assertThat(storedCaseData(reference).get("nullableValues"), equalTo(Map.of("v", "x")));
+    }
+
+    private Map<String, Object> immutableCaseData() {
+        return Map.of(
+            "firstValue", "first",
+            "secondValue", "second"
+        );
+    }
+
+    @Test
+    @Order(209)
+    void legacySubmissionShouldPreserveGetterOnlyCollections() throws Exception {
+        Map<String, Object> evidence = Map.of(
+            "documentIds", List.of("court-order-document-id", "witness-statement-document-id"),
+            "recordedAnswers", Map.of("consent", "Yes", "served", "Yes")
+        );
+
+        assertLegacyCompatibilityDataSurvives(1888000000000013L, Map.of("evidence", evidence));
+    }
+
+    @Test
+    @Order(209)
+    void legacySubmissionShouldPreserveLowercaseAccessors() throws Exception {
+        assertLegacyCompatibilityDataSurvives(
+            1888000000000014L,
+            Map.of("legacyReference", Map.of("reference", "COURT-2026-00123"))
+        );
+    }
+
+    @Test
+    @Order(209)
+    void legacySubmissionShouldNotApplyConstructorRoundingToStoredAmounts() throws Exception {
+        assertLegacyCompatibilityDataSurvives(
+            1888000000000015L,
+            Map.of("monetaryAmount", Map.of("amount", "123.4567"))
+        );
+    }
+
+    @Test
+    @Order(209)
+    void legacySubmissionShouldPreserveStoredMonthNames() throws Exception {
+        assertLegacyCompatibilityDataSurvives(1888000000000016L, Map.of("hearingMonth", "FEBRUARY"));
+    }
+
+    @Test
+    @Order(209)
+    void classicCallbackShouldPreserveStoredEnumNames() throws Exception {
+        var caseDetails = Map.of(
+            "id", 1888000000000017L,
+            "case_type_id", NoFaultDivorce.getCaseType(),
+            "state", State.Submitted.name(),
+            "case_data", Map.of("labelledStatus", "STORED_NAME")
+        );
+        var payload = Map.of(
+            "case_details", caseDetails,
+            "case_details_before", caseDetails,
+            "event_id", CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA
+        );
+        var request = new HttpPost(SERVICE_BASE_URL + "/callbacks/about-to-submit");
+        request.addHeader("ServiceAuthorization", getServiceAuth());
+        request.addHeader("Authorization", getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"));
+        request.setEntity(new StringEntity(mapper.writeValueAsString(payload), ContentType.APPLICATION_JSON));
+
+        try (var httpClient = HttpClientBuilder.create().build();
+             var response = httpClient.execute(request)) {
+            String responseBody = EntityUtils.toString(response.getEntity());
+            assertThat("Classic callback should succeed. Response: " + responseBody,
+                response.getStatusLine().getStatusCode(), equalTo(200));
+            assertThat("Classic callbacks must return the stored enum name to CCD",
+                mapper.readTree(responseBody).path("data").path("labelledStatus").asText(),
+                equalTo("STORED_NAME"));
+        }
+    }
+
+    private void assertLegacyCompatibilityDataSurvives(long reference, Map<String, Object> expected) throws Exception {
+        Map<String, Object> existingData = Map.of("jacksonCompatibilityData", expected);
+        db.update(
+            """
+                insert into ccd.case_data (
+                    id, reference, version, security_classification, jurisdiction, case_type_id, state, data
+                ) values (
+                    :id, :reference, 1, 'PUBLIC', :jurisdiction, :caseType, :state, cast(:data as jsonb)
+                )
+                """,
+            Map.of(
+                "id", reference + 1000000000000000L,
+                "reference", reference,
+                "jurisdiction", NoFaultDivorce.JURISDICTION,
+                "caseType", NoFaultDivorce.getCaseType(),
+                "state", State.Submitted.name(),
+                "data", mapper.writeValueAsString(existingData)
+            )
+        );
+        assertThat("The legacy values must be present before the event", storedCaseData(reference), equalTo(existingData));
+
+        submitDirectPersistenceEvent(
+            reference,
+            NoFaultDivorce.getCaseType(),
+            CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA,
+            existingData
+        );
+
+        assertThat("Existing case data must survive an unrelated legacy event unchanged",
+            storedCaseData(reference).get("jacksonCompatibilityData"), equalTo(expected));
+    }
+
+    private Map<String, String> nullableValues() {
+        Map<String, String> values = new LinkedHashMap<>();
+        values.put("v", "x");
+        values.put("n", null);
+        return values;
+    }
+
+    private JsonNode submitDirectPersistenceEvent(long reference,
+                                                  String caseType,
+                                                  String eventId,
+                                                  Map<String, ?> caseData) throws Exception {
+        Map<String, Object> caseDetails = new LinkedHashMap<>();
+        caseDetails.put("id", reference);
+        caseDetails.put("jurisdiction", NoFaultDivorce.JURISDICTION);
+        caseDetails.put("case_type_id", caseType);
+        caseDetails.put("state", State.Submitted.name());
+        caseDetails.put("case_data", caseData);
+        caseDetails.put("security_classification", "PUBLIC");
+        caseDetails.put("version", 1);
+
+        Map<String, Object> payload = Map.of(
+            "internal_case_id", reference + 1000000000000000L,
+            "case_details", caseDetails,
+            "event_details", Map.of(
+                "case_type", caseType,
+                "event_id", eventId,
+                "event_name", eventId,
+                "summary", "",
+                "description", ""
+            )
+        );
+
+        var request = new HttpPost(SERVICE_BASE_URL + "/ccd-persistence/cases");
+        request.addHeader("Content-Type", "application/json");
+        request.addHeader("Authorization", getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"));
+        request.addHeader("Idempotency-Key", UUID.randomUUID().toString());
+        request.setEntity(new StringEntity(CCD_WIRE_MAPPER.writeValueAsString(payload), ContentType.APPLICATION_JSON));
+
+        try (var httpClient = HttpClientBuilder.create().build();
+             var response = httpClient.execute(request)) {
+            String responseBody = EntityUtils.toString(response.getEntity());
+            assertThat("Direct persistence submission should succeed. Response: " + responseBody,
+                response.getStatusLine().getStatusCode(), equalTo(200));
+            return mapper.readTree(responseBody);
+        }
+    }
+
+    @SneakyThrows
+    private Map<String, Object> storedCaseData(long reference) {
+        String data = db.queryForObject(
+            "select data::text from ccd.case_data where reference = :reference",
+            Map.of("reference", reference),
+            String.class
+        );
+        return mapper.readValue(data, new TypeReference<>() {});
     }
 
     @Test
@@ -1283,14 +1673,14 @@ public class TestWithCCD extends CftlibTest {
         LocalDateTime eventTimestamp = LocalDateTime.parse(retrievedTimestampStr);
         assertThat(eventTimestamp, is(greaterThan(LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1))));
 
-        ArgumentCaptor<JsonNode> payloadCaptor = ArgumentCaptor.forClass(JsonNode.class);
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
         ArgumentCaptor<MessagePostProcessor> postProcessorCaptor = ArgumentCaptor.forClass(MessagePostProcessor.class);
 
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
             verify(jmsTemplate, atLeastOnce()).convertAndSend(eq("ccd-case-events-test"), payloadCaptor.capture(), postProcessorCaptor.capture())
         );
 
-        JsonNode payload = payloadCaptor.getValue();
+        JsonNode payload = mapper.readTree(payloadCaptor.getValue().toString());
         JsonNode publishedPayloadData = payload.path("AdditionalData").path("Data");
         assertThat(publishedPayloadData.path("note").isNull(), is(true));
         assertThat(StreamSupport.stream(publishedPayloadData.path("notes").spliterator(), false)
@@ -3177,10 +3567,10 @@ public class TestWithCCD extends CftlibTest {
                 equalTo(revisionBefore)
             ));
 
-        JsonNode originalDoc = fetchElasticsearchDocument(caseDataId);
+        ObjectNode originalDoc = fetchElasticsearchDocument(caseDataId);
 
-        JsonNode corruptedDoc = originalDoc.deepCopy();
-        ((ObjectNode) corruptedDoc).put("state", "MutatedState");
+        ObjectNode corruptedDoc = originalDoc.deepCopy();
+        corruptedDoc.put("state", "MutatedState");
         pushElasticsearchDocument(caseDataId, revisionBefore, corruptedDoc);
 
         await()
@@ -3616,7 +4006,7 @@ public class TestWithCCD extends CftlibTest {
         );
     }
 
-    private JsonNode fetchElasticsearchDocument(long caseDataId) throws IOException {
+    private ObjectNode fetchElasticsearchDocument(long caseDataId) throws IOException {
         var request = new HttpGet(ELASTICSEARCH_BASE_URL + "/e2e_cases/_doc/" + caseDataId);
         try (var response = HttpClientBuilder.create().build().execute(request)) {
             int statusCode = response.getStatusLine().getStatusCode();
@@ -3625,11 +4015,12 @@ public class TestWithCCD extends CftlibTest {
             var payload = mapper.readTree(EntityUtils.toString(response.getEntity()));
             var source = payload.path("_source");
             assertThat("Elasticsearch document should contain _source", source.isMissingNode(), is(false));
-            return source;
+            assertThat("Elasticsearch document _source should be an object", source.isObject(), is(true));
+            return (ObjectNode) source;
         }
     }
 
-    private void pushElasticsearchDocument(long caseDataId, int revision, JsonNode document) throws IOException {
+    private void pushElasticsearchDocument(long caseDataId, int revision, ObjectNode document) throws IOException {
         ObjectNode payload = document.deepCopy();
         payload.put("case_revision", revision);
 

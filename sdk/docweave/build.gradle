@@ -19,20 +19,20 @@ dependencies {
     implementation 'org.springframework:spring-tx'
     implementation 'org.springframework.boot:spring-boot-autoconfigure'
     compileOnly 'jakarta.servlet:jakarta.servlet-api'
-    implementation 'com.fasterxml.jackson.core:jackson-databind'
-    implementation 'com.github.hmcts:service-auth-provider-java-client:5.3.5'
+    implementation 'tools.jackson.core:jackson-databind'
+    implementation 'com.github.hmcts:service-auth-provider-java-client:6.1.2'
     compileOnly 'io.github.openfeign:feign-core:13.15'
-    implementation('com.github.hmcts:idam-java-client:3.0.5') {
+    implementation('com.github.hmcts:idam-java-client:4.0.0') {
         transitive = false
     }
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc'
     testImplementation 'org.springframework.boot:spring-boot-starter-jdbc'
-    testImplementation 'org.flywaydb:flyway-core'
+    testImplementation 'org.springframework.boot:spring-boot-starter-flyway'
     testImplementation 'org.testcontainers:testcontainers'
-    testImplementation 'org.testcontainers:junit-jupiter'
-    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    testImplementation 'org.testcontainers:testcontainers-postgresql'
     testRuntimeOnly 'org.flywaydb:flyway-database-postgresql'
     testRuntimeOnly 'org.postgresql:postgresql'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

@@ -1,9 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -11,15 +9,22 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.ObjectMapper;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedUpdateSupplementaryDataResponse;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 class SupplementaryDataService {
 
   private final NamedParameterJdbcTemplate ndb;
   private final ObjectMapper defaultMapper;
+
+  SupplementaryDataService(
+      NamedParameterJdbcTemplate ndb,
+      ObjectMapper defaultMapper) {
+    this.ndb = ndb;
+    this.defaultMapper = defaultMapper;
+  }
 
   @SneakyThrows
   @Transactional

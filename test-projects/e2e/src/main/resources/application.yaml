@@ -26,6 +26,9 @@ management:
     case-document-am-api:
       enabled: ${ENABLE_CDAM:true}
 spring:
+  http:
+    converters:
+      preferred-json-mapper: jackson2
   datasource:
     url: jdbc:postgresql://localhost:6432/nfd
     username: postgres

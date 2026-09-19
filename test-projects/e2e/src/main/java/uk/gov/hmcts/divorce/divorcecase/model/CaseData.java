@@ -27,6 +27,7 @@ import uk.gov.hmcts.divorce.divorcecase.model.access.DefaultAccess;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 @Data
@@ -51,6 +52,15 @@ public class CaseData {
 
     @CCD(access = {DefaultAccess.class})
     private String setInAboutToSubmit;
+
+    @CCD(access = {DefaultAccess.class})
+    private LabelledStatus labelledStatus;
+
+    @CCD(ignore = true)
+    private Map<String, String> nullableValues;
+
+    @CCD(ignore = true)
+    private JacksonCompatibilityData jacksonCompatibilityData;
 
     @CCD(
         label = "A Field",

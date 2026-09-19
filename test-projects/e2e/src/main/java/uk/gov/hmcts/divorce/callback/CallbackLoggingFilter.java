@@ -17,17 +17,19 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 import lombok.extern.slf4j.Slf4j;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.springframework.web.util.ContentCachingResponseWrapper;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Slf4j
 @Component
 public class CallbackLoggingFilter extends OncePerRequestFilter {
 
     private static final Path LOG_FILE = Paths.get("build", "logs", "http-traffic.log");
+    private static final int MAX_REQUEST_BODY_BYTES = 16 * 1024 * 1024;
     private static final ReentrantLock FILE_LOCK = new ReentrantLock();
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -45,7 +47,8 @@ public class CallbackLoggingFilter extends OncePerRequestFilter {
         HttpServletResponse response,
         FilterChain filterChain
     ) throws ServletException, IOException {
-        ContentCachingRequestWrapper cachingRequest = new ContentCachingRequestWrapper(request);
+        ContentCachingRequestWrapper cachingRequest =
+            new ContentCachingRequestWrapper(request, MAX_REQUEST_BODY_BYTES);
         ContentCachingResponseWrapper cachingResponse = new ContentCachingResponseWrapper(response);
         long start = System.nanoTime();
 
@@ -76,7 +79,7 @@ public class CallbackLoggingFilter extends OncePerRequestFilter {
         byte[] line;
         try {
             line = (OBJECT_MAPPER.writeValueAsString(entry) + System.lineSeparator()).getBytes(StandardCharsets.UTF_8);
-        } catch (IOException e) {
+        } catch (JsonProcessingException e) {
             log.warn("Failed to serialise HTTP traffic log entry", e);
             return;
         }

@@ -1,4 +1,3 @@
-uk.gov.hmcts.ccd.sdk.config.CcdWireFormatConfiguration
 uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration
 uk.gov.hmcts.ccd.sdk.retention.RetainAndDisposeAutoConfiguration
 uk.gov.hmcts.ccd.sdk.config.DecentralisedFlywayAutoConfiguration

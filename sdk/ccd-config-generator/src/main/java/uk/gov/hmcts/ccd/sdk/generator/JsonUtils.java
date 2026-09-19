@@ -1,17 +1,10 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.core.util.DefaultIndenter;
-import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.type.CollectionType;
 import com.google.common.base.Strings;
 import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,6 +14,12 @@ import java.util.Optional;
 import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.SneakyThrows;
+import tools.jackson.core.util.DefaultIndenter;
+import tools.jackson.core.util.DefaultPrettyPrinter;
+import tools.jackson.core.util.Separators;
+import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.type.CollectionType;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.Label;
 
@@ -36,16 +35,16 @@ public class JsonUtils {
   @SneakyThrows
   public static String serialise(List<Map<String, Object>> data, boolean sort, String... primaryKeys) {
     class CustomPrinter extends DefaultPrettyPrinter {
+      CustomPrinter() {
+        super(Separators.createDefaultInstance()
+            .withObjectNameValueSpacing(Separators.Spacing.AFTER));
+      }
+
       @Override
       public DefaultPrettyPrinter createInstance() {
         CustomPrinter result = new CustomPrinter();
         result.indentArraysWith(DefaultIndenter.SYSTEM_LINEFEED_INSTANCE);
         return result;
-      }
-
-      @Override
-      public void writeObjectFieldValueSeparator(JsonGenerator jg) throws IOException {
-        jg.writeRaw(": ");
       }
     }
 
@@ -62,9 +61,12 @@ public class JsonUtils {
       });
     }
 
-    return new ObjectMapper()
-      .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
-      .writer(new CustomPrinter()).writeValueAsString(data) + "\n";
+    return JsonMapper.builder()
+      .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+      .build()
+      .writer()
+      .with(new CustomPrinter())
+      .writeValueAsString(data) + "\n";
   }
 
   public static Map<String, Object> getField(String id) {
@@ -206,7 +208,7 @@ public class JsonUtils {
   @SneakyThrows
   public static void mergeInto(Path path, List<Map<String, Object>> fields,
       JsonMerger merger, boolean sort, String... primaryKeys) {
-    ObjectMapper mapper = new ObjectMapper();
+    JsonMapper mapper = JsonMapper.builder().build();
     List<Map<String, Object>> existing;
     if (path.toFile().exists()) {
       CollectionType mapCollectionType = mapper.getTypeFactory()

@@ -6,10 +6,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
 
@@ -27,6 +32,20 @@ public class ServicePersistenceControllerTest {
       caseProjectionService
   );
 
+  private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+
+  @Test
+  void malformedEventJsonReturnsBadRequest() throws Exception {
+    mockMvc.perform(post("/ccd-persistence/cases")
+            .contentType(MediaType.APPLICATION_JSON)
+            .header("Authorization", "******")
+            .header(IdempotencyEnforcer.IDEMPOTENCY_KEY_HEADER, UUID.randomUUID())
+            .content("{"))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(submissionService);
+  }
+
   @Test
   void createEventWithEmptyAuthorizationReturnsUnauthorized() {
     DecentralisedCaseEvent event = mock(DecentralisedCaseEvent.class);
@@ -37,7 +56,7 @@ public class ServicePersistenceControllerTest {
         UUID.randomUUID()
     );
 
-    assertThat(response.getStatusCodeValue()).isEqualTo(401);
+    assertThat(response.getStatusCode().value()).isEqualTo(401);
     assertThat(response.getBody()).isNotNull();
     assertThat(response.getBody().getErrors())
         .containsExactly("Authorization header is required");
@@ -55,7 +74,7 @@ public class ServicePersistenceControllerTest {
         UUID.randomUUID()
     );
 
-    assertThat(response.getStatusCodeValue()).isEqualTo(401);
+    assertThat(response.getStatusCode().value()).isEqualTo(401);
     assertThat(response.getBody()).isNotNull();
     assertThat(response.getBody().getErrors())
         .containsExactly("Authorization header is required");
@@ -76,7 +95,7 @@ public class ServicePersistenceControllerTest {
         idempotencyKey
     );
 
-    assertThat(response.getStatusCodeValue()).isEqualTo(200);
+    assertThat(response.getStatusCode().value()).isEqualTo(200);
     assertThat(response.getBody()).isSameAs(expectedResponse);
 
     verify(submissionService).submit(event, "Bearer token", idempotencyKey);

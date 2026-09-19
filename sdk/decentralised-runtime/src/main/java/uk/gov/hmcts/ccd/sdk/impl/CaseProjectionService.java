@@ -1,22 +1,24 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ResolvableType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.ClassUtils;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.domain.service.common.DefaultObjectMapperService;
 import uk.gov.hmcts.ccd.domain.service.processor.GlobalSearchProcessorService;
 import uk.gov.hmcts.ccd.sdk.CaseView;
 import uk.gov.hmcts.ccd.sdk.CaseViewRequest;
+import uk.gov.hmcts.ccd.sdk.Jackson2CaseDataMapper;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
@@ -34,6 +36,7 @@ class CaseProjectionService {
 
   private final CaseDataRepository caseDataRepository;
   private final ObjectMapper mapper;
+  private final com.fasterxml.jackson.databind.ObjectMapper consumerMapper;
   private final Map<String, CaseViewBinding> bindings;
   private final DefinitionRegistry definitionRegistry;
   private final GlobalSearchProcessorService globalSearchProcessorService;
@@ -41,11 +44,13 @@ class CaseProjectionService {
   CaseProjectionService(CaseDataRepository caseDataRepository,
                         @Qualifier(CcdCaseDataMapperConfiguration.CCD_CASE_DATA_OBJECT_MAPPER)
                         ObjectMapper mapper,
+                        Optional<com.fasterxml.jackson.databind.ObjectMapper> consumerMapper,
                         List<CaseView<?, ?>> caseViews,
                         ResolvedConfigRegistry configRegistry,
                         DefinitionRegistry definitionRegistry) {
     this.caseDataRepository = caseDataRepository;
     this.mapper = mapper;
+    this.consumerMapper = Jackson2CaseDataMapper.configured(consumerMapper);
     this.definitionRegistry = definitionRegistry;
     this.globalSearchProcessorService = new GlobalSearchProcessorService(new DefaultObjectMapperService(mapper));
     this.bindings = buildBindings(caseViews, configRegistry.asMap());
@@ -74,14 +79,14 @@ class CaseProjectionService {
           "No CaseView registered for decentralised case type %s".formatted(caseTypeId));
     }
 
-    Object blobCase = mapper.convertValue(caseDetails.getData(), binding.caseDataType());
+    Object blobCase = readConsumerData(caseDetails.getData(), binding.caseDataType());
     Enum<?> typedState = Enum.valueOf((Class<? extends Enum>) binding.stateType(), state);
 
     @SuppressWarnings("rawtypes")
     CaseViewRequest request = new CaseViewRequest(reference, typedState);
     @SuppressWarnings({"rawtypes", "unchecked"})
     Object projected = ((CaseView) binding.caseView()).getCase(request, blobCase);
-    Map<String, JsonNode> projectedData = mapper.convertValue(projected, JSON_NODE_MAP);
+    Map<String, JsonNode> projectedData = writeConsumerData(projected);
     Map<String, JsonNode> serialised = definitionRegistry.find(caseTypeId)
         .map(caseTypeDefinition -> globalSearchProcessorService.populateGlobalSearchData(
             caseTypeDefinition,
@@ -91,6 +96,16 @@ class CaseProjectionService {
 
     caseDetails.setData(serialised);
     return raw;
+  }
+
+  @lombok.SneakyThrows
+  private Object readConsumerData(Object data, Class<?> caseDataType) {
+    return consumerMapper.readValue(mapper.writeValueAsBytes(data), caseDataType);
+  }
+
+  @lombok.SneakyThrows
+  private Map<String, JsonNode> writeConsumerData(Object data) {
+    return mapper.readValue(consumerMapper.writeValueAsBytes(data), JSON_NODE_MAP);
   }
 
   private Map<String, CaseViewBinding> buildBindings(List<CaseView<?, ?>> caseViews,

@@ -1,32 +1,28 @@
 package uk.gov.hmcts.ccd.sdk.deserializer;
 
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.databind.DeserializationContext;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.SneakyThrows;
-import org.junit.Before;
-import org.junit.Test;
-
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
-
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.instanceOf;
 
+import java.time.LocalDateTime;
+import lombok.SneakyThrows;
+import org.junit.Before;
+import org.junit.Test;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.module.SimpleModule;
+
 public class LocalDateTimeDeserializerTest {
 
   private ObjectMapper mapper;
-  private LocalDateTimeDeserializer deserializer;
 
   @Before
   public void setup() {
-    mapper = new ObjectMapper();
-    deserializer = new LocalDateTimeDeserializer();
+    var module = new SimpleModule()
+        .addDeserializer(LocalDateTime.class, new LocalDateTimeDeserializer());
+    mapper = JsonMapper.builder()
+        .addModule(module)
+        .build();
   }
 
   @Test
@@ -65,15 +61,12 @@ public class LocalDateTimeDeserializerTest {
     assertThat(deserializedValue, instanceOf(LocalDateTime.class));
   }
 
-  @SneakyThrows({JsonParseException.class, IOException.class})
+  @SneakyThrows
   private LocalDateTime deserializeDateTime(String json) {
-    InputStream stream = new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8));
-    JsonParser parser = mapper.getFactory().createParser(stream);
-    DeserializationContext ctxt = mapper.getDeserializationContext();
-    parser.nextToken();
-    parser.nextToken();
-    parser.nextToken();
-    return deserializer.deserialize(parser, ctxt);
+    return mapper.readValue(json, DateTimeValue.class).value();
+  }
+
+  private record DateTimeValue(LocalDateTime value) {
   }
 
   private void assertDateValue(LocalDateTime dateTime) {

@@ -1,9 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import java.util.Map;
 import java.util.Optional;
 import lombok.SneakyThrows;
@@ -11,9 +7,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
+import uk.gov.hmcts.ccd.sdk.Jackson2CaseDataMapper;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.EventMetadata;
@@ -39,22 +40,32 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
 
   private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
-
   private final ResolvedConfigRegistry registry;
   private final CcdCallbackExecutor executor;
   private final ObjectMapper mapper;
-  private final ObjectMapper filteredMapper;
+  private final ObjectMapper callbackRequestMapper;
+  private final com.fasterxml.jackson.databind.ObjectMapper consumerMapper;
+  private final com.fasterxml.jackson.databind.ObjectMapper filteredMapper;
   private final ObjectProvider<CdamAttachService> cdamAttachService;
 
   LegacyCallbackSubmissionHandler(ResolvedConfigRegistry registry,
                                   CcdCallbackExecutor executor,
                                   @Qualifier(CcdCaseDataMapperConfiguration.CCD_CASE_DATA_OBJECT_MAPPER)
                                   ObjectMapper mapper,
+                                  Optional<com.fasterxml.jackson.databind.ObjectMapper> consumerMapper,
                                   ObjectProvider<CdamAttachService> cdamAttachService) {
     this.registry = registry;
     this.executor = executor;
     this.mapper = mapper;
-    this.filteredMapper = mapper.copy().setAnnotationIntrospector(new FilterExternalFieldsInspector());
+    this.callbackRequestMapper = mapper.rebuild()
+        .changeDefaultPropertyInclusion(inclusion -> com.fasterxml.jackson.annotation.JsonInclude.Value.construct(
+            com.fasterxml.jackson.annotation.JsonInclude.Include.ALWAYS,
+            com.fasterxml.jackson.annotation.JsonInclude.Include.ALWAYS
+        ))
+        .build();
+    this.consumerMapper = Jackson2CaseDataMapper.configured(consumerMapper);
+    this.filteredMapper = this.consumerMapper.copy()
+        .setAnnotationIntrospector(new FilterExternalFieldsInspector());
     this.cdamAttachService = cdamAttachService;
   }
 
@@ -126,7 +137,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
 
       Map<String, JsonNode> normalisedData = callbackResponse.getData() == null
           ? Map.of()
-          : mapper.convertValue(callbackResponse.getData(), JSON_NODE_MAP);
+          : writeConsumerData(callbackResponse.getData());
       event.getCaseDetails().setData(normalisedData);
 
       if (callbackResponse.getState() != null) {
@@ -178,10 +189,10 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   }
 
   private CallbackRequest buildCallbackRequest(DecentralisedCaseEvent event) {
-    CaseDetails caseDetails = mapper.convertValue(event.getCaseDetails(), CaseDetails.class);
+    CaseDetails caseDetails = callbackRequestMapper.convertValue(event.getCaseDetails(), CaseDetails.class);
     CaseDetails caseDetailsBefore = event.getCaseDetailsBefore() == null
         ? null
-        : mapper.convertValue(event.getCaseDetailsBefore(), CaseDetails.class);
+        : callbackRequestMapper.convertValue(event.getCaseDetailsBefore(), CaseDetails.class);
 
     return CallbackRequest.builder()
         .caseDetails(caseDetails)
@@ -231,9 +242,19 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     var caseType = event.getEventDetails().getCaseType();
     var caseClass = registry.getRequired(caseType).getCaseClass();
 
-    Object domainCaseData = mapper.convertValue(currentData, caseClass);
+    Object domainCaseData = readConsumerData(currentData, caseClass);
 
     String filteredJson = filteredMapper.writeValueAsString(domainCaseData);
     return mapper.readTree(filteredJson);
+  }
+
+  @SneakyThrows
+  private Object readConsumerData(Object data, Class<?> caseClass) {
+    return consumerMapper.readValue(mapper.writeValueAsBytes(data), caseClass);
+  }
+
+  @SneakyThrows
+  private Map<String, JsonNode> writeConsumerData(Object data) {
+    return mapper.readValue(consumerMapper.writeValueAsBytes(data), JSON_NODE_MAP);
   }
 }

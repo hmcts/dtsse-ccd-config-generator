@@ -1,13 +1,11 @@
 package uk.gov.hmcts.ccd.sdk.deserializer;
 
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.databind.DeserializationContext;
-import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
-import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeFormatterBuilder;
-import java.time.temporal.ChronoField;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.JsonParser;
+import tools.jackson.databind.DeserializationContext;
+import tools.jackson.databind.deser.std.StdDeserializer;
 
 public class LocalDateTimeDeserializer extends StdDeserializer<LocalDateTime> {
 
@@ -18,14 +16,9 @@ public class LocalDateTimeDeserializer extends StdDeserializer<LocalDateTime> {
   }
 
   @Override
-  public LocalDateTime deserialize(JsonParser jp, DeserializationContext ctxt) throws IOException {
+  public LocalDateTime deserialize(JsonParser jp, DeserializationContext ctxt) throws JacksonException {
     var dateString = jp.readValueAs(String.class);
-    DateTimeFormatter formatter = new DateTimeFormatterBuilder()
-            .appendPattern("yyyy-MM-dd'T'HH:mm:ss")
-            .optionalStart()
-                  .appendFraction(ChronoField.MILLI_OF_SECOND, 1, 3, true)
-            .optionalEnd()
-            .toFormatter();
+    DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
     return LocalDateTime.parse(dateString, formatter);
   }
 }

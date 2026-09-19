@@ -1,9 +1,9 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement.model.request;
 
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
-import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import java.util.List;
 import lombok.Builder;
+import tools.jackson.databind.PropertyNamingStrategies;
+import tools.jackson.databind.annotation.JsonNaming;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskReconfigurePayload;
 
 @Builder

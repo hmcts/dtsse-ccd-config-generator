@@ -1,39 +1,40 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static uk.gov.hmcts.reform.fpl.enums.UserRole.CCD_SOLICITOR;
+
 import com.google.common.collect.Maps;
 import com.google.common.io.Resources;
+import java.io.File;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.util.Map;
 import lombok.SneakyThrows;
 import org.apache.commons.io.FileUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.skyscreamer.jsonassert.JSONAssert;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.MapperFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import uk.gov.hmcts.ccd.sdk.model.AboutToStartOrSubmitCallbackResponse;
 import uk.gov.hmcts.ccd.sdk.type.PreviousOrganisationCollectionItem;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 import uk.gov.hmcts.reform.fpl.BulkCaseConfig;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
-
-import java.io.File;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
-import java.time.LocalDate;
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static uk.gov.hmcts.reform.fpl.enums.UserRole.CCD_SOLICITOR;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest
@@ -195,21 +196,22 @@ public class CallbackControllerTest {
   ResultActions makeRequest(String callback, String caseType, String eventId, Map<String, Object> data) {
     return this.mockMvc.perform(post("/callbacks/" + callback)
         .contentType(MediaType.APPLICATION_JSON)
-        .content(new ObjectMapper().writeValueAsString(buildRequest(caseType, eventId, data))));
+        .content(JsonMapper.builder().build().writeValueAsString(buildRequest(caseType, eventId, data))));
   }
 
   @SneakyThrows
   <T> T getResponseData(MvcResult result, Class<T> c) {
     AboutToStartOrSubmitCallbackResponse r = getCallbackResponse(result);
-    ObjectMapper mapper = new ObjectMapper();
-    mapper.findAndRegisterModules();
+    ObjectMapper mapper = JsonMapper.builder()
+        .enable(MapperFeature.ALLOW_FINAL_FIELDS_AS_MUTATORS)
+        .build();
     String json = mapper.writeValueAsString(r.getData());
     return mapper.readValue(json, c);
   }
 
   @SneakyThrows
   AboutToStartOrSubmitCallbackResponse getCallbackResponse(MvcResult result) {
-    ObjectMapper mapper = new ObjectMapper();
+    ObjectMapper mapper = JsonMapper.builder().build();
     return
       mapper.readValue(result.getResponse().getContentAsString(),
         AboutToStartOrSubmitCallbackResponse.class);

@@ -35,6 +35,7 @@ public abstract class BaseJsonLegacyController {
   public static volatile int externalSubmittedAttempts;
   public static volatile boolean aboutToSubmitSawAuthorisation;
   public static volatile boolean aboutToSubmitSawServiceAuthorisation;
+  public static volatile boolean aboutToSubmitSawNullMapEntry;
   public static volatile boolean submittedSawCommittedData;
   public static volatile boolean externalSubmittedSawAuthorisation;
   public static volatile boolean externalSubmittedSawServiceAuthorisation;
@@ -61,6 +62,10 @@ public abstract class BaseJsonLegacyController {
     }
     aboutToSubmitSawAuthorisation = authorisation != null && !authorisation.isBlank();
     aboutToSubmitSawServiceAuthorisation = serviceAuthorisation != null && !serviceAuthorisation.isBlank();
+    Object nullableValues = data.get("nullableValues");
+    aboutToSubmitSawNullMapEntry = nullableValues instanceof Map<?, ?> values
+        && values.containsKey("n")
+        && values.get("n") == null;
     return ResponseEntity.ok(aboutToSubmitResponse(data, List.of()));
   }
 
@@ -160,6 +165,7 @@ public abstract class BaseJsonLegacyController {
     externalSubmittedAttempts = 0;
     aboutToSubmitSawAuthorisation = false;
     aboutToSubmitSawServiceAuthorisation = false;
+    aboutToSubmitSawNullMapEntry = false;
     submittedSawCommittedData = false;
     externalSubmittedSawAuthorisation = false;
     externalSubmittedSawServiceAuthorisation = false;

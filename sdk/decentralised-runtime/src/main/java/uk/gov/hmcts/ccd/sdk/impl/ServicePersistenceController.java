@@ -3,7 +3,6 @@ package uk.gov.hmcts.ccd.sdk.impl;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -53,7 +52,6 @@ class ServicePersistenceController {
     return supplementaryDataService.updateSupplementaryData(caseRef, request);
   }
 
-  @SneakyThrows
   @PostMapping("/cases")
   public ResponseEntity<DecentralisedSubmitEventResponse> createEvent(
       @RequestBody DecentralisedCaseEvent event,

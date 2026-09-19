@@ -1,15 +1,14 @@
 package uk.gov.hmcts.reform.fpl.model.docmosis;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.Builder;
-import lombok.Data;
+import static java.util.stream.Collectors.groupingBy;
+import static org.apache.commons.lang3.ObjectUtils.isNotEmpty;
 
 import java.util.List;
 import java.util.Map;
-
-import static java.util.stream.Collectors.groupingBy;
-import static org.apache.commons.lang3.ObjectUtils.isNotEmpty;
+import lombok.Builder;
+import lombok.Data;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 @Data
 @Builder(builderClassName = "Builder")

@@ -1,28 +1,26 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement.model;
 
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.DeserializationContext;
-import com.fasterxml.jackson.databind.JsonDeserializer;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.JsonParser;
+import tools.jackson.databind.DeserializationContext;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ValueDeserializer;
 
-public class TaskPermissionListDeserializer extends JsonDeserializer<List<TaskPermission>> {
-
-  private static final TypeReference<List<TaskPermission>> LIST_TYPE = new TypeReference<>() {};
+public class TaskPermissionListDeserializer extends ValueDeserializer<List<TaskPermission>> {
 
   @Override
-  public List<TaskPermission> deserialize(JsonParser parser, DeserializationContext context) throws IOException {
-    ObjectMapper mapper = (ObjectMapper) parser.getCodec();
-    JsonNode node = mapper.readTree(parser);
+  public List<TaskPermission> deserialize(JsonParser parser, DeserializationContext context)
+      throws JacksonException {
+    JsonNode node = context.readTree(parser);
     if (node == null || node.isNull()) {
       return null;
     }
     if (node.isArray()) {
-      return mapper.convertValue(node, LIST_TYPE);
+      return context.readTreeAsValue(
+          node,
+          context.getTypeFactory().constructCollectionType(List.class, TaskPermission.class));
     }
     // WA returns permissions as an object; permissions are not needed for task termination.
     return Collections.emptyList();

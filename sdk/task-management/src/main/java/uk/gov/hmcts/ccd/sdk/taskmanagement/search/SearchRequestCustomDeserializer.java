@@ -1,15 +1,14 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement.search;
 
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.databind.DeserializationContext;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
-import java.io.IOException;
-import org.springframework.boot.jackson.JsonComponent;
+import org.springframework.boot.jackson.JacksonComponent;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.JsonParser;
+import tools.jackson.databind.DeserializationContext;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.deser.std.StdDeserializer;
 
-@JsonComponent
-@SuppressWarnings({"PMD.LawOfDemeter"})
+@JacksonComponent
+@SuppressWarnings("PMD.LawOfDemeter")
 public class SearchRequestCustomDeserializer extends StdDeserializer<TaskSearchParameter<?>> {
 
   private static final long serialVersionUID = -1895766495984179418L;
@@ -18,31 +17,27 @@ public class SearchRequestCustomDeserializer extends StdDeserializer<TaskSearchP
       "Each search_parameter element must have 'key', 'values' and 'operator' fields present and populated.";
 
   public SearchRequestCustomDeserializer() {
-    this(null);
-  }
-
-  public SearchRequestCustomDeserializer(final Class<?> cls) {
-    super(cls);
+    super(TaskSearchParameter.class);
   }
 
   @Override
-  public TaskSearchParameter<?> deserialize(JsonParser jsonParser, DeserializationContext ctxt) throws IOException {
+  public TaskSearchParameter<?> deserialize(JsonParser jsonParser, DeserializationContext ctxt)
+      throws JacksonException {
 
-    final ObjectMapper mapper = (ObjectMapper) jsonParser.getCodec();
-    final JsonNode searchNode = mapper.readTree(jsonParser);
+    final JsonNode searchNode = ctxt.readTree(jsonParser);
 
     final JsonNode operatorNode = searchNode.get("operator");
 
     if (operatorNode == null) {
-      throw new RuntimeException(ERROR_MESSAGE);
+      return ctxt.reportInputMismatch(TaskSearchParameter.class, ERROR_MESSAGE);
     }
 
     if (TaskSearchOperator.BOOLEAN.getValue().equals(operatorNode.asText())) {
-      return mapper.treeToValue(searchNode, TaskSearchParameterBoolean.class);
+      return ctxt.readTreeAsValue(searchNode, TaskSearchParameterBoolean.class);
     } else if (TaskSearchOperator.IN.getValue().equals(operatorNode.asText())) {
-      return mapper.treeToValue(searchNode, TaskSearchParameterList.class);
+      return ctxt.readTreeAsValue(searchNode, TaskSearchParameterList.class);
     } else {
-      throw new RuntimeException(ERROR_MESSAGE);
+      return ctxt.reportInputMismatch(TaskSearchParameter.class, ERROR_MESSAGE);
     }
   }
 }
