@@ -14,6 +14,7 @@ dependencies {
         transitive = false
     }
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-webmvc'
+    implementation group: 'org.springframework.boot', name: 'spring-boot-jackson2'
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-jdbc'
     implementation 'org.springframework.boot:spring-boot-starter-flyway'
     implementation('com.github.hmcts:idam-java-client:4.0.0') {

@@ -1,6 +1,8 @@
 package uk.gov.hmcts.ccd.sdk.impl.json;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
@@ -38,10 +40,9 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import uk.gov.hmcts.ccd.sdk.Jackson2CaseDataMapper;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
@@ -64,6 +65,7 @@ public class JsonCallbackBridge {
   private final ApplicationContext applicationContext;
   private final ObjectMapper mapper;
   private final ObjectMapper requestMapper;
+  private final com.fasterxml.jackson.databind.ObjectMapper consumerMapper;
   private final HttpClient httpClient;
   private final Map<String, List<HandlerMethod>> routes;
   private final String localCallbackPlaceholder;
@@ -73,13 +75,25 @@ public class JsonCallbackBridge {
   JsonCallbackBridge(ApplicationContext applicationContext,
                      @Qualifier(CcdCaseDataMapperConfiguration.CCD_CASE_DATA_OBJECT_MAPPER)
                      ObjectMapper mapper,
+                     Optional<com.fasterxml.jackson.databind.ObjectMapper> consumerMapper,
                      @Qualifier("requestMappingHandlerMapping")
                      RequestMappingHandlerMapping handlerMapping,
                      Environment environment) {
     this.applicationContext = applicationContext;
     this.mapper = mapper;
-    this.requestMapper = mapper.rebuild()
+    this.consumerMapper = Jackson2CaseDataMapper.configured(consumerMapper)
         .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+        .setSerializationInclusion(JsonInclude.Include.ALWAYS)
+        .setDefaultPropertyInclusion(JsonInclude.Value.construct(
+            JsonInclude.Include.ALWAYS,
+            JsonInclude.Include.ALWAYS
+        ));
+    this.consumerMapper.configOverride(Map.class).setInclude(JsonInclude.Value.construct(
+        JsonInclude.Include.ALWAYS,
+        JsonInclude.Include.ALWAYS
+    ));
+    this.requestMapper = mapper.rebuild()
+        .disable(tools.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
         .changeDefaultPropertyInclusion(inclusion -> JsonInclude.Value.construct(
             JsonInclude.Include.ALWAYS,
             JsonInclude.Include.ALWAYS
@@ -139,7 +153,7 @@ public class JsonCallbackBridge {
     Object data = callbackResponse.get("data");
     Object convertedData = data == null
         ? details.getData()
-        : mapper.convertValue(data, dataClass(details));
+        : consumerMapper.convertValue(data, dataClass(details));
     List<String> errors = (List<String>) callbackResponse.getOrDefault("errors", List.of());
     List<String> warnings = (List<String>) callbackResponse.getOrDefault("warnings", List.of());
     return AboutToStartOrSubmitResponse.builder()
@@ -279,7 +293,7 @@ public class JsonCallbackBridge {
       RequestBody requestBody = parameter.getParameterAnnotation(RequestBody.class);
       if (requestBody != null) {
         byte[] jsonPayload = requestMapper.writeValueAsBytes(payload);
-        args[i] = requestMapper.readValue(jsonPayload, parameter.getParameterType());
+        args[i] = consumerMapper.readValue(jsonPayload, parameter.getParameterType());
         continue;
       }
 
@@ -498,7 +512,7 @@ public class JsonCallbackBridge {
     );
     Object caseData = details.getData() == null
         ? Map.of()
-        : requestMapper.convertValue(details.getData(), Object.class);
+        : consumerMapper.convertValue(details.getData(), Object.class);
     callbackDetails.put("data", caseData);
     callbackDetails.put("case_data", caseData);
     return callbackDetails;
@@ -509,7 +523,7 @@ public class JsonCallbackBridge {
   }
 
   private Map<String, Object> responseMap(Object response) {
-    return response == null ? Map.of() : mapper.convertValue(response, MAP);
+    return response == null ? Map.of() : consumerMapper.convertValue(response, MAP);
   }
 
   private record Placeholder(String name, String path) {

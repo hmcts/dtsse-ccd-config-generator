@@ -2,9 +2,10 @@
 
 ## Purpose
 
-The generator and its consumers use Jackson 2.22.1. Consumer application and
-HMCTS-owned bytecode must not use Jackson 3 APIs. Jackson 3 may still be present on the
-runtime classpath because Spring Boot and other third-party libraries use it internally.
+The generator's consumer-facing APIs and consumer applications use Jackson 2.22.1.
+Consumer application bytecode must not use Jackson 3 APIs. Jackson 3 may still be
+present on the runtime classpath because Spring Boot, Elasticsearch and SDK internals
+use it.
 
 Two verification tasks enforce that rule:
 
@@ -65,13 +66,11 @@ Official `tools.jackson.*` artifacts produce one artifact-level finding instead 
 finding for every class inside the library. Other libraries are scanned for compiled
 references to `tools.jackson.*`.
 
-Findings in project output, Gradle project dependencies and configured first-party
-groups are fatal. Findings in third-party dependencies—including the Jackson 3
-artifacts used internally by Spring Boot—are informational. This allows framework
-internals while preventing consumer applications and shared HMCTS libraries from
-coupling to Jackson 3.
-
-There is deliberately no allow list for first-party findings.
+Findings in the consumer project's compiled output are fatal. Findings in all
+dependencies are informational, including Gradle project dependencies, configured
+first-party groups and third-party dependencies. This allows framework and SDK
+internals to use Jackson 3 while preventing consumer application code from coupling
+to it.
 
 The task writes:
 
@@ -102,8 +101,8 @@ ccdSdk {
 }
 ```
 
-Classification controls enforcement: project and first-party findings fail;
-third-party findings remain visible without failing.
+Classification identifies ownership in the report. Dependency findings remain visible
+without failing; only consumer project output is enforced.
 
 ## Failure behaviour
 
@@ -119,10 +118,11 @@ toolchain version.
 1. Jackson 2.22.1 artifacts and `com.fasterxml.jackson.*` bytecode pass.
 2. Direct or transitive third-party `tools.jackson.*` artifacts are reported but do
    not fail solely because they are present.
-3. Project or dependency bytecode referencing Jackson 3 fails.
+3. Consumer project bytecode referencing Jackson 3 fails; dependency bytecode is
+   reported without failing.
 4. Generated Jackson 3 annotations fail.
-5. Third-party Jackson 3 usage is informational, while project and first-party usage
-   fails.
+5. First-party and third-party dependency usage is informational, while consumer
+   project usage fails.
 6. The scanner does not load application or dependency classes.
 7. Multi-release JARs and malformed artifacts are handled deterministically.
 8. Reports are stable, cacheable and identify the owning component.

@@ -115,7 +115,8 @@ public abstract class JacksonClasspathCompatibilityCheck extends DefaultTask {
         enforcedCount, informationalCount, report);
     if (enforcedCount > 0) {
       throw new GradleException("Jackson 2 classpath guard failed with " + enforcedCount
-          + " first-party Jackson 3 findings. Consumer application code must use Jackson 2. See " + report + ".");
+          + " consumer project Jackson 3 findings. Consumer application code must use Jackson 2. See "
+          + report + ".");
     }
   }
 
@@ -249,7 +250,7 @@ public abstract class JacksonClasspathCompatibilityCheck extends DefaultTask {
         .append("Third-party dependency classes scanned: ").append(totals.thirdPartyClasses).append('\n')
         .append("Enforced Jackson 3 findings: ").append(enforced).append('\n')
         .append("Informational Jackson 3 findings: ").append(informational).append('\n')
-        .append("Project and first-party usage is forbidden; third-party runtime usage is informational.\n");
+        .append("Consumer project output usage is forbidden; dependency usage is informational.\n");
     if (failure != null) {
       report.append('\n').append(failure).append('\n');
     }
@@ -274,7 +275,7 @@ public abstract class JacksonClasspathCompatibilityCheck extends DefaultTask {
   }
 
   private enum Scope {
-    PROJECT_OUTPUT(true), FIRST_PARTY_DEPENDENCY(true), THIRD_PARTY_DEPENDENCY(false);
+    PROJECT_OUTPUT(true), FIRST_PARTY_DEPENDENCY(false), THIRD_PARTY_DEPENDENCY(false);
 
     private final boolean enforced;
 

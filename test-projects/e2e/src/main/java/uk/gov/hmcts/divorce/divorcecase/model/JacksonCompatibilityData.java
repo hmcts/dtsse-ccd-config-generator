@@ -11,14 +11,15 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.Data;
-import tools.jackson.core.JsonGenerator;
-import tools.jackson.core.JsonParser;
-import tools.jackson.databind.DeserializationContext;
-import tools.jackson.databind.SerializationContext;
-import tools.jackson.databind.ValueDeserializer;
-import tools.jackson.databind.ValueSerializer;
-import tools.jackson.databind.annotation.JsonDeserialize;
-import tools.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.JsonSerializer;
+import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import java.io.IOException;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
 /**
@@ -40,17 +41,17 @@ public class JacksonCompatibilityData {
     @JsonDeserialize(using = MonthNameDeserializer.class)
     private Month hearingMonth;
 
-    private static final class MonthNameSerializer extends ValueSerializer<Month> {
+    private static final class MonthNameSerializer extends JsonSerializer<Month> {
         @Override
-        public void serialize(Month value, JsonGenerator generator, SerializationContext context) {
+        public void serialize(Month value, JsonGenerator generator, SerializerProvider context) throws IOException {
             generator.writeString(value.name());
         }
     }
 
-    private static final class MonthNameDeserializer extends ValueDeserializer<Month> {
+    private static final class MonthNameDeserializer extends JsonDeserializer<Month> {
         @Override
-        public Month deserialize(JsonParser parser, DeserializationContext context) {
-            return Month.valueOf(parser.getString());
+        public Month deserialize(JsonParser parser, DeserializationContext context) throws IOException {
+            return Month.valueOf(parser.getValueAsString());
         }
     }
 

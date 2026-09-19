@@ -17,12 +17,12 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 import lombok.extern.slf4j.Slf4j;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.springframework.web.util.ContentCachingResponseWrapper;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.ObjectMapper;
 
 @Slf4j
 @Component
@@ -79,7 +79,7 @@ public class CallbackLoggingFilter extends OncePerRequestFilter {
         byte[] line;
         try {
             line = (OBJECT_MAPPER.writeValueAsString(entry) + System.lineSeparator()).getBytes(StandardCharsets.UTF_8);
-        } catch (JacksonException e) {
+        } catch (JsonProcessingException e) {
             log.warn("Failed to serialise HTTP traffic log entry", e);
             return;
         }

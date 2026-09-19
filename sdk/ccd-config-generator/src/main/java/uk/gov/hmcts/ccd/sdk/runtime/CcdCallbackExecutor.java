@@ -1,7 +1,10 @@
 package uk.gov.hmcts.ccd.sdk.runtime;
 
+import com.fasterxml.jackson.databind.JavaType;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
 import java.util.Map;
+import java.util.Optional;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,9 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.server.ResponseStatusException;
-import tools.jackson.databind.JavaType;
-import tools.jackson.databind.ObjectMapper;
-import uk.gov.hmcts.ccd.sdk.CcdCaseDataMapper;
+import uk.gov.hmcts.ccd.sdk.Jackson2CaseDataMapper;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
@@ -29,14 +30,15 @@ public class CcdCallbackExecutor {
 
   private final ResolvedConfigRegistry registry;
   private final ObjectMapper mapper;
+  private final ObjectMapper inboundMapper;
   private final Map<String, JavaType> caseTypeToJavaType = Maps.newHashMap();
 
   @Autowired
-  public CcdCallbackExecutor(ResolvedConfigRegistry registry, ObjectMapper mapper) {
+  public CcdCallbackExecutor(ResolvedConfigRegistry registry, Optional<ObjectMapper> mapper) {
     this.registry = registry;
-    var caseDataMapperBuilder = mapper.rebuild();
-    CcdCaseDataMapper.configure(caseDataMapperBuilder);
-    this.mapper = caseDataMapperBuilder.build();
+    this.mapper = Jackson2CaseDataMapper.configured(mapper);
+    this.inboundMapper = this.mapper.copy()
+        .setSerializationInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.ALWAYS);
     for (ResolvedCCDConfig<?, ?, ?> config : registry.getAll()) {
       this.caseTypeToJavaType.put(config.getCaseType(),
           this.mapper.getTypeFactory().constructParametricType(CaseDetails.class, config.getCaseClass(),
@@ -146,7 +148,7 @@ public class CcdCallbackExecutor {
       }
     }
 
-    String json = mapper.writeValueAsString(ccdDetails);
+    String json = inboundMapper.writeValueAsString(ccdDetails);
     CaseDetails result = mapper.readValue(json, caseTypeToJavaType.get(caseType));
     return result;
   }

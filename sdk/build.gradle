@@ -74,6 +74,7 @@ configure(javaProjects) {
     dependencyManagement {
         imports {
             mavenBom(SpringBootPlugin.BOM_COORDINATES)
+            mavenBom('com.fasterxml.jackson:jackson-bom:2.22.1')
             mavenBom('org.testcontainers:testcontainers-bom:2.0.5')
         }
     }

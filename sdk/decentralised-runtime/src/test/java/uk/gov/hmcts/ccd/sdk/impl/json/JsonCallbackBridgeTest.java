@@ -8,6 +8,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.net.http.HttpTimeoutException;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -95,6 +96,26 @@ class JsonCallbackBridgeTest {
   }
 
   @Test
+  void preservesNullMapEntriesSentToLocalCallbacks() {
+    NullMapCallbackController controller = new NullMapCallbackController();
+    JsonCallbackBridge bridge = bridgeWith(
+        new MockEnvironment().withProperty("decentralisation.local-callback-placeholder", "ET_COS_URL"),
+        controller
+    );
+    Map<String, String> values = new LinkedHashMap<>();
+    values.put("v", "x");
+    values.put("n", null);
+    CaseDetails<Object, Object> caseDetails = CaseDetails.builder()
+        .data(new NullableMapCaseData(values))
+        .build();
+
+    bridge.aboutToSubmit("${ET_COS_URL}/callbacks/null-map", "local")
+        .handle(caseDetails, null);
+
+    assertThat(controller.sawNullMapEntry).isTrue();
+  }
+
+  @Test
   void mapsSignificantItemFromLocalCallbackResponse() {
     JsonCallbackBridge bridge = bridgeWith(
         new MockEnvironment().withProperty("decentralisation.local-callback-placeholder", "ET_COS_URL"),
@@ -168,6 +189,7 @@ class JsonCallbackBridgeTest {
       return new JsonCallbackBridge(
           applicationContext,
           mapper,
+          java.util.Optional.of(new com.fasterxml.jackson.databind.ObjectMapper()),
           handlerMapping,
           environment
       );
@@ -205,7 +227,27 @@ class JsonCallbackBridgeTest {
     }
   }
 
+  @RestController
+  @RequestMapping("/callbacks")
+  private static class NullMapCallbackController {
+    private boolean sawNullMapEntry;
+
+    @PostMapping("/null-map")
+    Map<String, Object> nullMap(@RequestBody Map<String, Object> request) {
+      Map<?, ?> details = (Map<?, ?>) request.get("case_details");
+      Map<?, ?> data = (Map<?, ?>) details.get("data");
+      Map<?, ?> values = (Map<?, ?>) data.get("nullableValues");
+      sawNullMapEntry = values.containsKey("n") && values.get("n") == null;
+      Map<String, Object> response = new LinkedHashMap<>();
+      response.put("data", data);
+      return response;
+    }
+  }
+
   private record NocCallbackResponse(NocCaseData data) {
+  }
+
+  private record NullableMapCaseData(Map<String, String> nullableValues) {
   }
 
   private record NocCaseData(ChangeOrganisationRequestField changeOrganisationRequestField) {

@@ -163,7 +163,7 @@ public class JacksonCompatibilityFunctionalTest {
   }
 
   @Test
-  public void classpathGuardRejectsJacksonThreeInProjectDependencyWithoutLoadingClasses() throws IOException {
+  public void classpathGuardReportsJacksonThreeInProjectDependencyWithoutLoadingClasses() throws IOException {
     write("settings.gradle", "rootProject.name = 'compatibility-test'\ninclude 'shared'\n");
     write("build.gradle", """
         plugins { id 'hmcts.ccd.sdk' }
@@ -180,9 +180,9 @@ public class JacksonCompatibilityFunctionalTest {
         public class Detached { tools.jackson.databind.JsonNode value; }
         """);
 
-    runner("jackson2ClasspathGuard").buildAndFail();
+    runner("jackson2ClasspathGuard").build();
     String report = classpathReport();
-    assertTrue(report.contains("ERROR [FIRST_PARTY_DEPENDENCY] project(:shared)"));
+    assertTrue(report.contains("INFO [FIRST_PARTY_DEPENDENCY] project(:shared)"));
     assertTrue(report.contains("shared.Detached"));
     assertTrue(report.contains("tools.jackson.databind.ValueDeserializer"));
   }

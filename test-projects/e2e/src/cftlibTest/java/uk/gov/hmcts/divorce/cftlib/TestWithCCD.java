@@ -1,9 +1,9 @@
 package uk.gov.hmcts.divorce.cftlib;
 
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
@@ -158,11 +158,13 @@ import uk.gov.hmcts.rse.ccd.lib.test.CftlibTest;
     "ccd.decentralised-runtime.system-user.username=e2e-system-user",
     "ccd.decentralised-runtime.system-user.first-name=E2E",
     "ccd.decentralised-runtime.system-user.last-name=System",
-    "spring.jackson.deserialization.fail-on-unknown-properties=true",
+    "spring.jackson2.deserialization.fail-on-unknown-properties=true",
     "spring.autoconfigure.exclude=com.azure.spring.cloud.autoconfigure.implementation.jms.ServiceBusJmsAutoConfiguration"
 })
 @Slf4j
 public class TestWithCCD extends CftlibTest {
+
+    private static final ObjectMapper CCD_WIRE_MAPPER = new ObjectMapper();
 
     @Autowired
     private IdamClient idam;
@@ -971,7 +973,7 @@ public class TestWithCCD extends CftlibTest {
             reference,
             NoFaultDivorce.getCaseType(),
             CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA,
-            Map.of("aField", CaseworkerRoundTripData.SET_LABELLED_STATUS_MARKER)
+            Map.of("afield", CaseworkerRoundTripData.SET_LABELLED_STATUS_MARKER)
         );
 
         assertThat(storedCaseData(reference).get("labelledStatus"), equalTo("STORED_NAME"));
@@ -982,10 +984,8 @@ public class TestWithCCD extends CftlibTest {
     void legacySubmissionShouldPreserveStoredEnumAndPropertyNames() throws Exception {
         long reference = 1888000000000011L;
 
-        // Jackson 2 wrote CaseData.aField (getAField/setAField) as "afield"; Jackson 3 has no setting that
-        // reproduces that exact casing on write, only ACCEPT_CASE_INSENSITIVE_PROPERTIES for reading it back.
-        // A value submitted under the old key still binds and survives, but a full round trip through the
-        // typed CaseData normalises the persisted key to the canonical "aField".
+        // Jackson 2 writes CaseData.aField (getAField/setAField) as "afield". Preserve that established
+        // wire name when loading and persisting existing case data.
         submitDirectPersistenceEvent(
             reference,
             NoFaultDivorce.getCaseType(),
@@ -995,9 +995,8 @@ public class TestWithCCD extends CftlibTest {
 
         Map<String, Object> stored = storedCaseData(reference);
         assertThat(stored.get("labelledStatus"), equalTo("STORED_NAME"));
-        assertThat("Jackson 2 property values submitted under the old key name must survive persistence, "
-                + "even though the key itself normalises to the canonical property name",
-            stored.get("aField"), equalTo("must survive the upgrade"));
+        assertThat("Jackson 2 property names and values must survive persistence",
+            stored.get("afield"), equalTo("must survive the upgrade"));
     }
 
     @Test
@@ -1225,7 +1224,7 @@ public class TestWithCCD extends CftlibTest {
         request.addHeader("Content-Type", "application/json");
         request.addHeader("Authorization", getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"));
         request.addHeader("Idempotency-Key", UUID.randomUUID().toString());
-        request.setEntity(new StringEntity(mapper.writeValueAsString(payload), ContentType.APPLICATION_JSON));
+        request.setEntity(new StringEntity(CCD_WIRE_MAPPER.writeValueAsString(payload), ContentType.APPLICATION_JSON));
 
         try (var httpClient = HttpClientBuilder.create().build();
              var response = httpClient.execute(request)) {
@@ -1674,14 +1673,14 @@ public class TestWithCCD extends CftlibTest {
         LocalDateTime eventTimestamp = LocalDateTime.parse(retrievedTimestampStr);
         assertThat(eventTimestamp, is(greaterThan(LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1))));
 
-        ArgumentCaptor<JsonNode> payloadCaptor = ArgumentCaptor.forClass(JsonNode.class);
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
         ArgumentCaptor<MessagePostProcessor> postProcessorCaptor = ArgumentCaptor.forClass(MessagePostProcessor.class);
 
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
             verify(jmsTemplate, atLeastOnce()).convertAndSend(eq("ccd-case-events-test"), payloadCaptor.capture(), postProcessorCaptor.capture())
         );
 
-        JsonNode payload = payloadCaptor.getValue();
+        JsonNode payload = mapper.readTree(payloadCaptor.getValue().toString());
         JsonNode publishedPayloadData = payload.path("AdditionalData").path("Data");
         assertThat(publishedPayloadData.path("note").isNull(), is(true));
         assertThat(StreamSupport.stream(publishedPayloadData.path("notes").spliterator(), false)

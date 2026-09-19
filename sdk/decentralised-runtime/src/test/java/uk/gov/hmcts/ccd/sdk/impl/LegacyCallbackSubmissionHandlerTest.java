@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
@@ -35,6 +36,8 @@ class LegacyCallbackSubmissionHandlerTest {
 
   private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
   private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final com.fasterxml.jackson.databind.ObjectMapper CONSUMER_MAPPER =
+      new com.fasterxml.jackson.databind.ObjectMapper();
   private static final String AUTHORISATION = "Bearer test-token";
 
   private final ResolvedConfigRegistry registry = mock(ResolvedConfigRegistry.class);
@@ -42,7 +45,8 @@ class LegacyCallbackSubmissionHandlerTest {
   private final ObjectProvider<CdamAttachService> cdamAttachServiceProvider = mock(ObjectProvider.class);
   private final CdamAttachService cdamAttachService = mock(CdamAttachService.class);
   private final LegacyCallbackSubmissionHandler handler =
-      new LegacyCallbackSubmissionHandler(registry, executor, MAPPER, cdamAttachServiceProvider);
+      new LegacyCallbackSubmissionHandler(registry, executor, MAPPER,
+          Optional.of(new com.fasterxml.jackson.databind.ObjectMapper()), cdamAttachServiceProvider);
 
   @Test
   void leavesCallbackDataUnchangedWhenCdamAttachServiceIsDisabled() throws Exception {
@@ -186,11 +190,10 @@ class LegacyCallbackSubmissionHandlerTest {
         .build();
   }
 
-  private AboutToStartOrSubmitResponse<Map<String, JsonNode>, Object> callbackResponse(String dataJson,
-                                                                                       List<String> errors)
+  private AboutToStartOrSubmitResponse callbackResponse(String dataJson, List<String> errors)
       throws Exception {
-    return AboutToStartOrSubmitResponse.<Map<String, JsonNode>, Object>builder()
-        .data(MAPPER.convertValue(read(dataJson), JSON_NODE_MAP))
+    return AboutToStartOrSubmitResponse.builder()
+        .data(CONSUMER_MAPPER.readValue(dataJson, Map.class))
         .errors(errors)
         .build();
   }
