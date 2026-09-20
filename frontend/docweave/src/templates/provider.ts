@@ -19,6 +19,12 @@ export interface Template {
   revision: number;
   updatedAt: string;
   content: TemplateFragment;
+  /**
+   * False for a template that belongs to someone else: a search may return
+   * those, but only the owner can change or delete one. Left out by a provider
+   * that has no notion of owners, where every template is the reader's own.
+   */
+  ownedByCurrentUser?: boolean;
 }
 
 export interface TemplateSearchResult {

@@ -304,7 +304,7 @@ return controller;
     kind: "script",
     title: "Saved templates",
     prose: [
-      "Readers can save wording they use often as a template and insert it later. Enable the template library by giving the editor a provider. This page uses an in-memory provider; in an application, pass the same-origin URL of a template endpoint and a CSRF token instead, and serve that endpoint with createTemplateProxy from @hmcts-cft/docweave/express.",
+      "Readers can save wording they use often as a template and insert it later. Enable the template library by giving the editor a provider. This page uses an in-memory provider; in an application, pass the same-origin URL of a template endpoint and a CSRF token instead, and serve that endpoint with createTemplateProxy from @hmcts-cft/docweave/express. A search may return other people's templates: mark those with ownedByCurrentUser: false and the reader is offered a copy to make their own rather than Edit and Delete.",
     ],
     tryThis: [
       "Press Insert template in the toolbar, or type / on an empty line, and save the current wording as a template.",

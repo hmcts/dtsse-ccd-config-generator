@@ -27,6 +27,8 @@ export function createTemplateDraft(
   host: HTMLElement,
   title: HTMLInputElement,
   template?: Template,
+  /** Start from the template's wording but save as a new template. */
+  copy = false,
 ) {
   const document = host.ownerDocument;
   const doc = template
@@ -94,7 +96,7 @@ export function createTemplateDraft(
   title.addEventListener("input", markDirty);
 
   return {
-    template,
+    template: copy ? undefined : template,
     get dirty(): boolean {
       return dirty;
     },

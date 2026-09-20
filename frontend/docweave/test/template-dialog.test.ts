@@ -516,6 +516,55 @@ describe("template dialog", () => {
     dialog.destroy();
   });
 
+  it("offers a copy of someone else's template rather than an edit that cannot be saved", async () => {
+    const theirs: Template = { ...template, id: "theirs", title: "Their wording", ownedByCurrentUser: false };
+    const mine: Template = { ...template, title: "My wording", ownedByCurrentUser: true };
+    const calls: string[] = [];
+    let created: string | undefined;
+    const dialog = createTemplateDialog({
+      ownerDocument: dom.window.document,
+      provider: provider({
+        async search() {
+          return { items: [theirs, mine] };
+        },
+        async create(input) {
+          calls.push("create");
+          created = input.title;
+          return { ...template, id: "copied", title: input.title, ownedByCurrentUser: true };
+        },
+        async update(_id, input) {
+          calls.push("update");
+          return { ...template, title: input.title };
+        },
+      }),
+      insert() {},
+    });
+
+    dialog.open();
+    await tick();
+    const labels = [...dom.window.document.querySelectorAll(".docweave-templates__result-actions button")]
+      .map((action) => action.getAttribute("aria-label"));
+    assert.deepEqual(labels, [
+      "Copy Their wording to my templates",
+      "Edit My wording",
+      "Delete My wording",
+    ]);
+
+    button("Copy Their wording to my templates").click();
+    const title = dom.window.document.querySelector<HTMLInputElement>(".docweave-templates__form input")!;
+    assert.equal(title.value, "Their wording");
+    assert.match(
+      dom.window.document.querySelector(".docweave-templates__editor")!.textContent,
+      /Existing content\./,
+    );
+    button("Save template").click();
+    await tick();
+
+    assert.deepEqual(calls, ["create"]);
+    assert.equal(created, "Their wording");
+    dialog.destroy();
+  });
+
   it("does not close a new draft when a cancelled save finishes", async () => {
     let resolveCreate: (value: Template) => void = () => {};
     const pendingCreate = new Promise<Template>((resolve) => {

@@ -99,6 +99,8 @@ export function createTemplateDialogView(document: Document) {
               class="docweave-templates__result-action">Edit</button>
             <button type="button" data-action="delete" tabindex="-1"
               class="docweave-templates__result-action">Delete</button>
+            <button type="button" data-action="copy" tabindex="-1"
+              class="docweave-templates__result-action">Copy</button>
           </div>
         </li>
       </template>
@@ -143,10 +145,20 @@ export function createTemplateDialogView(document: Document) {
       find(fragment, "[data-snippet]").textContent = snippet(template);
       find(fragment, '[data-action="select"]')
         .setAttribute("aria-label", template.title);
-      find(fragment, '[data-action="edit"]')
-        .setAttribute("aria-label", `Edit ${template.title}`);
-      find(fragment, '[data-action="delete"]')
-        .setAttribute("aria-label", `Delete ${template.title}`);
+      const edit = find(fragment, '[data-action="edit"]');
+      const remove = find(fragment, '[data-action="delete"]');
+      const copy = find(fragment, '[data-action="copy"]');
+      // Only the owner can change or delete a template, so someone else's
+      // offers a copy to make their own instead of an edit that cannot be saved.
+      if (template.ownedByCurrentUser === false) {
+        edit.remove();
+        remove.remove();
+        copy.setAttribute("aria-label", `Copy ${template.title} to my templates`);
+      } else {
+        copy.remove();
+        edit.setAttribute("aria-label", `Edit ${template.title}`);
+        remove.setAttribute("aria-label", `Delete ${template.title}`);
+      }
       results.append(fragment);
     });
   }

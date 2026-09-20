@@ -139,11 +139,11 @@ export function createTemplateDialog(
     render();
   }
 
-  function edit(template?: Template): void {
+  function edit(template?: Template, copy = false): void {
     if (destroyed || draft || busy || !dialog.open) return;
     supersede();
     try {
-      draft = createTemplateDraft(view.editorHost, view.title, template);
+      draft = createTemplateDraft(view.editorHost, view.title, template, copy);
       view.showStatus("");
       view.showTitleError();
       render();
@@ -242,6 +242,7 @@ export function createTemplateDialog(
     create: () => edit(),
     select: (template) => select(template),
     edit: (template) => edit(template),
+    copy: (template) => edit(template, true),
     delete: (template) => {
       if (template) void remove(template);
     },
