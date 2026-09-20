@@ -29,19 +29,17 @@ public class DocweaveTemplateRepository {
       UUID owner,
       String title,
       JsonNode content,
-      List<String> tags,
-      String searchableText
+      List<String> tags
   ) {
     return jdbc.queryForObject(
         """
         insert into docweave.docweave_template
-          (id, owner_id, title, content, tags, searchable_text)
-        select :id::uuid, :owner::uuid, :title, :content::jsonb, new.tags,
-               :searchableText || chr(10) || array_to_string(new.tags, ' ')
+          (id, owner_id, title, content, tags)
+        select :id::uuid, :owner::uuid, :title, :content::jsonb, new.tags
         from (select array(select jsonb_array_elements_text(:tags::jsonb)) as tags) new
         returning *
         """,
-        parameters(owner, title, content, tags, searchableText)
+        parameters(owner, title, content, tags)
             .addValue("id", UUID.randomUUID().toString()),
         this::mapRow
     );
@@ -72,10 +70,9 @@ public class DocweaveTemplateRepository {
       long expectedRevision,
       String title,
       JsonNode content,
-      List<String> tags,
-      String searchableText
+      List<String> tags
   ) {
-    MapSqlParameterSource parameters = parameters(owner, title, content, tags, searchableText)
+    MapSqlParameterSource parameters = parameters(owner, title, content, tags)
         .addValue("id", id.toString())
         .addValue("revision", expectedRevision)
         .addValue("replaceTags", tags != null);
@@ -85,7 +82,6 @@ public class DocweaveTemplateRepository {
         set title = :title,
             content = :content::jsonb,
             tags = new.tags,
-            searchable_text = :searchableText || chr(10) || array_to_string(new.tags, ' '),
             revision = revision + 1,
             updated_at = now()
         from (select case when :replaceTags::boolean
@@ -125,14 +121,13 @@ public class DocweaveTemplateRepository {
   }
 
   private MapSqlParameterSource parameters(
-      UUID owner, String title, JsonNode content, List<String> tags, String searchableText
+      UUID owner, String title, JsonNode content, List<String> tags
   ) {
     return new MapSqlParameterSource()
         .addValue("owner", owner.toString())
         .addValue("title", title)
         .addValue("content", content == null ? null : content.toString())
-        .addValue("tags", json.valueToTree(tags == null ? List.of() : tags).toString())
-        .addValue("searchableText", searchableText == null ? title : title + "\n" + searchableText);
+        .addValue("tags", json.valueToTree(tags == null ? List.of() : tags).toString());
   }
 
   @SneakyThrows

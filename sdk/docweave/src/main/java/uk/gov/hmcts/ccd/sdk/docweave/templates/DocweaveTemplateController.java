@@ -75,7 +75,7 @@ public class DocweaveTemplateController {
   ) {
     UUID user = authenticate(userToken, serviceToken);
     DocweaveTemplateRepository.Template template =
-        templates.create(user, request.title(), request.content(), request.tags(), request.searchableText());
+        templates.create(user, request.title(), request.content(), request.tags());
     return respond(HttpStatus.CREATED, toResponse(template, user));
   }
 
@@ -96,8 +96,7 @@ public class DocweaveTemplateController {
         request.expectedRevision(),
         request.title(),
         request.content(),
-        request.tags(),
-        request.searchableText()
+        request.tags()
     );
     return ok(toResponse(template, user));
   }
@@ -202,15 +201,14 @@ public class DocweaveTemplateController {
     return "Bearer " + value;
   }
 
-  public record SaveRequest(String title, JsonNode content, List<String> tags, String searchableText) {
+  public record SaveRequest(String title, JsonNode content, List<String> tags) {
   }
 
   public record UpdateRequest(
       String title,
       JsonNode content,
       Long expectedRevision,
-      List<String> tags,
-      String searchableText
+      List<String> tags
   ) {
   }
 

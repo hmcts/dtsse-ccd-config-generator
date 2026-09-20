@@ -37,6 +37,10 @@ export interface SaveTemplateInput {
 }
 
 export interface TemplateProvider {
+  /**
+   * Finds templates by their title and by their wording. A provider works the
+   * wording out from the content it stores, so no client has to describe it.
+   */
   search(query: string): Promise<TemplateSearchResult>;
   create(input: SaveTemplateInput): Promise<Template>;
   update(

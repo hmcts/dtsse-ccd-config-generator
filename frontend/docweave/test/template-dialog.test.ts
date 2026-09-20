@@ -565,6 +565,25 @@ describe("template dialog", () => {
     dialog.destroy();
   });
 
+  it("finds a template by what it says, before and after it is edited", async () => {
+    const store = createInMemoryTemplateProvider();
+    const dialog = createTemplateDialog({
+      ownerDocument: dom.window.document, provider: store, insert() {},
+    });
+    await store.create({ title: "Costs", content: template.content });
+
+    dialog.open();
+    await searchFor("existing content");
+    assert.equal(selectedTitle(), "Costs");
+
+    button("Edit Costs").click();
+    button("Save template").click();
+    await tick();
+    await searchFor("existing content");
+    assert.equal(selectedTitle(), "Costs");
+    dialog.destroy();
+  });
+
   it("does not close a new draft when a cancelled save finishes", async () => {
     let resolveCreate: (value: Template) => void = () => {};
     const pendingCreate = new Promise<Template>((resolve) => {
