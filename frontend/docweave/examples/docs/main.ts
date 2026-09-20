@@ -3,6 +3,7 @@ import {
   createDocEditor,
   renderHtml,
   type DocEditorController,
+  type DocWeaveSnapshot,
 } from "@hmcts-cft/docweave";
 import "@hmcts-cft/docweave/styles/docweave.css";
 
@@ -113,14 +114,17 @@ function initBuildSection(section: HTMLElement): void {
   const elements = sectionElements(section);
   const label = required<HTMLElement>(section, "h2").textContent ?? "Document";
   let build: BuildFunction | undefined;
-  let controller = createDocEditor({ mount: elements.mount, label });
+  const controller = createDocEditor({
+    mount: elements.mount,
+    label,
+    onChange: showOutput,
+  });
 
   const snapshotOutput = section.querySelector<HTMLElement>(
     "[data-docs-snapshot]",
   );
 
-  function showOutput(): void {
-    const snapshot = controller.getSnapshot();
+  function showOutput(snapshot: DocWeaveSnapshot): void {
     elements.output.textContent = formatHtml(renderHtml(snapshot), document);
     if (snapshotOutput) {
       snapshotOutput.textContent = JSON.stringify(snapshot.current, null, 2);
@@ -131,7 +135,6 @@ function initBuildSection(section: HTMLElement): void {
     if (!build) return;
     try {
       controller.render(build(readInputs(section)));
-      showOutput();
       clearError(elements);
     } catch (error) {
       showError(elements, error);
@@ -150,21 +153,11 @@ function initBuildSection(section: HTMLElement): void {
   }
 
   initCodeBlock(elements, compile);
-  // Only the inputs panel re-renders. Typing in the editor also fires input
-  // events, and re-rendering during a keystroke makes ProseMirror discard it.
   section.querySelector("[data-docs-inputs]")?.addEventListener("input", render);
-  // Refresh the readouts after the reader's own edits. keyup and click arrive
-  // after ProseMirror has applied the change, unlike input.
-  for (const type of ["keyup", "click"]) {
-    elements.mount.addEventListener(type, () => {
-      if (controller.getDocument()) showOutput();
-    });
-  }
   section.querySelector("[data-docs-reset-editor]")?.addEventListener(
     "click",
     () => {
-      controller.destroy();
-      controller = createDocEditor({ mount: elements.mount, label });
+      controller.load();
       render();
     },
   );

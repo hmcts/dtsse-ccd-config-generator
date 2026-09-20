@@ -74,6 +74,11 @@ export interface CreateDocEditorOptions {
    */
   label?: string;
   initialSnapshot?: DocWeaveSnapshot;
+  /**
+   * Called with the new snapshot whenever getSnapshot would return something
+   * different: after the reader's edit, a render that changes it, or a load.
+   */
+  onChange?: (snapshot: DocWeaveSnapshot) => void;
   templates?: {
     url?: string;
     csrfToken?: string | (() => string | undefined);
@@ -182,6 +187,7 @@ export function createDocEditor(
 
   const runtime = createDocEditorController({
     initialSnapshot: options.initialSnapshot,
+    onChange: options.onChange,
     plugins: [
       createClipboardPlugin(),
       createListNumberingPlugin(),
@@ -238,6 +244,13 @@ export function createDocEditor(
   const mountAlreadyStyled = editor.classList.contains("docweave-editor");
   editor.classList.add("docweave-editor");
   editor.append(toolbar, editorSurface, announcer.element);
+
+  // Typing in the editor is not an answer to the host's form. Left to bubble,
+  // these reach a form that re-renders on input, and re-rendering during a
+  // keystroke makes ProseMirror discard it. Hosts use onChange instead.
+  const stopAtMount = (event: Event): void => event.stopPropagation();
+  editor.addEventListener("input", stopAtMount);
+  editor.addEventListener("change", stopAtMount);
 
   function openTemplateDialog(): void {
     if (!templateDialog) return;
@@ -318,9 +331,12 @@ export function createDocEditor(
 
   return {
     render: runtime.controller.render,
+    load: runtime.controller.load,
     getDocument: runtime.controller.getDocument,
     getSnapshot: runtime.controller.getSnapshot,
     destroy(): void {
+      editor.removeEventListener("input", stopAtMount);
+      editor.removeEventListener("change", stopAtMount);
       connectedToolbar?.destroy();
       templateDialog?.destroy();
       helpDialog?.destroy();

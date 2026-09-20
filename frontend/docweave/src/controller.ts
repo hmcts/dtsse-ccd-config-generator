@@ -25,6 +25,13 @@ export interface DocWeaveSnapshot {
 
 export interface DocEditorController {
   render(document: DocWeaveDocument): void;
+  /**
+   * Replaces the document being edited with a saved one, or with an empty
+   * document when there is no snapshot. Undo history does not carry across, and
+   * the next render is treated as the first. Use it to switch between documents
+   * in one editor rather than destroying the editor and creating another.
+   */
+  load(snapshot?: DocWeaveSnapshot): void;
   getDocument(): DocWeaveDocument | undefined;
   getSnapshot(): DocWeaveSnapshot;
   destroy(): void;
@@ -60,6 +67,12 @@ function changedFacts(
 
 interface CreateDocEditorControllerOptions {
   initialSnapshot?: DocWeaveSnapshot;
+  /**
+   * Called with the new snapshot whenever getSnapshot would return something
+   * different, whatever caused it: the reader's edit, a render or a load. Not
+   * called for a render that changes nothing, nor for the selection alone.
+   */
+  onChange?: (snapshot: DocWeaveSnapshot) => void;
   plugins?: readonly Plugin[];
   /** Called after each render that follows a previous generated document. */
   onRender?: (change: RenderChange) => void;
@@ -81,41 +94,49 @@ export interface DocEditorRuntime {
 export function createDocEditorController(
   options: CreateDocEditorControllerOptions,
 ): DocEditorRuntime {
-  if (options.initialSnapshot &&
-    (options.initialSnapshot.schema !== "docweave-document" ||
-      options.initialSnapshot.version !== 1)) {
-    throw new Error("Unsupported Docweave snapshot version");
-  }
-
-  const initialCurrent = options.initialSnapshot
-    ? editorSchema.nodeFromJSON(options.initialSnapshot.current)
-    : undefined;
-  const initialGenerated = options.initialSnapshot
-    ? editorSchema.nodeFromJSON(options.initialSnapshot.generated)
-    : undefined;
-  if (initialGenerated && initialCurrent) {
-    assertValidGeneratedDocument(initialGenerated);
-    assertCurrentDocumentMatchesGenerated(initialCurrent, initialGenerated);
-  }
-
-  let state = EditorState.create({
-    schema: editorSchema,
-    doc: initialCurrent,
-    plugins: [...options.plugins ?? []],
-  });
-  let generatedDocument = initialGenerated ?? state.doc;
-  let hasGeneratedDocument = initialGenerated !== undefined;
-  if (initialGenerated) {
-    state = state.apply(
-      options.prepareGeneratedTransaction?.(
-        state.tr,
-        initialGenerated,
-      ) ?? state.tr,
-    );
-  }
-
+  let state: EditorState;
+  let generatedDocument: ProseMirrorNode;
+  let hasGeneratedDocument: boolean;
   let document: DocWeaveDocument | undefined;
   let stateListener: ((state: EditorState) => void) | undefined;
+
+  // A fresh state rather than a transaction, so that undo cannot cross from one
+  // document into another. Validates before assigning: a bad snapshot leaves the
+  // document being edited untouched.
+  const load = (snapshot?: DocWeaveSnapshot): void => {
+    if (snapshot &&
+      (snapshot.schema !== "docweave-document" || snapshot.version !== 1)) {
+      throw new Error("Unsupported Docweave snapshot version");
+    }
+
+    const current = snapshot
+      ? editorSchema.nodeFromJSON(snapshot.current)
+      : undefined;
+    const generated = snapshot
+      ? editorSchema.nodeFromJSON(snapshot.generated)
+      : undefined;
+    if (generated && current) {
+      assertValidGeneratedDocument(generated);
+      assertCurrentDocumentMatchesGenerated(current, generated);
+    }
+
+    let loaded = EditorState.create({
+      schema: editorSchema,
+      doc: current,
+      plugins: [...options.plugins ?? []],
+    });
+    if (generated) {
+      loaded = loaded.apply(
+        options.prepareGeneratedTransaction?.(loaded.tr, generated) ??
+          loaded.tr,
+      );
+    }
+    state = loaded;
+    generatedDocument = generated ?? loaded.doc;
+    hasGeneratedDocument = generated !== undefined;
+    document = undefined;
+  };
+  load(options.initialSnapshot);
 
   const getSnapshot = (): DocWeaveSnapshot => ({
     schema: "docweave-document",
@@ -124,7 +145,7 @@ export function createDocEditorController(
     generated: generatedDocument.toJSON() as Record<string, unknown>,
   });
 
-  const notifyChange = (): void => {
+  const notifyState = (): void => {
     stateListener?.(state);
   };
 
@@ -159,12 +180,20 @@ export function createDocEditorController(
           changedFacts: changedFacts(generatedDocument, target),
         }
         : undefined;
+      const snapshotChanged = transaction.docChanged ||
+        !hasGeneratedDocument || !generatedDocument.eq(target);
       state = state.apply(transaction.setMeta("addToHistory", false));
       generatedDocument = target;
       hasGeneratedDocument = true;
       document = nextDocument;
-      notifyChange();
+      notifyState();
+      if (snapshotChanged) options.onChange?.(getSnapshot());
       if (change) options.onRender?.(change);
+    },
+    load(snapshot?: DocWeaveSnapshot): void {
+      load(snapshot);
+      notifyState();
+      options.onChange?.(getSnapshot());
     },
     getDocument(): DocWeaveDocument | undefined {
       return document;
@@ -183,7 +212,8 @@ export function createDocEditorController(
     },
     dispatch(transaction: Transaction): void {
       state = state.apply(transaction);
-      notifyChange();
+      notifyState();
+      if (transaction.docChanged) options.onChange?.(getSnapshot());
     },
     setStateListener(listener: (state: EditorState) => void): void {
       stateListener = listener;

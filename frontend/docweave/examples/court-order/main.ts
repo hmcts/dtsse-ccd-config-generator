@@ -32,34 +32,25 @@ const inspector = createInspector(document);
 const templates = window.__DOCWEAVE_TEMPLATES_MODE__ === "backend"
   ? { url: "/docweave/templates" }
   : { provider: createInMemoryTemplateProvider() };
-let controller: DocEditorController;
+const controller: DocEditorController = createDocEditor({
+  mount,
+  templates,
+  onChange: (snapshot) => inspector.update(snapshot),
+});
 
 function render(): void {
   controller.render(buildDemoOrder(readInputs(form!)));
-  inspector.update(controller.getSnapshot());
-}
-
-function initialiseEditor(): void {
-  controller?.destroy();
-  controller = createDocEditor({
-    mount: mount!,
-    templates,
-  });
-  render();
 }
 
 for (const controlGroup of controlGroups) {
   controlGroup.addEventListener("input", render);
 }
 form.addEventListener("reset", () => {
-  window.setTimeout(initialiseEditor, 0);
+  // The controls hold their reset values only after the event has finished.
+  window.setTimeout(() => {
+    controller.load();
+    render();
+  }, 0);
 });
 
-// The inspector pulls the snapshot after each edit rather than the editor pushing it.
-for (const type of ["input", "click"]) {
-  mount.addEventListener(type, () => {
-    inspector.update(controller.getSnapshot());
-  });
-}
-
-initialiseEditor();
+render();

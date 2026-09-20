@@ -274,7 +274,7 @@ export const sections: readonly DocsSection[] = [
     kind: "script",
     title: "The editor and snapshots",
     prose: [
-      "createDocEditor mounts an editor and returns a controller. Give it a label: that is the accessible name of the editing surface, read out when it receives focus. Call render with each new document. Call getSnapshot to get a serialisable record of the reader's document and the generated document it was reconciled against, and pass it back as initialSnapshot to restore the editor later. Call destroy when the editor is removed.",
+      "createDocEditor mounts an editor and returns a controller. Give it a label: that is the accessible name of the editing surface, read out when it receives focus. Call render with each new document. Call getSnapshot to get a serialisable record of the reader's document and the generated document it was reconciled against, or pass onChange to be given it whenever it changes. Pass a snapshot back as initialSnapshot to restore the editor later, or to load to switch the mounted editor to another document; load with no snapshot starts again from an empty one. The editor keeps its own input and change events from reaching the page's form. Call destroy when the editor is removed.",
       "The code below runs when you press Run. The page passes the previous run's snapshot as saved, so your edits survive the editor being destroyed and recreated. Without a mount, createDocEditor runs headlessly for tests and servers.",
     ],
     tryThis: [
