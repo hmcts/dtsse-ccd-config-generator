@@ -1,4 +1,6 @@
 
+import org.springframework.boot.gradle.plugin.SpringBootPlugin
+
 group = 'com.github.hmcts'
 
 repositories {
@@ -6,6 +8,8 @@ repositories {
 }
 
 dependencies {
+    api platform(SpringBootPlugin.BOM_COORDINATES)
+
     // Use JUnit test framework for unit tests
     testImplementation 'junit:junit:4.13.2'
     annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.48'
