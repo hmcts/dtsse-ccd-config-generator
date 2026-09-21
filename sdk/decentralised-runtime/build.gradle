@@ -13,14 +13,18 @@ dependencies {
     implementation ('com.github.hmcts.rse-cft-lib:ccd-lib:0.19.2186') {
         transitive = false
     }
-    implementation group: 'org.springframework.boot', name: 'spring-boot-starter-webmvc'
+    implementation(group: 'org.springframework.boot', name: 'spring-boot-starter-webmvc') {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-jackson'
+    }
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-jdbc'
     implementation 'org.springframework.boot:spring-boot-starter-flyway'
-    implementation('com.github.hmcts:idam-java-client:3.0.5') {
+    implementation('com.github.hmcts:idam-java-client:4.0.0') {
         transitive = false
     }
-    implementation 'com.github.hmcts:ccd-case-document-am-client:1.59.2'
-    implementation 'com.github.hmcts:service-auth-provider-java-client:5.3.5'
+    implementation('com.github.hmcts:ccd-case-document-am-client:2.0.0') {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-jackson'
+    }
+    implementation 'com.github.hmcts:service-auth-provider-java-client:6.1.2'
     implementation group: 'com.github.ben-manes.caffeine', name: 'caffeine'
     compileOnly 'io.github.openfeign:feign-core:13.15'
     compileOnly 'org.projectlombok:lombok:1.18.48'

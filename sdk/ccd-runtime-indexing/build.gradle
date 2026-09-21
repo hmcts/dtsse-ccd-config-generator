@@ -50,7 +50,7 @@ dependencies {
     chaosTestImplementation 'org.testcontainers:testcontainers-junit-jupiter'
     chaosTestImplementation 'org.testcontainers:testcontainers-postgresql'
     chaosTestImplementation 'org.testcontainers:testcontainers-elasticsearch'
-    chaosTestImplementation 'org.testcontainers:toxiproxy'
+    chaosTestImplementation 'org.testcontainers:testcontainers-toxiproxy'
     chaosTestImplementation 'org.springframework.boot:spring-boot-starter-flyway'
     chaosTestImplementation 'org.awaitility:awaitility'
     chaosTestRuntimeOnly 'org.flywaydb:flyway-database-postgresql'

@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.config;
 
 import java.util.Map;
 import org.springframework.boot.SpringApplication;
+import org.springframework.boot.SpringBootVersion;
 import org.springframework.boot.env.EnvironmentPostProcessor;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MapPropertySource;
@@ -18,8 +19,11 @@ public final class CcdSdkJacksonEnvironmentPostProcessor implements EnvironmentP
   public void postProcessEnvironment(
       ConfigurableEnvironment environment,
       SpringApplication application) {
-    environment.getPropertySources().addLast(new MapPropertySource(
-        "ccdSdkJacksonDefaults",
-        Map.of(PREFERRED_JSON_MAPPER, "jackson2")));
+    String bootVersion = SpringBootVersion.getVersion();
+    if (bootVersion != null && bootVersion.startsWith("4.")) {
+      environment.getPropertySources().addLast(new MapPropertySource(
+          "ccdSdkJacksonDefaults",
+          Map.of(PREFERRED_JSON_MAPPER, "jackson2")));
+    }
   }
 }
