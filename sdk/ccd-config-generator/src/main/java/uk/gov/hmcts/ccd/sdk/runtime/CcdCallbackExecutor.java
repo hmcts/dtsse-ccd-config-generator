@@ -38,7 +38,7 @@ public class CcdCallbackExecutor {
     this.registry = registry;
     this.mapper = Jackson2CaseDataMapper.configured(mapper);
     this.inboundMapper = this.mapper.copy()
-        .setSerializationInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.ALWAYS);
+        .setSerializationInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL);
     for (ResolvedCCDConfig<?, ?, ?> config : registry.getAll()) {
       this.caseTypeToJavaType.put(config.getCaseType(),
           this.mapper.getTypeFactory().constructParametricType(CaseDetails.class, config.getCaseClass(),

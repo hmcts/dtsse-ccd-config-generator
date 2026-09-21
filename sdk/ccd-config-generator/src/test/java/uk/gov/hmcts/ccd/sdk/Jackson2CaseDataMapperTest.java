@@ -8,8 +8,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.Test;
 import uk.gov.hmcts.ccd.sdk.type.AddressGlobalUK;
+import uk.gov.hmcts.ccd.sdk.type.DynamicList;
+import uk.gov.hmcts.ccd.sdk.type.OrderSummary;
 
 public class Jackson2CaseDataMapperTest {
 
@@ -41,6 +44,36 @@ public class Jackson2CaseDataMapperTest {
     assertThat(data.applicant().address().getAddressLine1()).isEqualTo("line 1");
     assertThat(mapper.readTree(mapper.writeValueAsBytes(data)).path("applicant1Address").path("AddressLine1").asText())
         .isEqualTo("line 1");
+  }
+
+  @Test
+  public void readsCcdOrderSummaryFields() throws Exception {
+    ObjectMapper mapper = Jackson2CaseDataMapper.configured(Optional.of(new ObjectMapper()));
+
+    OrderSummary summary = mapper.readValue("""
+        {"Fees":[{"id":"1","value":{"FeeCode":"FEE1","FeeDescription":"Test fee"}}],
+         "PaymentReference":"reference","PaymentTotal":"1000"}
+        """, OrderSummary.class);
+
+    assertThat(summary.getPaymentReference()).isEqualTo("reference");
+    assertThat(summary.getPaymentTotal()).isEqualTo("1000");
+    assertThat(summary.getFees()).hasSize(1);
+    assertThat(summary.getFees().getFirst().getValue().getCode()).isEqualTo("FEE1");
+  }
+
+  @Test
+  public void readsCcdDynamicListFields() throws Exception {
+    ObjectMapper mapper = Jackson2CaseDataMapper.configured(Optional.of(new ObjectMapper()));
+    UUID selectedCode = UUID.randomUUID();
+
+    DynamicList list = mapper.readValue("""
+        {"value":{"code":"%s","label":"Selected"},
+         "list_items":[{"code":"%s","label":"Selected"}]}
+        """.formatted(selectedCode, selectedCode), DynamicList.class);
+
+    assertThat(list.getValue().getCode()).isEqualTo(selectedCode);
+    assertThat(list.getValue().getLabel()).isEqualTo("Selected");
+    assertThat(list.getListItems()).hasSize(1);
   }
 
   private record AddressCaseData(AddressGlobalUK address) {
