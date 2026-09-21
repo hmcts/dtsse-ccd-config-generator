@@ -355,4 +355,23 @@ describe("document builder", () => {
       );
     }
   });
+
+  it("turns typed text into a paragraph for each line", () => {
+    const document = buildDoc((doc) => {
+      doc.text("recitals", "UPON hearing the parties\n\n  AND UPON reading the file  \n", {
+        sourceId: "recitals-text",
+      });
+      doc.text("nothing", "  \n");
+      doc.paragraph("ordered", "IT IS ORDERED THAT:");
+    });
+
+    assert.deepEqual(
+      document.children.map((clause) => [clause.id, clause.textContent]),
+      [
+        ["recitals-0", "UPON hearing the parties"],
+        ["recitals-1", "AND UPON reading the file"],
+        ["ordered", "IT IS ORDERED THAT:"],
+      ],
+    );
+  });
 });

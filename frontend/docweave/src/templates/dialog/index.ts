@@ -5,6 +5,14 @@ import {
 } from "../provider.js";
 
 import { isElement, isFocusable } from "../../dom.js";
+import {
+  addToDate,
+  calendarDay,
+  parseTypedDate,
+  resolveTemplateDates,
+  templateDateLabels,
+  templateDateVariables,
+} from "../dates.js";
 import { createTemplateDraft, type TemplateDraft } from "./editor.js";
 import { createTemplateDialogView } from "./view.js";
 
@@ -18,6 +26,8 @@ export interface TemplateDialogOptions {
   provider: TemplateProvider;
   insert(template: Template): void;
   onInserted?(): void;
+  /** The current time, for working out "today". Tests pass a fixed one. */
+  now?(): Date;
 }
 
 const DISCARD_DRAFT = "Discard your unsaved template changes?";
@@ -49,6 +59,8 @@ export function createTemplateDialog(
   let templates: Template[] = [];
   let selected: Template | undefined;
   let draft: TemplateDraft | undefined;
+  /** The template whose dates the reader is being asked for, and their labels. */
+  let dating: { template: Template; variables: string[] } | undefined;
   let pending: { request: number; selectedId?: string } | undefined;
   let searching = false;
   let stale = false;
@@ -60,6 +72,7 @@ export function createTemplateDialog(
   function render(): void {
     view.update({
       editing: draft !== undefined,
+      dating: dating !== undefined,
       busy,
       stale,
       searching,
@@ -94,7 +107,7 @@ export function createTemplateDialog(
   }
 
   function requestSearch(selectedId?: string): void {
-    if (destroyed || draft || busy || !dialog.open) return;
+    if (destroyed || draft || dating || busy || !dialog.open) return;
     pending = { request: supersede(), selectedId };
     // The listed results now answer an older query. They stay on screen so the
     // list does not flicker, but they cannot be selected or acted on.
@@ -139,11 +152,11 @@ export function createTemplateDialog(
     render();
   }
 
-  function edit(template?: Template): void {
+  function edit(template?: Template, copy = false): void {
     if (destroyed || draft || busy || !dialog.open) return;
     supersede();
     try {
-      draft = createTemplateDraft(view.editorHost, view.title, template);
+      draft = createTemplateDraft(view.editorHost, view.title, template, copy);
       view.showStatus("");
       view.showTitleError();
       render();
@@ -160,6 +173,7 @@ export function createTemplateDialog(
 
   function close(restoreFocus = true): void {
     if (!canDiscardDraft()) return;
+    dating = undefined;
     stopDraft();
     dialog.close();
     if (restoreFocus) returnFocus?.focus();
@@ -177,6 +191,19 @@ export function createTemplateDialog(
     if (!view.title.value.trim()) {
       view.showTitleError("Enter a template title.");
       view.title.focus();
+      return;
+    }
+    let dateProblem: string | undefined;
+    try {
+      // Reading the dates validates the draft, which can fail: it may be too large.
+      dateProblem = draft.dateProblem;
+    } catch (error) {
+      report(error);
+      return;
+    }
+    if (dateProblem) {
+      view.showStatus(dateProblem, true);
+      draft.focus();
       return;
     }
     const current = draft;
@@ -225,15 +252,108 @@ export function createTemplateDialog(
     }
   }
 
+  /** What the reader is asked for. Saving insists on a label, so the name is a last resort. */
+  function dateLabel(content: unknown, name: string): string {
+    return templateDateLabels(content).get(name) ?? name;
+  }
+
+  function today(): Date {
+    const now = options.now?.() ?? new Date();
+    return calendarDay(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  }
+
+  /**
+   * Quick dates, counted from today: a pill, or shorthand such as 2w or 3m
+   * typed into a day field.
+   */
+  function quickDate(target: EventTarget | null, typed: boolean): void {
+    if (!dating || !isElement(target)) return;
+    const group = target.closest(".docweave-templates__date");
+    const index = group ? [...view.dateFields.children].indexOf(group) : -1;
+    if (index < 0) return;
+    if (!typed) {
+      const days = target.closest<HTMLElement>("[data-date-pill-days]")?.dataset.datePillDays;
+      if (days === undefined) return;
+      view.setDate(index, addToDate(today(), Number(days), "days"));
+      view.focusDate(index);
+      return;
+    }
+    const shorthand = (target as HTMLElement).dataset.datePart === "day"
+      ? /^(\d{1,4})\s*([dwm])$/iu.exec((target as HTMLInputElement).value.trim())
+      : null;
+    if (!shorthand) return;
+    const unit = ({ d: "days", w: "weeks", m: "months" } as const)[
+      shorthand[2]!.toLowerCase() as "d" | "w" | "m"
+    ];
+    view.setDate(index, addToDate(today(), Number(shorthand[1]), unit));
+  }
+
+  function finishInsert(template: Template, values: ReadonlyMap<string, Date>): void {
+    options.insert({
+      ...template,
+      content: {
+        ...template.content,
+        content: resolveTemplateDates(template.content.content, values, today()),
+      },
+    });
+    close(false);
+    options.onInserted?.();
+  }
+
   function insert(): void {
-    if (destroyed || !dialog.open || draft || busy || stale || !selected) return;
+    if (destroyed || !dialog.open || draft || dating || busy || stale || !selected) return;
     try {
-      options.insert(selected);
-      close(false);
-      options.onInserted?.();
+      const { content } = selected.content;
+      const variables = templateDateVariables(content);
+      if (variables.length === 0) {
+        finishInsert(selected, new Map());
+        return;
+      }
+      dating = { template: selected, variables };
+      view.showDates(variables.map((name) => dateLabel(content, name)));
+      view.showStatus("");
+      render();
+      view.focusDate(0);
     } catch (error) {
       report(error);
     }
+  }
+
+  function insertDates(): void {
+    if (destroyed || !dialog.open || !dating) return;
+    const { content } = dating.template.content;
+    const values = new Map<string, Date>();
+    let firstError = -1;
+    view.readDates().forEach((parts, index) => {
+      const name = dating!.variables[index]!;
+      const date = parseTypedDate(...parts);
+      if (date) values.set(name, date);
+      else if (firstError < 0) firstError = index;
+      view.showDateError(
+        index,
+        date
+          ? ""
+          : parts.every((part) => part === "")
+          ? `Enter a date for ${dateLabel(content, name)}`
+          : `${dateLabel(content, name)} must be a real date`,
+      );
+    });
+    if (firstError >= 0) {
+      view.focusDate(firstError);
+      return;
+    }
+    try {
+      finishInsert(dating.template, values);
+    } catch (error) {
+      report(error);
+    }
+  }
+
+  function leaveDates(): void {
+    if (!dating) return;
+    dating = undefined;
+    render();
+    search.focus();
   }
 
   const actions: Record<string, (template?: Template) => void> = {
@@ -242,11 +362,14 @@ export function createTemplateDialog(
     create: () => edit(),
     select: (template) => select(template),
     edit: (template) => edit(template),
+    copy: (template) => edit(template, true),
     delete: (template) => {
       if (template) void remove(template);
     },
     save: () => void save(),
     insert,
+    "insert-dates": insertDates,
+    back: leaveDates,
   };
 
   // One handler for the whole dialog, including rows rendered after each search.
@@ -260,8 +383,19 @@ export function createTemplateDialog(
     );
   });
 
+  view.dateFields.addEventListener("input", (event) => quickDate(event.target, true));
+  view.dateFields.addEventListener("click", (event) => quickDate(event.target, false));
+  view.dateFields.addEventListener("keydown", (event) => {
+    // Only from a date's own fields: Enter on a pill is that pill being pressed.
+    if (event.key !== "Enter" || event.isComposing || !isElement(event.target) ||
+      !event.target.matches("input[data-date-part]")) return;
+    event.preventDefault();
+    insertDates();
+  });
+
   dialog.addEventListener("keydown", (event) => {
-    if (destroyed || !dialog.open || draft || busy || stale || event.isComposing ||
+    if (destroyed || !dialog.open || draft || dating || busy || stale ||
+      event.isComposing ||
       event.altKey || event.ctrlKey || event.metaKey || event.shiftKey ||
       !isElement(event.target)) return;
     const row = event.target.matches('[data-action="select"]')
@@ -302,6 +436,7 @@ export function createTemplateDialog(
       returnFocus = isFocusable(active) ? active : null;
       supersede();
       selected = undefined;
+      dating = undefined;
       view.showPreview();
       dialog.showModal();
       search.focus();
