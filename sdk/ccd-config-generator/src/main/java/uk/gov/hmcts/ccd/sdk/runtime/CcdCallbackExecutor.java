@@ -46,6 +46,14 @@ public class CcdCallbackExecutor {
     }
   }
 
+  /**
+   * Retains source compatibility for applications that supplied the former Jackson 3 mapper.
+   * Consumer case data is deliberately bound with the SDK's isolated Jackson 2 mapper.
+   */
+  public CcdCallbackExecutor(ResolvedConfigRegistry registry, tools.jackson.databind.ObjectMapper ignored) {
+    this(registry, Optional.empty());
+  }
+
   @SneakyThrows
   public AboutToStartOrSubmitResponse aboutToStart(CallbackRequest request) {
     log.info("About to start event ID: {}", request.getEventId());

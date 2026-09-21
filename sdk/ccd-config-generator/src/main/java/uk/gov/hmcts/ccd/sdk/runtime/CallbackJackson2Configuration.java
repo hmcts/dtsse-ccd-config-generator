@@ -46,5 +46,15 @@ class CallbackJackson2Configuration {
     public boolean canRead(Class<?> type, MediaType mediaType) {
       return false;
     }
+
+    @Override
+    public boolean canRead(java.lang.reflect.Type type, Class<?> contextClass, MediaType mediaType) {
+      return false;
+    }
+
+    @Override
+    public boolean canWrite(Class<?> type, MediaType mediaType) {
+      return supports(type) && super.canWrite(type, mediaType);
+    }
   }
 }
