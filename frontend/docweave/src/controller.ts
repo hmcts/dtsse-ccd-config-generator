@@ -191,9 +191,15 @@ export function createDocEditorController(
       if (change) options.onRender?.(change);
     },
     load(snapshot?: DocWeaveSnapshot): void {
+      const { doc: before } = state;
+      const generatedBefore = generatedDocument;
       load(snapshot);
+      // The editor state is always fresh, so views refresh, but a host that
+      // persists every callback is only told when the snapshot differs.
       notifyState();
-      options.onChange?.(getSnapshot());
+      if (!state.doc.eq(before) || !generatedDocument.eq(generatedBefore)) {
+        options.onChange?.(getSnapshot());
+      }
     },
     getDocument(): DocWeaveDocument | undefined {
       return document;

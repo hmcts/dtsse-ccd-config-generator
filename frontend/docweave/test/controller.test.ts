@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { getDocumentNode } from "../src/builder.js";
+import { createDocEditorController } from "../src/controller.js";
 import { buildDoc, createDocEditor } from "../src/index.js";
 
 describe("headless editor", () => {
@@ -94,5 +95,32 @@ describe("headless editor", () => {
     controller.load(saved);
     assert.deepEqual(changes[2], saved);
     assert.equal(changes.length, 3);
+
+    // Loading what is already there is not a change, however it is loaded.
+    controller.load(controller.getSnapshot());
+    controller.load(saved);
+    controller.load(JSON.parse(JSON.stringify(saved)));
+    assert.equal(changes.length, 3);
+    controller.load();
+    controller.load();
+    assert.equal(changes.length, 4);
+  });
+
+  it("still hands the view a fresh state when a load leaves the snapshot as it was", () => {
+    const changes: unknown[] = [];
+    const runtime = createDocEditorController({
+      onChange: (snapshot) => changes.push(snapshot),
+    });
+    const states: unknown[] = [];
+    runtime.setStateListener((state) => states.push(state));
+    runtime.controller.render(buildDoc((doc) => doc.paragraph("first", "First.")));
+    const saved = runtime.controller.getSnapshot();
+    const [seenChanges, seenStates] = [changes.length, states.length];
+
+    runtime.controller.load(saved);
+
+    assert.equal(changes.length, seenChanges);
+    assert.equal(states.length, seenStates + 1);
+    assert.deepEqual(runtime.controller.getSnapshot(), saved);
   });
 });
