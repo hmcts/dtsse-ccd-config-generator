@@ -309,7 +309,9 @@ export function createDocEditor(
       ownerDocument: editor.ownerDocument,
       provider: templateProvider,
       insert(template) {
-        const { document } = parseTemplateFragment(template.content);
+        const { document } = parseTemplateFragment(template.content, {
+          dates: false,
+        });
         const command = insertTemplate(
           document,
           view.state.selection,

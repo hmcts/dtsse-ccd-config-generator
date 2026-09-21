@@ -305,10 +305,12 @@ return controller;
     title: "Saved templates",
     prose: [
       "Readers can save wording they use often as a template and insert it later. Enable the template library by giving the editor a provider. This page uses an in-memory provider; in an application, pass the same-origin URL of a template endpoint and a CSRF token instead, and serve that endpoint with createTemplateProxy from @hmcts-cft/docweave/express. A search may return other people's templates: mark those with ownedByCurrentUser: false and the reader is offered a copy to make their own rather than Edit and Delete.",
+      "A template can work dates out when it is inserted. While writing one, write [date: Hearing date] where the hearing date goes, and [date+14d] for 14 days after it; Insert date in its toolbar writes an example to type over. Offsets use d, w or m, with + or -. For a second date use [date2: Date of service], and [today] or [today+28d] count from the day of inserting and ask for nothing. A template that only needs the later date can say what it is asking for there: [date+28d: Hearing date]. Inserting the template asks once for each date, with pills for today and 14, 28 or 42 days from now, or shorthand such as 2w typed as the day, and writes them into the wording as ordinary text the reader can change. A template will not save with a date it cannot read or has no name to ask for.",
     ],
     tryThis: [
       "Press Insert template in the toolbar, or type / on an empty line, and save the current wording as a template.",
       "Start a new empty line, type / and insert the template.",
+      "Create a template that says: Heard on [date: Hearing date]. File by [date+14d]. Insert it and enter a hearing date.",
     ],
     code: `const { createDocEditor, buildDoc } = docweave;
 

@@ -23,7 +23,8 @@ export function createInMemoryTemplateProvider(): TemplateProvider {
   const searchable = new Map<string, string>();
   const index = (id: string, input: SaveTemplateInput): void => {
     const { document } = parseTemplateFragment(input.content);
-    const wording = document.textBetween(0, document.content.size, " ");
+    // Wording only, as the backend indexes it: a template's dates are not searched.
+    const wording = document.textBetween(0, document.content.size, " ", () => "");
     searchable.set(id, `${input.title}\n${wording}`.toLocaleLowerCase());
   };
 

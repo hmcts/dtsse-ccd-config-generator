@@ -1,6 +1,8 @@
 import { type Node as ProseMirrorNode } from "prosemirror-model";
 
 import { editorSchema } from "../schema.js";
+import { readTemplateDate, TEMPLATE_DATE_NODE } from "./dates.js";
+import { templateSchema } from "./schema.js";
 
 export const TEMPLATE_CONTENT_VERSION = 1;
 export const TEMPLATE_MAX_TITLE_LENGTH = 200;
@@ -67,6 +69,7 @@ const allowedNodes = new Set([
   "ordered_list",
   "list_item",
   "text",
+  TEMPLATE_DATE_NODE,
 ]);
 const allowedMarks = new Set(["strong", "em"]);
 const encoder = new TextEncoder();
@@ -81,7 +84,7 @@ function asObject(
   return value as Record<string, unknown>;
 }
 
-function validateNode(value: unknown, depth: number): void {
+function validateNode(value: unknown, depth: number, dates: boolean): void {
   if (depth > TEMPLATE_MAX_DEPTH) {
     throw new Error(`Template content exceeds depth ${TEMPLATE_MAX_DEPTH}`);
   }
@@ -90,6 +93,10 @@ function validateNode(value: unknown, depth: number): void {
   const type = node.type;
   if (typeof type !== "string" || !allowedNodes.has(type)) {
     throw new Error(`Unsupported template node: ${String(type)}`);
+  }
+  if (type === TEMPLATE_DATE_NODE) {
+    if (!dates) throw new Error("Template dates must be worked out before inserting");
+    readTemplateDate(node.attrs);
   }
 
   const attrs = node.attrs;
@@ -116,12 +123,17 @@ function validateNode(value: unknown, depth: number): void {
     if (!Array.isArray(node.content)) {
       throw new Error("Template node content must be an array");
     }
-    for (const child of node.content) validateNode(child, depth + 1);
+    for (const child of node.content) validateNode(child, depth + 1, dates);
   }
 }
 
 export function parseTemplateFragment(
   value: unknown,
+  /**
+   * Wording on its way into an editor passes false: its dates must already
+   * have been written out as text, and it is parsed with the editor's schema.
+   */
+  { dates = true }: { dates?: boolean } = {},
 ): { fragment: TemplateFragment; document: ProseMirrorNode } {
   const envelope = asObject(value, "Template fragment");
   if (envelope.schema !== "docweave-template" || envelope.version !== 1) {
@@ -135,11 +147,12 @@ export function parseTemplateFragment(
     );
   }
 
-  validateNode(envelope.content, 0);
-  const document = editorSchema.nodeFromJSON(envelope.content);
+  validateNode(envelope.content, 0, dates);
+  const schema = dates ? templateSchema : editorSchema;
+  const document = schema.nodeFromJSON(envelope.content);
   document.check();
 
-  if (document.type !== editorSchema.nodes.doc) {
+  if (document.type !== schema.nodes.doc) {
     throw new Error("Template content must have a document root");
   }
 
