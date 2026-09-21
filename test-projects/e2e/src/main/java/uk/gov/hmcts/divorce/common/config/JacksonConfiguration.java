@@ -41,4 +41,11 @@ public class JacksonConfiguration {
 
         return mapper;
     }
+
+    @Bean
+    public tools.jackson.databind.ObjectMapper jackson3ObjectMapper() {
+        return tools.jackson.databind.json.JsonMapper.builder()
+            .findAndAddModules()
+            .build();
+    }
 }

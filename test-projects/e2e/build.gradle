@@ -75,6 +75,7 @@ dependencies {
     exclude group: 'org.springframework.boot', module: 'spring-boot-starter-jackson'
   }
   implementation 'org.springframework.boot:spring-boot-jackson2'
+  implementation 'tools.jackson.core:jackson-databind'
 
   implementation 'org.springframework.retry:spring-retry:2.0.13'
 
