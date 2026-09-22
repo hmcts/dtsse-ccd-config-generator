@@ -1,0 +1,31 @@
+import org.springframework.boot.gradle.plugin.SpringBootPlugin
+
+dependencies {
+    api platform(SpringBootPlugin.BOM_COORDINATES)
+    api project(':ccd-config-generator')
+    api project(':decentralised-runtime')
+    api 'org.springframework.boot:spring-boot-starter-test'
+    api 'org.springframework.boot:spring-boot-starter-jdbc'
+    api 'org.springframework.boot:spring-boot-starter-data-jpa'
+    api 'org.springframework.boot:spring-boot-starter-web'
+    api 'org.testcontainers:postgresql'
+    api('com.github.hmcts.rse-cft-lib:ccd-lib:0.19.2186') {
+        transitive = false
+    }
+    api('com.github.hmcts:idam-java-client:3.0.5') {
+        transitive = false
+    }
+    api 'org.flywaydb:flyway-core'
+    api 'org.flywaydb:flyway-database-postgresql'
+    api 'org.postgresql:postgresql'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}
