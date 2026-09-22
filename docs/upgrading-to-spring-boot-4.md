@@ -195,6 +195,12 @@ When a service uses `@JsonUnwrapped`, add round-trip tests at the highest model 
 annotation. A unit test for the nested type alone may pass while the complete case-data path loses
 values.
 
+For a worked example of preserving an existing CCD contract with focused Jackson 2 deserialisers and
+round-trip tests, see the
+[NFDiv Spring Boot 4 fixture branch](https://github.com/hmcts/nfdiv-case-api/tree/sb4-from-latest-master).
+The example is linked to demonstrate the mitigation pattern; the underlying risk applies to any
+service with nested or unwrapped JSON models.
+
 ## Other problems found in the service upgrades
 
 ### Spring test mocks
