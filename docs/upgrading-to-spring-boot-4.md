@@ -1,7 +1,7 @@
 # Upgrading a CCD service to Spring Boot 4
 
-This guide supplements the official Spring documentation with lessons learned while upgrading the
-Adoption, NFDiv, PCS and SPTribs CCD services.
+This guide supplements the official Spring documentation with lessons learned while upgrading
+several reference CCD services.
 
 The compatibility target for the CCD SDK is:
 
@@ -114,9 +114,9 @@ spring:
       fail-on-null-for-primitives: false
 ```
 
-The final property is an example from NFDiv. Preserve the service's existing value rather than
-copying it blindly. The same applies to property inclusion, enum handling, date formats and naming
-strategies: migrate the existing contract; do not choose new defaults during the framework upgrade.
+The final property is an example. Preserve the service's existing value rather than copying it
+blindly. The same applies to property inclusion, enum handling, date formats and naming strategies:
+migrate the existing contract; do not choose new defaults during the framework upgrade.
 
 For Lombok `@Jacksonized` classes, make the generated metadata explicitly target Jackson 2:
 
@@ -151,53 +151,45 @@ compiled first-party code and dependencies while reporting, but not automaticall
 Jackson 3 used internally by third-party libraries. See [Jackson 2 classpath compatibility
 guard](../classpathguard.md) for reports and exception rules.
 
-## NFDiv: nested `@JsonUnwrapped` data loss
+## Nested `@JsonUnwrapped` data-loss risk
 
-NFDiv exposed the most important JSON lesson from the upgrade: successful serialisation does not
-prove successful deserialisation.
+Successful serialisation does not prove successful deserialisation. Any case model that combines
+`@JsonUnwrapped` with further nested complex types needs explicit round-trip coverage.
 
-Its `CaseData` contains prefixed unwrapped objects, for example:
+For example, a model may contain a prefixed unwrapped object:
 
 ```java
-@JsonUnwrapped(prefix = "applicant2")
-private Applicant applicant2;
+@JsonUnwrapped(prefix = "primary")
+private PartyDetails partyDetails;
 ```
 
-Those unwrapped objects contain further CCD complex types, including addresses, dynamic lists,
-order summaries, documents and organisation policies. A callback therefore has multiple mapping
-layers:
+That object may contain another complex object such as an address, document, dynamic list or
+organisation. A callback then has multiple mapping layers:
 
 ```text
-CaseData -> @JsonUnwrapped Applicant -> OrganisationPolicy -> Organisation
+CaseData -> @JsonUnwrapped PartyDetails -> nested CCD complex type
 ```
 
-After the Boot 4/Jackson 2 upgrade, NFDiv could write apparently correct JSON but silently lose data
-while reading it back. The visible semantic-test failure was:
+During an upgrade, the model may write apparently correct JSON but silently lose nested values when
+the same payload is read back. A semantic or round-trip failure can therefore look like this:
 
 ```text
-applicant2SolicitorOrganisationPolicy
-expected: {"Organisation":{"OrganisationID":"Org"}}
+primaryAddress
+expected: {"AddressLine1":"1 Example Street","PostCode":"AB1 2CD"}
 actual:   {}
 ```
 
-This path is particularly sensitive because CCD's wire name is `OrganisationID`, including the
-capital `D`, while creator/property names must match exactly. Nested `@JsonUnwrapped` deserialisation
-also has [long-standing Jackson limitations](https://github.com/FasterXML/jackson-databind/issues/1646);
-do not assume that the presence of setters, a no-args constructor or correct serialised output
-guarantees a round trip.
+Nested `@JsonUnwrapped` deserialisation has
+[long-standing Jackson limitations](https://github.com/FasterXML/jackson-databind/issues/1646).
+Creator and property names are also case-sensitive: a constructor expecting `PropertyId` does not
+match a wire field named `PropertyID`. Do not assume that setters, a no-args constructor or correct
+serialised output guarantee a round trip.
 
-The safe response is not to rename the JSON or weaken the assertion. NFDiv retained the existing
-wire contract and registered small Jackson 2 deserialisers for the affected types:
-
-- `AddressGlobalUK`;
-- `DynamicList`;
-- `OrderSummary`;
-- `OrganisationPolicy`;
-- `DivorceDocument`.
-
-Each deserialiser reads the established CCD field names explicitly and preserves missing and JSON
-`null` values. Focused tests then serialise and deserialise representative values and assert every
-nested property.
+The safe response is not to rename the JSON or weaken the assertion. Preserve the established wire
+contract. Where normal Jackson binding cannot reliably reconstruct an affected type, register a
+small Jackson 2 deserialiser that reads the existing CCD field names explicitly and distinguishes
+missing values from JSON `null`. Add focused tests that serialise and deserialise representative
+values and assert every nested property.
 
 When a service uses `@JsonUnwrapped`, add round-trip tests at the highest model level that owns the
 annotation. A unit test for the nested type alone may pass while the complete case-data path loses
@@ -234,9 +226,9 @@ task dependencies.
 
 ### Test JVM memory can disguise the real failure
 
-PCS completed most of its integration suite and then exhausted the Gradle test worker's `512m` heap.
-The final failures appeared to be Spring `ApplicationContext` errors, but the earlier log contained
-`Java heap space`. The narrow fix was applied to the integration task only:
+One reference service completed most of its integration suite and then exhausted the Gradle test
+worker's `512m` heap. The final failures appeared to be Spring `ApplicationContext` errors, but the
+earlier log contained `Java heap space`. The narrow fix was applied to the integration task only:
 
 ```groovy
 tasks.register('integration', Test) {
