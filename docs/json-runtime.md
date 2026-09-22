@@ -92,8 +92,8 @@ Leave Java overrides at the default Spring order so they run after JSON-backed c
 
 A Java event applied after JSON with the same ID replaces the complete JSON-derived runtime event, including its
 callbacks and retry settings, so declare everything the replacement needs in Java. A callback-based replacement
-must retain every callback phase (about-to-submit and submitted) of the event it replaces; dropping a phase fails
-configuration resolution.
+must retain the original JSON callbacks and those of the event it replaces; dropping a phase fails configuration
+resolution, including after an intermediate decentralised replacement.
 
 `decentralisedEvent` replaces both callback phases with its submit handler. Retain JSON callback URLs and endpoints
 until older instances and outstanding callback requests have drained.

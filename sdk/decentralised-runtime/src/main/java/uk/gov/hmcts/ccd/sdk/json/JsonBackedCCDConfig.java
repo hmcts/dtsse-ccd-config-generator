@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -66,7 +67,10 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
       }
     }
 
-    ((ConfigBuilderImpl<Case, State, Role>) builder).onEventReplaced(this::requireCallbacksRetained);
+    Map<String, Event<Case, Role, State>> originalEvents = new HashMap<>();
+    ((ConfigBuilderImpl<Case, State, Role>) builder).onEventReplaced((previous, replacement) ->
+        requireCallbacksRetained(originalEvents.computeIfAbsent(previous.getId(), id -> previous),
+            previous, replacement));
   }
 
   private void configureEvent(ConfigBuilder<Case, State, Role> builder,
@@ -91,17 +95,22 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
         });
   }
 
-  private void requireCallbacksRetained(Event<Case, Role, State> previous, Event<Case, Role, State> replacement) {
+  private void requireCallbacksRetained(Event<Case, Role, State> original, Event<Case, Role, State> previous,
+                                       Event<Case, Role, State> replacement) {
     // A decentralised submit handler replaces the callback lifecycle. Keep the JSON URLs for rolling deployments.
     if (replacement.getSubmitHandler() != null) {
       return;
     }
 
+    // The original requirements still apply after an intermediate decentralised replacement.
+    boolean requiresAboutToSubmit = original.getAboutToSubmitCallback() != null
+        || previous.getAboutToSubmitCallback() != null;
+    boolean requiresSubmitted = original.getSubmittedCallback() != null || previous.getSubmittedCallback() != null;
     List<String> missing = new ArrayList<>();
-    if (previous.getAboutToSubmitCallback() != null && replacement.getAboutToSubmitCallback() == null) {
+    if (requiresAboutToSubmit && replacement.getAboutToSubmitCallback() == null) {
       missing.add("about-to-submit");
     }
-    if (previous.getSubmittedCallback() != null && replacement.getSubmittedCallback() == null) {
+    if (requiresSubmitted && replacement.getSubmittedCallback() == null) {
       missing.add("submitted");
     }
     if (!missing.isEmpty()) {
