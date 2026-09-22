@@ -29,8 +29,7 @@ available transitively may now require a dedicated starter.
 
 ## Upgrade in small, auditable stages
 
-Start from the service's current default branch. Do not use an earlier partial Boot 4 branch as the
-baseline: it may contain Jackson 3 migrations or workarounds that are no longer wanted.
+Start from the service's current default branch.
 
 1. Record the current JSON and generated CCD configuration.
 2. Upgrade Spring Boot and the required HMCTS clients.

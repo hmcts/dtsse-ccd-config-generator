@@ -204,6 +204,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
 
   private static boolean isCurrentProject(ComponentIdentifier identifier, Project project) {
     return identifier instanceof ProjectComponentIdentifier projectIdentifier
+        && projectIdentifier.getBuild().isCurrentBuild()
         && projectIdentifier.getProjectPath().equals(project.getPath());
   }
 
@@ -222,7 +223,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
   private static String artifactMetadata(ResolvedArtifactResult result) {
     ComponentIdentifier identifier = result.getId().getComponentIdentifier();
     if (identifier instanceof ProjectComponentIdentifier project) {
-      return "PROJECT\tproject(" + project.getProjectPath() + ")\t";
+      return "PROJECT\tproject(" + project.getBuildTreePath() + ")\t";
     }
     if (identifier instanceof ModuleComponentIdentifier module) {
       return "MODULE\t" + module.getGroup() + ":" + module.getModule() + ":" + module.getVersion()

@@ -228,6 +228,30 @@ public class JacksonCompatibilityFunctionalTest {
   }
 
   @Test
+  public void classpathGuardSupportsRootProjectsFromIncludedBuilds() throws IOException {
+    write("settings.gradle", "rootProject.name = 'compatibility-test'\nincludeBuild 'shared'\n");
+    write("build.gradle", """
+        plugins { id 'hmcts.ccd.sdk' }
+        repositories { mavenLocal(); mavenCentral() }
+        dependencies { implementation 'org.example:shared:1.0' }
+        """);
+    write("shared/settings.gradle", "rootProject.name = 'shared'\n");
+    write("shared/build.gradle", """
+        plugins { id 'java-library' }
+        group = 'org.example'
+        version = '1.0'
+        """);
+    write("shared/src/main/java/shared/SharedType.java", """
+        package shared;
+        public class SharedType { public String value; }
+        """);
+
+    BuildResult result = runner("jackson2ClasspathGuard").build();
+
+    assertEquals(TaskOutcome.SUCCESS, result.task(":jackson2ClasspathGuard").getOutcome());
+  }
+
+  @Test
   public void classpathGuardAllowsJacksonTwoArtifactsAndBytecode() throws IOException {
     write("build.gradle", """
         plugins { id 'hmcts.ccd.sdk' }

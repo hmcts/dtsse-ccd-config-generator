@@ -12,8 +12,10 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.http.converter.autoconfigure.ClientHttpMessageConvertersCustomizer;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.cloud.openfeign.support.FeignHttpMessageConverters;
+import org.springframework.cloud.openfeign.support.HttpMessageConverterCustomizer;
 import org.springframework.cloud.openfeign.support.ResponseEntityDecoder;
 import org.springframework.cloud.openfeign.support.SpringDecoder;
 import org.springframework.cloud.openfeign.support.SpringEncoder;
@@ -28,6 +30,15 @@ import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGeneratorFactory;
 @EnableConfigurationProperties(TaskManagementProperties.class)
 @EnableFeignClients(clients = TaskManagementFeignClient.class)
 public class TaskManagementAutoConfiguration {
+
+  @Bean
+  @ConditionalOnMissingBean(FeignHttpMessageConverters.class)
+  public FeignHttpMessageConverters compatibilityFeignHttpMessageConverters(
+      ObjectProvider<ClientHttpMessageConvertersCustomizer> clientCustomizers,
+      ObjectProvider<HttpMessageConverterCustomizer> feignCustomizers
+  ) {
+    return new FeignHttpMessageConverters(clientCustomizers, feignCustomizers);
+  }
 
   @Bean
   @ConditionalOnMissingBean(name = "feignEncoder")
