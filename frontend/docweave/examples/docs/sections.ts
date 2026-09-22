@@ -274,7 +274,7 @@ export const sections: readonly DocsSection[] = [
     kind: "script",
     title: "The editor and snapshots",
     prose: [
-      "createDocEditor mounts an editor and returns a controller. Give it a label: that is the accessible name of the editing surface, read out when it receives focus. Call render with each new document. Call getSnapshot to get a serialisable record of the reader's document and the generated document it was reconciled against, and pass it back as initialSnapshot to restore the editor later. Call destroy when the editor is removed.",
+      "createDocEditor mounts an editor and returns a controller. Give it a label: that is the accessible name of the editing surface, read out when it receives focus. Call render with each new document. Call getSnapshot to get a serialisable record of the reader's document and the generated document it was reconciled against, or pass onChange to be given it whenever it changes. Pass a snapshot back as initialSnapshot to restore the editor later, or to load to switch the mounted editor to another document; load with no snapshot starts again from an empty one. The editor keeps its own input and change events from reaching the page's form. Call destroy when the editor is removed.",
       "The code below runs when you press Run. The page passes the previous run's snapshot as saved, so your edits survive the editor being destroyed and recreated. Without a mount, createDocEditor runs headlessly for tests and servers.",
     ],
     tryThis: [
@@ -304,11 +304,13 @@ return controller;
     kind: "script",
     title: "Saved templates",
     prose: [
-      "Readers can save wording they use often as a template and insert it later. Enable the template library by giving the editor a provider. This page uses an in-memory provider; in an application, pass the same-origin URL of a template endpoint and a CSRF token instead, and serve that endpoint with createTemplateProxy from @hmcts-cft/docweave/express.",
+      "Readers can save wording they use often as a template and insert it later. Enable the template library by giving the editor a provider. This page uses an in-memory provider; in an application, pass the same-origin URL of a template endpoint and a CSRF token instead, and serve that endpoint with createTemplateProxy from @hmcts-cft/docweave/express. A search may return other people's templates: mark those with ownedByCurrentUser: false and the reader is offered a copy to make their own rather than Edit and Delete.",
+      "A template can work dates out when it is inserted. While writing one, write [date: Hearing date] where the hearing date goes, and [date+14d] for 14 days after it; Insert date in its toolbar writes an example to type over. Offsets use d, w or m, with + or -. For a second date use [date2: Date of service], and [today] or [today+28d] count from the day of inserting and ask for nothing. A template that only needs the later date can say what it is asking for there: [date+28d: Hearing date]. Inserting the template asks once for each date, with pills for today and 14, 28 or 42 days from now, or shorthand such as 2w typed as the day, and writes them into the wording as ordinary text the reader can change. A template will not save with a date it cannot read or has no name to ask for.",
     ],
     tryThis: [
       "Press Insert template in the toolbar, or type / on an empty line, and save the current wording as a template.",
       "Start a new empty line, type / and insert the template.",
+      "Create a template that says: Heard on [date: Hearing date]. File by [date+14d]. Insert it and enter a hearing date.",
     ],
     code: `const { createDocEditor, buildDoc } = docweave;
 

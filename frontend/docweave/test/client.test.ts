@@ -172,6 +172,54 @@ describe("public editor API", () => {
     }
   });
 
+  it("reports the reader's edits through onChange and keeps its input events from the host page", async () => {
+    const { createDocEditor } = await import("../src/index.js");
+    const changes: unknown[] = [];
+    const hostEvents: string[] = [];
+    for (const type of ["input", "change"]) {
+      dom.window.document.body.addEventListener(type, () => hostEvents.push(type));
+    }
+    const controller = createDocEditor({ mount: "#editor", onChange: (snapshot) => changes.push(snapshot) });
+    const surface = dom.window.document.querySelector<HTMLElement>("#editor .ProseMirror")!;
+
+    surface.focus();
+    assert.deepEqual(changes, []);
+    dom.window.document.querySelector<HTMLButtonElement>('[aria-label="Numbered clause"]')!.click();
+    assert.deepEqual(changes, [controller.getSnapshot()]);
+
+    for (const type of ["input", "change"]) {
+      surface.dispatchEvent(new dom.window.Event(type, { bubbles: true }));
+    }
+    assert.deepEqual(hostEvents, []);
+
+    controller.destroy();
+    dom.window.document.querySelector("#editor")!.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    assert.deepEqual(hostEvents, ["input"]);
+  });
+
+  it("loads another document into the mounted editor without carrying undo across", async () => {
+    const { createDocEditor, buildDoc } = await import("../src/index.js");
+    const controller = createDocEditor({ mount: "#editor" });
+    const surface = dom.window.document.querySelector<HTMLElement>("#editor .ProseMirror")!;
+    controller.render(buildDoc((doc) => doc.paragraph("first", "First order.")));
+    surface.focus();
+    dom.window.document.querySelector<HTMLButtonElement>('[aria-label="Bold"]')?.click();
+    const first = controller.getSnapshot();
+
+    controller.load();
+    controller.render(buildDoc((doc) => doc.paragraph("second", "Second order.")));
+    assert.equal(surface.textContent, "Second order.");
+    assert.equal(dom.window.document.querySelectorAll("#editor .docweave-editor__surface").length, 1);
+    const second = controller.getSnapshot();
+    dom.window.document.querySelector<HTMLButtonElement>('[aria-label="Undo"]')!.click();
+    assert.deepEqual(controller.getSnapshot(), second);
+
+    controller.load(first);
+    assert.equal(surface.textContent, "First order.");
+    assert.deepEqual(controller.getSnapshot(), first);
+    controller.destroy();
+  });
+
   it("refuses a mount point that already has an editor", async () => {
     const { createDocEditor } = await import("../src/index.js");
     const controller = createDocEditor({ mount: "#editor" });
