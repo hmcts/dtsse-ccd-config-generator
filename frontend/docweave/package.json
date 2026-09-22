@@ -67,7 +67,7 @@
   "devDependencies": {
     "@types/express": "5.0.6",
     "@types/jsdom": "28.0.3",
-    "@types/node": "26.6.1",
+    "@types/node": "26.6.2",
     "@types/nunjucks": "3.2.6",
     "@types/supertest": "7.2.1",
     "axe-core": "4.13.0",
