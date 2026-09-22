@@ -182,13 +182,13 @@
     "Country": "United Kingdom"
   },
   "sdkNested": {
-    "Name": "Round trip party",
-    "Document": {
+    "name": "Round trip party",
+    "document": {
       "document_url": "http://localhost/documents/00000000-0000-0000-0000-000000000001",
       "document_binary_url": "http://localhost/documents/00000000-0000-0000-0000-000000000001/binary",
       "document_filename": "round-trip-1.pdf"
     },
-    "AddressUk": {
+    "addressUk": {
       "AddressLine1": "1 Round Trip Street",
       "AddressLine2": "Flat 2",
       "AddressLine3": "Block 3",
@@ -197,7 +197,7 @@
       "PostCode": "SW1A 1AA",
       "Country": "United Kingdom"
     },
-    "AddressGlobalUk": {
+    "addressGlobalUk": {
       "AddressLine1": "2 Global Street",
       "AddressLine2": "Flat 2",
       "AddressLine3": "Block 3",
@@ -206,7 +206,7 @@
       "PostCode": "SW1A 1AA",
       "Country": "United Kingdom"
     },
-    "OrganisationPolicy": {
+    "organisationPolicy": {
       "Organisation": {
         "OrganisationID": "ORG1",
         "OrganisationName": "ORG1 Solicitors"
@@ -215,7 +215,7 @@
       "PrepopulateToUsersOrganisation": "No",
       "OrgPolicyCaseAssignedRole": "[APPONESOLICITOR]"
     },
-    "OrderSummary": {
+    "orderSummary": {
       "PaymentReference": "RC-1234-5678",
       "PaymentTotal": "4600",
       "Fees": [
@@ -230,7 +230,7 @@
         }
       ]
     },
-    "DynamicList": {
+    "dynamicList": {
       "value": {
         "code": "00000000-0000-0000-0000-000000000001",
         "label": "PBA0000001"
@@ -246,7 +246,7 @@
         }
       ]
     },
-    "DynamicMultiSelectList": {
+    "dynamicMultiSelectList": {
       "value": [
         {
           "code": "00000000-0000-0000-0000-000000000003",
@@ -264,7 +264,7 @@
         }
       ]
     },
-    "CaseLink": {
+    "caseLink": {
       "CaseReference": "{{caseReference}}",
       "CaseType": "NFD",
       "CreatedDateTime": "2026-01-02T03:04:05.678",
@@ -278,11 +278,11 @@
         }
       ]
     },
-    "CaseLocation": {
+    "caseLocation": {
       "region": "1",
       "baseLocation": "123456"
     },
-    "Flags": {
+    "flags": {
       "partyName": "Round trip party",
       "roleOnCase": "Applicant",
       "details": [
@@ -304,7 +304,7 @@
         }
       ]
     },
-    "ScannedDocument": {
+    "scannedDocument": {
       "type": "form",
       "subtype": "D8",
       "url": {
@@ -318,7 +318,7 @@
       "deliveryDate": "2026-01-03T03:04:05.000",
       "exceptionRecordReference": "1111222233334444"
     },
-    "Documents": [
+    "documents": [
       {
         "id": "40000000-0000-0000-0000-000000000001",
         "value": {
@@ -328,7 +328,7 @@
         }
       }
     ],
-    "ServiceDocument": {
+    "serviceDocument": {
       "documentLink": {
         "document_url": "http://localhost/documents/00000000-0000-0000-0000-000000000004",
         "document_binary_url": "http://localhost/documents/00000000-0000-0000-0000-000000000004/binary",
@@ -338,13 +338,13 @@
       "documentComment": "Service document comment",
       "documentFileName": "service.pdf"
     },
-    "Notification": {
+    "notification": {
       "id": "notification-1",
       "status": "delivered",
       "recipient": "party@example.local"
     },
-    "Confirmed": "Yes",
-    "Date": "2026-01-02",
+    "confirmed": "Yes",
+    "date": "2026-01-02",
     "SolicitorName": "Round trip solicitor",
     "SolicitorOrganisationPolicy": {
       "Organisation": {

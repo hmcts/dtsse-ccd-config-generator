@@ -77,7 +77,7 @@ public class CaseData {
         label = "SDK types nested without a prefix",
         access = {DefaultAccess.class}
     )
-    private RoundTripParty sdkNested;
+    private RoundTripNestedParty sdkNested;
 
     @CCD(
         label = "Notes",
