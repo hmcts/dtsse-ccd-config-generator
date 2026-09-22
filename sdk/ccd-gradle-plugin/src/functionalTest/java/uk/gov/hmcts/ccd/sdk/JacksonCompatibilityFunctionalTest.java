@@ -66,6 +66,22 @@ public class JacksonCompatibilityFunctionalTest {
   }
 
   @Test
+  public void sourceGuardRejectsJacksonThreeDeclaredInRootBuildFileWithoutResolvingDependencies()
+      throws IOException {
+    write("build.gradle", """
+        plugins { id 'hmcts.ccd.sdk' }
+        dependencies { implementation 'tools.jackson.core:jackson-databind:3.2.0' }
+        """);
+
+    BuildResult result = runner("jackson2CompatibilityGuard").buildAndFail();
+
+    assertEquals(TaskOutcome.FAILED, result.task(":jackson2CompatibilityGuard").getOutcome());
+    assertTrue(report().contains("ERROR build.gradle:"));
+    assertTrue(report().contains("[JACKSON3_API] tools.jackson.core"));
+    assertFalse(result.getOutput().contains("Could not resolve"));
+  }
+
+  @Test
   public void sourceGuardAllowsJacksonTwoAndRejectsJacksonThreeConfiguration() throws IOException {
     write("src/main/java/Model.java", """
         import com.fasterxml.jackson.databind.annotation.JsonNaming;
@@ -151,7 +167,7 @@ public class JacksonCompatibilityFunctionalTest {
         dependencies { compileOnly 'tools.jackson.core:jackson-databind:3.2.0' }
         ccdSdk {
             jackson2ClasspathGuard {
-                allowedSourceFiles = ['src/main/java/ExistingBridge.java']
+                allowedSourceFiles = ['build.gradle', 'src/main/java/ExistingBridge.java']
                 allowedClasses = ['project(:)|ExistingBridge']
             }
         }

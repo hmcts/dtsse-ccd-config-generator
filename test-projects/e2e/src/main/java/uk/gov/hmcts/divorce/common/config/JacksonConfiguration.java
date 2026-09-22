@@ -42,6 +42,8 @@ public class JacksonConfiguration {
         return mapper;
     }
 
+    // Required only by core-case-data-store-client 6.1.0. The primary application mapper above
+    // remains Jackson 2 and continues to own HTTP and CCD wire contracts.
     @Bean
     public tools.jackson.databind.ObjectMapper jackson3ObjectMapper() {
         return tools.jackson.databind.json.JsonMapper.builder()

@@ -101,6 +101,13 @@ Do not copy exclusions without checking the dependency graph. Third-party framew
 legitimately contain Jackson 3; the rule is that application and HMCTS-owned code must not depend on
 its APIs.
 
+An exclusion is not sufficient when a client library exposes `tools.jackson.*` in its own public
+classes, bean methods or model annotations. In that case the application still needs the Jackson 3
+types at runtime. Prefer a Boot 4-compatible Jackson 2 release when one exists. Where no such release
+exists, keep the exception narrow: isolate the Jackson 3 mapper required by that client, keep the
+application's primary HTTP mapper on Jackson 2, allow only exact source files, classes and dependency
+versions in the compatibility guard, and retain focused wire-contract tests.
+
 Select Jackson 2 for MVC and move the old Jackson properties beneath `spring.jackson2`:
 
 ```yaml

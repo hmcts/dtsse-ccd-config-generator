@@ -2,7 +2,7 @@ import uk.gov.hmcts.rse.AuthMode
 import uk.gov.hmcts.rse.CftlibExec
 
 plugins {
-  id 'org.springframework.boot' version '4.0.8'
+  id 'org.springframework.boot' version '4.1.1'
   id 'io.spring.dependency-management' version '1.1.7'
   id 'jacoco'
   id 'hmcts.ccd.sdk'
@@ -14,7 +14,6 @@ version = '0.0.1'
 
 dependencyManagement {
   imports {
-    mavenBom 'com.fasterxml.jackson:jackson-bom:2.22.1'
     mavenBom 'org.springframework.cloud:spring-cloud-dependencies:2025.1.3'
     mavenBom 'com.azure.spring:spring-cloud-azure-dependencies:7.4.0'
   }
@@ -87,6 +86,8 @@ dependencies {
     exclude group: 'org.springframework.boot', module: 'spring-boot-starter-jackson'
     exclude group: 'org.springframework.boot', module: 'spring-boot-jackson'
   }
+  // The Boot 4 client exposes Jackson 3 in its Spring configuration and model metadata. Its mapper
+  // is isolated in JacksonConfiguration; the application's primary HTTP mapper remains Jackson 2.
   implementation('com.github.hmcts:core-case-data-store-client:6.1.0') {
     exclude group: 'org.springframework.boot', module: 'spring-boot-jackson'
   }
