@@ -68,6 +68,17 @@ public class CaseData {
     @CCD(access = {DefaultAccess.class})
     private Applicant applicant2 = new Applicant();
 
+    @JsonUnwrapped(prefix = "sdkPrefixed")
+    @Builder.Default
+    @CCD(access = {DefaultAccess.class})
+    private RoundTripParty sdkPrefixed = new RoundTripParty();
+
+    @CCD(
+        label = "SDK types nested without a prefix",
+        access = {DefaultAccess.class}
+    )
+    private RoundTripParty sdkNested;
+
     @CCD(
         label = "Notes",
         typeOverride = FieldType.Collection,

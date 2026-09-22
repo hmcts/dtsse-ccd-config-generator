@@ -1,0 +1,368 @@
+{
+  "sdkPrefixedName": "Round trip party",
+  "sdkPrefixedDocument": {
+    "document_url": "http://localhost/documents/00000000-0000-0000-0000-000000000001",
+    "document_binary_url": "http://localhost/documents/00000000-0000-0000-0000-000000000001/binary",
+    "document_filename": "round-trip-1.pdf"
+  },
+  "sdkPrefixedAddressUk": {
+    "AddressLine1": "1 Round Trip Street",
+    "AddressLine2": "Flat 2",
+    "AddressLine3": "Block 3",
+    "PostTown": "London",
+    "County": "Greater London",
+    "PostCode": "SW1A 1AA",
+    "Country": "United Kingdom"
+  },
+  "sdkPrefixedAddressGlobalUk": {
+    "AddressLine1": "2 Global Street",
+    "AddressLine2": "Flat 2",
+    "AddressLine3": "Block 3",
+    "PostTown": "London",
+    "County": "Greater London",
+    "PostCode": "SW1A 1AA",
+    "Country": "United Kingdom"
+  },
+  "sdkPrefixedOrganisationPolicy": {
+    "Organisation": {
+      "OrganisationID": "ORG1",
+      "OrganisationName": "ORG1 Solicitors"
+    },
+    "OrgPolicyReference": "ref-ORG1",
+    "PrepopulateToUsersOrganisation": "No",
+    "OrgPolicyCaseAssignedRole": "[APPONESOLICITOR]"
+  },
+  "sdkPrefixedOrderSummary": {
+    "PaymentReference": "RC-1234-5678",
+    "PaymentTotal": "4600",
+    "Fees": [
+      {
+        "id": "10000000-0000-0000-0000-000000000001",
+        "value": {
+          "FeeAmount": "4600",
+          "FeeCode": "FEE0391",
+          "FeeDescription": "Bailiff service",
+          "FeeVersion": "1"
+        }
+      }
+    ]
+  },
+  "sdkPrefixedDynamicList": {
+    "value": {
+      "code": "00000000-0000-0000-0000-000000000001",
+      "label": "PBA0000001"
+    },
+    "list_items": [
+      {
+        "code": "00000000-0000-0000-0000-000000000001",
+        "label": "PBA0000001"
+      },
+      {
+        "code": "00000000-0000-0000-0000-000000000002",
+        "label": "PBA0000002"
+      }
+    ]
+  },
+  "sdkPrefixedDynamicMultiSelectList": {
+    "value": [
+      {
+        "code": "00000000-0000-0000-0000-000000000003",
+        "label": "Option three"
+      }
+    ],
+    "list_items": [
+      {
+        "code": "00000000-0000-0000-0000-000000000003",
+        "label": "Option three"
+      },
+      {
+        "code": "00000000-0000-0000-0000-000000000004",
+        "label": "Option four"
+      }
+    ]
+  },
+  "sdkPrefixedCaseLink": {
+    "CaseReference": "{{caseReference}}",
+    "CaseType": "NFD",
+    "CreatedDateTime": "2026-01-02T03:04:05.678",
+    "ReasonForLink": [
+      {
+        "id": "20000000-0000-0000-0000-000000000001",
+        "value": {
+          "Reason": "CLRC001",
+          "OtherDescription": "Linked for round trip"
+        }
+      }
+    ]
+  },
+  "sdkPrefixedCaseLocation": {
+    "region": "1",
+    "baseLocation": "123456"
+  },
+  "sdkPrefixedFlags": {
+    "partyName": "Round trip party",
+    "roleOnCase": "Applicant",
+    "details": [
+      {
+        "id": "30000000-0000-0000-0000-000000000001",
+        "value": {
+          "name": "Other",
+          "flagCode": "OT0001",
+          "status": "Active",
+          "hearingRelevant": "No",
+          "dateTimeCreated": "2026-01-02T03:04:05.000Z",
+          "path": [
+            {
+              "id": "30000000-0000-0000-0000-000000000002",
+              "value": "Party"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "sdkPrefixedScannedDocument": {
+    "type": "form",
+    "subtype": "D8",
+    "url": {
+      "document_url": "http://localhost/documents/00000000-0000-0000-0000-000000000002",
+      "document_binary_url": "http://localhost/documents/00000000-0000-0000-0000-000000000002/binary",
+      "document_filename": "round-trip-2.pdf"
+    },
+    "controlNumber": "123456789",
+    "fileName": "scan.pdf",
+    "scannedDate": "2026-01-02T03:04:05.000",
+    "deliveryDate": "2026-01-03T03:04:05.000",
+    "exceptionRecordReference": "1111222233334444"
+  },
+  "sdkPrefixedDocuments": [
+    {
+      "id": "40000000-0000-0000-0000-000000000001",
+      "value": {
+        "document_url": "http://localhost/documents/00000000-0000-0000-0000-000000000003",
+        "document_binary_url": "http://localhost/documents/00000000-0000-0000-0000-000000000003/binary",
+        "document_filename": "round-trip-3.pdf"
+      }
+    }
+  ],
+  "sdkPrefixedServiceDocument": {
+    "documentLink": {
+      "document_url": "http://localhost/documents/00000000-0000-0000-0000-000000000004",
+      "document_binary_url": "http://localhost/documents/00000000-0000-0000-0000-000000000004/binary",
+      "document_filename": "round-trip-4.pdf"
+    },
+    "documentDateAdded": "2026-01-02",
+    "documentComment": "Service document comment",
+    "documentFileName": "service.pdf"
+  },
+  "sdkPrefixedNotification": {
+    "id": "notification-1",
+    "status": "delivered",
+    "recipient": "party@example.local"
+  },
+  "sdkPrefixedConfirmed": "Yes",
+  "sdkPrefixedDate": "2026-01-02",
+  "sdkPrefixedSolicitorName": "Round trip solicitor",
+  "sdkPrefixedSolicitorOrganisationPolicy": {
+    "Organisation": {
+      "OrganisationID": "ORG2",
+      "OrganisationName": "ORG2 Solicitors"
+    },
+    "OrgPolicyReference": "ref-ORG2",
+    "PrepopulateToUsersOrganisation": "No",
+    "OrgPolicyCaseAssignedRole": "[APPTWOSOLICITOR]"
+  },
+  "sdkPrefixedSolicitorAddress": {
+    "AddressLine1": "3 Solicitor Street",
+    "AddressLine2": "Flat 2",
+    "AddressLine3": "Block 3",
+    "PostTown": "London",
+    "County": "Greater London",
+    "PostCode": "SW1A 1AA",
+    "Country": "United Kingdom"
+  },
+  "sdkNested": {
+    "Name": "Round trip party",
+    "Document": {
+      "document_url": "http://localhost/documents/00000000-0000-0000-0000-000000000001",
+      "document_binary_url": "http://localhost/documents/00000000-0000-0000-0000-000000000001/binary",
+      "document_filename": "round-trip-1.pdf"
+    },
+    "AddressUk": {
+      "AddressLine1": "1 Round Trip Street",
+      "AddressLine2": "Flat 2",
+      "AddressLine3": "Block 3",
+      "PostTown": "London",
+      "County": "Greater London",
+      "PostCode": "SW1A 1AA",
+      "Country": "United Kingdom"
+    },
+    "AddressGlobalUk": {
+      "AddressLine1": "2 Global Street",
+      "AddressLine2": "Flat 2",
+      "AddressLine3": "Block 3",
+      "PostTown": "London",
+      "County": "Greater London",
+      "PostCode": "SW1A 1AA",
+      "Country": "United Kingdom"
+    },
+    "OrganisationPolicy": {
+      "Organisation": {
+        "OrganisationID": "ORG1",
+        "OrganisationName": "ORG1 Solicitors"
+      },
+      "OrgPolicyReference": "ref-ORG1",
+      "PrepopulateToUsersOrganisation": "No",
+      "OrgPolicyCaseAssignedRole": "[APPONESOLICITOR]"
+    },
+    "OrderSummary": {
+      "PaymentReference": "RC-1234-5678",
+      "PaymentTotal": "4600",
+      "Fees": [
+        {
+          "id": "10000000-0000-0000-0000-000000000001",
+          "value": {
+            "FeeAmount": "4600",
+            "FeeCode": "FEE0391",
+            "FeeDescription": "Bailiff service",
+            "FeeVersion": "1"
+          }
+        }
+      ]
+    },
+    "DynamicList": {
+      "value": {
+        "code": "00000000-0000-0000-0000-000000000001",
+        "label": "PBA0000001"
+      },
+      "list_items": [
+        {
+          "code": "00000000-0000-0000-0000-000000000001",
+          "label": "PBA0000001"
+        },
+        {
+          "code": "00000000-0000-0000-0000-000000000002",
+          "label": "PBA0000002"
+        }
+      ]
+    },
+    "DynamicMultiSelectList": {
+      "value": [
+        {
+          "code": "00000000-0000-0000-0000-000000000003",
+          "label": "Option three"
+        }
+      ],
+      "list_items": [
+        {
+          "code": "00000000-0000-0000-0000-000000000003",
+          "label": "Option three"
+        },
+        {
+          "code": "00000000-0000-0000-0000-000000000004",
+          "label": "Option four"
+        }
+      ]
+    },
+    "CaseLink": {
+      "CaseReference": "{{caseReference}}",
+      "CaseType": "NFD",
+      "CreatedDateTime": "2026-01-02T03:04:05.678",
+      "ReasonForLink": [
+        {
+          "id": "20000000-0000-0000-0000-000000000001",
+          "value": {
+            "Reason": "CLRC001",
+            "OtherDescription": "Linked for round trip"
+          }
+        }
+      ]
+    },
+    "CaseLocation": {
+      "region": "1",
+      "baseLocation": "123456"
+    },
+    "Flags": {
+      "partyName": "Round trip party",
+      "roleOnCase": "Applicant",
+      "details": [
+        {
+          "id": "30000000-0000-0000-0000-000000000001",
+          "value": {
+            "name": "Other",
+            "flagCode": "OT0001",
+            "status": "Active",
+            "hearingRelevant": "No",
+            "dateTimeCreated": "2026-01-02T03:04:05.000Z",
+            "path": [
+              {
+                "id": "30000000-0000-0000-0000-000000000002",
+                "value": "Party"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "ScannedDocument": {
+      "type": "form",
+      "subtype": "D8",
+      "url": {
+        "document_url": "http://localhost/documents/00000000-0000-0000-0000-000000000002",
+        "document_binary_url": "http://localhost/documents/00000000-0000-0000-0000-000000000002/binary",
+        "document_filename": "round-trip-2.pdf"
+      },
+      "controlNumber": "123456789",
+      "fileName": "scan.pdf",
+      "scannedDate": "2026-01-02T03:04:05.000",
+      "deliveryDate": "2026-01-03T03:04:05.000",
+      "exceptionRecordReference": "1111222233334444"
+    },
+    "Documents": [
+      {
+        "id": "40000000-0000-0000-0000-000000000001",
+        "value": {
+          "document_url": "http://localhost/documents/00000000-0000-0000-0000-000000000003",
+          "document_binary_url": "http://localhost/documents/00000000-0000-0000-0000-000000000003/binary",
+          "document_filename": "round-trip-3.pdf"
+        }
+      }
+    ],
+    "ServiceDocument": {
+      "documentLink": {
+        "document_url": "http://localhost/documents/00000000-0000-0000-0000-000000000004",
+        "document_binary_url": "http://localhost/documents/00000000-0000-0000-0000-000000000004/binary",
+        "document_filename": "round-trip-4.pdf"
+      },
+      "documentDateAdded": "2026-01-02",
+      "documentComment": "Service document comment",
+      "documentFileName": "service.pdf"
+    },
+    "Notification": {
+      "id": "notification-1",
+      "status": "delivered",
+      "recipient": "party@example.local"
+    },
+    "Confirmed": "Yes",
+    "Date": "2026-01-02",
+    "SolicitorName": "Round trip solicitor",
+    "SolicitorOrganisationPolicy": {
+      "Organisation": {
+        "OrganisationID": "ORG2",
+        "OrganisationName": "ORG2 Solicitors"
+      },
+      "OrgPolicyReference": "ref-ORG2",
+      "PrepopulateToUsersOrganisation": "No",
+      "OrgPolicyCaseAssignedRole": "[APPTWOSOLICITOR]"
+    },
+    "SolicitorAddress": {
+      "AddressLine1": "3 Solicitor Street",
+      "AddressLine2": "Flat 2",
+      "AddressLine3": "Block 3",
+      "PostTown": "London",
+      "County": "Greater London",
+      "PostCode": "SW1A 1AA",
+      "Country": "United Kingdom"
+    }
+  }
+}

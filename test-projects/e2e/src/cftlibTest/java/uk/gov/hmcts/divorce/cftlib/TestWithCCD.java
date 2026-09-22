@@ -107,6 +107,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
+import uk.gov.hmcts.divorce.roundtrip.RoundTripFixture;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerRoundTripData;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCancelEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCompleteEvent;
@@ -2321,11 +2322,15 @@ public class TestWithCCD extends CftlibTest {
     }
 
     private void submitRoundTripEvent(Map<String, Object> payload) throws Exception {
+        submitRoundTripEvent(caseRef, payload);
+    }
+
+    private void submitRoundTripEvent(long reference, Map<String, Object> payload) throws Exception {
         String user = "TEST_CASE_WORKER_USER@mailinator.com";
         var startEvent = ccdApi.startEvent(
             getAuthorisation(user),
             getServiceAuth(),
-            String.valueOf(caseRef),
+            String.valueOf(reference),
             CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA
         );
 
@@ -2339,7 +2344,7 @@ public class TestWithCCD extends CftlibTest {
             submissionData.put("setInAboutToStart", startMarker);
         }
 
-        Map<String, Object> dataAfterMidEvent = invokeRoundTripMidEvent(user, submissionData);
+        Map<String, Object> dataAfterMidEvent = invokeRoundTripMidEvent(reference, user, submissionData);
         Object midEventMarker = dataAfterMidEvent.get("setInMidEvent");
         if (midEventMarker != null) {
             submissionData.put("setInMidEvent", midEventMarker);
@@ -2351,7 +2356,8 @@ public class TestWithCCD extends CftlibTest {
             user,
             CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA,
             submissionData,
-            startEvent.getToken()
+            startEvent.getToken(),
+            reference
         );
         var response = HttpClientBuilder.create().build().execute(request);
         try {
@@ -2393,15 +2399,16 @@ public class TestWithCCD extends CftlibTest {
         return payload;
     }
 
-    private Map<String, Object> invokeRoundTripMidEvent(String user, Map<String, Object> data) throws Exception {
+    private Map<String, Object> invokeRoundTripMidEvent(long reference, String user, Map<String, Object> data)
+        throws Exception {
         var caseDetails = ccdApi.getCase(
             getAuthorisation(user),
             getServiceAuth(),
-            String.valueOf(caseRef)
+            String.valueOf(reference)
         );
 
         Map<String, Object> caseDetailsPayload = new LinkedHashMap<>();
-        caseDetailsPayload.put("id", caseRef);
+        caseDetailsPayload.put("id", reference);
         caseDetailsPayload.put("jurisdiction", caseDetails.getJurisdiction());
         caseDetailsPayload.put("state", caseDetails.getState());
         caseDetailsPayload.put("case_type_id", NoFaultDivorce.getCaseType());
@@ -2440,10 +2447,14 @@ public class TestWithCCD extends CftlibTest {
         }
     }
 
-    @SneakyThrows
     private Map<String, Object> readCaseDataFromDb() {
+        return readCaseDataFromDb(caseRef);
+    }
+
+    @SneakyThrows
+    private Map<String, Object> readCaseDataFromDb(long reference) {
         String sql = "select data::text from ccd.case_data where reference = :ref";
-        String json = db.queryForObject(sql, Map.of("ref", caseRef), String.class);
+        String json = db.queryForObject(sql, Map.of("ref", reference), String.class);
         return mapper.readValue(json, new TypeReference<Map<String, Object>>() {});
     }
 
@@ -3238,6 +3249,37 @@ public class TestWithCCD extends CftlibTest {
             extractSubset(latestCaseData, expectedPersistedData), equalTo(expectedPersistedData));
         assertThat("Datastore JSON should retain the round-trip payload plus callback fields",
             extractSubset(datastoreSnapshot, expectedPersistedData), equalTo(expectedPersistedData));
+    }
+
+    @SneakyThrows
+    @Order(24)
+    @Test
+    void sdkComplexTypesSurviveCaseLifecycle() {
+        // A case of its own, so any damage done to it cannot affect the tests sharing caseRef.
+        long reference = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+        String user = "TEST_CASE_WORKER_USER@mailinator.com";
+        Map<String, Object> payload = RoundTripFixture.loadAsMap(
+            mapper, RoundTripFixture.SDK_COMPLEX_TYPES, reference);
+        submitRoundTripEvent(reference, payload);
+
+        JsonNode expected = mapper.valueToTree(payload);
+        JsonNode caseView = mapper.valueToTree(ccdApi.getCase(
+            getAuthorisation(user),
+            getServiceAuth(),
+            String.valueOf(reference)
+        ).getData());
+        JsonNode datastore = mapper.valueToTree(readCaseDataFromDb(reference));
+
+        List<String> differences = new ArrayList<>();
+        RoundTripFixture.lostOrChanged(expected, datastore).forEach(d -> differences.add("datastore " + d));
+        RoundTripFixture.lostOrChanged(expected, caseView).forEach(d -> differences.add("case view " + d));
+        try {
+            ccdApi.startEvent(getAuthorisation(user), getServiceAuth(), String.valueOf(reference),
+                CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA);
+        } catch (Exception e) {
+            differences.add("BROKEN  case can no longer start events: " + e.getMessage());
+        }
+        assertThat(RoundTripFixture.describe(differences), differences, empty());
     }
 
     @SneakyThrows

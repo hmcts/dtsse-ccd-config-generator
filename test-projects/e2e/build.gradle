@@ -62,6 +62,12 @@ configurations {
   cftlibTestRuntime.extendsFrom testRuntime
 }
 
+// Round-trip fixtures are shared by the Spring integration tests and the full-stack cftlib tests.
+[sourceSets.test, sourceSets.cftlibTest].each { sourceSet ->
+  sourceSet.java.srcDir 'src/roundTrip/java'
+  sourceSet.resources.srcDir 'src/roundTrip/resources'
+}
+
 repositories {
   mavenCentral()
 }

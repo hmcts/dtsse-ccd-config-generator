@@ -8,6 +8,8 @@ import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.divorce.common.ccd.PageBuilder;
 import uk.gov.hmcts.divorce.divorcecase.model.Applicant;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
+import uk.gov.hmcts.divorce.divorcecase.model.RoundTripParty;
+import uk.gov.hmcts.divorce.divorcecase.model.RoundTripSolicitor;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
 import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
 
@@ -64,6 +66,32 @@ public class CaseworkerRoundTripData implements CCDConfig<CaseData, State, UserR
                 .optional(Applicant::getLanguagePreferenceWelsh)
                 .optional(Applicant::getAgreedToReceiveEmails)
             .done()
+            .complex(CaseData::getSdkPrefixed)
+                .optional(RoundTripParty::getName)
+                .optional(RoundTripParty::getDocument)
+                .optional(RoundTripParty::getAddressUk)
+                .optional(RoundTripParty::getAddressGlobalUk)
+                .optional(RoundTripParty::getOrganisationPolicy)
+                // CCD only accepts OrderSummary as a mandatory (display) field on an event.
+                .mandatory(RoundTripParty::getOrderSummary)
+                .optional(RoundTripParty::getDynamicList)
+                .optional(RoundTripParty::getDynamicMultiSelectList)
+                .optional(RoundTripParty::getCaseLink)
+                .optional(RoundTripParty::getCaseLocation)
+                .optional(RoundTripParty::getFlags)
+                .optional(RoundTripParty::getScannedDocument)
+                .optional(RoundTripParty::getDocuments)
+                .optional(RoundTripParty::getServiceDocument)
+                .optional(RoundTripParty::getNotification)
+                .optional(RoundTripParty::getConfirmed)
+                .optional(RoundTripParty::getDate)
+                .complex(RoundTripParty::getSolicitor)
+                    .optional(RoundTripSolicitor::getName)
+                    .optional(RoundTripSolicitor::getOrganisationPolicy)
+                    .optional(RoundTripSolicitor::getAddress)
+                .done()
+            .done()
+            .optional(CaseData::getSdkNested)
             .done();
     }
 
