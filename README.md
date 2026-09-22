@@ -45,6 +45,10 @@ Write CCD configuration in Java.
 * Gradle 7.3
 * Java 21
 
+Services moving to Spring Boot 4 should follow the
+[Spring Boot 4 upgrade guide](docs/upgrading-to-spring-boot-4.md). It covers the required Jackson 2
+configuration and the JSON contract issues found while upgrading the reference services.
+
 ## Installation
 
 ### Add HMCTS Azure Artifacts as a Gradle plugin repository
