@@ -92,6 +92,11 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
   }
 
   private void requireCallbacksRetained(Event<Case, Role, State> previous, Event<Case, Role, State> replacement) {
+    // A decentralised submit handler replaces the callback lifecycle. Keep the JSON URLs for rolling deployments.
+    if (replacement.getSubmitHandler() != null) {
+      return;
+    }
+
     List<String> missing = new ArrayList<>();
     if (previous.getAboutToSubmitCallback() != null && replacement.getAboutToSubmitCallback() == null) {
       missing.add("about-to-submit");
