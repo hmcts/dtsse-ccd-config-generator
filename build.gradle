@@ -4,6 +4,37 @@ tasks.register('check') {
     }
 }
 
+project(':adoption') {
+    pluginManager.withPlugin('hmcts.ccd.sdk') {
+        ccdSdk {
+            jackson2ClasspathGuard {
+                allowedComponents = [
+                    'com.github.hmcts:core-case-data-store-client:6.1.0'
+                ]
+            }
+        }
+    }
+}
+
+project(':e2e') {
+    pluginManager.withPlugin('hmcts.ccd.sdk') {
+        ccdSdk {
+            jackson2ClasspathGuard {
+                allowedSourceFiles = [
+                    'build.gradle',
+                    'src/main/java/uk/gov/hmcts/divorce/common/config/JacksonConfiguration.java'
+                ]
+                allowedClasses = [
+                    'project(:e2e)|uk.gov.hmcts.divorce.common.config.JacksonConfiguration'
+                ]
+                allowedComponents = [
+                    'com.github.hmcts:core-case-data-store-client:6.1.0'
+                ]
+            }
+        }
+    }
+}
+
 tasks.register('allTests')
 
 gradle.afterProject { project, _ ->
