@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.sun.net.httpserver.HttpServer;
 import feign.codec.Decoder;
 import feign.codec.Encoder;
@@ -19,9 +20,11 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.cloud.openfeign.FeignAutoConfiguration;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.cloud.openfeign.support.FeignHttpMessageConverters;
+import org.springframework.cloud.openfeign.support.HttpMessageConverterCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -90,9 +93,36 @@ class TaskManagementAutoConfigurationTest {
     contextRunner
         .withPropertyValues("task-management.feign.compat-codecs.enabled=false")
         .run(context -> {
-          assertThat(context).doesNotHaveBean("compatibilityFeignEncoder");
-          assertThat(context).doesNotHaveBean("compatibilityFeignDecoder");
-        });
+        assertThat(context).doesNotHaveBean("compatibilityFeignEncoder");
+        assertThat(context).doesNotHaveBean("compatibilityFeignDecoder");
+        assertThat(context).doesNotHaveBean("compatibilityFeignHttpMessageConverters");
+      });
+  }
+
+  @Test
+  void shouldPreserveClientSpecificConvertersWhenCompatibilityCodecsAreDisabled() throws IOException {
+    AtomicReference<String> requestBody = new AtomicReference<>();
+    HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+    server.createContext("/messages", exchange -> {
+      requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+      exchange.sendResponseHeaders(204, -1);
+      exchange.close();
+    });
+    server.start();
+
+    try {
+      contextRunner
+          .withUserConfiguration(SnakeCaseConsumerConfiguration.class)
+          .withPropertyValues(
+              "task-management.feign.compat-codecs.enabled=false",
+              "snake-case-consumer.url=http://localhost:" + server.getAddress().getPort())
+          .run(context -> context.getBean(SnakeCaseConsumerClient.class)
+              .send(new ConsumerMessage("1234")));
+    } finally {
+      server.stop(0);
+    }
+
+    assertThat(requestBody.get()).isEqualTo("{\"case_id\":\"1234\"}");
   }
 
   @Test
@@ -156,9 +186,41 @@ class TaskManagementAutoConfigurationTest {
   static class OrdinaryConsumerConfiguration {
   }
 
+  @Configuration(proxyBeanMethods = false)
+  @EnableFeignClients(clients = SnakeCaseConsumerClient.class)
+  static class SnakeCaseConsumerConfiguration {
+  }
+
+  static class SnakeCaseConsumerFeignConfiguration {
+    @Bean
+    @SuppressWarnings("removal")
+    HttpMessageConverterCustomizer snakeCaseConverterCustomizer() {
+      ObjectMapper mapper = new ObjectMapper();
+      mapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
+      MappingJackson2HttpMessageConverter converter = new MappingJackson2HttpMessageConverter(mapper);
+      return converters -> {
+        converters.clear();
+        converters.add(converter);
+      };
+    }
+  }
+
   @FeignClient(name = "ordinary-consumer", url = "${ordinary-consumer.url}")
   interface OrdinaryConsumerClient {
     @PostMapping(path = "/messages", consumes = MediaType.APPLICATION_JSON_VALUE)
     void send(@RequestBody Map<String, String> body);
+  }
+
+  @FeignClient(
+      name = "snake-case-consumer",
+      url = "${snake-case-consumer.url}",
+      configuration = SnakeCaseConsumerFeignConfiguration.class
+  )
+  interface SnakeCaseConsumerClient {
+    @PostMapping(path = "/messages", consumes = MediaType.APPLICATION_JSON_VALUE)
+    void send(@RequestBody ConsumerMessage body);
+  }
+
+  record ConsumerMessage(String caseId) {
   }
 }

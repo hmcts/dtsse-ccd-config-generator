@@ -33,6 +33,12 @@ public class TaskManagementAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean(FeignHttpMessageConverters.class)
+  @ConditionalOnProperty(
+      prefix = "task-management.feign.compat-codecs",
+      name = "enabled",
+      havingValue = "true",
+      matchIfMissing = true
+  )
   public FeignHttpMessageConverters compatibilityFeignHttpMessageConverters(
       ObjectProvider<ClientHttpMessageConvertersCustomizer> clientCustomizers,
       ObjectProvider<HttpMessageConverterCustomizer> feignCustomizers
