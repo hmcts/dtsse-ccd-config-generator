@@ -1,6 +1,9 @@
 # CCD SDK testing support
 
-`ccd-sdk-test-support` runs configured CCD events against the SDK submission runtime and a disposable PostgreSQL database. Tests can seed or create a case, submit an event, run its `CaseView`, and inspect both the projected result and the persisted record.
+`ccd-sdk-test-support` is for integration testing your events against the real decentralised runtime persistence stack & postgres.
+
+Tests can create a case, submit an event, run its `CaseView`, and inspect both the projected result and the persisted record.
+
 
 Add the module to an application that uses the SDK BOM:
 
