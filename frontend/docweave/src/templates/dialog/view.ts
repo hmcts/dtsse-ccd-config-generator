@@ -1,6 +1,6 @@
 import { DOMSerializer } from "prosemirror-model";
 
-import { editorSchema } from "../../schema.js";
+import { templateSchema } from "../schema.js";
 import {
   parseTemplateFragment,
   TEMPLATE_MAX_TITLE_LENGTH,
@@ -10,6 +10,8 @@ import {
 export interface DialogState {
   /** A draft is open, so the browse controls are replaced by the form. */
   editing: boolean;
+  /** The reader is being asked for the dates the chosen template needs. */
+  dating: boolean;
   /** A save or delete is in flight and must not be interrupted. */
   busy: boolean;
   /** The listed results answer an older query, so they cannot be acted on. */
@@ -17,6 +19,9 @@ export interface DialogState {
   searching: boolean;
   selectedIndex: number;
 }
+
+/** How many days from today each quick-date pill fills in. */
+const DATE_PILL_DAYS = [0, 14, 28, 42];
 
 let nextId = 0;
 
@@ -83,10 +88,26 @@ export function createTemplateDialogView(document: Document) {
             aria-describedby="${id}-title-error">
         </div>
         <div class="docweave-editor docweave-templates__editor"></div>
+        <div class="docweave-templates__hint docweave-templates__date-hint">
+          To have dates worked out when the template is inserted, write
+          [date: Hearing date] where the hearing date goes, then [date+14d] for
+          14 days after it. You are asked for the hearing date when you insert
+          the template. Use d, w or m, + or -. For another date use [date2: ...],
+          and [today] or [today+28d] to count from the day of inserting.
+        </div>
         <div class="docweave-templates__actions">
           <button type="button" data-action="save" class="docweave-templates__button">Save template</button>
           <button type="button" data-action="cancel"
             class="docweave-templates__button docweave-templates__button--secondary">Cancel</button>
+        </div>
+      </div>
+      <div class="docweave-templates__dates" hidden>
+        <h3 id="${id}-dates-heading" class="docweave-templates__label">Dates for this template</h3>
+        <div class="docweave-templates__date-fields"></div>
+        <div class="docweave-templates__actions">
+          <button type="button" data-action="insert-dates" class="docweave-templates__button">Insert template</button>
+          <button type="button" data-action="back"
+            class="docweave-templates__button docweave-templates__button--secondary">Back</button>
         </div>
       </div>
       <template>
@@ -99,6 +120,8 @@ export function createTemplateDialogView(document: Document) {
               class="docweave-templates__result-action">Edit</button>
             <button type="button" data-action="delete" tabindex="-1"
               class="docweave-templates__result-action">Delete</button>
+            <button type="button" data-action="copy" tabindex="-1"
+              class="docweave-templates__result-action">Copy</button>
           </div>
         </li>
       </template>
@@ -114,6 +137,8 @@ export function createTemplateDialogView(document: Document) {
   const content = find<HTMLElement>(dialog, ".docweave-templates__content");
   const form = find<HTMLElement>(dialog, ".docweave-templates__form");
   const editorHost = find<HTMLElement>(dialog, ".docweave-templates__editor");
+  const dates = find<HTMLElement>(dialog, ".docweave-templates__dates");
+  const dateFields = find<HTMLElement>(dialog, ".docweave-templates__date-fields");
   const row = find<HTMLTemplateElement>(dialog, "template");
   document.body.append(dialog);
 
@@ -143,10 +168,20 @@ export function createTemplateDialogView(document: Document) {
       find(fragment, "[data-snippet]").textContent = snippet(template);
       find(fragment, '[data-action="select"]')
         .setAttribute("aria-label", template.title);
-      find(fragment, '[data-action="edit"]')
-        .setAttribute("aria-label", `Edit ${template.title}`);
-      find(fragment, '[data-action="delete"]')
-        .setAttribute("aria-label", `Delete ${template.title}`);
+      const edit = find(fragment, '[data-action="edit"]');
+      const remove = find(fragment, '[data-action="delete"]');
+      const copy = find(fragment, '[data-action="copy"]');
+      // Only the owner can change or delete a template, so someone else's
+      // offers a copy to make their own instead of an edit that cannot be saved.
+      if (template.ownedByCurrentUser === false) {
+        edit.remove();
+        remove.remove();
+        copy.setAttribute("aria-label", `Copy ${template.title} to my templates`);
+      } else {
+        copy.remove();
+        edit.setAttribute("aria-label", `Edit ${template.title}`);
+        remove.setAttribute("aria-label", `Delete ${template.title}`);
+      }
       results.append(fragment);
     });
   }
@@ -157,16 +192,97 @@ export function createTemplateDialogView(document: Document) {
     const heading = document.createElement("h3");
     heading.textContent = template.title;
     const { document: parsed } = parseTemplateFragment(template.content);
-    preview.append(heading, DOMSerializer.fromSchema(editorSchema)
+    preview.append(heading, DOMSerializer.fromSchema(templateSchema)
       .serializeFragment(parsed.content, { document }));
     preview.scrollTop = 0;
   }
 
+  /**
+   * One day, month and year group for each date the template asks for, with
+   * pills that fill it in counted from today.
+   */
+  function showDates(labels: readonly string[]): void {
+    dateFields.replaceChildren(...labels.map((label, index) => {
+      const group = document.createElement("div");
+      group.className = "docweave-templates__date";
+      const fieldset = document.createElement("fieldset");
+      const legend = document.createElement("legend");
+      legend.className = "docweave-templates__label";
+      legend.textContent = label;
+      const error = document.createElement("span");
+      error.id = `${id}-date-${index}-error`;
+      error.className = "docweave-templates__error";
+      fieldset.setAttribute("aria-describedby", error.id);
+      fieldset.append(legend, error);
+      for (const [part, width] of [["Day", 2], ["Month", 2], ["Year", 4]] as const) {
+        const field = document.createElement("label");
+        field.className = "docweave-templates__date-part";
+        const input = document.createElement("input");
+        input.type = "text";
+        input.inputMode = "numeric";
+        input.dataset.datePart = part.toLowerCase();
+        input.size = width;
+        field.append(part, input);
+        fieldset.append(field);
+      }
+      const pills = document.createElement("div");
+      pills.className = "docweave-templates__date-pills";
+      pills.setAttribute("role", "group");
+      pills.setAttribute("aria-label", `Quick date for ${label}`);
+      for (const days of DATE_PILL_DAYS) {
+        const pill = document.createElement("button");
+        pill.type = "button";
+        pill.className = "docweave-templates__date-pill";
+        pill.dataset.datePillDays = String(days);
+        pill.textContent = days === 0 ? "Today" : `${days} days`;
+        pills.append(pill);
+      }
+      group.append(fieldset, pills);
+      return group;
+    }));
+  }
+
+  function dateInputs(index: number): HTMLInputElement[] {
+    const group = dateFields.children[index];
+    return group ? [...group.querySelectorAll<HTMLInputElement>("input")] : [];
+  }
+
+  /** The day, month and year typed for each date, in the order they were asked. */
+  function readDates(): Array<[day: string, month: string, year: string]> {
+    return [...dateFields.children].map((_, index) => {
+      const [day, month, year] = dateInputs(index).map((input) => input.value.trim());
+      return [day ?? "", month ?? "", year ?? ""];
+    });
+  }
+
+  function showDateError(index: number, message = ""): void {
+    const error = dateFields.children[index]?.querySelector(".docweave-templates__error");
+    if (error) error.textContent = message;
+    for (const input of dateInputs(index)) {
+      input.setAttribute("aria-invalid", String(message !== ""));
+    }
+  }
+
+  function focusDate(index: number): void {
+    dateInputs(index)[0]?.focus();
+  }
+
+  /** Fills in a date's fields, as a pill or a typed shorthand does. */
+  function setDate(index: number, date: Date): void {
+    const [day, month, year] = dateInputs(index);
+    if (!day || !month || !year) return;
+    day.value = String(date.getUTCDate());
+    month.value = String(date.getUTCMonth() + 1);
+    year.value = String(date.getUTCFullYear());
+    showDateError(index);
+  }
+
   function update(state: DialogState): void {
     for (const element of dialog.querySelectorAll<HTMLElement>("[data-browse]")) {
-      element.hidden = state.editing;
+      element.hidden = state.editing || state.dating;
     }
     form.hidden = !state.editing;
+    dates.hidden = !state.dating;
     search.disabled = state.busy;
     title.disabled = state.busy;
     editorHost.toggleAttribute("inert", state.busy);
@@ -175,8 +291,9 @@ export function createTemplateDialogView(document: Document) {
 
     for (const button of dialog.querySelectorAll<HTMLButtonElement>("button[data-action]")) {
       const action = button.dataset.action;
-      // Close and cancel stay live so the dialog can never trap the user.
-      button.disabled = action !== "close" && action !== "cancel" && (
+      // Close, cancel and back stay live so the dialog can never trap the user.
+      button.disabled = action !== "close" && action !== "cancel" &&
+        action !== "back" && action !== "insert-dates" && (
         state.busy ||
         (state.stale && button.closest("li") !== null) ||
         (action === "insert" && state.selectedIndex < 0)
@@ -218,6 +335,12 @@ export function createTemplateDialogView(document: Document) {
     showTitleError,
     showResults,
     showPreview,
+    dateFields,
+    showDates,
+    readDates,
+    showDateError,
+    focusDate,
+    setDate,
     update,
     focusResult,
     scrollToResult,

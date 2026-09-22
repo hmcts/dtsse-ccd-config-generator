@@ -43,6 +43,12 @@ export interface ListItemBuilder {
 
 export interface DocBuilder {
   paragraph(id: string, content: ClauseContent): void;
+  /**
+   * Text the reader typed into a text box, one paragraph for each line. Each
+   * paragraph is a fact, so it leads back to the text box rather than being
+   * edited in two places. Empty text adds nothing.
+   */
+  text(id: string, value: string, options?: FactOptions): void;
   orderedList(
     id: string,
     define: (list: OrderedListBuilder) => void,
@@ -304,6 +310,17 @@ export function buildDoc(
           paragraphContent.map((node) => node.textContent).join(""),
         ),
       );
+    },
+    text(id: string, value: string, options?: FactOptions): void {
+      value
+        .split(/\n+/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .forEach((line, index) =>
+          docBuilder.paragraph(`${id}-${index}`, (content) => {
+            content.fact("text", line, options);
+          })
+        );
     },
     orderedList(
       id: string,

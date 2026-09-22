@@ -683,6 +683,120 @@ li.docweave-editor__clause--modified > p {
   padding-left: 0;
 }
 
+.docweave-templates__date-hint {
+  margin-top: 8px;
+}
+
+.docweave-templates__dates {
+  flex: 1;
+  min-height: 0;
+  padding: 16px 24px 0;
+  overflow: auto;
+  font-family: arial, sans-serif;
+}
+
+.docweave-templates__dates h3 {
+  margin-top: 0;
+  font-size: 1.2em;
+}
+
+.docweave-templates__date {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 24px;
+  margin: 0 0 20px;
+}
+
+.docweave-templates__date fieldset {
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.docweave-templates__date-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 2px;
+}
+
+.docweave-templates .docweave-templates__date-pill {
+  border: 2px solid #b1b4b6;
+  border-radius: 18px;
+  padding: 4px 14px;
+  background: #fff;
+  color: #0b0c0c;
+  cursor: pointer;
+  font: inherit;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.docweave-templates .docweave-templates__date-pill:hover {
+  background: #f3f2f1;
+}
+
+.docweave-templates .docweave-templates__date-pill:active {
+  border-color: #1d70b8;
+  background: #1d70b8;
+  color: #fff;
+}
+
+.docweave-templates .docweave-templates__date-pill:focus {
+  outline: 3px solid #fd0;
+  outline-offset: 0;
+  box-shadow: inset 0 0 0 2px;
+}
+
+.docweave-templates__date legend {
+  padding: 0;
+}
+
+.docweave-templates__date-part {
+  display: inline-block;
+  margin-right: 16px;
+}
+
+.docweave-templates__date-part input {
+  display: block;
+  box-sizing: content-box;
+  min-height: 28px;
+  margin-top: 4px;
+  padding: 5px;
+  border: 2px solid #0b0c0c;
+  border-radius: 0;
+  background: #fff;
+  color: #0b0c0c;
+  font: inherit;
+}
+
+.docweave-templates__date-part input:focus {
+  outline: 3px solid #fd0;
+  outline-offset: 0;
+  box-shadow: inset 0 0 0 2px;
+}
+
+.docweave-templates__date-part input[aria-invalid="true"] {
+  border-color: #d4351c;
+}
+
+.docweave-templates__dates .docweave-templates__actions {
+  margin-top: 16px;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+// A date the template works out when it is inserted.
+.docweave-template-date {
+  border: 1px solid #1d70b8;
+  border-radius: 3px;
+  padding: 0 4px;
+  background: #e8f1f8;
+  color: #0b0c0c;
+  white-space: nowrap;
+}
+
 .docweave-editor .ProseMirror h3 {
   font-size: 19px;
   font-weight: 700;

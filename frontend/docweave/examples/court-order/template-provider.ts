@@ -1,4 +1,5 @@
 import {
+  parseTemplateFragment,
   TemplateRequestError,
   type SaveTemplateInput,
   type Template,
@@ -18,6 +19,14 @@ function conflict(): TemplateRequestError {
 
 export function createInMemoryTemplateProvider(): TemplateProvider {
   const templates = new Map<string, Template>();
+  // Title and wording, worked out from the content as the backend does.
+  const searchable = new Map<string, string>();
+  const index = (id: string, input: SaveTemplateInput): void => {
+    const { document } = parseTemplateFragment(input.content);
+    // Wording only, as the backend indexes it: a template's dates are not searched.
+    const wording = document.textBetween(0, document.content.size, " ", () => "");
+    searchable.set(id, `${input.title}\n${wording}`.toLocaleLowerCase());
+  };
 
   function find(id: string): Template {
     const template = templates.get(id);
@@ -31,7 +40,7 @@ export function createInMemoryTemplateProvider(): TemplateProvider {
       return {
         items: [...templates.values()]
           .filter((template) =>
-            template.title.toLocaleLowerCase().includes(normalizedQuery)
+            searchable.get(template.id)?.includes(normalizedQuery)
           )
           .sort((left, right) =>
             left.title.localeCompare(right.title) ||
@@ -50,6 +59,7 @@ export function createInMemoryTemplateProvider(): TemplateProvider {
         content: structuredClone(input.content),
       };
       templates.set(template.id, template);
+      index(template.id, input);
       return copy(template);
     },
 
@@ -66,6 +76,7 @@ export function createInMemoryTemplateProvider(): TemplateProvider {
         updatedAt: new Date().toISOString(),
       };
       templates.set(id, updated);
+      index(id, input);
       return copy(updated);
     },
 
@@ -75,6 +86,7 @@ export function createInMemoryTemplateProvider(): TemplateProvider {
         throw conflict();
       }
       templates.delete(id);
+      searchable.delete(id);
     },
   };
 }
