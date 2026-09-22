@@ -66,9 +66,14 @@ class CcdEventTestSupportIntegrationTest {
   void legacyCallbackEventPersistsItsData() {
     var cases = events.forCaseType(CASE_TYPE);
     long reference = cases.seed(TestState.Open, new TestCase("original"));
+    var dates = jdbc.queryForMap("""
+        select created_date, last_modified, last_state_modified_date
+        from ccd.case_data where reference = ?
+        """, reference);
 
     var result = cases.event(reference, "legacy", new TestCase("submitted")).submitExpectingSuccess();
 
+    assertThat(dates).doesNotContainValue(null);
     assertThat(result.storedData().value()).isEqualTo("from callback");
     assertThat(result.audit().eventId()).isEqualTo("legacy");
   }

@@ -179,8 +179,10 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
         jdbc.update("""
           insert into ccd.case_data (
               id, reference, security_classification, jurisdiction, case_type_id, state,
-              data, supplementary_data, resolved_ttl, version, case_revision
-          ) values (?, ?, ?::ccd.securityclassification, ?, ?, ?, ?::jsonb, ?::jsonb, ?, 1, 0)
+              data, supplementary_data, resolved_ttl, last_modified,
+              last_state_modified_date, version, case_revision
+          ) values (?, ?, ?::ccd.securityclassification, ?, ?, ?, ?::jsonb, ?::jsonb, ?,
+              (now() at time zone 'UTC'), (now() at time zone 'UTC'), 1, 0)
             """,
             caseReference, caseReference, classification.name(), config.getJurId(), caseTypeId,
             state.name(), json(data), json(supplementaryData), ttl == null ? null : Date.valueOf(ttl));

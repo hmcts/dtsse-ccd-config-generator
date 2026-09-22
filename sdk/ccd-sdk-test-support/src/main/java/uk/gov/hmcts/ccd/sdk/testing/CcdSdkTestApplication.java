@@ -1,7 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.testing;
 
 import java.util.List;
-import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration;
 import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
@@ -13,6 +12,7 @@ import org.springframework.boot.autoconfigure.transaction.TransactionAutoConfigu
 import org.springframework.boot.autoconfigure.web.servlet.DispatcherServletAutoConfiguration;
 import org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import uk.gov.hmcts.ccd.sdk.CCDDefinitionGenerator;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
@@ -24,7 +24,7 @@ import uk.gov.hmcts.ccd.sdk.impl.json.TestJsonCallbackBridge;
 import uk.gov.hmcts.ccd.sdk.json.JsonCCDConfigSupport;
 
 /** Boot configuration shared by focused event submission tests. */
-@SpringBootConfiguration
+@Configuration(proxyBeanMethods = false)
 @Import({JsonCCDConfigSupport.class, TestJsonCallbackBridge.class})
 @ImportAutoConfiguration({
     DataSourceAutoConfiguration.class,
