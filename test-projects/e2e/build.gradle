@@ -102,8 +102,6 @@ dependencies {
   testImplementation 'com.github.hmcts:ccd-data-migration-support'
   implementation 'com.github.hmcts:task-management'
 
-  implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.9.1'
-
   implementation 'com.github.ben-manes.caffeine:caffeine:3.3.0'
   implementation 'com.google.guava:guava:33.7.1-jre'
 
