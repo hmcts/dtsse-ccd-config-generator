@@ -145,6 +145,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
               project.file("gradle.properties"),
               project.file("settings.gradle"),
               project.file("settings.gradle.kts")));
+          task.getScanFiles().from(JacksonCompatibilityCheck.sourceTree(project, project.file("gradle")));
           task.getLombokConfigs().from(project.provider(() -> {
             var directories = new HashSet<File>();
             directories.add(project.getProjectDir());

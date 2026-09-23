@@ -21,7 +21,6 @@ project(':e2e') {
         ccdSdk {
             jackson2ClasspathGuard {
                 allowedSourceFiles = [
-                    'build.gradle',
                     'src/main/java/uk/gov/hmcts/divorce/common/config/JacksonConfiguration.java'
                 ]
                 allowedClasses = [

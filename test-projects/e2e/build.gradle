@@ -6,7 +6,7 @@ plugins {
   id 'io.spring.dependency-management' version '1.1.7'
   id 'jacoco'
   id 'hmcts.ccd.sdk'
-  id 'com.github.hmcts.rse-cft-lib' version '0.19.2391'
+  id 'com.github.hmcts.rse-cft-lib' version '0.19.2395'
 }
 
 group = 'uk.gov.hmcts'
@@ -80,7 +80,6 @@ dependencies {
     exclude group: 'org.springframework.boot', module: 'spring-boot-starter-jackson'
   }
   implementation 'org.springframework.boot:spring-boot-jackson2'
-  implementation 'tools.jackson.core:jackson-databind'
 
   implementation 'org.springframework.retry:spring-retry:2.0.13'
 

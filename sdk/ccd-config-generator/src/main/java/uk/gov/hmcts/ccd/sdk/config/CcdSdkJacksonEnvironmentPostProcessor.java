@@ -26,8 +26,8 @@ public final class CcdSdkJacksonEnvironmentPostProcessor implements EnvironmentP
       if (configuredMapper != null && !JACKSON_2.equalsIgnoreCase(configuredMapper)) {
         throw new IllegalStateException(
             ("The CCD SDK requires '%s=%s' on Spring Boot 4 because CCD case data uses "
-                + "Jackson 2 wire contracts. Jackson 3 must remain on the Spring Boot 4 "
-                + "classpath, but must not replace Jackson 2 for HTTP conversion.")
+                + "Jackson 2 wire contracts. Jackson 3 may be present only as a transitive "
+                + "infrastructure dependency and must not replace Jackson 2 for HTTP conversion.")
                 .formatted(PREFERRED_JSON_MAPPER, JACKSON_2));
       }
       environment.getPropertySources().addLast(new MapPropertySource(

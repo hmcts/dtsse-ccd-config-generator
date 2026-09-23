@@ -48,6 +48,6 @@ public class CcdSdkJacksonEnvironmentPostProcessorTest {
         processor.postProcessEnvironment(environment, new SpringApplication()))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("requires 'spring.http.converters.preferred-json-mapper=jackson2'")
-        .hasMessageContaining("Jackson 3 must remain");
+        .hasMessageContaining("Jackson 3 may be present only as a transitive infrastructure dependency");
   }
 }
