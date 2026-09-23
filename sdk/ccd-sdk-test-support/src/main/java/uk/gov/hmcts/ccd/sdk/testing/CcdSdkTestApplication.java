@@ -11,6 +11,7 @@ import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfigurat
 import org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration;
 import org.springframework.boot.autoconfigure.web.servlet.DispatcherServletAutoConfiguration;
 import org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration;
+import org.springframework.boot.test.context.TestComponent;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -23,7 +24,11 @@ import uk.gov.hmcts.ccd.sdk.config.DefinitionMapperConfiguration;
 import uk.gov.hmcts.ccd.sdk.impl.json.TestJsonCallbackBridge;
 import uk.gov.hmcts.ccd.sdk.json.JsonCCDConfigSupport;
 
-/** Boot configuration shared by focused event submission tests. */
+/**
+ * Boot configuration shared by focused event submission tests. It is a test component so an
+ * application that scans {@code uk.gov.hmcts.ccd.sdk} does not pick it up.
+ */
+@TestComponent
 @Configuration(proxyBeanMethods = false)
 @Import({JsonCCDConfigSupport.class, TestJsonCallbackBridge.class})
 @ImportAutoConfiguration({
