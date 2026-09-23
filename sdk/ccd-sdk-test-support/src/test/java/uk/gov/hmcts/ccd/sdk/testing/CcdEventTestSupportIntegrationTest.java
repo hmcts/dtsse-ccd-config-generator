@@ -30,6 +30,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.filter.OncePerRequestFilter;
 import uk.gov.hmcts.ccd.sdk.CCDDefinitionGenerator;
 import uk.gov.hmcts.ccd.sdk.CaseView;
@@ -218,6 +222,66 @@ class CcdEventTestSupportIntegrationTest {
   }
 
   @Test
+  void startedEventSubmitsAsTheSameActor() {
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+    var actor = events.registerActor("Example", "Judge", "caseworker");
+
+    var result = events.start(reference, "whoAmI").as(actor).startExpectingSuccess()
+        .edit(unchanged -> { })
+        .submitExpectingSuccess();
+
+    assertThat(result.confirmationHeader()).isEqualTo(actor.authorisation());
+    assertThat(jdbc.queryForObject("select user_id from ccd.case_event where id = ?",
+        String.class, result.audit().id())).isEqualTo(actor.uid());
+    assertThat(actor.details().email()).isEqualTo("example.judge@example.com");
+  }
+
+  @Test
+  void startedEventSubmitsFromTheRevisionItWasStartedAt() {
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+    var started = events.start(reference, "serial").startExpectingSuccess();
+    events.event(reference, "readOnly", new TestCase("meanwhile")).submitExpectingSuccess();
+
+    var failed = started.submitting(new TestCase("edited")).submitExpectingFailure(409);
+
+    assertThat(failed.snapshot().caseRevision()).isEqualTo(1);
+    assertThat(events.start(reference, "serial").startExpectingSuccess()
+        .submitting(new TestCase("edited")).submitExpectingSuccess().audit().revision()).isEqualTo(2);
+  }
+
+  @Test
+  void applicationErrorStatusIsAFailedSubmission() {
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+
+    var failed = events.event(reference, "conflict", new TestCase("submitted")).submitExpectingFailure(409);
+
+    assertThat(failed.body()).contains("already being changed");
+    assertThat(failed.snapshot().caseRevision()).isZero();
+    assertThatThrownBy(() -> events.event(reference, "conflict", new TestCase("submitted"))
+        .submitExpectingSuccess())
+        .isInstanceOf(AssertionError.class)
+        .hasMessageContaining("returned HTTP 409");
+  }
+
+  @Test
+  void acceptedResultListsTheRowsTheEventChanged() {
+    jdbc.execute("create table if not exists public.audited_rows (id serial primary key, value text)");
+    jdbc.execute("drop trigger if exists ccd_audit_row_changes on public.audited_rows");
+    jdbc.execute("call ccd.attach_case_event_auditing_v1('public.audited_rows')");
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+
+    var result = events.event(reference, "writeRow", new TestCase("written")).submitExpectingSuccess();
+
+    assertThat(result.changes("audited_rows")).singleElement().satisfies(change -> {
+      assertThat(change.operation()).isEqualTo(CcdEventTestSupport.RowChange.Operation.INSERT);
+      assertThat(change.oldValues()).isNull();
+      assertThat(change.newValues().path("value").asText()).isEqualTo("written");
+    });
+    assertThat(result.changes()).extracting(CcdEventTestSupport.RowChange::table)
+        .containsExactly("audited_rows");
+  }
+
+  @Test
   void startWithoutAnActorUsesTheDefaultUser() {
     long reference = events.seed(TestState.Open, new TestCase("original"));
 
@@ -351,7 +415,20 @@ class CcdEventTestSupportIntegrationTest {
     }
 
     @Bean
-    CCDConfig<TestCase, TestState, TestRole> config() {
+    ConflictAdvice conflictAdvice() {
+      return new ConflictAdvice();
+    }
+
+    @RestControllerAdvice
+    static class ConflictAdvice {
+      @ExceptionHandler(IllegalStateException.class)
+      ResponseEntity<String> conflict(IllegalStateException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ex.getMessage());
+      }
+    }
+
+    @Bean
+    CCDConfig<TestCase, TestState, TestRole> config(JdbcTemplate jdbc) {
       return new CCDConfig<>() {
         @Override
         public Set<String> caseTypeIds() {
@@ -371,6 +448,15 @@ class CcdEventTestSupportIntegrationTest {
               .errors(List.of("invalid")).build()).forAllStates();
           builder.decentralisedEvent("openOnly", payload -> SubmitResponse.defaultResponse())
               .forState(TestState.Open);
+          builder.decentralisedEvent("serial", payload -> SubmitResponse.defaultResponse(),
+              payload -> payload.caseData()).forAllStates().nonConcurrent();
+          builder.decentralisedEvent("conflict", payload -> {
+            throw new IllegalStateException("The case is already being changed");
+          }).forAllStates();
+          builder.decentralisedEvent("writeRow", payload -> {
+            jdbc.update("insert into public.audited_rows (value) values (?)", payload.caseData().value());
+            return SubmitResponse.defaultResponse();
+          }).forAllStates();
           builder.decentralisedEvent("metadata", payload -> SubmitResponse.<TestState>builder()
               .warnings(List.of("check"))
               .confirmationHeader("Done")
