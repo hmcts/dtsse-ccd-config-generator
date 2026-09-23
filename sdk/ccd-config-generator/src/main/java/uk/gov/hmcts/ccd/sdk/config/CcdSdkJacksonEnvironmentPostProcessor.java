@@ -1,10 +1,13 @@
 package uk.gov.hmcts.ccd.sdk.config;
 
+import java.util.Arrays;
+import java.util.Locale;
 import java.util.Map;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.SpringBootVersion;
 import org.springframework.boot.env.EnvironmentPostProcessor;
 import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.MapPropertySource;
 
 /**
@@ -22,6 +25,12 @@ public final class CcdSdkJacksonEnvironmentPostProcessor implements EnvironmentP
       SpringApplication application) {
     String bootVersion = SpringBootVersion.getVersion();
     if (bootVersion != null && bootVersion.startsWith("4.")) {
+      if (hasJackson3Properties(environment)) {
+        throw new IllegalStateException(
+            "The CCD SDK requires Jackson 2 settings to use 'spring.jackson2.*' on Spring Boot 4. "
+                + "Properties under 'spring.jackson.*' configure Jackson 3 and do not preserve the "
+                + "CCD SDK's Jackson 2 wire contracts.");
+      }
       String configuredMapper = environment.getProperty(PREFERRED_JSON_MAPPER);
       if (configuredMapper != null && !JACKSON_2.equalsIgnoreCase(configuredMapper)) {
         throw new IllegalStateException(
@@ -34,5 +43,14 @@ public final class CcdSdkJacksonEnvironmentPostProcessor implements EnvironmentP
           "ccdSdkJacksonDefaults",
           Map.of(PREFERRED_JSON_MAPPER, JACKSON_2)));
     }
+  }
+
+  private static boolean hasJackson3Properties(ConfigurableEnvironment environment) {
+    return environment.getPropertySources().stream()
+        .filter(EnumerablePropertySource.class::isInstance)
+        .map(EnumerablePropertySource.class::cast)
+        .flatMap(source -> Arrays.stream(source.getPropertyNames()))
+        .map(property -> property.toLowerCase(Locale.ROOT).replace('_', '.'))
+        .anyMatch(property -> property.startsWith("spring.jackson."));
   }
 }
