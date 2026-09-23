@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.stream.StreamSupport;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -67,7 +68,7 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
   private final MockMvc mvc;
   private final JdbcTemplate jdbc;
   private final ObjectMapper mapper;
-  private final TestIdamService idam;
+  private final TestActors actors;
 
   CcdEventTestSupport(Class<Case> caseClass,
                       Class<State> stateClass,
@@ -75,14 +76,14 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
                       MockMvc mvc,
                       JdbcTemplate jdbc,
                       ObjectMapper mapper,
-                      TestIdamService idam) {
+                      TestActors actors) {
     this.caseClass = caseClass;
     this.stateClass = stateClass;
     this.registry = registry;
     this.mvc = mvc;
     this.jdbc = jdbc;
     this.mapper = mapper;
-    this.idam = idam;
+    this.actors = actors;
   }
 
   public CaseType forCaseType(String caseTypeId) {
@@ -106,8 +107,15 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
     return forCaseType(matching.getFirst());
   }
 
+  /**
+   * Registers an actor; requests sent {@code .as(actor)} carry its token and audit as it.
+   */
   public Actor registerActor(ActorDetails actor) {
-    return new Actor(idam.register("ccd-sdk-test-" + UUID.randomUUID(), actor), actor);
+    return new Actor(actors.register(actor), actor);
+  }
+
+  public Actor registerActor(String givenName, String familyName, String... roles) {
+    return registerActor(ActorDetails.of(givenName, familyName, roles));
   }
 
   public long seed(State state, Case data) {
@@ -154,6 +162,11 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
 
     public ActorDetails details() {
       return details;
+    }
+
+    /** The IDAM user id the application sees for this actor. */
+    public String uid() {
+      return details.uid();
     }
   }
 
@@ -288,8 +301,7 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
         if (result instanceof Accepted accepted) {
           return accepted;
         }
-        throw new AssertionError("Expected accepted event " + eventId + ", got errors "
-            + ((Rejected) result).errors());
+        throw new AssertionError("Expected accepted event " + eventId + ", got " + result.describe());
       }
 
       public Rejected submitExpectingErrors() {
@@ -297,7 +309,17 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
         if (result instanceof Rejected rejected) {
           return rejected;
         }
-        throw new AssertionError("Expected validation errors from event " + eventId);
+        throw new AssertionError("Expected validation errors from event " + eventId + ", got " + result.describe());
+      }
+
+      /** Expects the application to answer the submission with this HTTP status rather than a result. */
+      public Failed submitExpectingFailure(int status) {
+        Submission result = submit();
+        if (result instanceof Failed failed && failed.status() == status) {
+          return failed;
+        }
+        throw new AssertionError("Expected event " + eventId + " to fail with HTTP " + status
+            + ", got " + result.describe());
       }
     }
 
@@ -340,8 +362,7 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
         if (result instanceof Accepted accepted) {
           return accepted;
         }
-        throw new AssertionError("Expected created case from event " + eventId + ", got errors "
-            + ((CreationRejected) result).errors());
+        throw new AssertionError("Expected created case from event " + eventId + ", got " + result.describe());
       }
 
       public CreationRejected submitExpectingErrors() {
@@ -349,7 +370,17 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
         if (result instanceof CreationRejected rejected) {
           return rejected;
         }
-        throw new AssertionError("Expected validation errors from creation event " + eventId);
+        throw new AssertionError("Expected validation errors from creation event " + eventId
+            + ", got " + result.describe());
+      }
+
+      public Failed submitExpectingFailure(int status) {
+        Submission result = submit();
+        if (result instanceof Failed failed && failed.status() == status) {
+          return failed;
+        }
+        throw new AssertionError("Expected creation event " + eventId + " to fail with HTTP " + status
+            + ", got " + result.describe());
       }
     }
 
@@ -374,7 +405,8 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
       }
 
       public Started start() {
-        checkAllowedState(registry.getRequiredEvent(caseTypeId, eventId), eventId, stored(reference), null);
+        Map<String, Object> stored = stored(reference);
+        checkAllowedState(registry.getRequiredEvent(caseTypeId, eventId), eventId, stored, null);
         // Loads the case the way CCD does before an event starts, so the case view applies.
         JsonNode loaded = send(MockMvcRequestBuilders.get("/ccd-persistence/cases")
             .param("case-refs", String.valueOf(reference)), authorisation, null);
@@ -392,7 +424,8 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
             .build();
         JsonNode response = send(MockMvcRequestBuilders.post("/callbacks/about-to-start")
             .param("eventId", eventId), authorisation, request);
-        return new Started(response);
+        return new Started(response, CaseType.this, reference, eventId, authorisation,
+            ((Number) stored.get("case_revision")).longValue());
       }
 
       public Started startExpectingSuccess() {
@@ -441,10 +474,15 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
               .build())
           .build();
 
-      DecentralisedSubmitEventResponse response = WIRE.convertValue(send(
-          MockMvcRequestBuilders.post("/ccd-persistence/cases")
-              .header("Idempotency-Key", idempotencyKey.toString()),
-          authorisation, event), DecentralisedSubmitEventResponse.class);
+      DecentralisedSubmitEventResponse response;
+      try {
+        response = WIRE.convertValue(send(
+            MockMvcRequestBuilders.post("/ccd-persistence/cases")
+                .header("Idempotency-Key", idempotencyKey.toString()),
+            authorisation, event), DecentralisedSubmitEventResponse.class);
+      } catch (UnexpectedResponse failure) {
+        return new Failed(failure, stored == null ? null : snapshot(reference));
+      }
       // The response DTO starts with empty case details, so a rejection has none inside them.
       if (response.getCaseDetails() == null || response.getCaseDetails().getCaseDetails() == null) {
         return stored == null ? new CreationRejected(response) : new Rejected(response, snapshot(reference));
@@ -550,6 +588,39 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
   public record Audit(long id, String eventId, int version, long revision) {
   }
 
+  /** A row the application changed during the event, as recorded by the SDK's row auditing. */
+  public record RowChange(String schema,
+                          String table,
+                          Operation operation,
+                          JsonNode oldValues,
+                          JsonNode newValues) {
+    public enum Operation { INSERT, UPDATE, DELETE }
+  }
+
+  /**
+   * A response to a request that CCD data store would not treat as a result: any HTTP status
+   * other than 200, such as a filter rejecting the caller or the application mapping an
+   * exception to an error status.
+   */
+  public static final class UnexpectedResponse extends AssertionError {
+    private final int status;
+    private final String body;
+
+    UnexpectedResponse(String method, String uri, int status, String body) {
+      super(method + " " + uri + " returned HTTP " + status + (body.isEmpty() ? "" : ": " + body));
+      this.status = status;
+      this.body = body;
+    }
+
+    public int status() {
+      return status;
+    }
+
+    public String body() {
+      return body;
+    }
+  }
+
   public record CaseSnapshot(JsonNode rawData,
                              int blobVersion,
                              long caseRevision,
@@ -558,7 +629,7 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
                              Map<String, Object> supplementaryData) {
   }
 
-  public abstract sealed class Submission permits Accepted, Rejected, CreationRejected {
+  public abstract sealed class Submission permits Accepted, Rejected, CreationRejected, Failed {
     private final List<String> errors;
     private final List<String> warnings;
     private final String confirmationHeader;
@@ -572,6 +643,15 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
       this.confirmationHeader = confirmation == null ? null : confirmation.getConfirmationHeader();
       this.confirmationBody = confirmation == null ? null : confirmation.getConfirmationBody();
     }
+
+    private Submission() {
+      this.errors = List.of();
+      this.warnings = List.of();
+      this.confirmationHeader = null;
+      this.confirmationBody = null;
+    }
+
+    abstract String describe();
 
     public List<String> errors() {
       return errors;
@@ -644,6 +724,21 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
     public Audit audit() {
       return audit;
     }
+
+    /** Every row the application changed during this event, in the order it changed them. */
+    public List<RowChange> changes() {
+      return rowChanges(audit.id());
+    }
+
+    /** The rows this event changed in one table, in the order it changed them. */
+    public List<RowChange> changes(String table) {
+      return changes().stream().filter(change -> change.table().equals(table)).toList();
+    }
+
+    @Override
+    String describe() {
+      return "an accepted submission";
+    }
   }
 
   public final class Rejected extends Submission {
@@ -677,28 +772,100 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
     public CaseSnapshot snapshot() {
       return originalSnapshot;
     }
+
+    @Override
+    String describe() {
+      return "errors " + errors();
+    }
   }
 
   public final class CreationRejected extends Submission {
     private CreationRejected(DecentralisedSubmitEventResponse response) {
       super(response);
     }
+
+    @Override
+    String describe() {
+      return "errors " + errors();
+    }
   }
 
-  /** The case returned by an event's start handler or about-to-start callback. */
+  /**
+   * The application answered the submission with a status other than 200, so CCD would report
+   * a failure to the user and nothing was written. {@link #snapshot()} is the unchanged case,
+   * or null when the failed submission was a creation.
+   */
+  public final class Failed extends Submission {
+    private final UnexpectedResponse response;
+    private final CaseSnapshot originalSnapshot;
+
+    private Failed(UnexpectedResponse response, CaseSnapshot originalSnapshot) {
+      this.response = response;
+      this.originalSnapshot = originalSnapshot;
+    }
+
+    public int status() {
+      return response.status();
+    }
+
+    public String body() {
+      return response.body();
+    }
+
+    public CaseSnapshot snapshot() {
+      return originalSnapshot;
+    }
+
+    @Override
+    String describe() {
+      return response.getMessage();
+    }
+  }
+
+  /**
+   * The case returned by an event's start handler or about-to-start callback. {@link #edit(Consumer)}
+   * and {@link #submitting(Object)} continue to submission as the same actor from the revision the
+   * event was started at, as a user completing the event in CCD would.
+   */
   public final class Started {
     private final JsonNode data;
     private final List<String> errors;
     private final List<String> warnings;
+    private final CaseType caseType;
+    private final long reference;
+    private final String eventId;
+    private final String authorisation;
+    private final long revision;
 
-    private Started(JsonNode response) {
+    private Started(JsonNode response, CaseType caseType, long reference, String eventId,
+                    String authorisation, long revision) {
       this.data = response.path("data");
       this.errors = strings(response.path("errors"));
       this.warnings = strings(response.path("warnings"));
+      this.caseType = caseType;
+      this.reference = reference;
+      this.eventId = eventId;
+      this.authorisation = authorisation;
+      this.revision = revision;
     }
 
     public Case caseData() {
       return mapper.convertValue(data, caseClass);
+    }
+
+    /** Applies the user's changes to the started case and prepares its submission. */
+    public CaseType.EventSubmission edit(Consumer<Case> changes) {
+      Case edited = caseData();
+      changes.accept(edited);
+      return submitting(edited);
+    }
+
+    /** Prepares submission of this data in place of the started case. */
+    public CaseType.EventSubmission submitting(Case submittedData) {
+      CaseType.EventSubmission submission = caseType.event(reference, eventId, submittedData);
+      submission.authorisation = authorisation;
+      submission.startRevision = revision;
+      return submission;
     }
 
     public JsonNode rawData() {
@@ -745,10 +912,22 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
       throw new IllegalStateException(ex);
     }
     if (result.getResponse().getStatus() != 200) {
-      throw new AssertionError(result.getRequest().getMethod() + " " + result.getRequest().getRequestURI()
-          + " returned HTTP " + result.getResponse().getStatus() + (content.isEmpty() ? "" : ": " + content));
+      throw new UnexpectedResponse(result.getRequest().getMethod(), result.getRequest().getRequestURI(),
+          result.getResponse().getStatus(), content);
     }
     return fromJson(content);
+  }
+
+  private List<RowChange> rowChanges(long caseEventId) {
+    return jdbc.query("""
+        select table_schema, table_name, operation::text as operation,
+               old_values::text as old_values, new_values::text as new_values
+        from ccd.audit_log where case_event_id = ? order by id
+        """, (row, i) -> new RowChange(row.getString("table_schema"), row.getString("table_name"),
+            RowChange.Operation.valueOf(row.getString("operation")),
+            row.getString("old_values") == null ? null : fromJson(row.getString("old_values")),
+            row.getString("new_values") == null ? null : fromJson(row.getString("new_values"))),
+        caseEventId);
   }
 
   private String json(Object data) {

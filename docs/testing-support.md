@@ -54,11 +54,21 @@ Inject `CcdEventTestSupport<Case, State>` with concrete case and enum state type
 
 `seed(state, data)` allocates a 16-digit reference and inserts a fixture without event history. Use `seedCase(state, data)` to set a reference, supplementary data, `TestClassification`, or TTL before calling `insert()`. Use `create(eventId, initialState, data).submitExpectingSuccess()` to exercise a configured creation event and write its history.
 
-For an existing case, `start(reference, eventId).startExpectingSuccess()` opens an event. It loads the case through the `CaseView`, as CCD does, and then runs the event's start handler or about-to-start callback. The result's `caseData()` is the typed case that the event would show; nothing is written. `event(reference, eventId, submittedData)` creates a submission request. Set an actor with `.as(actor)`, a start revision with `.atRevision(revision)`, or an idempotency key with `.withIdempotencyKey(key)` before submitting. Register an actor with `events.registerActor(new ActorDetails(...))`; registration returns the `Actor` handle, and a start request takes `.as(actor)` in the same way. The helper checks the stored state against the event's allowed pre-states before starting or submitting.
+For an existing case, `start(reference, eventId).startExpectingSuccess()` opens an event. It loads the case through the `CaseView`, as CCD does, and then runs the event's start handler or about-to-start callback. The result's `caseData()` is the typed case that the event would show; nothing is written. `event(reference, eventId, submittedData)` creates a submission request. Set an actor with `.as(actor)`, a start revision with `.atRevision(revision)`, or an idempotency key with `.withIdempotencyKey(key)` before submitting. The helper checks the stored state against the event's allowed pre-states before starting or submitting.
 
-`submit()` returns an `Accepted` or `Rejected` result. Use `submitExpectingSuccess()` or `submitExpectingErrors()` when the expected outcome is known. Creation has a separate request type and returns `CreationRejected` on validation failure. Results expose errors, warnings, and confirmation text directly. Existing-case results also expose typed state, classification, supplementary data, and `storedData()`.
+A user completes an event by opening it, changing what it showed, and submitting. `Started` continues that way: `edit(changes)` applies a `Consumer` to the started case, and `submitting(data)` replaces it. Both return the submission request, already sent as the same actor from the revision the event was started at, so a non-concurrent event rejects it when something else has committed in between:
 
-On an accepted result, `storedData()` reads the saved blob as the typed case model, while `projectedCase()` includes the `CaseView` projection. `rawData()` returns the blob as JSON. `snapshot(reference)` reads the persisted blob, blob version, and case revision directly from `ccd.case_data`.
+```java
+var result = events.start(reference, "makeOrder").as(judge).startExpectingSuccess()
+    .edit(c -> c.setOrderNotes("agreed"))
+    .submitExpectingSuccess();
+```
+
+Register an actor with `events.registerActor("First", "Judge", "caseworker-pcs")`, or with an explicit `ActorDetails` when the uid or email matter; registration returns the `Actor` handle, whose `uid()` is the IDAM id the application sees. Start and submission requests take `.as(actor)`.
+
+`submit()` returns an `Accepted`, `Rejected` or `Failed` result. `Rejected` is a validation outcome from the event handler, with `errors()`. `Failed` is any HTTP status other than 200 from the application, such as a filter rejecting the caller or an exception the application maps to 409; CCD would report it to the user as a failure and nothing is written. Use `submitExpectingSuccess()`, `submitExpectingErrors()` or `submitExpectingFailure(status)` when the expected outcome is known. Creation has a separate request type and returns `CreationRejected` on validation failure. Results expose errors, warnings, and confirmation text directly. Existing-case results also expose typed state, classification, supplementary data, and `storedData()`.
+
+On an accepted result, `storedData()` reads the saved blob as the typed case model, while `projectedCase()` includes the `CaseView` projection. `rawData()` returns the blob as JSON. `snapshot(reference)` reads the persisted blob, blob version, and case revision directly from `ccd.case_data`. Where the application's tables carry the SDK's row auditing, `changes()` lists every row the event inserted, updated or deleted, and `changes("orders")` those in one table, each with its old and new values as JSON.
 
 Do not put these tests in a `@Transactional` test method: the helper needs to observe the runtime's committed transaction. The default audit actor is an SDK test user. These tests exercise starting, submission and projection; they do not simulate CCD event permissions or page callbacks.
 
@@ -68,15 +78,17 @@ An exception that the application does not handle is rethrown from `start()` or 
 
 Every request carries `ServiceAuthorization: CcdEventTestSupport.SERVICE_AUTHORISATION`. Test support wraps each `AuthTokenValidator` bean from `service-auth-provider-java-client`, so that token is valid and belongs to `ccd_data`. Any other token still goes to the application's validator. An application that authorises CCD data store's S2S name through that validator needs no S2S stubbing.
 
-The user token is the actor's `authorisation()`, or `CcdEventTestSupport.DEFAULT_AUTHORISATION` when a request names no actor. The SDK resolves it to the actor for event audit. An application filter that looks the token up with its own IDAM client needs that lookup stubbed in the test. Use the actor's `authorisation()` and `details()`:
+The user token is the actor's `authorisation()`, or `CcdEventTestSupport.DEFAULT_AUTHORISATION` when a request names no actor. The SDK resolves it to the actor for event audit. An application filter that looks the token up with its own IDAM client should answer from the `TestActors` bean, which knows every registered actor by its token. Declare one fake for that client in a shared test configuration and no test stubs it again:
 
 ```java
-var judge = events.registerActor(new ActorDetails(
-    judgeId.toString(), "judge@example.com", "Test", "Judge", List.of("caseworker-judge")));
-when(idamUserInfoApi.getUserInfo(judge.authorisation())).thenReturn(userInfo(judge.details()));
-
-var opened = events.start(reference, "makeOrder").as(judge).startExpectingSuccess();
+@Bean
+@Primary
+IdamUserInfoApi testActorUserInfoApi(TestActors actors) {
+    return token -> userInfo(actors.require(token));
+}
 ```
+
+Feign registers its clients as primary beans, so demote the real one with a `BeanDefinitionRegistryPostProcessor` or give the fake the same bean name. pcs-api's `PcsCcdEventTestConfiguration` shows this along with fakes for its other external services.
 
 ## Existing application context
 
