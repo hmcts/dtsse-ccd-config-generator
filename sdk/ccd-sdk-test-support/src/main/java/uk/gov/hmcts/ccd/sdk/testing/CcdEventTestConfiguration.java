@@ -24,9 +24,14 @@ import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
 public class CcdEventTestConfiguration {
 
   @Bean
+  TestActors ccdSdkTestActors() {
+    return new TestActors();
+  }
+
+  @Bean
   @Primary
-  TestIdamService ccdSdkTestIdamService() {
-    return new TestIdamService();
+  TestIdamService ccdSdkTestIdamService(TestActors actors) {
+    return new TestIdamService(actors);
   }
 
   @Bean
@@ -44,7 +49,7 @@ public class CcdEventTestConfiguration {
       ApplicationContext context,
       JdbcTemplate jdbc,
       @Qualifier(CcdCaseDataMapperConfiguration.CCD_CASE_DATA_OBJECT_MAPPER) ObjectMapper mapper,
-      TestIdamService idam) {
+      TestActors actors) {
     ResolvableType type = injectionPoint.getField() == null
         ? ResolvableType.forMethodParameter(injectionPoint.getMethodParameter())
         : ResolvableType.forField(injectionPoint.getField());
@@ -60,7 +65,7 @@ public class CcdEventTestConfiguration {
         mockMvc(context),
         jdbc,
         mapper,
-        idam
+        actors
     );
   }
 
