@@ -19,7 +19,6 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.cloud.openfeign.FeignAutoConfiguration;
 import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.cloud.openfeign.support.FeignHttpMessageConverters;
 import org.springframework.cloud.openfeign.support.HttpMessageConverterCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -41,13 +40,11 @@ class TaskManagementAutoConfigurationTest {
       .withUserConfiguration(TestConfig.class);
 
   @Test
-  void shouldRegisterCompatibilityCodecBeansByDefault() {
+  void shouldLeaveFeignCodecsInClientContexts() {
     contextRunner.run(context -> {
-      assertThat(context).hasSingleBean(FeignHttpMessageConverters.class);
-      assertThat(context).hasBean("compatibilityFeignEncoder");
-      assertThat(context).hasBean("compatibilityFeignDecoder");
-      assertThat(context).hasSingleBean(Encoder.class);
-      assertThat(context).hasSingleBean(Decoder.class);
+      assertThat(context).doesNotHaveBean("compatibilityFeignHttpMessageConverters");
+      assertThat(context).doesNotHaveBean("compatibilityFeignEncoder");
+      assertThat(context).doesNotHaveBean("compatibilityFeignDecoder");
     });
   }
 
@@ -75,32 +72,21 @@ class TaskManagementAutoConfigurationTest {
   }
 
   @Test
-  void shouldRegisterCompatibilityCodecBeansWhenCalendarBeansExist() {
+  void shouldNotAddGlobalCodecBeansWhenCalendarBeansExist() {
     contextRunner
         .withUserConfiguration(CalendarCodecConfiguration.class)
         .run(context -> {
           assertThat(context).hasBean("calendarFeignEncoder");
           assertThat(context).hasBean("calendarFeignDecoder");
-          assertThat(context).hasBean("compatibilityFeignEncoder");
-          assertThat(context).hasBean("compatibilityFeignDecoder");
-          assertThat(context.getBeansOfType(Encoder.class)).hasSize(2);
-          assertThat(context.getBeansOfType(Decoder.class)).hasSize(2);
+          assertThat(context).doesNotHaveBean("compatibilityFeignEncoder");
+          assertThat(context).doesNotHaveBean("compatibilityFeignDecoder");
+          assertThat(context.getBeansOfType(Encoder.class)).hasSize(1);
+          assertThat(context.getBeansOfType(Decoder.class)).hasSize(1);
         });
   }
 
   @Test
-  void shouldNotRegisterCompatibilityCodecBeansWhenDisabled() {
-    contextRunner
-        .withPropertyValues("task-management.feign.compat-codecs.enabled=false")
-        .run(context -> {
-        assertThat(context).doesNotHaveBean("compatibilityFeignEncoder");
-        assertThat(context).doesNotHaveBean("compatibilityFeignDecoder");
-        assertThat(context).doesNotHaveBean("compatibilityFeignHttpMessageConverters");
-      });
-  }
-
-  @Test
-  void shouldPreserveClientSpecificConvertersWhenCompatibilityCodecsAreDisabled() throws IOException {
+  void shouldPreserveClientSpecificConverters() throws IOException {
     AtomicReference<String> requestBody = new AtomicReference<>();
     HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
     server.createContext("/messages", exchange -> {
@@ -114,7 +100,6 @@ class TaskManagementAutoConfigurationTest {
       contextRunner
           .withUserConfiguration(SnakeCaseConsumerConfiguration.class)
           .withPropertyValues(
-              "task-management.feign.compat-codecs.enabled=false",
               "snake-case-consumer.url=http://localhost:" + server.getAddress().getPort())
           .run(context -> context.getBean(SnakeCaseConsumerClient.class)
               .send(new ConsumerMessage("1234")));
@@ -126,7 +111,7 @@ class TaskManagementAutoConfigurationTest {
   }
 
   @Test
-  void shouldNotOverrideUserProvidedCompatibilityCodecBeans() {
+  void shouldNotOverrideUserProvidedFeignCodecBeans() {
     contextRunner
         .withUserConfiguration(UserFeignCodecConfiguration.class)
         .run(context -> {

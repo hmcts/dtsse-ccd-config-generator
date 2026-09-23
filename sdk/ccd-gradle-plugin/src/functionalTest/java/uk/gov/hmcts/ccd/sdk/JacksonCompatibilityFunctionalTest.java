@@ -82,6 +82,50 @@ public class JacksonCompatibilityFunctionalTest {
   }
 
   @Test
+  public void sourceGuardRejectsJacksonThreeDeclaredInVersionCatalogWithoutResolvingDependencies()
+      throws IOException {
+    write("gradle/libs.versions.toml", """
+        [versions]
+        jackson3 = "3.2.0"
+
+        [libraries]
+        jackson-databind = { module = "tools.jackson.core:jackson-databind", version.ref = "jackson3" }
+        """);
+    write("build.gradle", """
+        plugins { id 'hmcts.ccd.sdk' }
+        dependencies { implementation libs.jackson.databind }
+        """);
+
+    BuildResult result = runner("jackson2CompatibilityGuard").buildAndFail();
+
+    assertEquals(TaskOutcome.FAILED, result.task(":jackson2CompatibilityGuard").getOutcome());
+    assertTrue(report().contains("ERROR gradle/libs.versions.toml:"));
+    assertTrue(report().contains("[JACKSON3_API] tools.jackson.core"));
+    assertFalse(result.getOutput().contains("Could not resolve"));
+  }
+
+  @Test
+  public void sourceGuardIgnoresJacksonThreeNamesInCommentsAndStringLiterals() throws IOException {
+    write("src/main/java/CompatibilityTest.java", """
+        class CompatibilityTest {
+          // tools.jackson.core is forbidden in executable code.
+          /* JacksonJsonHttpMessageConverter is the Jackson 3 converter. */
+          String jackson3Converter =
+              "org.springframework.http.converter.json.JacksonJsonHttpMessageConverter";
+        }
+        """);
+    write("build.gradle", """
+        plugins { id 'hmcts.ccd.sdk' }
+        // implementation 'tools.jackson.core:jackson-databind:3.2.0'
+        """);
+
+    BuildResult result = runner("jackson2CompatibilityGuard").build();
+
+    assertEquals(TaskOutcome.SUCCESS, result.task(":jackson2CompatibilityGuard").getOutcome());
+    assertTrue(report().contains("0 enforced findings, 0 allowed findings"));
+  }
+
+  @Test
   public void sourceGuardAllowsJacksonTwoAndRejectsJacksonThreeConfiguration() throws IOException {
     write("src/main/java/Model.java", """
         import com.fasterxml.jackson.databind.annotation.JsonNaming;

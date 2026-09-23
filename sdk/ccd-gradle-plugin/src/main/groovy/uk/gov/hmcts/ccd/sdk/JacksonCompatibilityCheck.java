@@ -39,6 +39,8 @@ public abstract class JacksonCompatibilityCheck extends DefaultTask {
   private static final String JACKSON = "tools\\s*\\.\\s*jackson\\s*\\.\\s*";
   private static final Pattern JACKSON3_API = Pattern.compile(
       "\\b" + JACKSON + "(?:\\w+\\s*\\.\\s*)*[\\w$*]+|\\b" + JACKSON + "\\*");
+  private static final Pattern JACKSON3_COORDINATE = Pattern.compile(
+      "\\btools\\s*\\.\\s*jackson(?:\\s*\\.\\s*[\\w-]+)+\\s*:\\s*[\\w.-]+");
   private static final Pattern JACKSON3_SPRING = Pattern.compile(
       "\\borg\\.springframework\\.boot\\.jackson(?!2\\b)(?:\\.\\w+)+\\b"
           + "|\\b(?:JacksonJson\\w*|JsonMapperBuilderCustomizer)\\b");
@@ -151,9 +153,12 @@ public abstract class JacksonCompatibilityCheck extends DefaultTask {
   private void scan(File file, Set<String> findings) throws IOException {
     String name = file.getName();
     String text = withoutComments(Files.readString(file.toPath(), StandardCharsets.UTF_8), name);
-    String configuration = isYaml(name) ? flattenYaml(text) : text;
-    match(file, text, JACKSON3_API, "JACKSON3_API", "use the Jackson 2 com.fasterxml.jackson API", findings);
-    match(file, text, JACKSON3_SPRING, "JACKSON3_SPRING", "use Spring's Jackson 2 integration",
+    String code = withoutQuotedLiterals(text);
+    final String configuration = isYaml(name) ? flattenYaml(text) : text;
+    match(file, code, JACKSON3_API, "JACKSON3_API", "use the Jackson 2 com.fasterxml.jackson API", findings);
+    match(file, text, JACKSON3_COORDINATE, "JACKSON3_API",
+        "use the Jackson 2 com.fasterxml.jackson dependency", findings);
+    match(file, code, JACKSON3_SPRING, "JACKSON3_SPRING", "use Spring's Jackson 2 integration",
         findings);
     match(file, configuration, JACKSON3_CONFIGURATION, "JACKSON3_CONFIG",
         "select Jackson 2 configuration", findings);
@@ -273,5 +278,10 @@ public abstract class JacksonCompatibilityCheck extends DefaultTask {
   private static String maskComments(String text, Pattern pattern) {
     return pattern.matcher(text).replaceAll(match -> Matcher.quoteReplacement(
         match.group(1) != null ? match.group() : match.group().replaceAll("[^\\r\\n]", " ")));
+  }
+
+  private static String withoutQuotedLiterals(String text) {
+    return QUOTED_OR_COMMENT.matcher(text).replaceAll(match -> Matcher.quoteReplacement(
+        match.group().replaceAll("[^\\r\\n]", " ")));
   }
 }
