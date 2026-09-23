@@ -2,7 +2,9 @@ package uk.gov.hmcts.ccd.sdk.jackson;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.fasterxml.jackson.annotation.JsonValue;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -11,7 +13,13 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.util.List;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.extern.jackson.Jacksonized;
 import org.junit.Test;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.context.annotation.ImportCandidates;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.config.CcdJacksonConfiguration;
@@ -81,22 +89,50 @@ public class UnwrappedPrefixModuleTest {
   }
 
   @Test
-  public void leavesACreatorTypeThatIsItselfTheUnwrappedTargetAsJacksonReadsIt() throws Exception {
-    ObjectNode json = withPrefix("policy", (ObjectNode) JSON.readTree(POLICY));
+  public void keepsNestedValuesWhenTheUnwrappedTargetIsBuiltByACreator() throws Exception {
+    ObjectNode json = withPrefix("party", creatorParty());
 
-    JsonNode withModule = roundTrip(mapper(true), json, UnwrappedPolicyHolder.class);
-    JsonNode withoutModule = roundTrip(mapper(false), json, UnwrappedPolicyHolder.class);
+    assertRoundTrips(json, CreatorHolder.class);
+  }
 
-    assertThat(withModule).isEqualTo(withoutModule);
+  @Test
+  public void keepsNestedValuesWhenTheUnwrappedTargetIsALombokJacksonizedBuilder() throws Exception {
+    ObjectNode json = withPrefix("party", creatorParty());
+
+    assertRoundTrips(json, JacksonizedHolder.class);
+  }
+
+  @Test
+  public void keepsNestedValuesWhenTheUnwrappedTargetsAreNestedCreators() throws Exception {
+    ObjectNode json = withPrefix("applicant1", withPrefix("Solicitor", creatorParty()));
+
+    assertRoundTrips(json, NestedCreatorHolder.class);
+  }
+
+  @Test
+  public void keepsACreatorTypeNestedInsideAnUnwrappedTarget() throws Exception {
+    ObjectNode party = JSON.createObjectNode();
+    party.set("built", creatorParty());
+    ObjectNode json = withPrefix("party", party);
+
+    assertRoundTrips(json, HolderOfPartyWithCreatorValue.class);
   }
 
   @Test
   public void registersTheModuleOnEveryObjectMapperBean() {
     new ApplicationContextRunner()
-        .withUserConfiguration(CcdJacksonConfiguration.class)
+        .withConfiguration(AutoConfigurations.of(CcdJacksonConfiguration.class))
         .withBean("serviceMapper", ObjectMapper.class, () -> JsonMapper.builder().build())
         .run(context -> assertThat(context.getBean(ObjectMapper.class).getRegisteredModuleIds())
             .contains(UnwrappedPrefixModule.class.getName()));
+  }
+
+  @Test
+  public void isAutoConfiguredForEveryServiceOnTheClasspath() {
+    List<String> candidates = new java.util.ArrayList<>();
+    ImportCandidates.load(AutoConfiguration.class, getClass().getClassLoader()).forEach(candidates::add);
+
+    assertThat(candidates).contains(CcdJacksonConfiguration.class.getName());
   }
 
   private static ObjectNode party() throws Exception {
@@ -107,6 +143,16 @@ public class UnwrappedPrefixModuleTest {
     return party;
   }
 
+  private static ObjectNode creatorParty() throws Exception {
+    ObjectNode party = JSON.createObjectNode();
+    party.put("name", "Party");
+    party.set("document", JSON.readTree(DOCUMENT));
+    party.set("address", JSON.readTree(ADDRESS));
+    party.set("organisationPolicy", JSON.readTree(POLICY));
+    party.put("confirmed", "Yes");
+    return party;
+  }
+
   private static ObjectNode withPrefix(String prefix, ObjectNode fields) {
     ObjectNode prefixed = JSON.createObjectNode();
     fields.fields().forEachRemaining(field -> prefixed.set(prefix + field.getKey(), field.getValue()));
@@ -114,21 +160,19 @@ public class UnwrappedPrefixModuleTest {
   }
 
   private static void assertRoundTrips(JsonNode json, Class<?> type) throws Exception {
-    assertThat(roundTrip(mapper(true), json, type)).isEqualTo(json);
+    assertThat(roundTrip(mapper(), json, type)).isEqualTo(json);
   }
 
   private static JsonNode roundTrip(ObjectMapper mapper, JsonNode json, Class<?> type) throws Exception {
     return mapper.readTree(mapper.writeValueAsString(mapper.treeToValue(json, type)));
   }
 
-  private static ObjectMapper mapper(boolean withModule) {
-    JsonMapper.Builder builder = JsonMapper.builder()
+  private static ObjectMapper mapper() {
+    return JsonMapper.builder()
         .addModule(new JavaTimeModule())
-        .serializationInclusion(JsonInclude.Include.NON_NULL);
-    if (withModule) {
-      builder.addModule(new UnwrappedPrefixModule());
-    }
-    return builder.build();
+        .addModule(new UnwrappedPrefixModule())
+        .serializationInclusion(JsonInclude.Include.NON_NULL)
+        .build();
   }
 
   public enum Role implements HasRole {
@@ -191,8 +235,64 @@ public class UnwrappedPrefixModuleTest {
     public Party party = new Party();
   }
 
-  public static class UnwrappedPolicyHolder {
-    @JsonUnwrapped(prefix = "policy")
-    public OrganisationPolicy<Role> policy;
+  public static class CreatorParty {
+    public final String name;
+    public final Document document;
+    public final AddressUK address;
+    public final OrganisationPolicy<Role> organisationPolicy;
+    public final YesOrNo confirmed;
+
+    @JsonCreator
+    public CreatorParty(@JsonProperty("name") String name,
+                        @JsonProperty("document") Document document,
+                        @JsonProperty("address") AddressUK address,
+                        @JsonProperty("organisationPolicy") OrganisationPolicy<Role> organisationPolicy,
+                        @JsonProperty("confirmed") YesOrNo confirmed) {
+      this.name = name;
+      this.document = document;
+      this.address = address;
+      this.organisationPolicy = organisationPolicy;
+      this.confirmed = confirmed;
+    }
+  }
+
+  @Getter
+  @Builder
+  @Jacksonized
+  public static class JacksonizedParty {
+    private final String name;
+    private final Document document;
+    private final AddressUK address;
+    private final OrganisationPolicy<Role> organisationPolicy;
+    private final YesOrNo confirmed;
+  }
+
+  public static class CreatorHolder {
+    @JsonUnwrapped(prefix = "party")
+    public CreatorParty party;
+  }
+
+  public static class JacksonizedHolder {
+    @JsonUnwrapped(prefix = "party")
+    public JacksonizedParty party;
+  }
+
+  public static class CreatorApplicant {
+    @JsonUnwrapped(prefix = "Solicitor")
+    public JacksonizedParty solicitor;
+  }
+
+  public static class NestedCreatorHolder {
+    @JsonUnwrapped(prefix = "applicant1")
+    public CreatorApplicant applicant;
+  }
+
+  public static class PartyWithCreatorValue {
+    public JacksonizedParty built;
+  }
+
+  public static class HolderOfPartyWithCreatorValue {
+    @JsonUnwrapped(prefix = "party")
+    public PartyWithCreatorValue party;
   }
 }

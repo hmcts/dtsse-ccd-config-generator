@@ -197,6 +197,16 @@ small Jackson 2 deserialiser that reads the existing CCD field names explicitly 
 missing values from JSON `null`. Add focused tests that serialise and deserialise representative
 values and assert every nested property.
 
+The SDK now auto-configures `UnwrappedPrefixModule` on every Jackson 2 `ObjectMapper` bean. It
+keeps the unwrap prefix off nested values, whether the unwrapped object is built through setters or
+through a creator such as a Lombok `@Builder @Jacksonized` class. Mappers a service creates outside
+the Spring context, with `new ObjectMapper()` or a builder in a static field, do not get it and
+should not be used for case data. The failure is
+[jackson-databind #3178](https://github.com/FasterXML/jackson-databind/issues/3178). It applies to
+jackson-databind 2.19 and later, which includes the versions Spring Boot 3.5 manages, so services
+still on Boot 3 need the SDK release containing the module as well. Jackson 3.2 fixes it; Jackson 2
+does not.
+
 When a service uses `@JsonUnwrapped`, add round-trip tests at the highest model level that owns the
 annotation. A unit test for the nested type alone may pass while the complete case-data path loses
 values.

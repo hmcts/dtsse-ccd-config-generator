@@ -79,6 +79,10 @@ public class CaseData {
     )
     private RoundTripNestedParty sdkNested;
 
+    @JsonUnwrapped(prefix = "sdkBuilt")
+    @CCD(access = {DefaultAccess.class})
+    private RoundTripBuiltParty sdkBuilt;
+
     @CCD(
         label = "Notes",
         typeOverride = FieldType.Collection,

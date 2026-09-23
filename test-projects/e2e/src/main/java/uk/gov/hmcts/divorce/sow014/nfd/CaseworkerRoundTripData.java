@@ -8,6 +8,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.divorce.common.ccd.PageBuilder;
 import uk.gov.hmcts.divorce.divorcecase.model.Applicant;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
+import uk.gov.hmcts.divorce.divorcecase.model.RoundTripBuiltParty;
 import uk.gov.hmcts.divorce.divorcecase.model.RoundTripParty;
 import uk.gov.hmcts.divorce.divorcecase.model.RoundTripSolicitor;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
@@ -92,6 +93,14 @@ public class CaseworkerRoundTripData implements CCDConfig<CaseData, State, UserR
                 .done()
             .done()
             .optional(CaseData::getSdkNested)
+            .complex(CaseData::getSdkBuilt)
+                .optional(RoundTripBuiltParty::getName)
+                .optional(RoundTripBuiltParty::getDocument)
+                .optional(RoundTripBuiltParty::getAddressUk)
+                .optional(RoundTripBuiltParty::getOrganisationPolicy)
+                .optional(RoundTripBuiltParty::getDynamicList)
+                .optional(RoundTripBuiltParty::getConfirmed)
+            .done()
             .done();
     }
 

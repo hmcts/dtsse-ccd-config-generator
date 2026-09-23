@@ -107,6 +107,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
+import uk.gov.hmcts.ccd.sdk.jackson.UnwrappedPrefixModule;
 import uk.gov.hmcts.divorce.roundtrip.RoundTripFixture;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerRoundTripData;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCancelEvent;
@@ -3255,6 +3256,11 @@ public class TestWithCCD extends CftlibTest {
     @Order(24)
     @Test
     void sdkComplexTypesSurviveCaseLifecycle() {
+        // The fix for nested values behind a prefixed @JsonUnwrapped is auto-configured by the SDK.
+        // It must reach the running service's mapper, not only the test contexts that import it.
+        assertThat("SDK Jackson auto-configuration must reach the running service",
+            mapper.getRegisteredModuleIds(), hasItem(UnwrappedPrefixModule.class.getName()));
+
         // A case of its own, so any damage done to it cannot affect the tests sharing caseRef.
         long reference = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
         String user = "TEST_CASE_WORKER_USER@mailinator.com";

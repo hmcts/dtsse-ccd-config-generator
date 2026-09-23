@@ -181,6 +181,47 @@
     "PostCode": "SW1A 1AA",
     "Country": "United Kingdom"
   },
+  "sdkBuiltName": "Built party",
+  "sdkBuiltDocument": {
+    "document_url": "http://localhost/documents/00000000-0000-0000-0000-000000000005",
+    "document_binary_url": "http://localhost/documents/00000000-0000-0000-0000-000000000005/binary",
+    "document_filename": "built-party.pdf"
+  },
+  "sdkBuiltAddressUk": {
+    "AddressLine1": "5 Built Street",
+    "AddressLine2": "Flat 2",
+    "AddressLine3": "Block 3",
+    "PostTown": "London",
+    "County": "Greater London",
+    "PostCode": "SW1A 1AA",
+    "Country": "United Kingdom"
+  },
+  "sdkBuiltOrganisationPolicy": {
+    "Organisation": {
+      "OrganisationID": "ORG3",
+      "OrganisationName": "ORG3 Solicitors"
+    },
+    "OrgPolicyReference": "ref-ORG3",
+    "PrepopulateToUsersOrganisation": "No",
+    "OrgPolicyCaseAssignedRole": "[APPONESOLICITOR]"
+  },
+  "sdkBuiltDynamicList": {
+    "value": {
+      "code": "00000000-0000-0000-0000-000000000001",
+      "label": "PBA0000001"
+    },
+    "list_items": [
+      {
+        "code": "00000000-0000-0000-0000-000000000001",
+        "label": "PBA0000001"
+      },
+      {
+        "code": "00000000-0000-0000-0000-000000000002",
+        "label": "PBA0000002"
+      }
+    ]
+  },
+  "sdkBuiltConfirmed": "Yes",
   "sdkNested": {
     "name": "Round trip party",
     "document": {
