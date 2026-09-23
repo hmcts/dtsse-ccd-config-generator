@@ -17,7 +17,7 @@ dependencies {
     api('com.github.hmcts.rse-cft-lib:ccd-lib:0.19.2186') {
         transitive = false
     }
-    api('com.github.hmcts:idam-java-client:3.0.5') {
+    api('com.github.hmcts:idam-java-client:3.1.0') {
         transitive = false
     }
     implementation 'com.github.hmcts:service-auth-provider-java-client:6.1.2'
