@@ -1,6 +1,6 @@
 dependencyManagement {
     imports {
-        mavenBom 'com.azure.spring:spring-cloud-azure-dependencies:6.5.0'
+        mavenBom 'com.azure.spring:spring-cloud-azure-dependencies:7.4.0'
     }
 }
 
@@ -9,11 +9,15 @@ dependencies {
     api 'org.springframework:spring-jdbc'
     api 'org.springframework:spring-context'
     api 'org.springframework:spring-web'
-    api 'com.azure.spring:spring-cloud-azure-starter-servicebus-jms:6.5.0'
+    api('com.azure.spring:spring-cloud-azure-starter-servicebus-jms:7.4.0') {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-jackson'
+        exclude group: 'tools.jackson.core'
+    }
 
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
 
     implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'org.springframework.boot:spring-boot-jackson2'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

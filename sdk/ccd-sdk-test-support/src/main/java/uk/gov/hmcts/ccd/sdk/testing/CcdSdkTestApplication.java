@@ -2,16 +2,17 @@ package uk.gov.hmcts.ccd.sdk.testing;
 
 import java.util.List;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
-import org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration;
-import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration;
-import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
-import org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration;
-import org.springframework.boot.autoconfigure.web.servlet.DispatcherServletAutoConfiguration;
-import org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration;
+import org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration;
+import org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration;
+import org.springframework.boot.http.converter.autoconfigure.HttpMessageConvertersAutoConfiguration;
+import org.springframework.boot.jackson2.autoconfigure.Jackson2AutoConfiguration;
+import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
+import org.springframework.boot.jdbc.autoconfigure.DataSourceTransactionManagerAutoConfiguration;
+import org.springframework.boot.jdbc.autoconfigure.JdbcTemplateAutoConfiguration;
 import org.springframework.boot.test.context.TestComponent;
+import org.springframework.boot.transaction.autoconfigure.TransactionAutoConfiguration;
+import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
+import org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -29,11 +30,13 @@ import uk.gov.hmcts.ccd.sdk.json.JsonCCDConfigSupport;
  * application that scans {@code uk.gov.hmcts.ccd.sdk} does not pick it up.
  */
 @TestComponent
+@SuppressWarnings("removal") // Jackson2AutoConfiguration is intentionally used while the SDK remains on Jackson 2.
 @Configuration(proxyBeanMethods = false)
 @Import({JsonCCDConfigSupport.class, TestJsonCallbackBridge.class})
 @ImportAutoConfiguration({
     DataSourceAutoConfiguration.class,
-    JacksonAutoConfiguration.class,
+    Jackson2AutoConfiguration.class,
+    HttpMessageConvertersAutoConfiguration.class,
     DefinitionMapperConfiguration.class,
     CcdCaseDataMapperConfiguration.class,
     JdbcTemplateAutoConfiguration.class,
