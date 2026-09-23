@@ -61,8 +61,14 @@ public final class RoundTripFixture {
     }
 
     private static void compare(String path, JsonNode expected, JsonNode actual, List<String> differences) {
-        if (actual == null || actual.isMissingNode() || actual.isNull()) {
+        if (actual == null || actual.isMissingNode()) {
             differences.add("LOST    " + path + " expected " + expected);
+            return;
+        }
+        if (actual.isNull()) {
+            if (!expected.isNull()) {
+                differences.add("LOST    " + path + " expected " + expected);
+            }
             return;
         }
         if (expected.isObject()) {

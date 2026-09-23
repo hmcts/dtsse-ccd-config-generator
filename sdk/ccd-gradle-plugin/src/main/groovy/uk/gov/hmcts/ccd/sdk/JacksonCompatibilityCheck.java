@@ -40,7 +40,14 @@ public abstract class JacksonCompatibilityCheck extends DefaultTask {
   private static final Pattern JACKSON3_API = Pattern.compile(
       "\\b" + JACKSON + "(?:\\w+\\s*\\.\\s*)*[\\w$*]+|\\b" + JACKSON + "\\*");
   private static final Pattern JACKSON3_COORDINATE = Pattern.compile(
-      "\\btools\\s*\\.\\s*jackson(?:\\s*\\.\\s*[\\w-]+)+\\s*:\\s*[\\w.-]+");
+      "\\btools\\s*\\.\\s*jackson(?:\\s*\\.\\s*[\\w-]+)+\\s*:\\s*[\\w.-]+"
+          + "|\\borg\\.springframework\\.boot\\s*:\\s*spring-boot-(?:starter-)?jackson\\b"
+          + "|(?m)^\\s*(?!exclude\\b)\\w+\\s*(?:\\(\\s*)?"
+          + "group\\s*[:=]\\s*['\"]org\\.springframework\\.boot['\"]"
+          + "[^\\r\\n]{0,200}?\\b(?:name|module)\\s*[:=]\\s*['\"]spring-boot-(?:starter-)?jackson['\"]"
+          + "|(?m)^\\s*(?!exclude\\b)\\w+\\s*(?:\\(\\s*)?"
+          + "(?:name|module)\\s*[:=]\\s*['\"]spring-boot-(?:starter-)?jackson['\"]"
+          + "[^\\r\\n]{0,200}?\\bgroup\\s*[:=]\\s*['\"]org\\.springframework\\.boot['\"]");
   private static final Pattern JACKSON3_SPRING = Pattern.compile(
       "\\borg\\.springframework\\.boot\\.jackson(?!2\\b)(?:\\.\\w+)+\\b"
           + "|\\b(?:JacksonJson\\w*|JsonMapperBuilderCustomizer)\\b");

@@ -105,6 +105,54 @@ public class JacksonCompatibilityFunctionalTest {
   }
 
   @Test
+  public void sourceGuardRejectsBootJacksonThreeDependenciesInSupportedGradleNotations() throws IOException {
+    write("gradle/libs.versions.toml", """
+        [libraries]
+        boot-jackson = { module = "org.springframework.boot:spring-boot-jackson" }
+        """);
+    write("build.gradle", """
+        plugins { id 'hmcts.ccd.sdk' }
+        dependencies {
+          implementation 'org.springframework.boot:spring-boot-starter-jackson'
+          implementation group: 'org.springframework.boot', name: 'spring-boot-jackson'
+          implementation libs.boot.jackson
+          implementation('example:client:1.0') {
+            exclude group: 'org.springframework.boot', module: 'spring-boot-jackson'
+            exclude group: 'org.springframework.boot', module: 'spring-boot-starter-jackson'
+          }
+        }
+        """);
+
+    BuildResult result = runner("jackson2CompatibilityGuard").buildAndFail();
+
+    assertEquals(TaskOutcome.FAILED, result.task(":jackson2CompatibilityGuard").getOutcome());
+    assertTrue(report().contains("org.springframework.boot:spring-boot-starter-jackson"));
+    assertTrue(report().contains("group:'org.springframework.boot',name:'spring-boot-jackson'"));
+    assertTrue(report().contains("org.springframework.boot:spring-boot-jackson"));
+    assertFalse(report().contains("exclude"));
+    assertFalse(result.getOutput().contains("Could not resolve"));
+  }
+
+  @Test
+  public void sourceGuardScansRootConfigurationWhenPluginIsAppliedToSubproject() throws IOException {
+    write("settings.gradle", "rootProject.name = 'compatibility-test'\ninclude 'service'\n");
+    write("build.gradle", """
+        plugins { id 'java' }
+        dependencies {
+          implementation 'tools.jackson.core:jackson-databind:3.2.0'
+        }
+        """);
+    write("service/build.gradle", "plugins { id 'hmcts.ccd.sdk' }\n");
+
+    BuildResult result = runner(":service:jackson2CompatibilityGuard").buildAndFail();
+
+    assertEquals(TaskOutcome.FAILED, result.task(":service:jackson2CompatibilityGuard").getOutcome());
+    assertTrue(report("service").contains("ERROR build.gradle:"));
+    assertTrue(report("service").contains("[JACKSON3_API] tools.jackson.core"));
+    assertFalse(result.getOutput().contains("Could not resolve"));
+  }
+
+  @Test
   public void sourceGuardIgnoresJacksonThreeNamesInCommentsAndStringLiterals() throws IOException {
     write("src/main/java/CompatibilityTest.java", """
         class CompatibilityTest {
@@ -287,7 +335,7 @@ public class JacksonCompatibilityFunctionalTest {
     String report = classpathReport();
     assertTrue(report.contains("ERROR [FIRST_PARTY_DEPENDENCY] project(:shared)"));
     assertTrue(report.contains("shared.Detached"));
-    assertTrue(report.contains("tools.jackson.databind.ValueDeserializer"));
+    assertTrue(report.contains("tools.jackson.databind.JsonNode"));
 
     write("build.gradle", """
         plugins { id 'hmcts.ccd.sdk' }
@@ -374,7 +422,13 @@ public class JacksonCompatibilityFunctionalTest {
   }
 
   private String report() throws IOException {
-    return Files.readString(directory.getRoot().toPath().resolve("build/reports/jackson-compatibility/report.txt"));
+    return report("");
+  }
+
+  private String report(String project) throws IOException {
+    return Files.readString(directory.getRoot().toPath()
+        .resolve(project)
+        .resolve("build/reports/jackson-compatibility/report.txt"));
   }
 
   private String classpathReport() throws IOException {

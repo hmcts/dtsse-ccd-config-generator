@@ -42,7 +42,7 @@ Write CCD configuration in Java.
 
 ## Requirements
 
-* Gradle 7.3
+* Gradle 8.14.5 for Spring Boot 4
 * Java 21
 
 Services moving to Spring Boot 4 should follow the

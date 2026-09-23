@@ -127,12 +127,13 @@ public class CcdSdkPlugin implements Plugin<Project> {
   }
 
   private void registerJacksonCompatibilityChecks(Project project, SourceSetContainer sourceSets,
-                                                  JacksonClasspathGuardExtension verification) {
+                                                    JacksonClasspathGuardExtension verification) {
+    Project rootProject = project.getRootProject();
     var sourceCheck = project.getTasks().register("jackson2CompatibilityGuard", JacksonCompatibilityCheck.class,
         task -> {
           task.setGroup("verification");
           task.setDescription("Rejects Jackson 3 API usage in project sources and mapper configuration");
-          task.getProjectDirectory().set(project.getLayout().getProjectDirectory());
+          task.getProjectDirectory().set(rootProject.getLayout().getProjectDirectory());
           task.getReportFile().convention(project.getLayout().getBuildDirectory()
               .file("reports/jackson-compatibility/report.txt"));
           // Include every registered source set without depending on compilation or source generation tasks.
@@ -146,6 +147,13 @@ public class CcdSdkPlugin implements Plugin<Project> {
               project.file("settings.gradle"),
               project.file("settings.gradle.kts")));
           task.getScanFiles().from(JacksonCompatibilityCheck.sourceTree(project, project.file("gradle")));
+          task.getScanFiles().from(project.files(
+              rootProject.file("build.gradle"),
+              rootProject.file("build.gradle.kts"),
+              rootProject.file("gradle.properties"),
+              rootProject.file("settings.gradle"),
+              rootProject.file("settings.gradle.kts")));
+          task.getScanFiles().from(JacksonCompatibilityCheck.sourceTree(rootProject, rootProject.file("gradle")));
           task.getLombokConfigs().from(project.provider(() -> {
             var directories = new HashSet<File>();
             directories.add(project.getProjectDir());
@@ -154,7 +162,9 @@ public class CcdSdkPlugin implements Plugin<Project> {
                 .flatMap(dir -> JacksonCompatibilityCheck.ancestorConfigs(dir).stream()).toList();
           }));
           task.getAllowedSourceFiles().set(project.provider(() ->
-              verification.getJackson2ClasspathGuard().getAllowedSourceFiles()));
+              verification.getJackson2ClasspathGuard().getAllowedSourceFiles().stream()
+                  .map(file -> rootProject.relativePath(project.file(file)).replace(File.separatorChar, '/'))
+                  .toList()));
         });
     var classpathCheck = project.getTasks().register(
         "jackson2ClasspathGuard", JacksonClasspathCompatibilityCheck.class, task -> {

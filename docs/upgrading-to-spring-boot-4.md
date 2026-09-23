@@ -6,6 +6,7 @@ several reference CCD services.
 The compatibility target for the CCD SDK is:
 
 - Spring Boot 4 and Spring Framework 7;
+- Gradle 8.14.5, the minimum version verified by the CCD SDK's Boot 4 functional tests;
 - Java 21 for HMCTS services;
 - Jackson 2 for application code and CCD wire contracts;
 - no first-party use of Jackson 3 APIs.
@@ -298,6 +299,7 @@ field types, casing changes and ordering-independent structural differences that
 - [ ] Started from the latest service default branch.
 - [ ] Read the official Boot 4 migration guide and reviewed removed deprecations.
 - [ ] Replaced old broad starters with the required Boot 4 application and test starters.
+- [ ] Upgraded the Gradle wrapper to at least 8.14.5.
 - [ ] Upgraded Spring Cloud and HMCTS clients to Boot 4-compatible releases.
 - [ ] Added `spring-boot-jackson2` and selected `jackson2` for each relevant mapper.
 - [ ] Moved application settings from `spring.jackson` to `spring.jackson2` without changing values.
