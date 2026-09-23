@@ -1,5 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.testing;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,8 +12,6 @@ import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 @CcdSdkTest(components = {
     CcdSdkTestIntegrationTest.BaseConfig.class,

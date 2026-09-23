@@ -2,8 +2,13 @@ package uk.gov.hmcts.ccd.sdk.testing;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import jakarta.servlet.ServletException;
+import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
@@ -13,7 +18,14 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.StreamSupport;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedEventDetails;
@@ -22,18 +34,37 @@ import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.Event;
-import uk.gov.hmcts.ccd.sdk.impl.CaseSubmissionService;
+import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
+import uk.gov.hmcts.reform.ccd.client.model.Classification;
 
-/** Exercises registered CCD events through the real runtime and database. */
+/**
+ * Exercises registered CCD events through the application's endpoints, filters and database,
+ * sending the requests CCD data store would.
+ */
 public final class CcdEventTestSupport<Case, State extends Enum<State>> {
+
+  /**
+   * User token sent when a request names no actor.
+   */
+  public static final String DEFAULT_AUTHORISATION = TestIdamService.DEFAULT_TOKEN;
+  /**
+   * S2S token sent with every request. Test support accepts it as {@code ccd_data}.
+   */
+  public static final String SERVICE_AUTHORISATION = TestServiceAuthorisation.TOKEN;
 
   private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
   private static final TypeReference<Map<String, Object>> OBJECT_MAP = new TypeReference<>() {};
+  /** Reads and writes request bodies independently of the application's own Jackson settings. */
+  private static final ObjectMapper WIRE = JsonMapper.builder()
+      .findAndAddModules()
+      .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+      .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+      .build();
 
   private final Class<Case> caseClass;
   private final Class<State> stateClass;
   private final ResolvedConfigRegistry registry;
-  private final CaseSubmissionService submissionService;
+  private final MockMvc mvc;
   private final JdbcTemplate jdbc;
   private final ObjectMapper mapper;
   private final TestIdamService idam;
@@ -41,14 +72,14 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
   CcdEventTestSupport(Class<Case> caseClass,
                       Class<State> stateClass,
                       ResolvedConfigRegistry registry,
-                      CaseSubmissionService submissionService,
+                      MockMvc mvc,
                       JdbcTemplate jdbc,
                       ObjectMapper mapper,
                       TestIdamService idam) {
     this.caseClass = caseClass;
     this.stateClass = stateClass;
     this.registry = registry;
-    this.submissionService = submissionService;
+    this.mvc = mvc;
     this.jdbc = jdbc;
     this.mapper = mapper;
     this.idam = idam;
@@ -76,7 +107,7 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
   }
 
   public Actor registerActor(ActorDetails actor) {
-    return new Actor(idam.register("ccd-sdk-test-" + UUID.randomUUID(), actor));
+    return new Actor(idam.register("ccd-sdk-test-" + UUID.randomUUID(), actor), actor);
   }
 
   public long seed(State state, Case data) {
@@ -89,6 +120,10 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
 
   public CaseType.CreateSubmission create(String eventId, State initialState, Case submittedData) {
     return caseType().create(eventId, initialState, submittedData);
+  }
+
+  public CaseType.StartRequest start(long reference, String eventId) {
+    return caseType().start(reference, eventId);
   }
 
   public CaseType.Seed seedCase(State state, Case data) {
@@ -105,9 +140,20 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
 
   public static final class Actor {
     private final String authorisation;
+    private final ActorDetails details;
 
-    private Actor(String authorisation) {
+    private Actor(String authorisation, ActorDetails details) {
       this.authorisation = authorisation;
+      this.details = details;
+    }
+
+    /** The bearer token sent as this actor, for stubbing the application's own IDAM lookup. */
+    public String authorisation() {
+      return authorisation;
+    }
+
+    public ActorDetails details() {
+      return details;
     }
   }
 
@@ -307,6 +353,67 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
       }
     }
 
+    /** Opens an event on an existing case, running its start handler or about-to-start callback. */
+    public StartRequest start(long reference, String eventId) {
+      return new StartRequest(reference, eventId);
+    }
+
+    public final class StartRequest {
+      private final long reference;
+      private final String eventId;
+      private String authorisation = TestIdamService.DEFAULT_TOKEN;
+
+      private StartRequest(long reference, String eventId) {
+        this.reference = reference;
+        this.eventId = eventId;
+      }
+
+      public StartRequest as(Actor actor) {
+        this.authorisation = Objects.requireNonNull(actor).authorisation;
+        return this;
+      }
+
+      public Started start() {
+        checkAllowedState(registry.getRequiredEvent(caseTypeId, eventId), eventId, stored(reference), null);
+        // Loads the case the way CCD does before an event starts, so the case view applies.
+        JsonNode loaded = send(MockMvcRequestBuilders.get("/ccd-persistence/cases")
+            .param("case-refs", String.valueOf(reference)), authorisation, null);
+        JsonNode details = loaded.path(0).path("case_details");
+        CallbackRequest request = CallbackRequest.builder()
+            .eventId(eventId)
+            .caseDetails(uk.gov.hmcts.reform.ccd.client.model.CaseDetails.builder()
+                .id(reference)
+                .jurisdiction(details.path("jurisdiction").asText())
+                .caseTypeId(caseTypeId)
+                .state(details.path("state").asText())
+                .securityClassification(Classification.valueOf(details.path("security_classification").asText()))
+                .data(WIRE.convertValue(details.path("case_data"), OBJECT_MAP))
+                .build())
+            .build();
+        JsonNode response = send(MockMvcRequestBuilders.post("/callbacks/about-to-start")
+            .param("eventId", eventId), authorisation, request);
+        return new Started(response);
+      }
+
+      public Started startExpectingSuccess() {
+        Started started = start();
+        if (!started.errors().isEmpty()) {
+          throw new AssertionError("Expected event " + eventId + " to start, got errors " + started.errors());
+        }
+        return started;
+      }
+    }
+
+    private Map<String, Object> stored(long reference) {
+      return jdbc.queryForMap("""
+          select id, version, case_revision, state, data::text as data,
+                 supplementary_data::text as supplementary_data,
+                 security_classification::text as security_classification,
+                 created_date, last_modified, last_state_modified_date, resolved_ttl
+          from ccd.case_data where reference = ?
+          """, reference);
+    }
+
     private Submission submitInternal(long reference,
                                       String eventId,
                                       Case submittedData,
@@ -315,13 +422,7 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
                                       String authorisation,
                                       Long startRevision) {
       Event<?, ?, ?> eventConfig = registry.getRequiredEvent(caseTypeId, eventId);
-      Map<String, Object> stored = initialState == null ? jdbc.queryForMap("""
-          select id, version, case_revision, state, data::text as data,
-                 supplementary_data::text as supplementary_data,
-                 security_classification::text as security_classification,
-                 created_date, last_modified, last_state_modified_date, resolved_ttl
-          from ccd.case_data where reference = ?
-          """, reference) : null;
+      Map<String, Object> stored = initialState == null ? stored(reference) : null;
       checkAllowedState(eventConfig, eventId, stored, initialState);
       CaseDetails before = stored == null ? null : caseDetails(reference, stored,
           mapper.convertValue(fromJson((String) stored.get("data")), JSON_NODE_MAP));
@@ -340,8 +441,12 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
               .build())
           .build();
 
-      DecentralisedSubmitEventResponse response = submissionService.submit(event, authorisation, idempotencyKey);
-      if (response.getCaseDetails() == null) {
+      DecentralisedSubmitEventResponse response = WIRE.convertValue(send(
+          MockMvcRequestBuilders.post("/ccd-persistence/cases")
+              .header("Idempotency-Key", idempotencyKey.toString()),
+          authorisation, event), DecentralisedSubmitEventResponse.class);
+      // The response DTO starts with empty case details, so a rejection has none inside them.
+      if (response.getCaseDetails() == null || response.getCaseDetails().getCaseDetails() == null) {
         return stored == null ? new CreationRejected(response) : new Rejected(response, snapshot(reference));
       }
       Case projected = mapper.convertValue(response.getCaseDetails().getCaseDetails().getData(), caseClass);
@@ -462,8 +567,8 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
     private Submission(DecentralisedSubmitEventResponse response) {
       this.errors = response.getErrors() == null ? List.of() : List.copyOf(response.getErrors());
       this.warnings = response.getWarnings() == null ? List.of() : List.copyOf(response.getWarnings());
-      var details = response.getCaseDetails();
-      var confirmation = details == null ? null : details.getCaseDetails().getAfterSubmitCallbackResponse();
+      var details = response.getCaseDetails() == null ? null : response.getCaseDetails().getCaseDetails();
+      var confirmation = details == null ? null : details.getAfterSubmitCallbackResponse();
       this.confirmationHeader = confirmation == null ? null : confirmation.getConfirmationHeader();
       this.confirmationBody = confirmation == null ? null : confirmation.getConfirmationBody();
     }
@@ -578,6 +683,72 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
     private CreationRejected(DecentralisedSubmitEventResponse response) {
       super(response);
     }
+  }
+
+  /** The case returned by an event's start handler or about-to-start callback. */
+  public final class Started {
+    private final JsonNode data;
+    private final List<String> errors;
+    private final List<String> warnings;
+
+    private Started(JsonNode response) {
+      this.data = response.path("data");
+      this.errors = strings(response.path("errors"));
+      this.warnings = strings(response.path("warnings"));
+    }
+
+    public Case caseData() {
+      return mapper.convertValue(data, caseClass);
+    }
+
+    public JsonNode rawData() {
+      return data;
+    }
+
+    public List<String> errors() {
+      return errors;
+    }
+
+    public List<String> warnings() {
+      return warnings;
+    }
+
+    private static List<String> strings(JsonNode values) {
+      return values.isArray()
+          ? StreamSupport.stream(values.spliterator(), false).map(JsonNode::asText).toList()
+          : List.of();
+    }
+  }
+
+  /**
+   * Sends a request with the headers CCD data store sends. An exception the application does not
+   * handle is rethrown as it was raised, and any other unsuccessful response fails the test.
+   */
+  private JsonNode send(MockHttpServletRequestBuilder request, String authorisation, Object body) {
+    request.header(HttpHeaders.AUTHORIZATION, authorisation)
+        .header("ServiceAuthorization", SERVICE_AUTHORISATION)
+        .accept(MediaType.APPLICATION_JSON);
+    MvcResult result;
+    String content;
+    try {
+      if (body != null) {
+        request.contentType(MediaType.APPLICATION_JSON).content(WIRE.writeValueAsBytes(body));
+      }
+      result = mvc.perform(request).andReturn();
+      content = result.getResponse().getContentAsString(StandardCharsets.UTF_8);
+    } catch (ServletException ex) {
+      if (ex.getCause() instanceof RuntimeException cause) {
+        throw cause;
+      }
+      throw new IllegalStateException(ex);
+    } catch (Exception ex) {
+      throw new IllegalStateException(ex);
+    }
+    if (result.getResponse().getStatus() != 200) {
+      throw new AssertionError(result.getRequest().getMethod() + " " + result.getRequest().getRequestURI()
+          + " returned HTTP " + result.getResponse().getStatus() + (content.isEmpty() ? "" : ": " + content));
+    }
+    return fromJson(content);
   }
 
   private String json(Object data) {

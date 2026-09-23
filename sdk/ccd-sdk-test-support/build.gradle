@@ -16,6 +16,7 @@ dependencies {
     api('com.github.hmcts:idam-java-client:3.0.5') {
         transitive = false
     }
+    implementation 'com.github.hmcts:service-auth-provider-java-client:5.3.5'
     api 'org.flywaydb:flyway-core'
     api 'org.flywaydb:flyway-database-postgresql'
     api 'org.postgresql:postgresql'
