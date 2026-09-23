@@ -4,15 +4,21 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.InjectionPoint;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
+import org.springframework.boot.test.autoconfigure.web.servlet.MockMvcPrint;
+import org.springframework.boot.test.autoconfigure.web.servlet.SpringBootMockMvcBuilderCustomizer;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Scope;
 import org.springframework.core.ResolvableType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
-import uk.gov.hmcts.ccd.sdk.impl.CaseSubmissionService;
 
 @TestConfiguration(proxyBeanMethods = false)
 public class CcdEventTestConfiguration {
@@ -23,6 +29,11 @@ public class CcdEventTestConfiguration {
     return new TestIdamService();
   }
 
+  @Bean
+  static TestServiceAuthorisation ccdSdkTestServiceAuthorisation() {
+    return new TestServiceAuthorisation();
+  }
+
   /** Resolve the case and state types from each injection point. */
   @Bean
   @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
@@ -30,7 +41,7 @@ public class CcdEventTestConfiguration {
   <Case, State extends Enum<State>> CcdEventTestSupport<Case, State> ccdEventTestSupport(
       InjectionPoint injectionPoint,
       ResolvedConfigRegistry registry,
-      CaseSubmissionService submissionService,
+      ApplicationContext context,
       JdbcTemplate jdbc,
       @Qualifier(CcdCaseDataMapperConfiguration.CCD_CASE_DATA_OBJECT_MAPPER) ObjectMapper mapper,
       TestIdamService idam) {
@@ -46,10 +57,24 @@ public class CcdEventTestConfiguration {
         (Class<Case>) caseClass,
         (Class<State>) stateClass,
         registry,
-        submissionService,
+        mockMvc(context),
         jdbc,
         mapper,
         idam
     );
+  }
+
+  /** Sends requests through the application's servlet filters, as CCD's calls to it would. */
+  private static MockMvc mockMvc(ApplicationContext context) {
+    if (!(context instanceof WebApplicationContext web)) {
+      throw new IllegalStateException("CCD event testing calls the application's endpoints; "
+          + "run the test in a servlet web application context");
+    }
+    DefaultMockMvcBuilder builder = MockMvcBuilders.webAppContextSetup(web);
+    SpringBootMockMvcBuilderCustomizer customizer = new SpringBootMockMvcBuilderCustomizer(web);
+    // Printing registers a context bean, which fails when a second helper is built.
+    customizer.setPrint(MockMvcPrint.NONE);
+    customizer.customize(builder);
+    return builder.build();
   }
 }
