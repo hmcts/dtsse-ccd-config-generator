@@ -45,7 +45,7 @@ public abstract class JacksonCompatibilityCheck extends DefaultTask {
       "\\borg\\.springframework\\.boot\\.jackson(?!2\\b)(?:\\.\\w+)+\\b"
           + "|\\b(?:JacksonJson\\w*|JsonMapperBuilderCustomizer)\\b");
   private static final Pattern JACKSON3_CONFIGURATION = Pattern.compile(
-      "(?i)preferred[-_.]?json[-_.]?mapper\\s*['\"]?\\s*[,:=]\\s*['\"]?jackson3\\b"
+      "(?i)preferred[-_.]?json[-_.]?mapper\\s*['\"]?\\s*[,:=]\\s*['\"]?jackson(?:3)?\\b"
           + "|\\bspring[._-]jackson(?!2)(?:\\b|_)"
           + "|(?m)^\\s*jackson3\\s*:");
   private static final Pattern JACKSONIZED = Pattern.compile("@(?:lombok\\.extern\\.jackson\\.)?Jacksonized\\b");

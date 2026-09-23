@@ -147,15 +147,31 @@ public class JacksonCompatibilityFunctionalTest {
 
     write("src/main/resources/application.yaml", """
         spring:
-          jackson:
-            serialization:
-              indent-output: true
           http:
             converters:
-              preferred-json-mapper: jackson3
+              preferred-json-mapper: jackson
         """);
     runner("jackson2CompatibilityGuard").buildAndFail();
     assertTrue(report().contains("[JACKSON3_CONFIG]"));
+  }
+
+  @Test
+  public void classpathGuardIgnoresCurrentProjectTestFixturesArtifact() throws IOException {
+    write("build.gradle", """
+        plugins {
+          id 'hmcts.ccd.sdk'
+          id 'java-test-fixtures'
+        }
+        repositories { mavenLocal(); mavenCentral() }
+        dependencies { testImplementation(testFixtures(project(':'))) }
+        """);
+    write("src/testFixtures/java/Fixture.java", "public class Fixture {}\n");
+    write("src/test/java/FixtureTest.java", "class FixtureTest { Fixture fixture; }\n");
+
+    BuildResult result = runner("jackson2ClasspathGuard").build();
+
+    assertEquals(TaskOutcome.SUCCESS, result.task(":jackson2ClasspathGuard").getOutcome());
+    assertFalse(result.getOutput().contains("Missing component metadata"));
   }
 
   @Test

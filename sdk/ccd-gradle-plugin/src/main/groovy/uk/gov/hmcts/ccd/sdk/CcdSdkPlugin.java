@@ -175,12 +175,12 @@ public class CcdSdkPlugin implements Plugin<Project> {
           sourceSets.all(sourceSet -> {
             task.getProjectClasses().from(sourceSet.getOutput().getClassesDirs());
             task.dependsOn(sourceSet.getClassesTaskName());
-            Configuration runtimeClasspath = project.getConfigurations()
-                .getByName(sourceSet.getRuntimeClasspathConfigurationName());
-            task.getDependencyArtifacts().from(runtimeClasspath.getIncoming().getArtifacts().getArtifactFiles()
-                .filter(file -> !isCurrentProjectOutput(file, sourceSets)));
+            task.dependsOn(project.getConfigurations()
+                .getByName(sourceSet.getRuntimeClasspathConfigurationName()));
           });
           var artifacts = project.provider(() -> resolvedRuntimeArtifacts(project, sourceSets));
+          task.getDependencyArtifacts().from(artifacts.map(results -> results.stream()
+              .map(ResolvedArtifactResult::getFile).toList()));
           task.getArtifactMetadata().set(artifacts.map(results -> results.stream()
               .map(CcdSdkPlugin::stableArtifactMetadata).distinct().sorted().toList()));
           task.getArtifactMetadataByPath().set(artifacts.map(results -> {
