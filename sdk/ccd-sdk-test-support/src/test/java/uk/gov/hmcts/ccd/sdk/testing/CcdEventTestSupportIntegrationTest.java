@@ -4,6 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -14,13 +19,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration;
+import org.springframework.boot.http.converter.autoconfigure.HttpMessageConvertersAutoConfiguration;
 import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
 import org.springframework.boot.jdbc.autoconfigure.DataSourceTransactionManagerAutoConfiguration;
 import org.springframework.boot.jdbc.autoconfigure.JdbcTemplateAutoConfiguration;
 import org.springframework.boot.transaction.autoconfigure.TransactionAutoConfiguration;
+import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
+import org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.web.filter.OncePerRequestFilter;
 import uk.gov.hmcts.ccd.sdk.CCDDefinitionGenerator;
 import uk.gov.hmcts.ccd.sdk.CaseView;
 import uk.gov.hmcts.ccd.sdk.CaseViewRequest;
@@ -31,6 +41,9 @@ import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 import uk.gov.hmcts.ccd.sdk.config.DecentralisedFlywayAutoConfiguration;
+import uk.gov.hmcts.reform.authorisation.exceptions.InvalidTokenException;
+import uk.gov.hmcts.reform.authorisation.filters.ServiceAuthFilter;
+import uk.gov.hmcts.reform.authorisation.validators.AuthTokenValidator;
 import uk.gov.hmcts.reform.ccd.client.model.Classification;
 
 @SpringBootTest(classes = CcdEventTestSupportIntegrationTest.TestApplication.class)
@@ -44,6 +57,9 @@ class CcdEventTestSupportIntegrationTest {
 
   @Autowired
   private JdbcTemplate jdbc;
+
+  @Autowired
+  private AuthTokenValidator serviceTokens;
 
   @Test
   void decentralisedEventWritesAuditWithoutChangingBlob() {
@@ -178,6 +194,47 @@ class CcdEventTestSupportIntegrationTest {
   }
 
   @Test
+  void submissionPassesThroughTheApplicationsFiltersAsTheActor() {
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+    var actor = events.registerActor(new ActorDetails(
+        "actor-456", "judge@example.com", "Example", "Judge", List.of("caseworker")));
+
+    var result = events.event(reference, "whoAmI", new TestCase("submitted"))
+        .as(actor).submitExpectingSuccess();
+
+    assertThat(result.confirmationHeader()).isEqualTo(actor.authorisation());
+  }
+
+  @Test
+  void startRunsTheStartHandlerAsTheActor() {
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+    var actor = events.registerActor(new ActorDetails(
+        "actor-789", "judge@example.com", "Example", "Judge", List.of("caseworker")));
+
+    var started = events.start(reference, "whoAmI").as(actor).startExpectingSuccess();
+
+    assertThat(started.caseData().value()).isEqualTo("original for " + actor.authorisation());
+    assertThat(events.snapshot(reference).caseRevision()).isZero();
+  }
+
+  @Test
+  void startWithoutAnActorUsesTheDefaultUser() {
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+
+    var started = events.start(reference, "whoAmI").startExpectingSuccess();
+
+    assertThat(started.caseData().value())
+        .isEqualTo("original for " + CcdEventTestSupport.DEFAULT_AUTHORISATION);
+  }
+
+  @Test
+  void onlyTheHelpersServiceTokenBypassesTheApplicationsValidator() {
+    assertThat(serviceTokens.getServiceName(CcdEventTestSupport.SERVICE_AUTHORISATION)).isEqualTo("ccd_data");
+    assertThatThrownBy(() -> serviceTokens.getServiceName("Bearer another-service"))
+        .isInstanceOf(InvalidTokenException.class);
+  }
+
+  @Test
   void rejectsEventOutsideItsAllowedPreStates() {
     long reference = events.seed(TestState.Closed, new TestCase("closed"));
 
@@ -215,6 +272,9 @@ class CcdEventTestSupportIntegrationTest {
     Closed
   }
 
+  /** Stands in for an application filter that authenticates the caller from its token. */
+  static final ThreadLocal<String> CURRENT_USER = new ThreadLocal<>();
+
   enum TestRole implements HasRole {
     User;
 
@@ -236,9 +296,54 @@ class CcdEventTestSupportIntegrationTest {
       DataSourceTransactionManagerAutoConfiguration.class,
       TransactionAutoConfiguration.class,
       FlywayAutoConfiguration.class,
-      DecentralisedFlywayAutoConfiguration.class
+      DecentralisedFlywayAutoConfiguration.class,
+      HttpMessageConvertersAutoConfiguration.class,
+      DispatcherServletAutoConfiguration.class,
+      WebMvcAutoConfiguration.class
   })
   static class TestApplication {
+
+    /** Rejects every token, so only test support's shim lets its requests through. */
+    @Bean
+    AuthTokenValidator serviceTokenValidator() {
+      return new AuthTokenValidator() {
+        @Override
+        public void validate(String token) {
+          throw new InvalidTokenException("unknown service");
+        }
+
+        @Override
+        public void validate(String token, List<String> roles) {
+          throw new InvalidTokenException("unknown service");
+        }
+
+        @Override
+        public String getServiceName(String token) {
+          throw new InvalidTokenException("unknown service");
+        }
+      };
+    }
+
+    @Bean
+    ServiceAuthFilter serviceAuthFilter(AuthTokenValidator validator) {
+      return new ServiceAuthFilter(validator, List.of("ccd_data"));
+    }
+
+    @Bean
+    OncePerRequestFilter currentUserFilter() {
+      return new OncePerRequestFilter() {
+        @Override
+        protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
+                                        FilterChain chain) throws IOException, ServletException {
+          CURRENT_USER.set(request.getHeader(HttpHeaders.AUTHORIZATION));
+          try {
+            chain.doFilter(request, response);
+          } finally {
+            CURRENT_USER.remove();
+          }
+        }
+      };
+    }
 
     @Bean({"objectMapper", "ccd_mapper", "ccdCaseDataObjectMapper"})
     ObjectMapper objectMapper() {
@@ -258,6 +363,10 @@ class CcdEventTestSupportIntegrationTest {
           builder.caseType(CASE_TYPE, CASE_TYPE, CASE_TYPE);
           builder.jurisdiction("TEST", "Test", "Test");
           builder.decentralisedEvent("readOnly", payload -> SubmitResponse.defaultResponse()).forAllStates();
+          builder.decentralisedEvent("whoAmI",
+              payload -> SubmitResponse.<TestState>builder().confirmationHeader(CURRENT_USER.get()).build(),
+              payload -> new TestCase(payload.caseData().value() + " for " + CURRENT_USER.get()))
+              .forAllStates();
           builder.decentralisedEvent("reject", payload -> SubmitResponse.<TestState>builder()
               .errors(List.of("invalid")).build()).forAllStates();
           builder.decentralisedEvent("openOnly", payload -> SubmitResponse.defaultResponse())

@@ -5,6 +5,7 @@ dependencies {
     api project(':ccd-config-generator')
     api project(':decentralised-runtime')
     api 'org.springframework.boot:spring-boot-starter-test'
+    api 'org.springframework.boot:spring-boot-starter-webmvc-test'
     api 'org.springframework.boot:spring-boot-starter-jdbc'
     api 'org.springframework.boot:spring-boot-starter-data-jpa'
     api('org.springframework.boot:spring-boot-starter-webmvc') {
@@ -19,6 +20,7 @@ dependencies {
     api('com.github.hmcts:idam-java-client:3.0.5') {
         transitive = false
     }
+    implementation 'com.github.hmcts:service-auth-provider-java-client:6.1.2'
     api 'org.springframework.boot:spring-boot-starter-flyway'
     api 'org.flywaydb:flyway-database-postgresql'
     api 'org.postgresql:postgresql'
