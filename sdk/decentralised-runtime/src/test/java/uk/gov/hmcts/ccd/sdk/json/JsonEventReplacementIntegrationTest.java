@@ -21,8 +21,10 @@ import uk.gov.hmcts.ccd.sdk.CCDDefinitionGenerator;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
+import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
+import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
 import uk.gov.hmcts.ccd.sdk.impl.json.JsonCallbackBridge;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
@@ -66,6 +68,20 @@ class JsonEventReplacementIntegrationTest {
   }
 
   @Test
+  void allowsDecentralisedReplacementWhileJsonRetainsCallbackUrls() throws IOException {
+    context(Callbacks.BOTH, null)
+        .withBean(DecentralisedConfig.class)
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          ResolvedCCDConfig<?, ?, ?> resolved = context.getBean(ResolvedCCDConfig.class);
+          var event = resolved.getEvents().get("update");
+          assertThat(event.getAboutToSubmitCallback()).isNull();
+          assertThat(event.getSubmittedCallback()).isNull();
+          assertThat(event.getSubmitHandler().submit(null).getConfirmationHeader()).isEqualTo("Decentralised");
+        });
+  }
+
+  @Test
   void keepsJsonCallbacksWhenEventIsNotReplaced() throws IOException {
     context(Callbacks.BOTH, null).run(context -> {
       assertThat(context).hasNotFailed();
@@ -74,6 +90,35 @@ class JsonEventReplacementIntegrationTest {
       assertThat(event.getAboutToSubmitCallback()).isNotNull();
       assertThat(event.getSubmittedCallback()).isNotNull();
     });
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      "ABOUT_TO_SUBMIT, submitted",
+      "SUBMITTED, about-to-submit",
+      "NONE, 'about-to-submit, submitted'"
+  })
+  void rejectsLostCallbacksAfterDecentralisedReplacement(Callbacks callbacks, String missing) throws IOException {
+    context(Callbacks.BOTH, null)
+        .withBean(ReplacementChainConfig.class, () -> new ReplacementChainConfig(callbacks))
+        .run(context -> assertThat(context.getStartupFailure())
+            .hasRootCauseInstanceOf(IllegalStateException.class)
+            .hasRootCauseMessage("Replacement for event 'update' in case type 'TEST' drops callbacks: " + missing));
+  }
+
+  @ParameterizedTest
+  @CsvSource({"BOTH, BOTH", "NONE, NONE"})
+  void allowsCallbackReplacementThatMeetsEarlierRequirements(Callbacks json, Callbacks callbacks) throws IOException {
+    context(json, null)
+        .withBean(ReplacementChainConfig.class, () -> new ReplacementChainConfig(callbacks))
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          ResolvedCCDConfig<?, ?, ?> resolved = context.getBean(ResolvedCCDConfig.class);
+          var event = resolved.getEvents().get("update");
+          assertThat(event.getSubmitHandler()).isNull();
+          assertThat(event.getAboutToSubmitCallback() != null).isEqualTo(callbacks.aboutToSubmit);
+          assertThat(event.getSubmittedCallback() != null).isEqualTo(callbacks.submitted);
+        });
   }
 
   private ApplicationContextRunner context(Callbacks json, Callbacks java) throws IOException {
@@ -125,6 +170,32 @@ class JsonEventReplacementIntegrationTest {
         event.submittedCallback((details, before) -> SubmittedCallbackResponse.builder()
             .confirmationHeader("Java").build());
       }
+    }
+  }
+
+  static class DecentralisedConfig implements CCDConfig<CaseData, State, Role> {
+    @Override
+    public Set<String> caseTypeIds() {
+      return Set.of("TEST");
+    }
+
+    @Override
+    public void configureDecentralised(DecentralisedConfigBuilder<CaseData, State, Role> builder) {
+      builder.decentralisedEvent("update", payload -> SubmitResponse.<State>builder()
+          .confirmationHeader("Decentralised").build()).forAllStates();
+    }
+  }
+
+  record ReplacementChainConfig(Callbacks callbacks) implements CCDConfig<CaseData, State, Role> {
+    @Override
+    public Set<String> caseTypeIds() {
+      return Set.of("TEST");
+    }
+
+    @Override
+    public void configureDecentralised(DecentralisedConfigBuilder<CaseData, State, Role> builder) {
+      new DecentralisedConfig().configureDecentralised(builder);
+      new JavaConfig(callbacks).configure(builder);
     }
   }
 
