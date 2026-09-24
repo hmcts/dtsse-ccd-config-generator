@@ -131,7 +131,7 @@ the SDK-before-application ordering.
 
 - `case_data` mirrors CCD’s `case_data` table, including metadata such as state, security classification, TTL and the JSON payload.
 - `case_event` mirrors CCD’s `case_event` table and adds an idempotency key.
-- `es_queue` tracks cases that require Elasticsearch indexing 
+- `es_queue` tracks cases that require Elasticsearch indexing
 - `message_queue_candidates` mirrors CCD’s Service Bus transactional outbox table.
 
 
@@ -246,13 +246,13 @@ The validator runs during application boot and fails the service fast if the top
 
 ## External events
 
-An external event is one a bespoke frontend, such as a citizen or judicial journey, drives through CCD's API instead of EXUI's event pages. It has states, a name, the roles that may use it and a show condition for when EXUI offers it, but no pages, fields or end button: the frontend and the handlers exchange typed payloads instead of case data. What the frontend is sent when it starts the event and what it submits are usually different, so each has its own type.
+An external event is one a bespoke frontend, such as a citizen or judicial journey, drives through CCD's API.
 
-An `ExternalEventId` states the event's contract once: its id, the type the frontend is sent on start and the type it submits. The same constant configures the event and drives it in tests.
+External events may have bespoke payloads for both event start and event submission:
 
 ```java
 public static final ExternalEventId<MakeOrderStart, MakeOrderRequest> MAKE_ORDER =
-    ExternalEventId.of("makeOrder", MakeOrderStart.class, MakeOrderRequest.class);
+    ExternalEventId.of("ext:makeOrder", MakeOrderStart.class, MakeOrderRequest.class);
 
 configBuilder.externalEvent(MAKE_ORDER, this::submit)
     .forStates(State.CASE_ISSUED)
@@ -270,13 +270,15 @@ private ExternalSubmitResponse<State> submit(ExternalSubmit<MakeOrderRequest> su
 }
 ```
 
-The id must start `ext:`: that is how EXUI knows to hand the user off to the service's frontend rather than render the event itself. External events act on existing cases. An event that sends its frontend nothing on start declares only the submit type, `ExternalEventId.of(id, Request.class)`, and has no start handler.
+The submit handler is required. It is given the case reference and the payload the frontend sent.
 
-The submit handler is required. It is given the case reference and the payload the frontend sent, not case data; a handler that needs the case loads it by `caseReference()`. It answers `ExternalSubmitResponse.accepted(summary, description)`, which records the event in the case history with that summary and description and can also move the case with `.movingTo(state)`, or `rejected(errors)`, which records and changes nothing.
+The start handler is optional. It is given the case reference and loads whatever it needs to send the frontend, and answers `ExternalStartResponse.started(payload)` or `rejected(errors)`. Without one the event has no about-to-start callback and the frontend is sent no payload.
 
-The start handler is optional. It is given the case reference and loads whatever it needs to send the frontend, and answers `ExternalStartResponse.started(payload)` or `rejected(errors)` to stop the event starting. Without one the event has no about-to-start callback and the frontend is sent no payload. Both handlers take and return types of their own so they can grow without changing handler signatures.
+The payloads travel in the case field named by `DecentralisedConfigBuilder.PAYLOAD_FIELD`, `eventPayload`, which the SDK defines for the case type with create and read permission for the event's roles.
 
-The payloads travel in the case field named by `DecentralisedConfigBuilder.PAYLOAD_FIELD`, `eventPayload`, which the SDK defines for the case type with create and read permission for the event's roles. The frontend reads the start payload from that field of the start-event response, as a JSON string, and posts its own payload back in the same field. The SDK deserialises it with the application's `ObjectMapper` as the submit type; a submission whose payload is missing, not a JSON string, or not that type is rejected like a handler rejection: CCD answers 422 with the reason in `callbackErrors`, and nothing is written. The field never reaches the case: submission of a decentralised event does not write case data, and the case model needs no field for it.
+The frontend reads the start payload from that field of the start-event response, as a JSON string, and posts its own payload back in the same field. The SDK handle serialisation with the application's `ObjectMapper`.
+
+Like decentralisedEvents, external events cannot mutate the `ccd.case_data.data` json blob column.
 
 ## Event submission flow
 
