@@ -69,10 +69,11 @@ public class ExternalGreetingEvent implements CCDConfig<CaseData, State, UserRol
     }
 
     private ExternalSubmitResponse<State> greet(ExternalSubmit<Reply> submit) {
-        if (submit.payload().message().isBlank()) {
+        String message = submit.payload().message();
+        if (message == null || message.isBlank()) {
             return ExternalSubmitResponse.rejected("Say something");
         }
-        return ExternalSubmitResponse.accepted(submit.payload().message(), "Greeted from an external frontend");
+        return ExternalSubmitResponse.accepted(message, "Greeted from an external frontend");
     }
 
     private ExternalSubmitResponse<State> farewell(ExternalSubmit<Farewell> submit) {
