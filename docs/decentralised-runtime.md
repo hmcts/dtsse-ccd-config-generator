@@ -264,23 +264,26 @@ configBuilder.externalEvent(MAKE_ORDER, this::submit)
     .grant(Permission.CRUD, UserRole.JUDGE)
     .onStart(this::start);
 
+// Given the case reference; answers the payload the frontend is sent.
 private ExternalStartResponse<MakeOrderStart> start(ExternalStart start) {
-    return ExternalStartResponse.started(orders.startFor(start.caseReference()));
+    return ExternalStartResponse.started(new MakeOrderStart(...));
 }
 
+// Given the case reference and the payload the frontend submitted.
 private ExternalSubmitResponse<State> submit(ExternalSubmit<MakeOrderRequest> submit) {
-    orders.apply(submit.caseReference(), submit.payload());
+    MakeOrderRequest order = submit.payload();
+    ...
     return ExternalSubmitResponse.accepted("Order draft saved", "Saved an order as a draft");
 }
 ```
 
-The submit handler is required. It is given the case reference and the payload the frontend sent.
+The submit handler is required. It answers `accepted(summary, description)`, optionally `.movingTo(state)`, or `rejected(errors)`, which the frontend receives as a 422.
 
-The start handler is optional. It is given the case reference and loads whatever it needs to send the frontend, and answers `ExternalStartResponse.started(payload)` or `rejected(errors)`. Without one the event has no about-to-start callback and the frontend is sent no payload.
+The start handler is optional. It answers `ExternalStartResponse.started(payload)` or `rejected(errors)`. Without one the event has no about-to-start callback and the frontend is sent no payload.
 
 The payloads travel in the case field named by `DecentralisedConfigBuilder.PAYLOAD_FIELD`, `sdkEventPayload`, which the SDK defines for the case type with create and read permission for the event's roles.
 
-The frontend reads the start payload from that field of the start-event response, as a JSON string, and posts its own payload back in the same field. The SDK handle serialisation with the application's `ObjectMapper`.
+The frontend reads the start payload from that field of the start-event response, as a JSON string, and posts its own payload back in the same field. The SDK handles serialisation with the application's `ObjectMapper`.
 
 Like decentralisedEvents, external events cannot mutate the `ccd.case_data.data` json blob column.
 
