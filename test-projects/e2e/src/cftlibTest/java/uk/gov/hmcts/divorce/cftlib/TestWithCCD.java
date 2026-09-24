@@ -36,6 +36,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.HashMap;
+import feign.FeignException;
 import java.util.stream.StreamSupport;
 
 import lombok.SneakyThrows;
@@ -104,6 +105,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerPopulateSearchCriteria;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerSignificantItem;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
+import uk.gov.hmcts.divorce.sow014.nfd.ExternalGreetingEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
@@ -4184,6 +4186,122 @@ public class TestWithCCD extends CftlibTest {
             content
         );
         return Long.parseLong(result.getId().toString());
+    }
+
+    @Order(35)
+    @Test
+    public void externalEventExchangesAPayloadThroughCcd() throws Exception {
+        var offered = exuiTriggers(caseRef);
+        assertThat("EXUI offers the user other events", offered.isEmpty(), equalTo(false));
+        assertThat("EXUI never offers an external event", offered, not(hasItem(ExternalGreetingEvent.GREETING.id())));
+        assertThat("EXUI never offers an external event", offered, not(hasItem(ExternalGreetingEvent.FAREWELL.id())));
+
+        var start = startExternalEvent(caseRef, ExternalGreetingEvent.GREETING.id());
+
+        var started = mapper.readValue((String) start.getCaseDetails().getData().get("sdkEventPayload"),
+            ExternalGreetingEvent.Greeting.class);
+        assertThat(started, equalTo(new ExternalGreetingEvent.Greeting("hello " + caseRef)));
+
+        var response = submitExternalEvent(caseRef, ExternalGreetingEvent.GREETING.id(), start.getToken(),
+            mapper.writeValueAsString(new ExternalGreetingEvent.Reply("hello back")));
+
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+        var history = getLatestAuditEvent(EXTERNAL_EVENT_USER, caseRef, ExternalGreetingEvent.GREETING.id());
+        assertThat(history.get("summary"), equalTo("hello back"));
+        assertThat(history.get("description"), equalTo("Greeted from an external frontend"));
+        var storesPayload = db.queryForObject(
+            "select jsonb_exists(data, 'sdkEventPayload') from ccd.case_data where reference = :ref",
+            Map.of("ref", caseRef), Boolean.class);
+        assertThat(storesPayload, equalTo(false));
+    }
+
+    @Order(36)
+    @Test
+    public void externalEventRejectionReachesTheFrontendAndChangesNothing() throws Exception {
+        var revision = caseDataRevision();
+        var audits = auditCountForCase(caseRef);
+        var start = startExternalEvent(caseRef, ExternalGreetingEvent.GREETING.id());
+
+        var response = submitExternalEvent(caseRef, ExternalGreetingEvent.GREETING.id(), start.getToken(),
+            mapper.writeValueAsString(new ExternalGreetingEvent.Reply(" ")));
+
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(422));
+        var body = mapper.readValue(EntityUtils.toString(response.getEntity()), Map.class);
+        assertThat(body.get("callbackErrors"), equalTo(List.of("Say something")));
+        assertThat(caseDataRevision(), equalTo(revision));
+        assertThat(auditCountForCase(caseRef), equalTo(audits));
+    }
+
+    @Order(37)
+    @Test
+    public void externalEventRefusesAPayloadItCannotRead() throws Exception {
+        var revision = caseDataRevision();
+        var audits = auditCountForCase(caseRef);
+
+        for (String unreadable : new String[] {"not json", "[1, 2]", "null", null}) {
+            var start = startExternalEvent(caseRef, ExternalGreetingEvent.GREETING.id());
+            var response = submitExternalEvent(caseRef, ExternalGreetingEvent.GREETING.id(), start.getToken(),
+                unreadable);
+
+            assertThat("payload " + unreadable, response.getStatusLine().getStatusCode(), equalTo(422));
+            var body = mapper.readValue(EntityUtils.toString(response.getEntity()), Map.class);
+            assertThat(body.get("callbackErrors").toString(), containsString("greeting"));
+        }
+        assertThat(caseDataRevision(), equalTo(revision));
+        assertThat(auditCountForCase(caseRef), equalTo(audits));
+    }
+
+    @Order(38)
+    @Test
+    public void externalEventCanMoveTheCaseAndLaterRefuseToStart() throws Exception {
+        long reference = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+
+        var start = startExternalEvent(reference, ExternalGreetingEvent.FAREWELL.id());
+        assertThat("an event without a start payload sends none",
+            start.getCaseDetails().getData().get("sdkEventPayload"), equalTo(null));
+        var response = submitExternalEvent(reference, ExternalGreetingEvent.FAREWELL.id(), start.getToken(),
+            mapper.writeValueAsString(new ExternalGreetingEvent.Farewell("all done")));
+
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+        var state = db.queryForObject("select state from ccd.case_data where reference = :ref",
+            Map.of("ref", reference), String.class);
+        assertThat(state, equalTo(State.Withdrawn.name()));
+        assertThat(getLatestAuditEvent(EXTERNAL_EVENT_USER, reference, ExternalGreetingEvent.FAREWELL.id())
+            .get("summary"), equalTo("all done"));
+
+        var refused = assertThrows(FeignException.class,
+            () -> startExternalEvent(reference, ExternalGreetingEvent.GREETING.id()));
+        assertThat(refused.status(), equalTo(422));
+        assertThat(refused.contentUTF8(), containsString("The case has been withdrawn"));
+    }
+
+    private static final String EXTERNAL_EVENT_USER = "TEST_CASE_WORKER_USER@mailinator.com";
+
+    /** The events EXUI's case view offers the user as next steps. */
+    @SneakyThrows
+    private List<String> exuiTriggers(long reference) {
+        var get = buildRequest(EXTERNAL_EVENT_USER, "http://localhost:4452/internal/cases/" + reference, HttpGet::new);
+        withCcdAccept(get, ACCEPT_UI_CASE_VIEW);
+        var response = HttpClientBuilder.create().build().execute(get);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
+        Map<String, Object> view = mapper.readValue(EntityUtils.toString(response.getEntity()), new TypeReference<>() {});
+        return ((List<Map<String, Object>>) view.get("triggers")).stream()
+            .map(trigger -> (String) trigger.get("id"))
+            .toList();
+    }
+
+    private StartEventResponse startExternalEvent(long reference, String eventId) {
+        return ccdApi.startEvent(getAuthorisation(EXTERNAL_EVENT_USER), getServiceAuth(),
+            String.valueOf(reference), eventId);
+    }
+
+    /** Posts only the payload field, as a bespoke frontend does; CCD's UI likewise posts only an event's fields. */
+    @SneakyThrows
+    private CloseableHttpResponse submitExternalEvent(long reference, String eventId, String token, String payload) {
+        var data = new HashMap<String, Object>();
+        data.put("sdkEventPayload", payload);
+        return HttpClientBuilder.create().build().execute(
+            prepareEventRequestWithToken(EXTERNAL_EVENT_USER, eventId, data, token, reference));
     }
 
     @SneakyThrows

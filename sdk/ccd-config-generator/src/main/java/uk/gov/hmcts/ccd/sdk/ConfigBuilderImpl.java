@@ -38,6 +38,9 @@ import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.api.TypedPropertyGetter;
 import uk.gov.hmcts.ccd.sdk.api.callback.Start;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalEventId;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalEventStates;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalSubmitHandler;
 
 public class ConfigBuilderImpl<T, S, R extends HasRole> implements DecentralisedConfigBuilder<T, S, R> {
 
@@ -106,6 +109,12 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   @Override
   public EventTypeBuilder<T, R, S> decentralisedEvent(String id, Submit<T, S> submitHandler, Start<T, S> startHandler) {
     return new EventTypeBuilderImpl<>(config, events, id, submitHandler, startHandler);
+  }
+
+  @Override
+  public <O, I> ExternalEventStates<T, R, S, O, I> externalEvent(ExternalEventId<O, I> id,
+                                                          ExternalSubmitHandler<S, I> submitHandler) {
+    return new ExternalEventBuilderImpl<>(config, events, id, submitHandler);
   }
 
 

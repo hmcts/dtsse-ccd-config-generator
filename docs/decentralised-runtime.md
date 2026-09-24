@@ -131,7 +131,7 @@ the SDK-before-application ordering.
 
 - `case_data` mirrors CCD’s `case_data` table, including metadata such as state, security classification, TTL and the JSON payload.
 - `case_event` mirrors CCD’s `case_event` table and adds an idempotency key.
-- `es_queue` tracks cases that require Elasticsearch indexing 
+- `es_queue` tracks cases that require Elasticsearch indexing
 - `message_queue_candidates` mirrors CCD’s Service Bus transactional outbox table.
 
 
@@ -243,6 +243,49 @@ dependencies {
 This replaces the deprecated `ccd.caseEventServiceBus` flag.
 
 The validator runs during application boot and fails the service fast if the topic does not exist or the supplied credentials lack `Send` rights.
+
+## External events
+
+An external event is one a bespoke frontend, such as a citizen or judicial journey, drives through CCD's API.
+
+External events may have bespoke payloads for both event start and event submission:
+
+```java
+// What the frontend is sent when it starts the event, and what it submits.
+public record MakeOrderStart(String caseName, List<String> parties) {}
+public record MakeOrderRequest(String orderType, String notes) {}
+
+public static final ExternalEventId<MakeOrderStart, MakeOrderRequest> MAKE_ORDER =
+    ExternalEventId.of("makeOrder", MakeOrderStart.class, MakeOrderRequest.class);
+
+configBuilder.externalEvent(MAKE_ORDER, this::submit)
+    .forStates(State.CASE_ISSUED)
+    .name("Make an order")
+    .grant(Permission.CRUD, UserRole.JUDGE)
+    .onStart(this::start);
+
+// Given the case reference; answers the payload the frontend is sent.
+private ExternalStartResponse<MakeOrderStart> start(ExternalStart start) {
+    return ExternalStartResponse.started(new MakeOrderStart(...));
+}
+
+// Given the case reference and the payload the frontend submitted.
+private ExternalSubmitResponse<State> submit(ExternalSubmit<MakeOrderRequest> submit) {
+    MakeOrderRequest order = submit.payload();
+    ...
+    return ExternalSubmitResponse.accepted("Order draft saved", "Saved an order as a draft");
+}
+```
+
+The submit handler is required. It answers `accepted(summary, description)`, optionally `.movingTo(state)`, or `rejected(errors)`, which the frontend receives as a 422.
+
+The start handler is optional. It answers `ExternalStartResponse.started(payload)` or `rejected(errors)`. Without one the event has no about-to-start callback and the frontend is sent no payload.
+
+The payloads travel in the case field named by `DecentralisedConfigBuilder.PAYLOAD_FIELD`, `sdkEventPayload`, which the SDK defines for the case type with create and read permission for the event's roles.
+
+The frontend reads the start payload from that field of the start-event response, as a JSON string, and posts its own payload back in the same field. The SDK handles serialisation with the application's `ObjectMapper`.
+
+Like decentralisedEvents, external events cannot mutate the `ccd.case_data.data` json blob column.
 
 ## Event submission flow
 

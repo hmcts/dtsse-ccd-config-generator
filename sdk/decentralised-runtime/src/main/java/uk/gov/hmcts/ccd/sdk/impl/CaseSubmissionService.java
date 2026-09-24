@@ -34,7 +34,7 @@ public class CaseSubmissionService {
                                                  UUID idempotencyKey) {
     var eventConfig = getEventConfig(event);
     var user = idam.retrieveUser(authorisation);
-    var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
+    var handler = eventConfig.hasSubmitHandler() ? submitHandler : legacyHandler;
     // Creation events have no pre-state or start revision to check.
     var startRevision = !eventConfig.isConcurrent() && event.getCaseDetailsBefore() != null
         ? Objects.requireNonNull(event.getStartRevision(), "Non-concurrent event requires a start revision")

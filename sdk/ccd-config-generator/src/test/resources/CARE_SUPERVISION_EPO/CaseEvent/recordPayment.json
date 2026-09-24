@@ -1,0 +1,16 @@
+[
+  {
+    "PreConditionState(s)": "*",
+    "CallBackURLAboutToStartEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callbacks/about-to-start?eventId=recordPayment",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "PostConditionState": "*",
+    "Description": "Record payment",
+    "EventEnablingCondition": "[STATE]=\"A\" AND [STATE]=\"B\"",
+    "DisplayOrder": 1,
+    "ID": "recordPayment",
+    "SecurityClassification": "Public",
+    "Name": "Record payment",
+    "Publish": "N"
+  }
+]
