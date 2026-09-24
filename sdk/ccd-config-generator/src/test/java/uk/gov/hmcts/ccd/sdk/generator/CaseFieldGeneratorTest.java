@@ -5,6 +5,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -26,7 +27,14 @@ public class CaseFieldGeneratorTest {
                 {"floatField", "Number"},
                 {"FloatField", "Number"},
                 {"doubleField", "Number"},
-                {"DoubleField", "Number"}
+                {"DoubleField", "Number"},
+                // The type a service reaches for when a Number field holds money. Left out of the
+                // numeric list, it did not degrade to something imprecise: the switch yields the
+                // inferred type verbatim, so the field emitted FieldType=BigDecimal, which the
+                // definition store's base types do not contain, and the import failed outright.
+                {"decimalField", "Number"},
+                {"longField", "Number"},
+                {"LongField", "Number"}
         });
     }
 
@@ -39,6 +47,9 @@ public class CaseFieldGeneratorTest {
         private int FloatField;
         private int DoubleField;
         private int IntegerField;
+        private BigDecimal decimalField;
+        private long longField;
+        private Long LongField;
     }
 
     @Parameterized.Parameter

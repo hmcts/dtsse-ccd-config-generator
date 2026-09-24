@@ -1,0 +1,10 @@
+[
+  {
+    "ElementLabel": "A shared detail",
+    "FieldType": "Text",
+    "ID": "IgnoredReachShared",
+    "ListElementCode": "sharedDetail",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  }
+]

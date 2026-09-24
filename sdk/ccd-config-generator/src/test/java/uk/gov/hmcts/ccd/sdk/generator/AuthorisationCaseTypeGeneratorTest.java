@@ -65,6 +65,46 @@ public class AuthorisationCaseTypeGeneratorTest {
             .isEqualTo(UserRole.SYSTEM_UPDATE.getCaseTypePermissions());
     }
 
+    @Test
+    public void caseRolesAreExcludedByDefault() {
+        ConfigBuilderImpl<CaseData, State, UserRole> builder = newBuilder();
+
+        Map<String, String> crudByRole = generateCrudByRole(builder);
+
+        assertThat(crudByRole).doesNotContainKey(UserRole.CCD_SOLICITOR.getRole());
+    }
+
+    @Test
+    public void includedCaseRoleGetsItsCaseTypePermissions() {
+        ConfigBuilderImpl<CaseData, State, UserRole> builder = newBuilder();
+        builder.includeCaseRolesInCaseTypeAuthorisation(UserRole.CCD_SOLICITOR);
+
+        Map<String, String> crudByRole = generateCrudByRole(builder);
+
+        assertThat(crudByRole.get(UserRole.CCD_SOLICITOR.getRole()))
+            .isEqualTo(UserRole.CCD_SOLICITOR.getCaseTypePermissions());
+    }
+
+    @Test
+    public void includedCaseRoleIsShutteredLikeAnyOtherRole() {
+        ConfigBuilderImpl<CaseData, State, UserRole> builder = newBuilder();
+        builder.shutterService();
+        builder.includeCaseRolesInCaseTypeAuthorisation(UserRole.CCD_SOLICITOR);
+
+        Map<String, String> crudByRole = generateCrudByRole(builder);
+
+        assertThat(crudByRole.get(UserRole.CCD_SOLICITOR.getRole())).isEqualTo("D");
+    }
+
+    @Test
+    public void includeCaseRolesInCaseTypeAuthorisationRejectsNonCaseRole() {
+        ConfigBuilderImpl<CaseData, State, UserRole> builder = newBuilder();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> builder.includeCaseRolesInCaseTypeAuthorisation(UserRole.SYSTEM_UPDATE))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
     private ConfigBuilderImpl<CaseData, State, UserRole> newBuilder() {
         ResolvedCCDConfig<CaseData, State, UserRole> config = new ResolvedCCDConfig<>(
             CaseData.class, State.class, UserRole.class, Map.of(),
