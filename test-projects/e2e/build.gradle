@@ -6,7 +6,7 @@ plugins {
   id 'io.spring.dependency-management' version '1.1.7'
   id 'jacoco'
   id 'hmcts.ccd.sdk'
-  id 'com.github.hmcts.rse-cft-lib' version '0.19.2395'
+  id 'com.github.hmcts.rse-cft-lib' version '0.19.2402'
 }
 
 group = 'uk.gov.hmcts'
@@ -26,6 +26,7 @@ ccd {
 }
 
 def jsonLegacyDefinitionsDir = layout.buildDirectory.dir('json-ccd-definitions')
+def etCosUrl = System.getenv('ET_COS_URL') ?: 'http://localhost:4013'
 
 tasks.register('generateJsonLegacyDefinitions') {
   def sourceDir = layout.projectDirectory.dir('src/main/resources/json-ccd-definitions/CaseTypeA')
@@ -206,6 +207,7 @@ tasks.withType(CftlibExec).configureEach {
   dependsOn tasks.named('generateJsonLegacyDefinitions')
   authMode = AuthMode.Local
   environment 'POSTGRES_VERSION', '15'
+  environment 'ET_COS_URL', etCosUrl
   environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_E2E', 'http://localhost:4013'
   environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_case-type-a', 'http://localhost:4013'
   environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_case-type-b', 'http://localhost:4013'
@@ -292,6 +294,7 @@ tasks.named('generateCCDConfig').configure {
 cftlibTest {
   authMode = AuthMode.Local
   group = 'verification'
+  environment 'ET_COS_URL', etCosUrl
 
   systemProperties([
     'junit.jupiter.execution.parallel.enabled'             : 'false',
