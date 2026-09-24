@@ -251,8 +251,12 @@ An external event is one a bespoke frontend, such as a citizen or judicial journ
 External events may have bespoke payloads for both event start and event submission:
 
 ```java
+// What the frontend is sent when it starts the event, and what it submits.
+public record MakeOrderStart(String caseName, List<String> parties) {}
+public record MakeOrderRequest(String orderType, String notes) {}
+
 public static final ExternalEventId<MakeOrderStart, MakeOrderRequest> MAKE_ORDER =
-    ExternalEventId.of("ext:makeOrder", MakeOrderStart.class, MakeOrderRequest.class);
+    ExternalEventId.of("makeOrder", MakeOrderStart.class, MakeOrderRequest.class);
 
 configBuilder.externalEvent(MAKE_ORDER, this::submit)
     .forStates(State.CASE_ISSUED)
