@@ -50,7 +50,7 @@ class CaseSubmissionServiceTest {
     DecentralisedCaseEvent event = event();
     Event<?, ?, ?> eventConfig = mock(Event.class);
     doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("TestCase", "submit");
-    when(eventConfig.getSubmitHandler()).thenReturn(null);
+    when(eventConfig.hasSubmitHandler()).thenReturn(false);
     when(eventConfig.isConcurrent()).thenReturn(false);
     doReturn(Set.of("Submitted")).when(eventConfig).getPreState();
     when(idam.retrieveUser("raw-token")).thenReturn(new IdamService.User(
@@ -86,7 +86,7 @@ class CaseSubmissionServiceTest {
     DecentralisedCaseEvent event = event();
     Event<?, ?, ?> eventConfig = mock(Event.class);
     doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("TestCase", "submit");
-    when(eventConfig.getSubmitHandler()).thenReturn(null);
+    when(eventConfig.hasSubmitHandler()).thenReturn(false);
     when(idam.retrieveUser("raw-token")).thenReturn(new IdamService.User(
         "Bearer raw-token",
         new UserInfo("sub", "uid", "name", "given", "family", List.of("caseworker"))

@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk.runtime;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
+import java.util.HashMap;
 import java.util.Map;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -14,11 +15,13 @@ import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
+import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.EventPayload;
 import uk.gov.hmcts.ccd.sdk.api.TypedPropertyGetter;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalStartResponse;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
@@ -47,18 +50,32 @@ public class CcdCallbackExecutor {
 
     var event = findCaseEvent(request);
 
-    if (event.getStartHandler() != null) {
+    if (event.hasStartHandler()) {
       var config = registry.getRequired(request.getCaseDetails().getCaseTypeId());
-      String json = mapper.writeValueAsString(request.getCaseDetails().getData());
-      var domainClass = mapper.readValue(json, config.getCaseClass());
+      Map<String, Object> data = request.getCaseDetails().getData();
+      // An external event's start handler loads what it needs itself, so the case is not read here.
+      var domainClass = event.isExternal() ? null
+          : mapper.readValue(mapper.writeValueAsString(data), config.getCaseClass());
       EventPayload payload = new EventPayload<>(
           request.getCaseDetails().getId(),
           domainClass,
           new LinkedMultiValueMap<>()
       );
 
-      var response = event.getStartHandler().start(payload);
-      return AboutToStartOrSubmitResponse.builder().data(response).build();
+      Object started = event.start(payload);
+      if (!event.isExternal()) {
+        return AboutToStartOrSubmitResponse.builder().data(started).build();
+      }
+      return switch ((ExternalStartResponse<?>) started) {
+        case ExternalStartResponse.Rejected<?> rejected ->
+            AboutToStartOrSubmitResponse.builder().errors(rejected.errors()).build();
+        case ExternalStartResponse.Started<?> accepted -> {
+          // The payload rides in its own field; the case data goes back to CCD as it came.
+          Map<String, Object> withPayload = data == null ? new HashMap<>() : new HashMap<>(data);
+          withPayload.put(DecentralisedConfigBuilder.PAYLOAD_FIELD, mapper.writeValueAsString(accepted.payload()));
+          yield AboutToStartOrSubmitResponse.builder().data(withPayload).build();
+        }
+      };
     }
 
     return findCallback(request, Event::getAboutToStartCallback)

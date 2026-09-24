@@ -815,7 +815,7 @@
     "ID": "organisationPolicy",
     "Label": " ",
     "LiveFrom": "01/01/2017",
-    "RetainHiddenValue" : "Y",
+    "RetainHiddenValue": "Y",
     "SecurityClassification": "Public"
   },
   {
@@ -1060,6 +1060,14 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "FieldType": "YesOrNo",
     "ID": "yesOrNoField",
+    "Label": " ",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "FieldType": "TextArea",
+    "ID": "eventPayload",
     "Label": " ",
     "LiveFrom": "01/01/2017",
     "SecurityClassification": "Public"

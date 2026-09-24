@@ -33,7 +33,8 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     List<Event<T, R, S>> events = getOrderedEvents(config.getEvents().values());
 
     for (Event event : events) {
-      Path output = Paths.get(folder.getPath(), event.getId() + ".json");
+      // Colons, as in external event ids, are not allowed in Windows file names.
+      Path output = Paths.get(folder.getPath(), event.getId().replace(':', '_') + ".json");
 
       JsonUtils.mergeInto(output, serialise(config.getCaseType(), event, config.getAllStates(),
               config.getCallbackHost()),
@@ -60,7 +61,8 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     JsonUtils.putYn(data, "ShowSummary", event.isShowSummary());
     JsonUtils.putYn(data, "ShowEventNotes", event.isShowEventNotes());
     JsonUtils.putYn(data, "Publish", event.isPublishToCamunda());
-    if (!Strings.isNullOrEmpty(event.getEndButtonLabel())) {
+    // An external event's frontend is not EXUI, so it has no end button to label.
+    if (!Strings.isNullOrEmpty(event.getEndButtonLabel()) && !event.isExternal()) {
       data.put("EndButtonLabel", event.getEndButtonLabel());
     }
     if (Objects.nonNull(event.getTtlIncrement())) {
@@ -79,7 +81,7 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     data.put("SecurityClassification", "Public");
 
     addCallbackIfConfigured(data, callbackHost, event,
-        event.getAboutToStartCallback() != null || event.getStartHandler() != null,
+        event.getAboutToStartCallback() != null || event.hasStartHandler(),
         CallbackMetadata.ABOUT_TO_START);
     addCallbackIfConfigured(data, callbackHost, event,
         event.getAboutToSubmitCallback() != null,

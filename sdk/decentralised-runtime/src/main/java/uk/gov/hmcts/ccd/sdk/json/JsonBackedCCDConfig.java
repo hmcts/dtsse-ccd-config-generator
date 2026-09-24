@@ -98,7 +98,7 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
   private void requireCallbacksRetained(Event<Case, Role, State> original, Event<Case, Role, State> previous,
                                        Event<Case, Role, State> replacement) {
     // A decentralised submit handler replaces the callback lifecycle. Keep the JSON URLs for rolling deployments.
-    if (replacement.getSubmitHandler() != null) {
+    if (replacement.hasSubmitHandler()) {
       return;
     }
 

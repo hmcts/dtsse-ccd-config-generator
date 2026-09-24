@@ -69,8 +69,8 @@ public class EventTypeBuilderImpl<T, R extends HasRole, S> implements EventTypeB
   protected Event.EventBuilder<T, R, S> build(Set<S> preStates, Set<S> postStates) {
     Event.EventBuilder<T, R, S> result = Event.EventBuilder
         .builder(id, config.caseClass, new PropertyUtils(), preStates, postStates);
-    result.submitHandler(this.submitHandler);
-    result.startHandler(this.startHandler);
+    result.submitHandler(submitHandler);
+    result.startHandler(startHandler);
     if (!events.containsKey(id)) {
       events.put(id, Lists.newArrayList());
     }
