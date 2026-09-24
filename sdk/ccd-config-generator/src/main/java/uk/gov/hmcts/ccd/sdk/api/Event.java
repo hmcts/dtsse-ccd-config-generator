@@ -117,12 +117,6 @@ public class Event<T, R extends HasRole, S> {
     return onSubmit.apply(event, payload);
   }
 
-  /** A decentralised event's start handler, for code that calls it directly; null for an external event. */
-  @SuppressWarnings("unchecked")
-  public Start<T, S> getStartHandler() {
-    return onStart == null || isExternal() ? null : event -> (T) onStart.apply(event);
-  }
-
   /** A decentralised event's submit handler, for code that calls it directly; null for an external event. */
   public Submit<T, S> getSubmitHandler() {
     return onSubmit == null || isExternal() ? null : event -> onSubmit.apply(event, null);
@@ -316,7 +310,7 @@ public class Event<T, R extends HasRole, S> {
     }
 
     // Hide lombok's generated builder methods for these fields to stop them polluting the public API.
-    // The payload handlers are set through payload(...), which also registers the payload field.
+    // The payload handlers are set through external(...), which also registers the payload field.
     private void submitType(Class<?> value) {
       this.submitType = value;
     }
