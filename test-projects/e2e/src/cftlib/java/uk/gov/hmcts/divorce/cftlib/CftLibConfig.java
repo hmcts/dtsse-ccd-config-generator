@@ -287,11 +287,14 @@ public class CftLibConfig implements CFTLibConfigurer {
     private void importDivorceDefinitions(CFTLib lib) throws Exception {
         // Generate CCD definitions before importing them into the in-memory instance.
         configWriter.generateAllCaseTypesToJSON(new File("build/definitions"));
+        Map<String, String> jsonDefinitionSubstitutions = Map.of(
+            "ET_COS_URL", System.getenv().getOrDefault("ET_COS_URL", "http://localhost:4013")
+        );
 
         lib.importJsonDefinition(new File("build/definitions/" + NoFaultDivorce.getCaseType()));
         lib.importJsonDefinition(new File("build/definitions/" + SimpleCaseConfiguration.CASE_TYPE));
-        lib.importJsonDefinition(JsonLegacyCcdConfig.caseTypeADefinitionDirectory());
-        lib.importJsonDefinition(JsonLegacyCcdConfig.caseTypeBDefinitionDirectory());
+        lib.importJsonDefinition(JsonLegacyCcdConfig.caseTypeADefinitionDirectory(), null, jsonDefinitionSubstitutions);
+        lib.importJsonDefinition(JsonLegacyCcdConfig.caseTypeBDefinitionDirectory(), null, jsonDefinitionSubstitutions);
         lib.createProfile("TEST_CASE_WORKER_USER@mailinator.com", "DIVORCE", JsonLegacyCcdConfig.CASE_TYPE_A, "Submitted");
         lib.createProfile("TEST_CASE_WORKER_USER@mailinator.com", "DIVORCE", JsonLegacyCcdConfig.CASE_TYPE_B, "Submitted");
         lib.dumpDefinitionSnapshots();
