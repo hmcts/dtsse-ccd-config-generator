@@ -15,7 +15,6 @@ import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.domain.model.callbacks.AfterSubmitCallbackResponse;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
-import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.EventMetadata;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 
@@ -34,11 +33,6 @@ public class CaseSubmissionService {
                                                  String authorisation,
                                                  UUID idempotencyKey) {
     var eventConfig = getEventConfig(event);
-    var data = event.getCaseDetails().getData();
-    if (!eventConfig.isExternal() && data != null && data.containsKey(DecentralisedConfigBuilder.PAYLOAD_FIELD)) {
-      // Any role granted an external event can post the payload field; only external events read it.
-      data.remove(DecentralisedConfigBuilder.PAYLOAD_FIELD);
-    }
     var user = idam.retrieveUser(authorisation);
     var handler = eventConfig.hasSubmitHandler() ? submitHandler : legacyHandler;
     // Creation events have no pre-state or start revision to check.
