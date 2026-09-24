@@ -8,6 +8,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import com.fasterxml.jackson.databind.node.NullNode;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
@@ -44,6 +45,9 @@ import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalEventId;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalStartResponse;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.config.DecentralisedFlywayAutoConfiguration;
 import uk.gov.hmcts.reform.authorisation.exceptions.InvalidTokenException;
 import uk.gov.hmcts.reform.authorisation.filters.ServiceAuthFilter;
@@ -193,8 +197,7 @@ class CcdEventTestSupportIntegrationTest {
     var result = cases.event(reference, "readOnly", new TestCase("submitted"))
         .as(actor).submitExpectingSuccess();
 
-    assertThat(jdbc.queryForObject("select user_id from ccd.case_event where id = ?",
-        String.class, result.audit().id())).isEqualTo("actor-123");
+    assertThat(result.audit().userId()).isEqualTo("actor-123");
   }
 
   @Test
@@ -231,8 +234,7 @@ class CcdEventTestSupportIntegrationTest {
         .submitExpectingSuccess();
 
     assertThat(result.confirmationHeader()).isEqualTo(actor.authorisation());
-    assertThat(jdbc.queryForObject("select user_id from ccd.case_event where id = ?",
-        String.class, result.audit().id())).isEqualTo(actor.uid());
+    assertThat(result.audit().userId()).isEqualTo(actor.uid());
     assertThat(actor.details().email()).isEqualTo("example.judge@example.com");
   }
 
@@ -279,6 +281,55 @@ class CcdEventTestSupportIntegrationTest {
     });
     assertThat(result.changes()).extracting(CcdEventTestSupport.RowChange::table)
         .containsExactly("audited_rows");
+  }
+
+  @Test
+  void externalEventExchangesItsPayloadInsteadOfCaseData() {
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+    ExternalEvent<Greeting, Reply> greet = events.external(reference, GREET);
+
+    assertThat(greet.start()).isEqualTo(new Greeting("hello original"));
+
+    var outcome = greet.submitExpectingSuccess(new Reply("hello back"));
+
+    assertThat(outcome.status()).isEqualTo(200);
+    assertThat(outcome.audit().summary()).isEqualTo("hello back");
+    assertThat(events.storedData(reference).value()).isEqualTo("original");
+    assertThat(events.snapshot(reference).rawData().has("eventPayload")).isFalse();
+  }
+
+  @Test
+  void externalEventHandlersCanRefuseToStartOrAcceptASubmission() {
+    long grumpy = events.seed(TestState.Open, new TestCase("grumpy"));
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+
+    assertThat(events.external(grumpy, GREET).startExpectingRejection()).containsExactly("Not today");
+    var rejected = events.external(reference, GREET).submitExpectingRejection(new Reply(" "));
+
+    assertThat(rejected.errors()).containsExactly("Say something");
+    assertThat(events.snapshot(reference).caseRevision()).isZero();
+  }
+
+  @Test
+  void externalEventRejectsASubmissionWithoutAUsablePayload() {
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+    ExternalEvent<Object, Object> greet = events.external(reference, "ext:greet");
+
+    for (Object unusable : new Object[] {null, NullNode.getInstance(), List.of(1, 2)}) {
+      assertThat(greet.submitExpectingRejection(unusable).errors()).singleElement().asString()
+          .contains("ext:greet");
+    }
+
+    assertThat(events.snapshot(reference).caseRevision()).isZero();
+  }
+
+  @Test
+  void externalEventIsDrivenOnlyByTheContractItWasRegisteredWith() {
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+
+    assertThatThrownBy(() -> events.external(reference,
+        ExternalEventId.of("ext:greet", Reply.class, Greeting.class)))
+        .isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test
@@ -329,6 +380,14 @@ class CcdEventTestSupportIntegrationTest {
   }
 
   record TestCase(String value) {
+  }
+
+  record Greeting(String text) {
+  }
+
+  static final ExternalEventId<Greeting, Reply> GREET = ExternalEventId.of("ext:greet", Greeting.class, Reply.class);
+
+  record Reply(String text) {
   }
 
   enum TestState {
@@ -450,6 +509,18 @@ class CcdEventTestSupportIntegrationTest {
               .forState(TestState.Open);
           builder.decentralisedEvent("serial", payload -> SubmitResponse.defaultResponse(),
               payload -> payload.caseData()).forAllStates().nonConcurrent();
+          builder.externalEvent(GREET, submit -> submit.payload().text().isBlank()
+                  ? ExternalSubmitResponse.rejected("Say something")
+                  : ExternalSubmitResponse.accepted(submit.payload().text(), "Greeted"))
+              .forAllStates()
+              .onStart(start -> {
+                // The start handler loads what it needs; here, the case's stored value.
+                String value = jdbc.queryForObject("select data ->> 'value' from ccd.case_data where reference = ?",
+                    String.class, start.caseReference());
+                return "grumpy".equals(value)
+                    ? ExternalStartResponse.rejected("Not today")
+                    : ExternalStartResponse.started(new Greeting("hello " + value));
+              });
           builder.decentralisedEvent("conflict", payload -> {
             throw new IllegalStateException("The case is already being changed");
           }).forAllStates();

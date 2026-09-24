@@ -4,11 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.InjectionPoint;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.MockMvcPrint;
 import org.springframework.boot.webmvc.test.autoconfigure.SpringBootMockMvcBuilderCustomizer;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Scope;
 import org.springframework.core.ResolvableType;
@@ -26,6 +28,20 @@ public class CcdEventTestConfiguration {
   @Bean
   TestActors ccdSdkTestActors() {
     return new TestActors();
+  }
+
+  /**
+   * Answers the application's own Feign calls to IDAM, S2S and role assignment from the actors
+   * test support registers, when the application uses Spring Cloud OpenFeign.
+   */
+  @Configuration(proxyBeanMethods = false)
+  @ConditionalOnClass(name = "feign.Capability")
+  static class FeignIdentity {
+
+    @Bean
+    feign.Capability ccdSdkTestIdentity(TestActors actors) {
+      return new TestIdentityCapability(actors);
+    }
   }
 
   @Bean
