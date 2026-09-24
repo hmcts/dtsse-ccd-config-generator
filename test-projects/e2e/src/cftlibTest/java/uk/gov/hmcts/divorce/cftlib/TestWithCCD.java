@@ -4240,7 +4240,7 @@ public class TestWithCCD extends CftlibTest {
 
             assertThat("payload " + unreadable, response.getStatusLine().getStatusCode(), equalTo(422));
             var body = mapper.readValue(EntityUtils.toString(response.getEntity()), Map.class);
-            assertThat(body.get("callbackErrors").toString(), containsString("ext:greeting"));
+            assertThat(body.get("callbackErrors").toString(), containsString("greeting"));
         }
         assertThat(caseDataRevision(), equalTo(revision));
         assertThat(auditCountForCase(caseRef), equalTo(audits));

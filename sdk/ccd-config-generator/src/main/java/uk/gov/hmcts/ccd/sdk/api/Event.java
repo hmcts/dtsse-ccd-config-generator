@@ -21,7 +21,6 @@ import uk.gov.hmcts.ccd.sdk.api.callback.Start;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
-import uk.gov.hmcts.ccd.sdk.api.external.ExternalEventId;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalStart;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalStartHandler;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalSubmit;
@@ -167,10 +166,6 @@ public class Event<T, R extends HasRole, S> {
                                                  ExternalSubmitHandler<S, I> submit,
                                                  Class<O> startType,
                                                  ExternalStartHandler<O> start) {
-      if (!id.startsWith(ExternalEventId.PREFIX)) {
-        throw new IllegalArgumentException(
-            "Event " + id + " is not external; declare external events with externalEvent(...)");
-      }
       if (this.submitType == null) {
         // Immutable, so the event's roles keep create and read on it even under explicitGrants().
         fieldsBuilder.field(DecentralisedConfigBuilder.PAYLOAD_FIELD).type("TextArea").optional().immutable();

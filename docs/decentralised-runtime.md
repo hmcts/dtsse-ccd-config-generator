@@ -252,7 +252,7 @@ An `ExternalEventId` states the event's contract once: its id, the type the fron
 
 ```java
 public static final ExternalEventId<MakeOrderStart, MakeOrderRequest> MAKE_ORDER =
-    ExternalEventId.of("ext:makeOrder", MakeOrderStart.class, MakeOrderRequest.class);
+    ExternalEventId.of("makeOrder", MakeOrderStart.class, MakeOrderRequest.class);
 
 configBuilder.externalEvent(MAKE_ORDER, this::submit)
     .forStates(State.CASE_ISSUED)

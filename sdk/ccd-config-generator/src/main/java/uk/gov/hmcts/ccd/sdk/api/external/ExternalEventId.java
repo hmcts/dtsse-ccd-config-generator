@@ -8,15 +8,9 @@ import java.util.Objects;
  */
 public record ExternalEventId<O, I>(String id, Class<O> startType, Class<I> submitType) {
 
-  /** Every external event id starts with this; it is how EXUI hands the user off to the frontend. */
-  public static final String PREFIX = "ext:";
-
   public ExternalEventId {
     Objects.requireNonNull(id);
     Objects.requireNonNull(submitType);
-    if (!id.startsWith(PREFIX)) {
-      throw new IllegalArgumentException("External event " + id + " must have an id starting " + PREFIX);
-    }
   }
 
   public static <O, I> ExternalEventId<O, I> of(String id, Class<O> startType, Class<I> submitType) {

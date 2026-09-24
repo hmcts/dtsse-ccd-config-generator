@@ -16,23 +16,13 @@ import uk.gov.hmcts.reform.fpl.model.CaseData;
 /** Configuration mistakes an external event refuses when it is declared, rather than at runtime in CCD. */
 public class ExternalEventConfigurationTest {
 
-    private static final ExternalEventId<Void, String> NOTE = ExternalEventId.of("ext:note", String.class);
+    private static final ExternalEventId<Void, String> NOTE = ExternalEventId.of("note", String.class);
 
     @Test
     public void anExternalEventNeedsAStateToActOn() {
         assertThatThrownBy(() -> newBuilder().externalEvent(NOTE, submit -> accepted()).forStates())
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("needs at least one state");
-    }
-
-    @Test
-    public void onlyAnExternalIdMakesAnEventExternal() {
-        Event.EventBuilder<CaseData, UserRole, State> event = Event.EventBuilder.builder(
-            "addNote", CaseData.class, new PropertyUtils(), ImmutableSet.of(State.Open), ImmutableSet.of(State.Open));
-
-        assertThatThrownBy(() -> event.external(String.class, submit -> accepted(), null, null))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("is not external");
     }
 
     @Test
