@@ -85,10 +85,10 @@ dependencies {
   implementation 'com.github.ben-manes.caffeine:caffeine:3.3.0'
   implementation 'com.google.guava:guava:33.7.1-jre'
 
-  implementation 'org.projectlombok:lombok'
-  annotationProcessor 'org.projectlombok:lombok'
-  cftlibAnnotationProcessor 'org.projectlombok:lombok'
-  cftlibTestAnnotationProcessor 'org.projectlombok:lombok'
+  implementation 'org.projectlombok:lombok:1.18.48'
+  annotationProcessor 'org.projectlombok:lombok:1.18.48'
+  cftlibAnnotationProcessor 'org.projectlombok:lombok:1.18.48'
+  cftlibTestAnnotationProcessor 'org.projectlombok:lombok:1.18.48'
 
   testImplementation('org.springframework.boot:spring-boot-starter-test') {
     exclude module: 'commons-logging'
