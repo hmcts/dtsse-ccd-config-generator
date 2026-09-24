@@ -278,7 +278,7 @@ The submit handler is required. It is given the case reference and the payload t
 
 The start handler is optional. It is given the case reference and loads whatever it needs to send the frontend, and answers `ExternalStartResponse.started(payload)` or `rejected(errors)`. Without one the event has no about-to-start callback and the frontend is sent no payload.
 
-The payloads travel in the case field named by `DecentralisedConfigBuilder.PAYLOAD_FIELD`, `eventPayload`, which the SDK defines for the case type with create and read permission for the event's roles.
+The payloads travel in the case field named by `DecentralisedConfigBuilder.PAYLOAD_FIELD`, `sdkEventPayload`, which the SDK defines for the case type with create and read permission for the event's roles.
 
 The frontend reads the start payload from that field of the start-event response, as a JSON string, and posts its own payload back in the same field. The SDK handle serialisation with the application's `ObjectMapper`.
 

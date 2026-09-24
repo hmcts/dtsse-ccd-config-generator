@@ -4193,7 +4193,7 @@ public class TestWithCCD extends CftlibTest {
     public void externalEventExchangesAPayloadThroughCcd() throws Exception {
         var start = startExternalEvent(caseRef, ExternalGreetingEvent.GREETING.id());
 
-        var started = mapper.readValue((String) start.getCaseDetails().getData().get("eventPayload"),
+        var started = mapper.readValue((String) start.getCaseDetails().getData().get("sdkEventPayload"),
             ExternalGreetingEvent.Greeting.class);
         assertThat(started, equalTo(new ExternalGreetingEvent.Greeting("hello " + caseRef)));
 
@@ -4205,7 +4205,7 @@ public class TestWithCCD extends CftlibTest {
         assertThat(history.get("summary"), equalTo("hello back"));
         assertThat(history.get("description"), equalTo("Greeted from an external frontend"));
         var storesPayload = db.queryForObject(
-            "select jsonb_exists(data, 'eventPayload') from ccd.case_data where reference = :ref",
+            "select jsonb_exists(data, 'sdkEventPayload') from ccd.case_data where reference = :ref",
             Map.of("ref", caseRef), Boolean.class);
         assertThat(storesPayload, equalTo(false));
     }
@@ -4253,7 +4253,7 @@ public class TestWithCCD extends CftlibTest {
 
         var start = startExternalEvent(reference, ExternalGreetingEvent.FAREWELL.id());
         assertThat("an event without a start payload sends none",
-            start.getCaseDetails().getData().get("eventPayload"), equalTo(null));
+            start.getCaseDetails().getData().get("sdkEventPayload"), equalTo(null));
         var response = submitExternalEvent(reference, ExternalGreetingEvent.FAREWELL.id(), start.getToken(),
             mapper.writeValueAsString(new ExternalGreetingEvent.Farewell("all done")));
 
@@ -4281,7 +4281,7 @@ public class TestWithCCD extends CftlibTest {
     @SneakyThrows
     private CloseableHttpResponse submitExternalEvent(long reference, String eventId, String token, String payload) {
         var data = new HashMap<String, Object>();
-        data.put("eventPayload", payload);
+        data.put("sdkEventPayload", payload);
         return HttpClientBuilder.create().build().execute(
             prepareEventRequestWithToken(EXTERNAL_EVENT_USER, eventId, data, token, reference));
     }
