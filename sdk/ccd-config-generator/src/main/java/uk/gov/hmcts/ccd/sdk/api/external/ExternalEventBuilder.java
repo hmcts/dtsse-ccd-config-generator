@@ -6,18 +6,15 @@ import uk.gov.hmcts.ccd.sdk.api.Permission;
 
 /**
  * Configures an external event: one a bespoke frontend drives through CCD's API rather than
- * EXUI's event pages. It has a name, the roles that may use it and when EXUI offers it, but no
- * pages or fields; the frontend and the handlers exchange the payloads its {@link ExternalEventId}
- * declares instead of case data.
+ * EXUI's event pages. It has a name and the roles that may use it, but no pages or fields, and
+ * EXUI never offers it; the frontend and the handlers exchange the payloads its
+ * {@link ExternalEventId} declares instead of case data.
  */
 public interface ExternalEventBuilder<T, R extends HasRole, S, O, I> {
 
   ExternalEventBuilder<T, R, S, O, I> name(String name);
 
   ExternalEventBuilder<T, R, S, O, I> description(String description);
-
-  /** When EXUI offers the event on a case, as a CCD show condition. */
-  ExternalEventBuilder<T, R, S, O, I> showCondition(String showCondition);
 
   ExternalEventBuilder<T, R, S, O, I> grant(Set<Permission> permissions, R... roles);
 

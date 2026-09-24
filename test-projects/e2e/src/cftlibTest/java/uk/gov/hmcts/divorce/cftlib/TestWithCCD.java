@@ -4191,6 +4191,11 @@ public class TestWithCCD extends CftlibTest {
     @Order(35)
     @Test
     public void externalEventExchangesAPayloadThroughCcd() throws Exception {
+        var offered = exuiTriggers(caseRef);
+        assertThat("EXUI offers the user other events", offered.isEmpty(), equalTo(false));
+        assertThat("EXUI never offers an external event", offered, not(hasItem(ExternalGreetingEvent.GREETING.id())));
+        assertThat("EXUI never offers an external event", offered, not(hasItem(ExternalGreetingEvent.FAREWELL.id())));
+
         var start = startExternalEvent(caseRef, ExternalGreetingEvent.GREETING.id());
 
         var started = mapper.readValue((String) start.getCaseDetails().getData().get("sdkEventPayload"),
@@ -4271,6 +4276,19 @@ public class TestWithCCD extends CftlibTest {
     }
 
     private static final String EXTERNAL_EVENT_USER = "TEST_CASE_WORKER_USER@mailinator.com";
+
+    /** The events EXUI's case view offers the user as next steps. */
+    @SneakyThrows
+    private List<String> exuiTriggers(long reference) {
+        var get = buildRequest(EXTERNAL_EVENT_USER, "http://localhost:4452/internal/cases/" + reference, HttpGet::new);
+        withCcdAccept(get, ACCEPT_UI_CASE_VIEW);
+        var response = HttpClientBuilder.create().build().execute(get);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
+        Map<String, Object> view = mapper.readValue(EntityUtils.toString(response.getEntity()), new TypeReference<>() {});
+        return ((List<Map<String, Object>>) view.get("triggers")).stream()
+            .map(trigger -> (String) trigger.get("id"))
+            .toList();
+    }
 
     private StartEventResponse startExternalEvent(long reference, String eventId) {
         return ccdApi.startEvent(getAuthorisation(EXTERNAL_EVENT_USER), getServiceAuth(),

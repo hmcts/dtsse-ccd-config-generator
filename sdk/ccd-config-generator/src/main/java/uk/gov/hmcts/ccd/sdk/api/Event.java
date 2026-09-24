@@ -21,6 +21,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.Start;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalRejection;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalStart;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalStartHandler;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalSubmit;
@@ -58,11 +59,9 @@ public class Event<T, R extends HasRole, S> {
   @Getter(AccessLevel.NONE)
   @Setter(AccessLevel.NONE)
   private Function<EventPayload<T, S>, Object> onStart;
-  // An external event's payload types: what its frontend submits, and what it is sent on start.
+  // What an external event's frontend submits; null for other events.
   @Setter(AccessLevel.NONE)
   private Class<?> submitType;
-  @Setter(AccessLevel.NONE)
-  private Class<?> startType;
   private FieldCollection fields;
   private boolean concurrent;
 
@@ -117,6 +116,12 @@ public class Event<T, R extends HasRole, S> {
     return onSubmit.apply(event, payload);
   }
 
+  /** A decentralised event's start handler, for code that calls it directly; null for an external event. */
+  @SuppressWarnings("unchecked")
+  public Start<T, S> getStartHandler() {
+    return onStart == null || isExternal() ? null : event -> (T) onStart.apply(event);
+  }
+
   /** A decentralised event's submit handler, for code that calls it directly; null for an external event. */
   public Submit<T, S> getSubmitHandler() {
     return onSubmit == null || isExternal() ? null : event -> onSubmit.apply(event, null);
@@ -156,22 +161,20 @@ public class Event<T, R extends HasRole, S> {
      * events with {@code DecentralisedConfigBuilder.externalEvent}.
      */
     @SuppressWarnings("unchecked")
-    public <I, O> EventBuilder<T, R, S> external(Class<I> submitType,
-                                                 ExternalSubmitHandler<S, I> submit,
-                                                 Class<O> startType,
-                                                 ExternalStartHandler<O> start) {
-      if (this.submitType == null) {
-        // Immutable, so the event's roles keep create and read on it even under explicitGrants().
-        fieldsBuilder.field(DecentralisedConfigBuilder.PAYLOAD_FIELD).type("TextArea").optional().immutable();
-      }
+    public <I> EventBuilder<T, R, S> external(Class<I> submitType, ExternalSubmitHandler<S, I> submit) {
+      // Immutable, so the event's roles keep create and read on it even under explicitGrants().
+      fieldsBuilder.field(DecentralisedConfigBuilder.PAYLOAD_FIELD).type("TextArea").optional().immutable();
       this.submitType = submitType;
-      this.startType = startType;
       this.onSubmit = (event, payload) -> toSubmitResponse(
           // The runtime has already read the payload as submitType; a cast through the class would
           // reject a boxed value for a primitive payload type.
           submit.submit(new ExternalSubmit<>(event.caseReference(), (I) payload)));
-      this.onStart = start == null ? null
-          : event -> start.start(new ExternalStart(event.caseReference()));
+      return this;
+    }
+
+    /** Sets an external event's start handler. Called by the SDK's external event builder. */
+    public EventBuilder<T, R, S> externalStartHandler(ExternalStartHandler<?> start) {
+      this.onStart = event -> start.start(new ExternalStart(event.caseReference()));
       return this;
     }
 
@@ -182,7 +185,7 @@ public class Event<T, R extends HasRole, S> {
             .eventMetadata(accepted.summary() == null && accepted.description() == null ? null
                 : EventMetadata.builder().summary(accepted.summary()).description(accepted.description()).build())
             .build();
-        case ExternalSubmitResponse.Rejected<S> rejected -> SubmitResponse.<S>builder()
+        case ExternalRejection<S> rejected -> SubmitResponse.<S>builder()
             .errors(rejected.errors())
             .build();
       };
@@ -310,13 +313,9 @@ public class Event<T, R extends HasRole, S> {
     }
 
     // Hide lombok's generated builder methods for these fields to stop them polluting the public API.
-    // The payload handlers are set through external(...), which also registers the payload field.
+    // An external event's handlers are set through external(...) and externalStartHandler(...).
     private void submitType(Class<?> value) {
       this.submitType = value;
-    }
-
-    private void startType(Class<?> value) {
-      this.startType = value;
     }
 
     private void onSubmit(BiFunction<EventPayload<T, S>, Object, SubmitResponse<S>> value) {
@@ -329,22 +328,14 @@ public class Event<T, R extends HasRole, S> {
 
     /** Sets a decentralised event's submit handler. */
     public EventBuilder<T, R, S> submitHandler(Submit<T, S> handler) {
-      requireNotExternal();
       this.onSubmit = handler == null ? null : (event, ignored) -> handler.submit(event);
       return this;
     }
 
     /** Sets a decentralised event's start handler, which returns the case. */
     public EventBuilder<T, R, S> startHandler(Start<T, S> handler) {
-      requireNotExternal();
       this.onStart = handler == null ? null : handler::start;
       return this;
-    }
-
-    private void requireNotExternal() {
-      if (submitType != null) {
-        throw new IllegalStateException("External event " + id + " takes its handlers from externalEvent(...)");
-      }
     }
 
     private void id(String value) {

@@ -5,8 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.google.common.collect.ImmutableSet;
 import java.util.Map;
 import org.junit.Test;
-import uk.gov.hmcts.ccd.sdk.api.Event;
-import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalEventId;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalSubmitResponse;
 import uk.gov.hmcts.reform.fpl.enums.State;
@@ -23,18 +21,6 @@ public class ExternalEventConfigurationTest {
         assertThatThrownBy(() -> newBuilder().externalEvent(NOTE, submit -> accepted()).forStates())
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("needs at least one state");
-    }
-
-    @Test
-    public void anExternalEventKeepsTheHandlersItWasDeclaredWith() {
-        Event.EventBuilder<CaseData, UserRole, State> event = Event.EventBuilder.builder(
-            NOTE.id(), CaseData.class, new PropertyUtils(), ImmutableSet.of(State.Open), ImmutableSet.of(State.Open));
-        event.external(String.class, submit -> accepted(), null, null);
-
-        assertThatThrownBy(() -> event.submitHandler(payload -> SubmitResponse.defaultResponse()))
-            .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> event.startHandler(payload -> payload.caseData()))
-            .isInstanceOf(IllegalStateException.class);
     }
 
     private static ExternalSubmitResponse<State> accepted() {
