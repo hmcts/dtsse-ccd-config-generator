@@ -19,7 +19,7 @@ class ExternalEventBuilderImpl<T, R extends HasRole, S, O, I>
     implements ExternalEventStates<T, R, S, O, I>, ExternalEventBuilder<T, R, S, O, I> {
 
   // Contradictory checks keep the event hidden in EXUI; CCD's API still starts and submits it.
-  private static final String NEVER_SHOW = "[STATE]=\"NEVER_SHOW\" AND [STATE]!=\"NEVER_SHOW\"";
+  private static final String NEVER_SHOW = "[STATE]=\"A\" AND [STATE]=\"B\"";
 
   private final ResolvedCCDConfig<T, S, R> config;
   private final Map<String, List<Event.EventBuilder<T, R, S>>> events;
