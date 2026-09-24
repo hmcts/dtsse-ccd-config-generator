@@ -21,6 +21,7 @@ import uk.gov.hmcts.ccd.sdk.api.EventPayload;
 import uk.gov.hmcts.ccd.sdk.api.TypedPropertyGetter;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalRejection;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalStartResponse;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
@@ -51,28 +52,27 @@ public class CcdCallbackExecutor {
     var event = findCaseEvent(request);
 
     if (event.hasStartHandler()) {
-      var config = registry.getRequired(request.getCaseDetails().getCaseTypeId());
       Map<String, Object> data = request.getCaseDetails().getData();
       // An external event's start handler loads what it needs itself, so the case is not read here.
       var domainClass = event.isExternal() ? null
-          : mapper.readValue(mapper.writeValueAsString(data), config.getCaseClass());
+          : mapper.convertValue(data, registry.getRequired(request.getCaseDetails().getCaseTypeId()).getCaseClass());
       EventPayload payload = new EventPayload<>(
           request.getCaseDetails().getId(),
           domainClass,
           new LinkedMultiValueMap<>()
       );
 
-      Object started = event.start(payload);
+      Object response = event.start(payload);
       if (!event.isExternal()) {
-        return AboutToStartOrSubmitResponse.builder().data(started).build();
+        return AboutToStartOrSubmitResponse.builder().data(response).build();
       }
-      return switch ((ExternalStartResponse<?>) started) {
-        case ExternalStartResponse.Rejected<?> rejected ->
+      return switch ((ExternalStartResponse<?>) response) {
+        case ExternalRejection<?> rejected ->
             AboutToStartOrSubmitResponse.builder().errors(rejected.errors()).build();
-        case ExternalStartResponse.Started<?> accepted -> {
+        case ExternalStartResponse.Started<?> started -> {
           // The payload rides in its own field; the case data goes back to CCD as it came.
           Map<String, Object> withPayload = data == null ? new HashMap<>() : new HashMap<>(data);
-          withPayload.put(DecentralisedConfigBuilder.PAYLOAD_FIELD, mapper.writeValueAsString(accepted.payload()));
+          withPayload.put(DecentralisedConfigBuilder.PAYLOAD_FIELD, mapper.writeValueAsString(started.payload()));
           yield AboutToStartOrSubmitResponse.builder().data(withPayload).build();
         }
       };

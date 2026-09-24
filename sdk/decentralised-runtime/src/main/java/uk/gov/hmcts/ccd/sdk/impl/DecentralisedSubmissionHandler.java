@@ -61,8 +61,6 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
       throw new IllegalStateException("Submit handler not configured for event %s".formatted(eventId));
     }
 
-    var config = registry.getRequired(caseType);
-
     Map<String, JsonNode> data = event.getCaseDetails().getData();
     long caseRef = event.getCaseDetails().getReference();
 
@@ -76,7 +74,7 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
       return eventConfig.submit(new EventPayload(caseRef, null, urlParams), submitted);
     }
 
-    Object domainCaseData = mapper.convertValue(data, config.getCaseClass());
+    Object domainCaseData = mapper.convertValue(data, registry.getRequired(caseType).getCaseClass());
     return eventConfig.submit(new EventPayload(caseRef, domainCaseData, urlParams), null);
   }
 
@@ -93,7 +91,7 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
     try {
       JsonNode tree = mapper.readTree(field.asText());
       // Checked before binding, which would read null as 0 or false for a primitive payload type.
-      if (tree == null || tree.isNull()) {
+      if (tree.isNull()) {
         throw unreadable(missing);
       }
       return mapper.treeToValue(tree, payloadType);

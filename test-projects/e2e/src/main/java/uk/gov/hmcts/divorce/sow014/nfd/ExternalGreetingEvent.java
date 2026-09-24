@@ -26,10 +26,10 @@ public class ExternalGreetingEvent implements CCDConfig<CaseData, State, UserRol
 
     /** The frontend is sent a greeting on start and posts a reply to it. */
     public static final ExternalEventId<Greeting, Reply> GREETING =
-        ExternalEventId.of("ext:greeting", Greeting.class, Reply.class);
+        ExternalEventId.of("greeting", Greeting.class, Reply.class);
 
     /** Nothing to show before saying goodbye, so this event has no start payload. */
-    public static final ExternalEventId<Void, Farewell> FAREWELL = ExternalEventId.of("ext:farewell", Farewell.class);
+    public static final ExternalEventId<Void, Farewell> FAREWELL = ExternalEventId.of("farewell", Farewell.class);
 
     public record Greeting(String text) {
     }

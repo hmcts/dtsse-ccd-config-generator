@@ -18,6 +18,9 @@ import uk.gov.hmcts.ccd.sdk.api.external.ExternalSubmitHandler;
 class ExternalEventBuilderImpl<T, R extends HasRole, S, O, I>
     implements ExternalEventStates<T, R, S, O, I>, ExternalEventBuilder<T, R, S, O, I> {
 
+  // Always false, so EXUI never offers the event; CCD's API still starts and submits it.
+  private static final String NEVER_SHOW = "[STATE]=\"NEVER_SHOW\"";
+
   private final ResolvedCCDConfig<T, S, R> config;
   private final Map<String, List<Event.EventBuilder<T, R, S>>> events;
   private final ExternalEventId<O, I> id;
@@ -62,12 +65,6 @@ class ExternalEventBuilderImpl<T, R extends HasRole, S, O, I>
     return this;
   }
 
-  @Override
-  public ExternalEventBuilder<T, R, S, O, I> showCondition(String showCondition) {
-    event.showCondition(showCondition);
-    return this;
-  }
-
   @SafeVarargs
   @Override
   public final ExternalEventBuilder<T, R, S, O, I> grant(Set<Permission> permissions, R... roles) {
@@ -86,7 +83,7 @@ class ExternalEventBuilderImpl<T, R extends HasRole, S, O, I>
     if (id.startType() == null) {
       throw new IllegalStateException("External event " + id.id() + " declares no start type");
     }
-    event.external(id.submitType(), submitHandler, id.startType(), Objects.requireNonNull(handler));
+    event.externalStartHandler(Objects.requireNonNull(handler));
     return this;
   }
 
@@ -99,7 +96,8 @@ class ExternalEventBuilderImpl<T, R extends HasRole, S, O, I>
       throw new IllegalArgumentException("External event " + id.id() + " needs at least one state");
     }
     event = Event.EventBuilder.builder(id.id(), config.caseClass, new PropertyUtils(), states, states);
-    event.external(id.submitType(), submitHandler, id.startType(), null);
+    event.showCondition(NEVER_SHOW);
+    event.external(id.submitType(), submitHandler);
     events.computeIfAbsent(id.id(), key -> Lists.newArrayList()).add(event);
     return this;
   }

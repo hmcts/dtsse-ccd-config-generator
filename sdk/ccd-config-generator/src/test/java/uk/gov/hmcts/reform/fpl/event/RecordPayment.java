@@ -21,7 +21,7 @@ import uk.gov.hmcts.reform.fpl.model.CaseData;
 public class RecordPayment implements CCDConfig<CaseData, State, UserRole> {
 
   public static final ExternalEventId<PaymentDue, Payment> RECORD_PAYMENT =
-      ExternalEventId.of("ext:recordPayment", PaymentDue.class, Payment.class);
+      ExternalEventId.of("recordPayment", PaymentDue.class, Payment.class);
 
   /** What the payment page is sent. */
   public record PaymentDue(BigDecimal amount) {

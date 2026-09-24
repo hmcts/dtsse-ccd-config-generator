@@ -17,7 +17,7 @@ public interface DecentralisedConfigBuilder<T, S, R extends HasRole> extends Con
    * frontend and the handlers. The SDK defines it for every case type with external events; it is
    * never written to the case.
    */
-  String PAYLOAD_FIELD = "eventPayload";
+  String PAYLOAD_FIELD = "sdkEventPayload";
 
   /**
    * Event that replaces AboutToSubmit/Submitted callbacks

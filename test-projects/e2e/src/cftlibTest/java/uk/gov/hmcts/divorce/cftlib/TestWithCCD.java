@@ -4191,9 +4191,14 @@ public class TestWithCCD extends CftlibTest {
     @Order(35)
     @Test
     public void externalEventExchangesAPayloadThroughCcd() throws Exception {
+        var offered = exuiTriggers(caseRef);
+        assertThat("EXUI offers the user other events", offered.isEmpty(), equalTo(false));
+        assertThat("EXUI never offers an external event", offered, not(hasItem(ExternalGreetingEvent.GREETING.id())));
+        assertThat("EXUI never offers an external event", offered, not(hasItem(ExternalGreetingEvent.FAREWELL.id())));
+
         var start = startExternalEvent(caseRef, ExternalGreetingEvent.GREETING.id());
 
-        var started = mapper.readValue((String) start.getCaseDetails().getData().get("eventPayload"),
+        var started = mapper.readValue((String) start.getCaseDetails().getData().get("sdkEventPayload"),
             ExternalGreetingEvent.Greeting.class);
         assertThat(started, equalTo(new ExternalGreetingEvent.Greeting("hello " + caseRef)));
 
@@ -4205,7 +4210,7 @@ public class TestWithCCD extends CftlibTest {
         assertThat(history.get("summary"), equalTo("hello back"));
         assertThat(history.get("description"), equalTo("Greeted from an external frontend"));
         var storesPayload = db.queryForObject(
-            "select jsonb_exists(data, 'eventPayload') from ccd.case_data where reference = :ref",
+            "select jsonb_exists(data, 'sdkEventPayload') from ccd.case_data where reference = :ref",
             Map.of("ref", caseRef), Boolean.class);
         assertThat(storesPayload, equalTo(false));
     }
@@ -4240,7 +4245,7 @@ public class TestWithCCD extends CftlibTest {
 
             assertThat("payload " + unreadable, response.getStatusLine().getStatusCode(), equalTo(422));
             var body = mapper.readValue(EntityUtils.toString(response.getEntity()), Map.class);
-            assertThat(body.get("callbackErrors").toString(), containsString("ext:greeting"));
+            assertThat(body.get("callbackErrors").toString(), containsString("greeting"));
         }
         assertThat(caseDataRevision(), equalTo(revision));
         assertThat(auditCountForCase(caseRef), equalTo(audits));
@@ -4253,7 +4258,7 @@ public class TestWithCCD extends CftlibTest {
 
         var start = startExternalEvent(reference, ExternalGreetingEvent.FAREWELL.id());
         assertThat("an event without a start payload sends none",
-            start.getCaseDetails().getData().get("eventPayload"), equalTo(null));
+            start.getCaseDetails().getData().get("sdkEventPayload"), equalTo(null));
         var response = submitExternalEvent(reference, ExternalGreetingEvent.FAREWELL.id(), start.getToken(),
             mapper.writeValueAsString(new ExternalGreetingEvent.Farewell("all done")));
 
@@ -4272,6 +4277,19 @@ public class TestWithCCD extends CftlibTest {
 
     private static final String EXTERNAL_EVENT_USER = "TEST_CASE_WORKER_USER@mailinator.com";
 
+    /** The events EXUI's case view offers the user as next steps. */
+    @SneakyThrows
+    private List<String> exuiTriggers(long reference) {
+        var get = buildRequest(EXTERNAL_EVENT_USER, "http://localhost:4452/internal/cases/" + reference, HttpGet::new);
+        withCcdAccept(get, ACCEPT_UI_CASE_VIEW);
+        var response = HttpClientBuilder.create().build().execute(get);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
+        Map<String, Object> view = mapper.readValue(EntityUtils.toString(response.getEntity()), new TypeReference<>() {});
+        return ((List<Map<String, Object>>) view.get("triggers")).stream()
+            .map(trigger -> (String) trigger.get("id"))
+            .toList();
+    }
+
     private StartEventResponse startExternalEvent(long reference, String eventId) {
         return ccdApi.startEvent(getAuthorisation(EXTERNAL_EVENT_USER), getServiceAuth(),
             String.valueOf(reference), eventId);
@@ -4281,7 +4299,7 @@ public class TestWithCCD extends CftlibTest {
     @SneakyThrows
     private CloseableHttpResponse submitExternalEvent(long reference, String eventId, String token, String payload) {
         var data = new HashMap<String, Object>();
-        data.put("eventPayload", payload);
+        data.put("sdkEventPayload", payload);
         return HttpClientBuilder.create().build().execute(
             prepareEventRequestWithToken(EXTERNAL_EVENT_USER, eventId, data, token, reference));
     }

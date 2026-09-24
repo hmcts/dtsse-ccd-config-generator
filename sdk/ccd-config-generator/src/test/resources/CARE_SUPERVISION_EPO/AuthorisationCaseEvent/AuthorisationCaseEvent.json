@@ -141,7 +141,7 @@
   },
   {
     "CRUD": "CRU",
-    "CaseEventID": "ext:recordPayment",
+    "CaseEventID": "recordPayment",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
     "UserRole": "caseworker-publiclaw-courtadmin"

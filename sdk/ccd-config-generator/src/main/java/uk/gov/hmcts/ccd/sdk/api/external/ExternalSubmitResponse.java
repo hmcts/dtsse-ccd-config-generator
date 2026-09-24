@@ -7,14 +7,14 @@ import java.util.List;
  * case history shows for it and optionally a state to move the case to, or rejected with errors
  * that change nothing.
  */
-public sealed interface ExternalSubmitResponse<S> {
+public sealed interface ExternalSubmitResponse<S> permits ExternalSubmitResponse.Accepted, ExternalRejection {
 
   static <S> Accepted<S> accepted(String summary, String description) {
     return new Accepted<>(summary, description, null);
   }
 
   static <S> ExternalSubmitResponse<S> rejected(String... errors) {
-    return new Rejected<>(List.of(errors));
+    return new ExternalRejection<>(List.of(errors));
   }
 
   record Accepted<S>(String summary, String description, S state) implements ExternalSubmitResponse<S> {
@@ -22,16 +22,6 @@ public sealed interface ExternalSubmitResponse<S> {
     /** The same outcome, also moving the case to this state. */
     public Accepted<S> movingTo(S newState) {
       return new Accepted<>(summary, description, newState);
-    }
-  }
-
-  record Rejected<S>(List<String> errors) implements ExternalSubmitResponse<S> {
-
-    public Rejected {
-      if (errors.isEmpty()) {
-        throw new IllegalArgumentException("A rejected submission needs at least one error");
-      }
-      errors = List.copyOf(errors);
     }
   }
 }

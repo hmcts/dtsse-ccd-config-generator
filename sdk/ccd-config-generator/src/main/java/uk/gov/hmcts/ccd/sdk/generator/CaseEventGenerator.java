@@ -33,8 +33,7 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     List<Event<T, R, S>> events = getOrderedEvents(config.getEvents().values());
 
     for (Event event : events) {
-      // Colons, as in external event ids, are not allowed in Windows file names.
-      Path output = Paths.get(folder.getPath(), event.getId().replace(':', '_') + ".json");
+      Path output = Paths.get(folder.getPath(), event.getId() + ".json");
 
       JsonUtils.mergeInto(output, serialise(config.getCaseType(), event, config.getAllStates(),
               config.getCallbackHost()),
