@@ -288,7 +288,8 @@ public class CftLibConfig implements CFTLibConfigurer {
         // Generate CCD definitions before importing them into the in-memory instance.
         configWriter.generateAllCaseTypesToJSON(new File("build/definitions"));
         Map<String, String> jsonDefinitionSubstitutions = Map.of(
-            "ET_COS_URL", System.getenv().getOrDefault("ET_COS_URL", "http://localhost:4013")
+            "ET_COS_URL", System.getenv().getOrDefault("ET_COS_URL", "http://localhost:4013"),
+            "CCD_DEF_AAC_URL", System.getenv().getOrDefault("CCD_DEF_AAC_URL", "http://127.0.0.1:4014")
         );
 
         lib.importJsonDefinition(new File("build/definitions/" + NoFaultDivorce.getCaseType()));
