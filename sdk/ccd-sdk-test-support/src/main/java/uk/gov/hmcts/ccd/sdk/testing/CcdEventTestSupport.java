@@ -7,12 +7,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import jakarta.servlet.ServletException;
 import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -34,7 +37,9 @@ import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
+import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalEventId;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.Classification;
 
@@ -122,19 +127,34 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
     return caseType().seed(state, data);
   }
 
-  public CaseType.EventSubmission event(long reference, String eventId, Case submittedData) {
+  public EventSubmission event(long reference, String eventId, Case submittedData) {
     return caseType().event(reference, eventId, submittedData);
   }
 
-  public CaseType.CreateSubmission create(String eventId, State initialState, Case submittedData) {
+  public CreateSubmission create(String eventId, State initialState, Case submittedData) {
     return caseType().create(eventId, initialState, submittedData);
   }
 
-  public CaseType.StartRequest start(long reference, String eventId) {
+  public StartRequest start(long reference, String eventId) {
     return caseType().start(reference, eventId);
   }
 
-  public CaseType.Seed seedCase(State state, Case data) {
+  /**
+   * An external event on this case, driven as its frontend drives it; see {@link ExternalEvent}.
+   */
+  public <O, I> ExternalEvent<O, I> external(long reference, ExternalEventId<O, I> event) {
+    return caseType().external(reference, event);
+  }
+
+  /**
+   * An external event on this case, untyped, for posting payloads its frontend's types cannot
+   * express.
+   */
+  public ExternalEvent<Object, Object> external(long reference, String eventId) {
+    return caseType().external(reference, eventId);
+  }
+
+  public Seed seedCase(State state, Case data) {
     return caseType().seedCase(state, data);
   }
 
@@ -197,244 +217,80 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
     }
 
     public Seed seedCase(State state, Case data) {
-      return new Seed(state, data);
-    }
-
-    public final class Seed {
-      private final State state;
-      private final Case data;
-      private Long reference;
-      private Map<String, ?> supplementaryData = Map.of();
-      private TestClassification classification = TestClassification.PUBLIC;
-      private LocalDate ttl;
-
-      private Seed(State state, Case data) {
-        this.state = state;
-        this.data = data;
-      }
-
-      public Seed reference(long value) {
-        this.reference = value;
-        return this;
-      }
-
-      public Seed supplementaryData(Map<String, ?> value) {
-        this.supplementaryData = Map.copyOf(value);
-        return this;
-      }
-
-      public Seed classification(TestClassification value) {
-        this.classification = Objects.requireNonNull(value);
-        return this;
-      }
-
-      public Seed ttl(LocalDate value) {
-        this.ttl = value;
-        return this;
-      }
-
-      public long insert() {
-        long caseReference = reference == null ? allocateReference() : reference;
-        jdbc.update("""
-          insert into ccd.case_data (
-              id, reference, security_classification, jurisdiction, case_type_id, state,
-              data, supplementary_data, resolved_ttl, last_modified,
-              last_state_modified_date, version, case_revision
-          ) values (?, ?, ?::ccd.securityclassification, ?, ?, ?, ?::jsonb, ?::jsonb, ?,
-              (now() at time zone 'UTC'), (now() at time zone 'UTC'), 1, 0)
-            """,
-            caseReference, caseReference, classification.name(), config.getJurId(), caseTypeId,
-            state.name(), json(data), json(supplementaryData), ttl == null ? null : Date.valueOf(ttl));
-        return caseReference;
-      }
+      return new Seed(this, state, data);
     }
 
     public EventSubmission event(long reference, String eventId, Case submittedData) {
-      return new EventSubmission(reference, eventId, submittedData);
+      return new EventSubmission(this, reference, eventId, submittedData);
     }
 
     /** Runs a configured creation event and records its audit history. */
     public CreateSubmission create(String eventId, State initialState, Case submittedData) {
-      return new CreateSubmission(allocateReference(), eventId, initialState, submittedData);
-    }
-
-    public final class EventSubmission {
-      private final long reference;
-      private final String eventId;
-      private final Case submittedData;
-      private UUID idempotencyKey = UUID.randomUUID();
-      private String authorisation = TestIdamService.DEFAULT_TOKEN;
-      private Long startRevision;
-
-      private EventSubmission(long reference, String eventId, Case submittedData) {
-        this.reference = reference;
-        this.eventId = eventId;
-        this.submittedData = submittedData;
-      }
-
-      public long reference() {
-        return reference;
-      }
-
-      public EventSubmission as(Actor actor) {
-        this.authorisation = Objects.requireNonNull(actor).authorisation;
-        return this;
-      }
-
-      public EventSubmission atRevision(long revision) {
-        this.startRevision = revision;
-        return this;
-      }
-
-      public EventSubmission withIdempotencyKey(UUID key) {
-        this.idempotencyKey = key;
-        return this;
-      }
-
-      public Submission submit() {
-        return submitInternal(reference, eventId, submittedData, null,
-            idempotencyKey, authorisation, startRevision);
-      }
-
-      public Accepted submitExpectingSuccess() {
-        Submission result = submit();
-        if (result instanceof Accepted accepted) {
-          return accepted;
-        }
-        throw new AssertionError("Expected accepted event " + eventId + ", got " + result.describe());
-      }
-
-      public Rejected submitExpectingErrors() {
-        Submission result = submit();
-        if (result instanceof Rejected rejected) {
-          return rejected;
-        }
-        throw new AssertionError("Expected validation errors from event " + eventId + ", got " + result.describe());
-      }
-
-      /** Expects the application to answer the submission with this HTTP status rather than a result. */
-      public Failed submitExpectingFailure(int status) {
-        Submission result = submit();
-        if (result instanceof Failed failed && failed.status() == status) {
-          return failed;
-        }
-        throw new AssertionError("Expected event " + eventId + " to fail with HTTP " + status
-            + ", got " + result.describe());
-      }
-    }
-
-    public final class CreateSubmission {
-      private final long reference;
-      private final String eventId;
-      private final State initialState;
-      private final Case submittedData;
-      private UUID idempotencyKey = UUID.randomUUID();
-      private String authorisation = TestIdamService.DEFAULT_TOKEN;
-
-      private CreateSubmission(long reference, String eventId, State initialState, Case submittedData) {
-        this.reference = reference;
-        this.eventId = eventId;
-        this.initialState = initialState;
-        this.submittedData = submittedData;
-      }
-
-      public long reference() {
-        return reference;
-      }
-
-      public CreateSubmission as(Actor actor) {
-        this.authorisation = Objects.requireNonNull(actor).authorisation;
-        return this;
-      }
-
-      public CreateSubmission withIdempotencyKey(UUID key) {
-        this.idempotencyKey = key;
-        return this;
-      }
-
-      public Submission submit() {
-        return submitInternal(reference, eventId, submittedData, initialState,
-            idempotencyKey, authorisation, null);
-      }
-
-      public Accepted submitExpectingSuccess() {
-        Submission result = submit();
-        if (result instanceof Accepted accepted) {
-          return accepted;
-        }
-        throw new AssertionError("Expected created case from event " + eventId + ", got " + result.describe());
-      }
-
-      public CreationRejected submitExpectingErrors() {
-        Submission result = submit();
-        if (result instanceof CreationRejected rejected) {
-          return rejected;
-        }
-        throw new AssertionError("Expected validation errors from creation event " + eventId
-            + ", got " + result.describe());
-      }
-
-      public Failed submitExpectingFailure(int status) {
-        Submission result = submit();
-        if (result instanceof Failed failed && failed.status() == status) {
-          return failed;
-        }
-        throw new AssertionError("Expected creation event " + eventId + " to fail with HTTP " + status
-            + ", got " + result.describe());
-      }
+      return new CreateSubmission(this, allocateReference(), eventId, initialState, submittedData);
     }
 
     /** Opens an event on an existing case, running its start handler or about-to-start callback. */
     public StartRequest start(long reference, String eventId) {
-      return new StartRequest(reference, eventId);
+      return new StartRequest(this, reference, eventId);
     }
 
-    public final class StartRequest {
-      private final long reference;
-      private final String eventId;
-      private String authorisation = TestIdamService.DEFAULT_TOKEN;
-
-      private StartRequest(long reference, String eventId) {
-        this.reference = reference;
-        this.eventId = eventId;
+    /**
+     * An external event on this case, driven as its frontend drives it; see {@link ExternalEvent}.
+     */
+    public <O, I> ExternalEvent<O, I> external(long reference, ExternalEventId<O, I> event) {
+      Event<?, ?, ?> registered = registry.getRequiredEvent(caseTypeId, event.id());
+      if (!registered.isExternal()
+          || !event.submitType().equals(registered.getSubmitType())
+          || !Objects.equals(event.startType(), registered.getStartType())) {
+        throw new IllegalArgumentException("Event " + event.id() + " is not registered as " + event);
       }
+      return driving(reference, event.id());
+    }
 
-      public StartRequest as(Actor actor) {
-        this.authorisation = Objects.requireNonNull(actor).authorisation;
-        return this;
+    /**
+     * An external event on this case, untyped, for posting payloads its frontend's types cannot
+     * express.
+     */
+    public ExternalEvent<Object, Object> external(long reference, String eventId) {
+      if (!registry.getRequiredEvent(caseTypeId, eventId).isExternal()) {
+        throw new IllegalArgumentException("Event " + eventId + " is not an external event");
       }
+      return driving(reference, eventId);
+    }
 
-      public Started start() {
-        Map<String, Object> stored = stored(reference);
-        checkAllowedState(registry.getRequiredEvent(caseTypeId, eventId), eventId, stored, null);
-        // Loads the case the way CCD does before an event starts, so the case view applies.
-        JsonNode loaded = send(MockMvcRequestBuilders.get("/ccd-persistence/cases")
-            .param("case-refs", String.valueOf(reference)), authorisation, null);
-        JsonNode details = loaded.path(0).path("case_details");
-        CallbackRequest request = CallbackRequest.builder()
-            .eventId(eventId)
-            .caseDetails(uk.gov.hmcts.reform.ccd.client.model.CaseDetails.builder()
-                .id(reference)
-                .jurisdiction(details.path("jurisdiction").asText())
-                .caseTypeId(caseTypeId)
-                .state(details.path("state").asText())
-                .securityClassification(Classification.valueOf(details.path("security_classification").asText()))
-                .data(WIRE.convertValue(details.path("case_data"), OBJECT_MAP))
-                .build())
-            .build();
-        JsonNode response = send(MockMvcRequestBuilders.post("/callbacks/about-to-start")
-            .param("eventId", eventId), authorisation, request);
-        return new Started(response, CaseType.this, reference, eventId, authorisation,
-            ((Number) stored.get("case_revision")).longValue());
+    private <O, I> ExternalEvent<O, I> driving(long reference, String eventId) {
+      if (!registry.getRequiredEvent(caseTypeId, eventId).hasStartHandler()) {
+        // Nothing to start: the frontend posts its payload straight away.
+        return new ExternalEvent<>(eventId,
+            actor -> {
+              throw new AssertionError("Event " + eventId + " has no start handler to send its frontend a payload");
+            },
+            (actor, payload) -> {
+              EventSubmission submission = event(reference, eventId, null).withPayload(payload);
+              return outcomeOf((actor == null ? submission : submission.as(actor)).submit());
+            },
+            null);
       }
+      return new ExternalEvent<>(eventId,
+          actor -> {
+            Started started = started(reference, eventId, actor);
+            return started.errors().isEmpty()
+                ? new ExternalEvent.Started<O>(started.payload(), List.of())
+                : new ExternalEvent.Started<O>(null, started.errors());
+          },
+          (actor, payload) -> {
+            Started started = started(reference, eventId, actor);
+            if (!started.errors().isEmpty()) {
+              throw new AssertionError("Expected " + eventId + " to start, got errors " + started.errors());
+            }
+            return outcomeOf(started.submittingPayload(payload).submit());
+          },
+          null);
+    }
 
-      public Started startExpectingSuccess() {
-        Started started = start();
-        if (!started.errors().isEmpty()) {
-          throw new AssertionError("Expected event " + eventId + " to start, got errors " + started.errors());
-        }
-        return started;
-      }
+    private Started started(long reference, String eventId, Actor actor) {
+      StartRequest request = start(reference, eventId);
+      return (actor == null ? request : request.as(actor)).start();
     }
 
     private Map<String, Object> stored(long reference) {
@@ -450,6 +306,7 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
     private Submission submitInternal(long reference,
                                       String eventId,
                                       Case submittedData,
+                                      Object payload,
                                       State initialState,
                                       UUID idempotencyKey,
                                       String authorisation,
@@ -459,8 +316,13 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
       checkAllowedState(eventConfig, eventId, stored, initialState);
       CaseDetails before = stored == null ? null : caseDetails(reference, stored,
           mapper.convertValue(fromJson((String) stored.get("data")), JSON_NODE_MAP));
+      Map<String, JsonNode> submittedFields = submittedData == null ? new LinkedHashMap<>()
+          : new LinkedHashMap<>(mapper.convertValue(submittedData, JSON_NODE_MAP));
+      if (payload != null) {
+        submittedFields.put(DecentralisedConfigBuilder.PAYLOAD_FIELD, new TextNode(json(payload)));
+      }
       CaseDetails submitted = stored == null ? newCaseDetails(reference, initialState, submittedData)
-          : caseDetails(reference, stored, mapper.convertValue(submittedData, JSON_NODE_MAP));
+          : caseDetails(reference, stored, submittedFields);
       DecentralisedCaseEvent event = DecentralisedCaseEvent.builder()
           .caseDetailsBefore(before)
           .caseDetails(submitted)
@@ -552,13 +414,14 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
 
     private Audit audit(long reference, UUID idempotencyKey) {
       Map<String, Object> row = jdbc.queryForMap("""
-          select ce.id, ce.event_id, ce.version, ce.case_revision
+          select ce.id, ce.event_id, ce.version, ce.case_revision, ce.user_id, ce.summary, ce.description
           from ccd.case_event ce
           join ccd.case_data cd on cd.id = ce.case_data_id
           where cd.reference = ? and ce.idempotency_key = ?
           """, reference, idempotencyKey);
       return new Audit(((Number) row.get("id")).longValue(), (String) row.get("event_id"),
-          ((Number) row.get("version")).intValue(), ((Number) row.get("case_revision")).longValue());
+          ((Number) row.get("version")).intValue(), ((Number) row.get("case_revision")).longValue(),
+          (String) row.get("user_id"), (String) row.get("summary"), (String) row.get("description"));
     }
 
     private CaseDetails caseDetails(long reference, Map<String, Object> stored, Map<String, JsonNode> data) {
@@ -585,7 +448,256 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
     }
   }
 
-  public record Audit(long id, String eventId, int version, long revision) {
+  public final class Seed {
+    private final CaseType caseType;
+    private final State state;
+    private final Case data;
+    private Long reference;
+    private Map<String, ?> supplementaryData = Map.of();
+    private TestClassification classification = TestClassification.PUBLIC;
+    private LocalDate ttl;
+
+    private Seed(CaseType caseType, State state, Case data) {
+      this.caseType = caseType;
+      this.state = state;
+      this.data = data;
+    }
+
+    public Seed reference(long value) {
+      this.reference = value;
+      return this;
+    }
+
+    public Seed supplementaryData(Map<String, ?> value) {
+      this.supplementaryData = Map.copyOf(value);
+      return this;
+    }
+
+    public Seed classification(TestClassification value) {
+      this.classification = Objects.requireNonNull(value);
+      return this;
+    }
+
+    public Seed ttl(LocalDate value) {
+      this.ttl = value;
+      return this;
+    }
+
+    public long insert() {
+      long caseReference = reference == null ? caseType.allocateReference() : reference;
+      jdbc.update("""
+        insert into ccd.case_data (
+            id, reference, security_classification, jurisdiction, case_type_id, state,
+            data, supplementary_data, resolved_ttl, last_modified,
+            last_state_modified_date, version, case_revision
+        ) values (?, ?, ?::ccd.securityclassification, ?, ?, ?, ?::jsonb, ?::jsonb, ?,
+            (now() at time zone 'UTC'), (now() at time zone 'UTC'), 1, 0)
+          """,
+          caseReference, caseReference, classification.name(), caseType.config.getJurId(), caseType.caseTypeId,
+          state.name(), json(data), json(supplementaryData), ttl == null ? null : Date.valueOf(ttl));
+      return caseReference;
+    }
+  }
+
+  public final class EventSubmission {
+    private final CaseType caseType;
+    private final long reference;
+    private final String eventId;
+    private final Case submittedData;
+    private UUID idempotencyKey = UUID.randomUUID();
+    private String authorisation = TestIdamService.DEFAULT_TOKEN;
+    private Long startRevision;
+    private Object payload;
+
+    private EventSubmission(CaseType caseType, long reference, String eventId, Case submittedData) {
+      this.caseType = caseType;
+      this.reference = reference;
+      this.eventId = eventId;
+      this.submittedData = submittedData;
+    }
+
+    public long reference() {
+      return reference;
+    }
+
+    public EventSubmission as(Actor actor) {
+      this.authorisation = Objects.requireNonNull(actor).authorisation;
+      return this;
+    }
+
+    public EventSubmission atRevision(long revision) {
+      this.startRevision = revision;
+      return this;
+    }
+
+    public EventSubmission withIdempotencyKey(UUID key) {
+      this.idempotencyKey = key;
+      return this;
+    }
+
+    /** Sends this payload in the event's payload field, as a bespoke frontend would. */
+    public EventSubmission withPayload(Object value) {
+      this.payload = value;
+      return this;
+    }
+
+    public Submission submit() {
+      return caseType.submitInternal(reference, eventId, submittedData, payload, null,
+          idempotencyKey, authorisation, startRevision);
+    }
+
+    public Accepted submitExpectingSuccess() {
+      Submission result = submit();
+      if (result instanceof Accepted accepted) {
+        return accepted;
+      }
+      throw new AssertionError("Expected accepted event " + eventId + ", got " + result.describe());
+    }
+
+    public Rejected submitExpectingErrors() {
+      Submission result = submit();
+      if (result instanceof Rejected rejected) {
+        return rejected;
+      }
+      throw new AssertionError("Expected validation errors from event " + eventId + ", got " + result.describe());
+    }
+
+    /** Expects the application to answer the submission with this HTTP status rather than a result. */
+    public Failed submitExpectingFailure(int status) {
+      Submission result = submit();
+      if (result instanceof Failed failed && failed.status() == status) {
+        return failed;
+      }
+      throw new AssertionError("Expected event " + eventId + " to fail with HTTP " + status
+          + ", got " + result.describe());
+    }
+  }
+
+  public final class CreateSubmission {
+    private final CaseType caseType;
+    private final long reference;
+    private final String eventId;
+    private final State initialState;
+    private final Case submittedData;
+    private UUID idempotencyKey = UUID.randomUUID();
+    private String authorisation = TestIdamService.DEFAULT_TOKEN;
+
+    private CreateSubmission(CaseType caseType, long reference, String eventId, State initialState,
+                             Case submittedData) {
+      this.caseType = caseType;
+      this.reference = reference;
+      this.eventId = eventId;
+      this.initialState = initialState;
+      this.submittedData = submittedData;
+    }
+
+    public long reference() {
+      return reference;
+    }
+
+    public CreateSubmission as(Actor actor) {
+      this.authorisation = Objects.requireNonNull(actor).authorisation;
+      return this;
+    }
+
+    public CreateSubmission withIdempotencyKey(UUID key) {
+      this.idempotencyKey = key;
+      return this;
+    }
+
+    public Submission submit() {
+      return caseType.submitInternal(reference, eventId, submittedData, null, initialState,
+          idempotencyKey, authorisation, null);
+    }
+
+    public Accepted submitExpectingSuccess() {
+      Submission result = submit();
+      if (result instanceof Accepted accepted) {
+        return accepted;
+      }
+      throw new AssertionError("Expected created case from event " + eventId + ", got " + result.describe());
+    }
+
+    public CreationRejected submitExpectingErrors() {
+      Submission result = submit();
+      if (result instanceof CreationRejected rejected) {
+        return rejected;
+      }
+      throw new AssertionError("Expected validation errors from creation event " + eventId
+          + ", got " + result.describe());
+    }
+
+    public Failed submitExpectingFailure(int status) {
+      Submission result = submit();
+      if (result instanceof Failed failed && failed.status() == status) {
+        return failed;
+      }
+      throw new AssertionError("Expected creation event " + eventId + " to fail with HTTP " + status
+          + ", got " + result.describe());
+    }
+  }
+
+  public final class StartRequest {
+    private final CaseType caseType;
+    private final long reference;
+    private final String eventId;
+    private String authorisation = TestIdamService.DEFAULT_TOKEN;
+
+    private StartRequest(CaseType caseType, long reference, String eventId) {
+      this.caseType = caseType;
+      this.reference = reference;
+      this.eventId = eventId;
+    }
+
+    public StartRequest as(Actor actor) {
+      this.authorisation = Objects.requireNonNull(actor).authorisation;
+      return this;
+    }
+
+    public Started start() {
+      Map<String, Object> stored = caseType.stored(reference);
+      caseType.checkAllowedState(registry.getRequiredEvent(caseType.caseTypeId, eventId), eventId, stored, null);
+      // Loads the case the way CCD does before an event starts, so the case view applies.
+      JsonNode loaded = send(MockMvcRequestBuilders.get("/ccd-persistence/cases")
+          .param("case-refs", String.valueOf(reference)), authorisation, null);
+      JsonNode details = loaded.path(0).path("case_details");
+      CallbackRequest request = CallbackRequest.builder()
+          .eventId(eventId)
+          .caseDetails(uk.gov.hmcts.reform.ccd.client.model.CaseDetails.builder()
+              .id(reference)
+              .jurisdiction(details.path("jurisdiction").asText())
+              .caseTypeId(caseType.caseTypeId)
+              .state(details.path("state").asText())
+              .securityClassification(Classification.valueOf(details.path("security_classification").asText()))
+              .data(WIRE.convertValue(details.path("case_data"), OBJECT_MAP))
+              .build())
+          .build();
+      JsonNode response = send(MockMvcRequestBuilders.post("/callbacks/about-to-start")
+          .param("eventId", eventId), authorisation, request);
+      return new Started(response, caseType, reference, eventId, authorisation,
+          ((Number) stored.get("case_revision")).longValue());
+    }
+
+    public Started startExpectingSuccess() {
+      Started started = start();
+      if (!started.errors().isEmpty()) {
+        throw new AssertionError("Expected event " + eventId + " to start, got errors " + started.errors());
+      }
+      return started;
+    }
+  }
+
+  /**
+   * The event as CCD's case history records it: who made it, and the summary and description it
+   * shows. {@code userId} is the actor's IDAM id.
+   */
+  public record Audit(long id,
+                      String eventId,
+                      int version,
+                      long revision,
+                      String userId,
+                      String summary,
+                      String description) {
   }
 
   /** A row the application changed during the event, as recorded by the SDK's row auditing. */
@@ -850,19 +962,48 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
     }
 
     public Case caseData() {
-      return mapper.convertValue(data, caseClass);
+      JsonNode caseFields = event().isExternal() && data.isObject()
+          ? ((ObjectNode) data.deepCopy()).without(DecentralisedConfigBuilder.PAYLOAD_FIELD) : data;
+      return mapper.convertValue(caseFields, caseClass);
+    }
+
+    /** The payload an external event's start handler sent to the frontend, as its declared start type. */
+    @SuppressWarnings("unchecked")
+    <P> P payload() {
+      Class<?> payloadType = event().getStartType();
+      if (payloadType == null) {
+        throw new AssertionError("Event " + eventId + " sends its frontend no payload on start");
+      }
+      JsonNode field = data.path(DecentralisedConfigBuilder.PAYLOAD_FIELD);
+      if (!field.isTextual()) {
+        throw new AssertionError("Event " + eventId + " did not start with a payload");
+      }
+      try {
+        return (P) mapper.readValue(field.asText(), payloadType);
+      } catch (JsonProcessingException ex) {
+        throw new AssertionError("Event " + eventId + " payload is not a " + payloadType.getSimpleName(), ex);
+      }
+    }
+
+    private Event<?, ?, ?> event() {
+      return registry.getRequiredEvent(caseType.caseTypeId, eventId);
+    }
+
+    /** Prepares submission of this payload alone, as a bespoke frontend posts it. */
+    EventSubmission submittingPayload(Object payload) {
+      return submitting(null).withPayload(payload);
     }
 
     /** Applies the user's changes to the started case and prepares its submission. */
-    public CaseType.EventSubmission edit(Consumer<Case> changes) {
+    public EventSubmission edit(Consumer<Case> changes) {
       Case edited = caseData();
       changes.accept(edited);
       return submitting(edited);
     }
 
     /** Prepares submission of this data in place of the started case. */
-    public CaseType.EventSubmission submitting(Case submittedData) {
-      CaseType.EventSubmission submission = caseType.event(reference, eventId, submittedData);
+    public EventSubmission submitting(Case submittedData) {
+      EventSubmission submission = caseType.event(reference, eventId, submittedData);
       submission.authorisation = authorisation;
       submission.startRevision = revision;
       return submission;
@@ -916,6 +1057,17 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
           result.getResponse().getStatus(), content);
     }
     return fromJson(content);
+  }
+
+  private ExternalOutcome outcomeOf(Submission submission) {
+    if (submission instanceof Accepted accepted) {
+      long eventId = accepted.audit().id();
+      return new ExternalOutcome(200, null, List.of(), accepted.audit(), () -> rowChanges(eventId));
+    }
+    if (submission instanceof Failed failed) {
+      return new ExternalOutcome(failed.status(), failed.body(), List.of(), null, List::of);
+    }
+    return new ExternalOutcome(422, null, submission.errors(), null, List::of);
   }
 
   private List<RowChange> rowChanges(long caseEventId) {
