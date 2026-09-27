@@ -72,7 +72,7 @@ public class CaseSubmissionService {
       IdamService.User user,
       CaseSubmissionHandler handler
   ) {
-    var handlerResult = handler.apply(event, user.authToken());
+    var handlerResult = handler.apply(event, user);
     applyHandlerChanges(event, handlerResult);
 
     return new CaseEventTransactionCoordinator.CaseEventWrite<>(

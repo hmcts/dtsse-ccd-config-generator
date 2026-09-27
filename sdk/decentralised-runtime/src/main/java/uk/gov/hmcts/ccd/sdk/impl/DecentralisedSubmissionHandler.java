@@ -30,11 +30,11 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
   private final ObjectMapper mapper;
 
   @Override
-  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, String authorisation) {
+  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, IdamService.User user) {
     log.info("[submit-handler] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
-    var outcome = prepareSubmitHandler(event);
+    var outcome = prepareSubmitHandler(event, user);
 
     if (outcome.getErrors() != null && !outcome.getErrors().isEmpty()) {
       throw new CallbackValidationException(outcome.getErrors(), outcome.getWarnings());
@@ -52,7 +52,7 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
         () -> outcome);
   }
 
-  private SubmitResponse<?> prepareSubmitHandler(DecentralisedCaseEvent event) {
+  private SubmitResponse<?> prepareSubmitHandler(DecentralisedCaseEvent event, IdamService.User user) {
     String caseType = event.getEventDetails().getCaseType();
     String eventId = event.getEventDetails().getEventId();
     Event<?, ?, ?> eventConfig = registry.getRequiredEvent(caseType, eventId);
@@ -71,11 +71,11 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
     if (eventConfig.isExternal()) {
       JsonNode payloadField = data == null ? null : data.get(DecentralisedConfigBuilder.PAYLOAD_FIELD);
       Object submitted = readPayload(eventId, payloadField, eventConfig.getSubmitType());
-      return eventConfig.submit(new EventPayload(caseRef, null, urlParams), submitted);
+      return eventConfig.submit(new EventPayload(caseRef, null, urlParams), submitted, user.toExternalUser());
     }
 
     Object domainCaseData = mapper.convertValue(data, registry.getRequired(caseType).getCaseClass());
-    return eventConfig.submit(new EventPayload(caseRef, domainCaseData, urlParams), null);
+    return eventConfig.submit(new EventPayload(caseRef, domainCaseData, urlParams), null, null);
   }
 
   /**

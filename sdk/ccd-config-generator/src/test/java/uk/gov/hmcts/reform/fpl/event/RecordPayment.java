@@ -8,9 +8,9 @@ import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalEventId;
-import uk.gov.hmcts.ccd.sdk.api.external.ExternalStart;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalStartRequest;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalStartResponse;
-import uk.gov.hmcts.ccd.sdk.api.external.ExternalSubmit;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalSubmitRequest;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalSubmitResponse;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
@@ -40,11 +40,11 @@ public class RecordPayment implements CCDConfig<CaseData, State, UserRole> {
         .onStart(this::start);
   }
 
-  private ExternalStartResponse<PaymentDue> start(ExternalStart start) {
+  private ExternalStartResponse<PaymentDue> start(ExternalStartRequest start) {
     return ExternalStartResponse.started(new PaymentDue(BigDecimal.ZERO));
   }
 
-  private ExternalSubmitResponse<State> submit(ExternalSubmit<Payment> submit) {
+  private ExternalSubmitResponse<State> submit(ExternalSubmitRequest<Payment> submit) {
     return ExternalSubmitResponse.accepted("Payment recorded", "Recorded a payment");
   }
 }

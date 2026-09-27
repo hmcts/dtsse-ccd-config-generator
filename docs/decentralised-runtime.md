@@ -264,13 +264,13 @@ configBuilder.externalEvent(MAKE_ORDER, this::submit)
     .grant(Permission.CRUD, UserRole.JUDGE)
     .onStart(this::start);
 
-// Given the case reference; answers the payload the frontend is sent.
-private ExternalStartResponse<MakeOrderStart> start(ExternalStart start) {
+// Given the case reference and the user; answers the payload the frontend is sent.
+private ExternalStartResponse<MakeOrderStart> start(ExternalStartRequest start) {
     return ExternalStartResponse.started(new MakeOrderStart(...));
 }
 
-// Given the case reference and the payload the frontend submitted.
-private ExternalSubmitResponse<State> submit(ExternalSubmit<MakeOrderRequest> submit) {
+// Given the case reference, the payload the frontend submitted and the user.
+private ExternalSubmitResponse<State> submit(ExternalSubmitRequest<MakeOrderRequest> submit) {
     MakeOrderRequest order = submit.payload();
     ...
     return ExternalSubmitResponse.accepted("Order draft saved", "Saved an order as a draft");
@@ -280,6 +280,16 @@ private ExternalSubmitResponse<State> submit(ExternalSubmit<MakeOrderRequest> su
 The submit handler is required. It answers `accepted(summary, description)`, optionally `.movingTo(state)`, or `rejected(errors)`, which the frontend receives as a 422.
 
 The start handler is optional. It answers `ExternalStartResponse.started(payload)` or `rejected(errors)`. Without one the event has no about-to-start callback and the frontend is sent no payload.
+
+Both requests carry `user()`: the IDAM id and roles of the user driving the event, and their bearer token for the handler's calls to downstream services such as CDAM.
+
+A handler rejects either by returning a rejection, or, from code below the handler where returning one is awkward, by throwing one:
+
+```java
+throw ExternalRejection.because("Choose an order type");
+```
+
+Both have the same effect: the frontend receives the errors, and a submission's database writes are rolled back.
 
 The payloads travel in the case field named by `DecentralisedConfigBuilder.PAYLOAD_FIELD`, `sdkEventPayload`, which the SDK defines for the case type with create and read permission for the event's roles.
 

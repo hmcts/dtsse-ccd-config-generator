@@ -12,9 +12,10 @@ import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalEventId;
-import uk.gov.hmcts.ccd.sdk.api.external.ExternalStart;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalRejection;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalStartRequest;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalStartResponse;
-import uk.gov.hmcts.ccd.sdk.api.external.ExternalSubmit;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalSubmitRequest;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalSubmitResponse;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
@@ -61,22 +62,30 @@ public class ExternalGreetingEvent implements CCDConfig<CaseData, State, UserRol
             .grant(CREATE_READ_UPDATE_DELETE, SUPER_USER);
     }
 
-    private ExternalStartResponse<Greeting> start(ExternalStart start) {
+    private ExternalStartResponse<Greeting> start(ExternalStartRequest start) {
         if (State.Withdrawn.name().equals(state(start.caseReference()))) {
             return ExternalStartResponse.rejected("The case has been withdrawn");
         }
-        return ExternalStartResponse.started(new Greeting("hello " + start.caseReference()));
+        return ExternalStartResponse.started(new Greeting("hello " + start.user().id()));
     }
 
-    private ExternalSubmitResponse<State> greet(ExternalSubmit<Reply> submit) {
+    private ExternalSubmitResponse<State> greet(ExternalSubmitRequest<Reply> submit) {
+        keepAsNote(submit);
+        return ExternalSubmitResponse.accepted(submit.payload().message(), "Greeted by " + submit.user().id());
+    }
+
+    /** Writes the reply before checking it, so a rejection thrown here must roll the write back. */
+    private void keepAsNote(ExternalSubmitRequest<Reply> submit) {
         String message = submit.payload().message();
+        db.update("insert into case_notes(reference, author, note) values (:reference, :author, :note)",
+            Map.of("reference", submit.caseReference(), "author", submit.user().id(),
+                "note", message == null ? "" : message));
         if (message == null || message.isBlank()) {
-            return ExternalSubmitResponse.rejected("Say something");
+            throw ExternalRejection.because("Say something");
         }
-        return ExternalSubmitResponse.accepted(message, "Greeted from an external frontend");
     }
 
-    private ExternalSubmitResponse<State> farewell(ExternalSubmit<Farewell> submit) {
+    private ExternalSubmitResponse<State> farewell(ExternalSubmitRequest<Farewell> submit) {
         return ExternalSubmitResponse.<State>accepted(submit.payload().reason(), "Said goodbye")
             .movingTo(State.Withdrawn);
     }
