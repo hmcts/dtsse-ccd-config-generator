@@ -97,7 +97,7 @@ class ExternalEventBuilderImpl<T, R extends HasRole, S, O, I>
     }
     event = Event.EventBuilder.builder(id.id(), config.caseClass, new PropertyUtils(), states, states);
     event.showCondition(NEVER_SHOW);
-    event.external(id.submitType(), submitHandler);
+    event.external(id, submitHandler);
     events.computeIfAbsent(id.id(), key -> Lists.newArrayList()).add(event);
     return this;
   }

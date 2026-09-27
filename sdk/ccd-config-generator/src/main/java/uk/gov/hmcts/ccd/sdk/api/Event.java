@@ -21,6 +21,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.Start;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalEventId;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalRejection;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalStart;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalStartHandler;
@@ -59,9 +60,12 @@ public class Event<T, R extends HasRole, S> {
   @Getter(AccessLevel.NONE)
   @Setter(AccessLevel.NONE)
   private Function<EventPayload<T, S>, Object> onStart;
-  // What an external event's frontend submits; null for other events.
+  // An external event's payload types: what its frontend submits, and what it is sent on start.
+  // Null for other events; the start type is also null for an external event that sends nothing.
   @Setter(AccessLevel.NONE)
   private Class<?> submitType;
+  @Setter(AccessLevel.NONE)
+  private Class<?> startType;
   private FieldCollection fields;
   private boolean concurrent;
 
@@ -161,10 +165,11 @@ public class Event<T, R extends HasRole, S> {
      * events with {@code DecentralisedConfigBuilder.externalEvent}.
      */
     @SuppressWarnings("unchecked")
-    public <I> EventBuilder<T, R, S> external(Class<I> submitType, ExternalSubmitHandler<S, I> submit) {
+    public <I> EventBuilder<T, R, S> external(ExternalEventId<?, I> id, ExternalSubmitHandler<S, I> submit) {
       // Immutable, so the event's roles keep create and read on it even under explicitGrants().
       fieldsBuilder.field(DecentralisedConfigBuilder.PAYLOAD_FIELD).type("TextArea").optional().immutable();
-      this.submitType = submitType;
+      this.submitType = id.submitType();
+      this.startType = id.startType();
       this.onSubmit = (event, payload) -> toSubmitResponse(
           // The runtime has already read the payload as submitType; a cast through the class would
           // reject a boxed value for a primitive payload type.
@@ -316,6 +321,10 @@ public class Event<T, R extends HasRole, S> {
     // An external event's handlers are set through external(...) and externalStartHandler(...).
     private void submitType(Class<?> value) {
       this.submitType = value;
+    }
+
+    private void startType(Class<?> value) {
+      this.startType = value;
     }
 
     private void onSubmit(BiFunction<EventPayload<T, S>, Object, SubmitResponse<S>> value) {
