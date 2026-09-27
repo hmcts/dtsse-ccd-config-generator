@@ -53,11 +53,12 @@ class CaseSubmissionServiceTest {
     when(eventConfig.hasSubmitHandler()).thenReturn(false);
     when(eventConfig.isConcurrent()).thenReturn(false);
     doReturn(Set.of("Submitted")).when(eventConfig).getPreState();
-    when(idam.retrieveUser("raw-token")).thenReturn(new IdamService.User(
+    var user = new IdamService.User(
         "Bearer raw-token",
         new UserInfo("sub", "uid", "name", "given", "family", List.of("caseworker"))
-    ));
-    when(legacyHandler.apply(eq(event), eq("Bearer raw-token"))).thenReturn(handlerResult());
+    );
+    when(idam.retrieveUser("raw-token")).thenReturn(user);
+    when(legacyHandler.apply(eq(event), eq(user))).thenReturn(handlerResult());
     when(transactionCoordinator.execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any(), any()))
         .thenAnswer(invocation -> {
           var work = invocation
@@ -72,7 +73,7 @@ class CaseSubmissionServiceTest {
 
     service.submit(event, "raw-token", IDEMPOTENCY_KEY);
 
-    verify(legacyHandler).apply(event, "Bearer raw-token");
+    verify(legacyHandler).apply(event, user);
     verify(transactionCoordinator).execute(
         eq(123456789L),
         eq(IDEMPOTENCY_KEY),

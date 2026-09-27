@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -23,6 +24,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalRejection;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalStartResponse;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalUser;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
@@ -32,12 +34,15 @@ public class CcdCallbackExecutor {
 
   private final ResolvedConfigRegistry registry;
   private final ObjectMapper mapper;
+  private final ObjectProvider<ExternalUserResolver> users;
   private final Map<String, JavaType> caseTypeToJavaType = Maps.newHashMap();
 
   @Autowired
-  public CcdCallbackExecutor(ResolvedConfigRegistry registry, ObjectMapper mapper) {
+  public CcdCallbackExecutor(ResolvedConfigRegistry registry, ObjectMapper mapper,
+                             ObjectProvider<ExternalUserResolver> users) {
     this.registry = registry;
     this.mapper = mapper;
+    this.users = users;
     for (ResolvedCCDConfig<?, ?, ?> config : registry.getAll()) {
       this.caseTypeToJavaType.put(config.getCaseType(),
           mapper.getTypeFactory().constructParametricType(CaseDetails.class, config.getCaseClass(),
@@ -46,7 +51,7 @@ public class CcdCallbackExecutor {
   }
 
   @SneakyThrows
-  public AboutToStartOrSubmitResponse aboutToStart(CallbackRequest request) {
+  public AboutToStartOrSubmitResponse aboutToStart(CallbackRequest request, String authorisation) {
     log.info("About to start event ID: {}", request.getEventId());
 
     var event = findCaseEvent(request);
@@ -62,7 +67,7 @@ public class CcdCallbackExecutor {
           new LinkedMultiValueMap<>()
       );
 
-      Object response = event.start(payload);
+      Object response = event.start(payload, event.isExternal() ? externalUser(authorisation) : null);
       if (!event.isExternal()) {
         return AboutToStartOrSubmitResponse.builder().data(response).build();
       }
@@ -80,6 +85,14 @@ public class CcdCallbackExecutor {
 
     return findCallback(request, Event::getAboutToStartCallback)
         .handle(convertCaseDetails(request.getCaseDetails()));
+  }
+
+  private ExternalUser externalUser(String authorisation) {
+    ExternalUserResolver resolver = users.getIfAvailable();
+    if (resolver == null) {
+      throw new IllegalStateException("External events need the decentralised runtime to resolve their user");
+    }
+    return resolver.resolve(authorisation);
   }
 
   @SneakyThrows

@@ -4196,11 +4196,13 @@ public class TestWithCCD extends CftlibTest {
         assertThat("EXUI never offers an external event", offered, not(hasItem(ExternalGreetingEvent.GREETING.id())));
         assertThat("EXUI never offers an external event", offered, not(hasItem(ExternalGreetingEvent.FAREWELL.id())));
 
+        var caseworker = idam.getUserInfo(getAuthorisation(EXTERNAL_EVENT_USER)).getUid();
         var start = startExternalEvent(caseRef, ExternalGreetingEvent.GREETING.id());
 
         var started = mapper.readValue((String) start.getCaseDetails().getData().get("sdkEventPayload"),
             ExternalGreetingEvent.Greeting.class);
-        assertThat(started, equalTo(new ExternalGreetingEvent.Greeting("hello " + caseRef)));
+        assertThat("the start handler is told who is starting", started,
+            equalTo(new ExternalGreetingEvent.Greeting("hello " + caseworker)));
 
         var response = submitExternalEvent(caseRef, ExternalGreetingEvent.GREETING.id(), start.getToken(),
             mapper.writeValueAsString(new ExternalGreetingEvent.Reply("hello back")));
@@ -4208,7 +4210,8 @@ public class TestWithCCD extends CftlibTest {
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
         var history = getLatestAuditEvent(EXTERNAL_EVENT_USER, caseRef, ExternalGreetingEvent.GREETING.id());
         assertThat(history.get("summary"), equalTo("hello back"));
-        assertThat(history.get("description"), equalTo("Greeted from an external frontend"));
+        assertThat("the submit handler is told who submitted", history.get("description"),
+            equalTo("Greeted by " + caseworker));
         var storesPayload = db.queryForObject(
             "select jsonb_exists(data, 'sdkEventPayload') from ccd.case_data where reference = :ref",
             Map.of("ref", caseRef), Boolean.class);
@@ -4220,6 +4223,7 @@ public class TestWithCCD extends CftlibTest {
     public void externalEventRejectionReachesTheFrontendAndChangesNothing() throws Exception {
         var revision = caseDataRevision();
         var audits = auditCountForCase(caseRef);
+        var notes = caseNoteCount(caseRef);
         var start = startExternalEvent(caseRef, ExternalGreetingEvent.GREETING.id());
 
         var response = submitExternalEvent(caseRef, ExternalGreetingEvent.GREETING.id(), start.getToken(),
@@ -4230,6 +4234,13 @@ public class TestWithCCD extends CftlibTest {
         assertThat(body.get("callbackErrors"), equalTo(List.of("Say something")));
         assertThat(caseDataRevision(), equalTo(revision));
         assertThat(auditCountForCase(caseRef), equalTo(audits));
+        assertThat("the note written before the rejection was thrown is rolled back",
+            caseNoteCount(caseRef), equalTo(notes));
+    }
+
+    private int caseNoteCount(long reference) {
+        return db.queryForObject("select count(*) from case_notes where reference = :ref",
+            Map.of("ref", reference), Integer.class);
     }
 
     @Order(37)

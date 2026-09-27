@@ -18,8 +18,8 @@ import uk.gov.hmcts.ccd.sdk.api.external.ExternalSubmitHandler;
 class ExternalEventBuilderImpl<T, R extends HasRole, S, O, I>
     implements ExternalEventStates<T, R, S, O, I>, ExternalEventBuilder<T, R, S, O, I> {
 
-  // Always false, so EXUI never offers the event; CCD's API still starts and submits it.
-  private static final String NEVER_SHOW = "[STATE]=\"NEVER_SHOW\"";
+  // Contradictory checks keep the event hidden in EXUI; CCD's API still starts and submits it.
+  private static final String NEVER_SHOW = "[STATE]=\"A\" AND [STATE]=\"B\"";
 
   private final ResolvedCCDConfig<T, S, R> config;
   private final Map<String, List<Event.EventBuilder<T, R, S>>> events;
@@ -97,7 +97,7 @@ class ExternalEventBuilderImpl<T, R extends HasRole, S, O, I>
     }
     event = Event.EventBuilder.builder(id.id(), config.caseClass, new PropertyUtils(), states, states);
     event.showCondition(NEVER_SHOW);
-    event.external(id.submitType(), submitHandler);
+    event.external(id, submitHandler);
     events.computeIfAbsent(id.id(), key -> Lists.newArrayList()).add(event);
     return this;
   }
