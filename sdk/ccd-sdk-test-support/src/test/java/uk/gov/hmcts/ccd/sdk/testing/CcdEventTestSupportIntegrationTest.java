@@ -267,7 +267,7 @@ class CcdEventTestSupportIntegrationTest {
 
   @Test
   void acceptedResultListsTheRowsTheEventChanged() {
-    jdbc.execute("create table if not exists public.audited_rows (id serial primary key, value text)");
+    jdbc.execute("create table if not exists public.audited_rows (id serial primary key, stored_value text)");
     jdbc.execute("drop trigger if exists ccd_audit_row_changes on public.audited_rows");
     jdbc.execute("call ccd.attach_case_event_auditing_v1('public.audited_rows')");
     long reference = events.seed(TestState.Open, new TestCase("original"));
@@ -277,8 +277,9 @@ class CcdEventTestSupportIntegrationTest {
     assertThat(result.changes("audited_rows")).singleElement().satisfies(change -> {
       assertThat(change.operation()).isEqualTo(CcdEventTestSupport.RowChange.Operation.INSERT);
       assertThat(change.oldValues()).isNull();
-      assertThat(change.newValues().path("value").asText()).isEqualTo("written");
+      assertThat(change.newValues().path("stored_value").asText()).isEqualTo("written");
     });
+    assertThat(result.changed("audited_rows", AuditedRow.class)).isEqualTo(new AuditedRow("written"));
     assertThat(result.changes()).extracting(CcdEventTestSupport.RowChange::table)
         .containsExactly("audited_rows");
   }
@@ -295,7 +296,7 @@ class CcdEventTestSupportIntegrationTest {
     assertThat(outcome.status()).isEqualTo(200);
     assertThat(outcome.audit().summary()).isEqualTo("hello back");
     assertThat(events.storedData(reference).value()).isEqualTo("original");
-    assertThat(events.snapshot(reference).rawData().has("eventPayload")).isFalse();
+    assertThat(events.snapshot(reference).rawData().has(DecentralisedConfigBuilder.PAYLOAD_FIELD)).isFalse();
   }
 
   @Test
@@ -388,6 +389,9 @@ class CcdEventTestSupportIntegrationTest {
   static final ExternalEventId<Greeting, Reply> GREET = ExternalEventId.of("ext:greet", Greeting.class, Reply.class);
 
   record Reply(String text) {
+  }
+
+  record AuditedRow(String storedValue) {
   }
 
   enum TestState {
@@ -525,7 +529,7 @@ class CcdEventTestSupportIntegrationTest {
             throw new IllegalStateException("The case is already being changed");
           }).forAllStates();
           builder.decentralisedEvent("writeRow", payload -> {
-            jdbc.update("insert into public.audited_rows (value) values (?)", payload.caseData().value());
+            jdbc.update("insert into public.audited_rows (stored_value) values (?)", payload.caseData().value());
             return SubmitResponse.defaultResponse();
           }).forAllStates();
           builder.decentralisedEvent("metadata", payload -> SubmitResponse.<TestState>builder()

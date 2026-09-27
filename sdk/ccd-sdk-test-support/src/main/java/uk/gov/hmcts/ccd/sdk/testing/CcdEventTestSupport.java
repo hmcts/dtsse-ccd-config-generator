@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -707,6 +708,27 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
                           JsonNode oldValues,
                           JsonNode newValues) {
     public enum Operation { INSERT, UPDATE, DELETE }
+
+    // Columns are snake_case; the types tests read rows as, often the application's own, are camelCase.
+    private static final ObjectMapper ROWS = JsonMapper.builder()
+        .propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
+        .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+        .findAndAddModules()
+        .build();
+
+    /**
+     * The row as the change left it, read as a {@code T} whose properties are its columns.
+     */
+    public <T> T newValues(Class<T> type) {
+      return ROWS.convertValue(newValues, type);
+    }
+
+    static RowChange only(List<RowChange> changes, String table) {
+      if (changes.size() != 1) {
+        throw new AssertionError("Expected one change to " + table + ", got " + changes.size());
+      }
+      return changes.getFirst();
+    }
   }
 
   /**
@@ -845,6 +867,13 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
     /** The rows this event changed in one table, in the order it changed them. */
     public List<RowChange> changes(String table) {
       return changes().stream().filter(change -> change.table().equals(table)).toList();
+    }
+
+    /**
+     * The one row this event changed in a table, as it left it; see {@link RowChange#newValues(Class)}.
+     */
+    public <T> T changed(String table, Class<T> type) {
+      return RowChange.only(changes(table), table).newValues(type);
     }
 
     @Override

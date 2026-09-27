@@ -57,6 +57,14 @@ public final class ExternalOutcome {
     return changes().stream().filter(change -> change.table().equals(table)).toList();
   }
 
+  /**
+   * The one row an accepted submission changed in a table, as it left it; see
+   * {@link CcdEventTestSupport.RowChange#newValues(Class)}.
+   */
+  public <T> T changed(String table, Class<T> type) {
+    return CcdEventTestSupport.RowChange.only(changes(table), table).newValues(type);
+  }
+
   @Override
   public String toString() {
     return accepted() ? "accepted" : errors.isEmpty() ? "HTTP " + status + (body == null ? "" : ": " + body)
