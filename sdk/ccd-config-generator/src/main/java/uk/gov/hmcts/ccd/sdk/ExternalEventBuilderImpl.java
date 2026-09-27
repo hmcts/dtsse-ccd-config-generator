@@ -18,9 +18,6 @@ import uk.gov.hmcts.ccd.sdk.api.external.ExternalSubmitHandler;
 class ExternalEventBuilderImpl<T, R extends HasRole, S, O, I>
     implements ExternalEventStates<T, R, S, O, I>, ExternalEventBuilder<T, R, S, O, I> {
 
-  // Contradictory checks keep the event hidden in EXUI; CCD's API still starts and submits it.
-  private static final String NEVER_SHOW = "[STATE]=\"A\" AND [STATE]=\"B\"";
-
   private final ResolvedCCDConfig<T, S, R> config;
   private final Map<String, List<Event.EventBuilder<T, R, S>>> events;
   private final ExternalEventId<O, I> id;
@@ -65,6 +62,12 @@ class ExternalEventBuilderImpl<T, R extends HasRole, S, O, I>
     return this;
   }
 
+  @Override
+  public ExternalEventBuilder<T, R, S, O, I> showCondition(String showCondition) {
+    event.showCondition(showCondition);
+    return this;
+  }
+
   @SafeVarargs
   @Override
   public final ExternalEventBuilder<T, R, S, O, I> grant(Set<Permission> permissions, R... roles) {
@@ -96,7 +99,6 @@ class ExternalEventBuilderImpl<T, R extends HasRole, S, O, I>
       throw new IllegalArgumentException("External event " + id.id() + " needs at least one state");
     }
     event = Event.EventBuilder.builder(id.id(), config.caseClass, new PropertyUtils(), states, states);
-    event.showCondition(NEVER_SHOW);
     event.external(id, submitHandler);
     events.computeIfAbsent(id.id(), key -> Lists.newArrayList()).add(event);
     return this;

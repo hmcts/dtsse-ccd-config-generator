@@ -58,6 +58,8 @@ public class ExternalGreetingEvent implements CCDConfig<CaseData, State, UserRol
             .externalEvent(FAREWELL, this::farewell)
             .forAllStates()
             .name("Farewell")
+            // Whether EXUI offers an external event is the service's choice; this one is hidden until withdrawal.
+            .showCondition("[STATE]=\"Withdrawn\"")
             .grant(CREATE_READ_UPDATE, CASE_WORKER)
             .grant(CREATE_READ_UPDATE_DELETE, SUPER_USER);
     }
