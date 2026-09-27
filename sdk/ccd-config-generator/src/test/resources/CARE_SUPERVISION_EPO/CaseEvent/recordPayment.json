@@ -6,7 +6,6 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "PostConditionState": "*",
     "Description": "Record payment",
-    "EventEnablingCondition": "[STATE]=\"A\" AND [STATE]=\"B\"",
     "DisplayOrder": 1,
     "ID": "recordPayment",
     "SecurityClassification": "Public",

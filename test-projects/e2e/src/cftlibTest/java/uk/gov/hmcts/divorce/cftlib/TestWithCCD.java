@@ -4192,9 +4192,9 @@ public class TestWithCCD extends CftlibTest {
     @Test
     public void externalEventExchangesAPayloadThroughCcd() throws Exception {
         var offered = exuiTriggers(caseRef);
-        assertThat("EXUI offers the user other events", offered.isEmpty(), equalTo(false));
-        assertThat("EXUI never offers an external event", offered, not(hasItem(ExternalGreetingEvent.GREETING.id())));
-        assertThat("EXUI never offers an external event", offered, not(hasItem(ExternalGreetingEvent.FAREWELL.id())));
+        assertThat("EXUI offers an external event like any other", offered, hasItem(ExternalGreetingEvent.GREETING.id()));
+        assertThat("unless the service's show condition hides it", offered,
+            not(hasItem(ExternalGreetingEvent.FAREWELL.id())));
 
         var caseworker = idam.getUserInfo(getAuthorisation(EXTERNAL_EVENT_USER)).getUid();
         var start = startExternalEvent(caseRef, ExternalGreetingEvent.GREETING.id());
