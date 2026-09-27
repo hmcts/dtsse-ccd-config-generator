@@ -294,6 +294,7 @@ class CcdEventTestSupportIntegrationTest {
     var outcome = greet.submitExpectingSuccess(new Reply("hello back"));
 
     assertThat(outcome.status()).isEqualTo(200);
+    assertThat(outcome.audit().description()).isEqualTo("Greeted by " + outcome.audit().userId());
     assertThat(outcome.audit().summary()).isEqualTo("hello back");
     assertThat(events.storedData(reference).value()).isEqualTo("original");
     assertThat(events.snapshot(reference).rawData().has(DecentralisedConfigBuilder.PAYLOAD_FIELD)).isFalse();
@@ -515,7 +516,7 @@ class CcdEventTestSupportIntegrationTest {
               payload -> payload.caseData()).forAllStates().nonConcurrent();
           builder.externalEvent(GREET, submit -> submit.payload().text().isBlank()
                   ? ExternalSubmitResponse.rejected("Say something")
-                  : ExternalSubmitResponse.accepted(submit.payload().text(), "Greeted"))
+                  : ExternalSubmitResponse.accepted(submit.payload().text(), "Greeted by " + submit.user().id()))
               .forAllStates()
               .onStart(start -> {
                 // The start handler loads what it needs; here, the case's stored value.
