@@ -1,0 +1,26 @@
+[
+  {
+    "CaseTypeID": "GatedMember",
+    "FieldType": "Text",
+    "ID": "baseField",
+    "Label": "A base field",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "GatedMember",
+    "FieldType": "CaseHistoryViewer",
+    "ID": "caseHistory",
+    "Label": " ",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "GatedMember",
+    "FieldType": "GatedMemberComplex",
+    "ID": "complexField",
+    "Label": "A complex field",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  }
+]

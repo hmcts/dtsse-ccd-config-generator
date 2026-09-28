@@ -1,0 +1,27 @@
+[
+  {
+    "ElementLabel": "Has representative",
+    "FieldType": "Text",
+    "ID": "InheritedMemberRepresentative",
+    "ListElementCode": "hasRepresentative",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ElementLabel": "Name",
+    "FieldShowCondition": "hasRepresentative=\"Yes\"",
+    "FieldType": "Text",
+    "ID": "InheritedMemberRepresentative",
+    "ListElementCode": "partyName",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ElementLabel": "Representative organisation",
+    "FieldType": "Text",
+    "ID": "InheritedMemberRepresentative",
+    "ListElementCode": "organisation",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  }
+]

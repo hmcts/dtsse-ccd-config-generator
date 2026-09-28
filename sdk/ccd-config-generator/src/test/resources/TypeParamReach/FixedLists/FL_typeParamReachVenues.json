@@ -1,0 +1,16 @@
+[
+  {
+    "DisplayOrder": 1,
+    "ID": "FL_typeParamReachVenues",
+    "ListElement": "Aberdeen",
+    "ListElementCode": "219164",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "DisplayOrder": 2,
+    "ID": "FL_typeParamReachVenues",
+    "ListElement": "Aldershot",
+    "ListElementCode": "450049",
+    "LiveFrom": "01/01/2017"
+  }
+]

@@ -1,0 +1,10 @@
+[
+  {
+    "Description": "Env-gated field case type",
+    "ID": "GatedField",
+    "JurisdictionID": "",
+    "LiveFrom": "01/01/2017",
+    "Name": "Gated field",
+    "SecurityClassification": "Public"
+  }
+]

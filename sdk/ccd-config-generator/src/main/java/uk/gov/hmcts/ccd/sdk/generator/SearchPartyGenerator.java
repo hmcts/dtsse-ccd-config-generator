@@ -30,7 +30,15 @@ public class SearchPartyGenerator<T, S, R extends HasRole> implements ConfigGene
     }
 
     final Path path = Paths.get(outputFolder.getPath(), "SearchParty.json");
-    mergeInto(path, result, new AddMissing(), "CaseTypeID", "SearchPartyName");
+    // SearchPartyCollectionFieldName is part of the row identity: a case type can declare several
+    // parties that share a SearchPartyName but point at different collections (e.g. applicants vs
+    // respondents both named "party.firstName,party.lastName"). Keying only on
+    // (CaseTypeID, SearchPartyName) collapsed those to a single last-wins row; including the
+    // collection field name keeps them distinct, mirroring the comparator's SHEET_PRIMARY_KEYS.
+    // Configs whose party names are already unique are unaffected (the extra key never ties), so the
+    // emitted JSON is byte-identical for them.
+    mergeInto(path, result, new AddMissing(), "CaseTypeID", "SearchPartyName",
+        "SearchPartyCollectionFieldName");
   }
 
   @SneakyThrows

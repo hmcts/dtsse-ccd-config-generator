@@ -1,0 +1,44 @@
+[
+  {
+    "CRUD": "CRU",
+    "CaseFieldID": "appellant",
+    "CaseTypeID": "InheritedMember",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseFieldID": "baseField",
+    "CaseTypeID": "InheritedMember",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseFieldID": "caseHistory",
+    "CaseTypeID": "InheritedMember",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseFieldID": "hasJointParty",
+    "CaseTypeID": "InheritedMember",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseFieldID": "partyName",
+    "CaseTypeID": "InheritedMember",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseFieldID": "representative",
+    "CaseTypeID": "InheritedMember",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor"
+  }
+]

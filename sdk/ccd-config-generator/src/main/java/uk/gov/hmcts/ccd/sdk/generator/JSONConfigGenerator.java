@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.generator;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.io.MoreFiles;
 import com.google.common.io.RecursiveDeleteOption;
 import java.io.File;
@@ -46,7 +47,7 @@ public class JSONConfigGenerator<T, S, R extends HasRole> {
 
   private void generateCaseType(File outputfolder, ResolvedCCDConfig<T, S, R> builder) {
     List<Map<String, Object>> fields = Lists.newArrayList();
-    fields.add(Map.of(
+    Map<String, Object> caseType = Maps.newHashMap(Map.of(
         "LiveFrom", JsonUtils.DEFAULT_LIVE_FROM,
         "ID", builder.getCaseType(),
         "Name", builder.getCaseName(),
@@ -54,18 +55,29 @@ public class JSONConfigGenerator<T, S, R extends HasRole> {
         "JurisdictionID", builder.getJurId(),
         "SecurityClassification", "Public"
     ));
+    if (builder.isEnableForDeletion()) {
+      caseType.put("EnableForDeletion", "Y");
+    }
+    if (!builder.getPrintableDocumentsUrl().isEmpty()) {
+      caseType.put("PrintableDocumentsUrl", builder.getPrintableDocumentsUrl());
+    }
+    fields.add(caseType);
     Path output = Paths.get(outputfolder.getPath(),"CaseType.json");
     JsonUtils.mergeInto(output, fields, new JsonUtils.AddMissing(), "ID");
   }
 
   private void generateJurisdiction(File outputfolder, ResolvedCCDConfig<T, S, R> builder) {
     List<Map<String, Object>> fields = Lists.newArrayList();
-    fields.add(ImmutableMap.of(
+    Map<String, Object> jurisdiction = Maps.newHashMap(ImmutableMap.of(
         "LiveFrom", JsonUtils.DEFAULT_LIVE_FROM,
         "ID", builder.getJurId(),
         "Name", builder.getJurName(),
         "Description", builder.getJurDesc()
     ));
+    if (builder.isJurisdictionShuttered()) {
+      jurisdiction.put("Shuttered", "Y");
+    }
+    fields.add(jurisdiction);
     Path output = Paths.get(outputfolder.getPath(),"Jurisdiction.json");
     JsonUtils.mergeInto(output, fields, new JsonUtils.AddMissing(), "ID");
   }
