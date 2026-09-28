@@ -133,6 +133,45 @@ exclusions are not supported. Nested classes must be listed separately.
 - NFDiv, PCS and SPTribs have no Jackson 3 exceptions. Their application mappers, round-trip
   tests and casing/null configuration remain on Jackson 2.
 
+## Before allowing `core-case-data-store-client` 6.x
+
+`core-case-data-store-client` 6.x is the Spring Boot 4 line of the CCD client and uses
+Jackson 3 in its Spring configuration and model metadata. No version of the client
+clears the guard, so consumers that depend on it need an `allowedComponents` entry.
+That exception silences findings that matter at runtime. In an SDK application, the
+primary HTTP mapper is Jackson 2, so the client's Feign responses are decoded with
+Jackson 2:
+
+| Jackson 3 use in the client | Behaviour under the application's Jackson 2 mapper |
+|---|---|
+| `CoreCaseDataConfiguration` declares a `SearchCriteria` bean that needs a `tools.jackson.databind.ObjectMapper` | The Feign clients cannot be created unless a Jackson 3 mapper bean exists. The e2e fixture registers one alongside its `@Primary` Jackson 2 mapper. |
+| `CaseResource.data` and `dataClassification` are `Map<String, tools.jackson.databind.JsonNode>` | `CoreCaseDataApi.createEvent(...)` (`POST /cases/{caseId}/events`) always fails. With `FAIL_ON_UNKNOWN_PROPERTIES` enabled it fails on `_links`. With it disabled it fails with `Cannot construct instance of tools.jackson.databind.JsonNode`. |
+| `CategoriesAndDocuments`, `Category` and `Document` use Jackson 3 `@JsonNaming(SnakeCaseStrategy)` | Jackson 2 ignores the annotation. `CoreCaseDataApi.getCategoriesAndDocuments(...)` fails on `case_version` when unknown properties fail. When they are ignored it returns `caseVersion=null` and `uncategorisedDocuments=null` without an error. |
+| `SearchCriteria` builds queries with the injected Jackson 3 mapper | No effect: it returns a JSON string. |
+
+Models that use only `com.fasterxml.jackson.annotation.*`, such as `CaseDetails`,
+`StartEventResponse` and `CaseDataContent`, are unaffected. Jackson 2 and Jackson 3
+share that annotations package.
+
+Jackson 3 disables `FAIL_ON_UNKNOWN_PROPERTIES` by default, while a plain Jackson 2
+mapper enables it. Response types without `@JsonIgnoreProperties(ignoreUnknown = true)`
+can therefore fail under Jackson 2 even when they contain no Jackson 3 references.
+
+Before adding the exception, confirm that the application:
+
+1. provides a Jackson 3 `ObjectMapper` bean for the client without replacing the
+   `@Primary` Jackson 2 mapper;
+2. does not call `createEvent(...)` or `getCategoriesAndDocuments(...)` through the
+   client;
+3. re-reviews this list whenever the pinned client version changes.
+
+These behaviours were observed with `core-case-data-store-client:6.1.0`. The strict-mapper
+failures come from calling the client in the e2e cftlib stack. The lenient-mapper results
+come from deserialising the same payloads with the e2e mapper after disabling
+`FAIL_ON_UNKNOWN_PROPERTIES`. The affected model classes are unchanged from 6.0.0 to
+6.2.0-rc1. A decoding failure surfaces as `feign.codec.DecodeException` caused by a
+`com.fasterxml.jackson` exception.
+
 ## Failure behaviour
 
 Unreadable classes or JARs fail explicitly with the component and entry. The scanner
