@@ -332,4 +332,88 @@ describe("template insertion", () => {
       ],
     );
   });
+
+  it("inserts a heading template into a personal clause as a clause", () => {
+    const personal = editorSchema.node(
+      "list_item",
+      null,
+      editorSchema.node("paragraph", { id: null }),
+    );
+    const nested = editorSchema.node(
+      "ordered_list",
+      { id: "ordered-list:nested" },
+      [
+        listItem("item:first", "First child"),
+        personal,
+        listItem("item:second", "Second child"),
+      ],
+    );
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node(
+        "ordered_list",
+        { id: "ordered-list:outer" },
+        listItem("item:parent", "Parent", nested),
+      ),
+    );
+    const template = editorSchema.node("doc", null, [
+      editorSchema.node("heading", { level: 2 }, editorSchema.text("Heading")),
+      paragraph(null, "Template wording"),
+    ]);
+    const start = positionOf(doc, "item:first") +
+      doc.nodeAt(positionOf(doc, "item:first"))!.nodeSize;
+
+    const inserted = run(doc, TextSelection.create(doc, start + 2), template);
+    const outer = inserted.firstChild!;
+
+    assert.deepEqual(outer.children.map((node) => node.attrs.id), [
+      "item:parent",
+    ]);
+    assert.deepEqual(
+      outer.firstChild!.lastChild!.children.map((node) => [
+        node.attrs.id,
+        node.firstChild!.type.name,
+        node.textContent,
+      ]),
+      [
+        ["item:first", "paragraph", "First child"],
+        [null, "paragraph", "Heading"],
+        [null, "paragraph", "Template wording"],
+        ["item:second", "paragraph", "Second child"],
+      ],
+    );
+  });
+
+  it("inserts a heading template after a personal clause with wording", () => {
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node("ordered_list", { id: "ordered-list:clauses" }, [
+        listItem("item:first", "First"),
+        listItem(null, "Mine"),
+        listItem("item:second", "Second"),
+      ]),
+    );
+    const template = editorSchema.node("doc", null, [
+      editorSchema.node("heading", { level: 2 }, editorSchema.text("Heading")),
+    ]);
+    const end = positionOf(doc, "item:second") - 2;
+
+    const inserted = run(doc, TextSelection.create(doc, end), template);
+
+    assert.equal(inserted.childCount, 1);
+    assert.deepEqual(
+      inserted.firstChild!.children.map((node) => [
+        node.attrs.id,
+        node.textContent,
+      ]),
+      [
+        ["item:first", "First"],
+        [null, "Mine"],
+        [null, "Heading"],
+        ["item:second", "Second"],
+      ],
+    );
+  });
 });
