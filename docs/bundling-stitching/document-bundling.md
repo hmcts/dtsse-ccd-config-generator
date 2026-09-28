@@ -93,6 +93,15 @@ Limits default to 100 documents, 300 MB per source, 1 GB output and 1,000 pages;
 field with `ccd.bundling.limits.*` or `.limits(...)`. `max-concurrent-renders` (default 2) caps how
 many renders hold a PDFBox scratch buffer at once; extra renders wait their turn.
 
+## Logs and metrics
+
+Logs go through SLF4J with `externalId`, `stage` and `documentId` in the MDC (your own MDC values
+are restored afterwards): one INFO line per stage, one WARN per warning, and exactly one ERROR
+when a render fails, whose message is complete on its own. `result.timings()` has the time spent
+in each stage. If a Micrometer `MeterRegistry` bean exists (or you call `.meterRegistry(...)` on
+the builder) the renderer publishes `ccd.bundling.stage` timers and `ccd.bundling.documents`,
+`pages`, `bytes`, `warnings{code}` and `failures{code}` counters.
+
 ## Extending it
 
 ### Fetching documents: `DocumentResolver`
@@ -186,6 +195,15 @@ The module hands back a file; storing it is a port in the loosest sense, you jus
 code. The e2e `BundlePublisher` uploads to CDAM, attaches the document to the case and builds the
 service's `CaseBundle` from `result.documents()`.
 
+## Telemetry
+
+Logs go through SLF4J with the MDC keys `externalId`, `stage` and `documentId` (restored to the
+caller's values afterwards): one INFO per stage, one WARN per warning, exactly one ERROR at final
+failure whose message is complete on its own. `result.timings()` carries the wall-clock time per
+stage. When a Micrometer `MeterRegistry` bean exists (or `.meterRegistry(...)` is called on the
+builder) the renderer publishes `ccd.bundling.stage` timers and `ccd.bundling.documents`,
+`pages`, `bytes`, `warnings{code}` and `failures{code}` counters; tag values are bounded.
+
 ## Testing
 
 The module's tests are behavioural: a real PDF layer, an in-memory resolver, a stub Docmosis on a
@@ -200,6 +218,6 @@ your event handlers can fake it.
 
 This is the first of a stack of changes. [document-bundling-scope.md](document-bundling-scope.md)
 has the design goals, the delivery plan, the feature matrix and the one-click bundle requirements
-coverage. In short: logging and metrics follow in PR2, the job outbox for asynchronous bundling in
+coverage. In short: the job outbox for asynchronous bundling in
 PR3, and the rest of the microservice's rendering features (Docmosis cover pages, watermarks,
 source bookmarks, media-type detection, readability checks) plus audio and video link pages in PR4.

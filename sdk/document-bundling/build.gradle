@@ -1,5 +1,7 @@
 dependencies {
     api 'org.slf4j:slf4j-api'
+    // Metrics API only; bound to the consumer's registry when one is provided.
+    api 'io.micrometer:micrometer-core'
 
     // Same PDFBox version as em-stitching-api, so the ported rendering code stays a direct port
     // while the characterisation goldens are established.

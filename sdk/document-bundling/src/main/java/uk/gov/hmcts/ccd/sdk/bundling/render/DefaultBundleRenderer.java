@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.bundling.render;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -8,7 +9,9 @@ import java.nio.file.Path;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,8 +19,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BuiltInMediaTypes;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleErrorCode;
@@ -44,12 +49,16 @@ import uk.gov.hmcts.ccd.sdk.bundling.pdf.PdfBundleAssembler;
 
 public final class DefaultBundleRenderer implements BundleRenderer {
   private static final Logger log = LoggerFactory.getLogger(DefaultBundleRenderer.class);
+  private static final String MDC_EXTERNAL_ID = "externalId";
+  private static final String MDC_STAGE = "stage";
+  private static final String MDC_DOCUMENT_ID = "documentId";
 
   private final Map<String, DocumentResolver> resolvers;
   private final DocmosisRenderService docmosis;
   private final HandlerRegistry registry;
   private final BundleLimits limits;
   private final Semaphore permits;
+  private final RenderMetrics metrics;
   private final Path tempBase;
   private final PdfBundleAssembler assembler = new PdfBundleAssembler();
 
@@ -59,12 +68,14 @@ public final class DefaultBundleRenderer implements BundleRenderer {
       HandlerRegistry registry,
       BundleLimits limits,
       int maxConcurrentRenders,
+      MeterRegistry meterRegistry,
       Path tempBase) {
     this.resolvers = Map.copyOf(resolvers);
     this.docmosis = docmosis;
     this.registry = registry;
     this.limits = limits;
     this.permits = new Semaphore(maxConcurrentRenders, true);
+    this.metrics = new RenderMetrics(meterRegistry);
     this.tempBase = tempBase;
   }
 
@@ -78,14 +89,34 @@ public final class DefaultBundleRenderer implements BundleRenderer {
     if (request == null || context == null) {
       throw new IllegalArgumentException("request and context must be provided");
     }
+    String previousExternalId = MDC.get(MDC_EXTERNAL_ID);
+    String previousStage = MDC.get(MDC_STAGE);
+    String previousDocumentId = MDC.get(MDC_DOCUMENT_ID);
+    MDC.put(MDC_EXTERNAL_ID, request.externalId().toString());
     permits.acquireUninterruptibly();
     try {
       return new Render(request, context).execute();
     } catch (BundleGenerationException e) {
-      log.error("Bundle {} failed. {}", request.externalId(), e.getMessage());
+      metrics.failure(e.code().name());
+      log.error("Bundle generation failed. {}", e.getMessage());
+      throw e;
+    } catch (RuntimeException e) {
+      metrics.failure("UNEXPECTED");
+      log.error("Bundle generation failed unexpectedly: {}", e.toString());
       throw e;
     } finally {
       permits.release();
+      restoreMdc(MDC_EXTERNAL_ID, previousExternalId);
+      restoreMdc(MDC_STAGE, previousStage);
+      restoreMdc(MDC_DOCUMENT_ID, previousDocumentId);
+    }
+  }
+
+  private static void restoreMdc(String key, String previous) {
+    if (previous == null) {
+      MDC.remove(key);
+    } else {
+      MDC.put(key, previous);
     }
   }
 
@@ -96,6 +127,7 @@ public final class DefaultBundleRenderer implements BundleRenderer {
     private final BundleRequest request;
     private final BundleExecutionContext context;
     private final List<BundleWarning> warnings = new ArrayList<>();
+    private final EnumMap<BundleStage, Duration> timings = new EnumMap<>(BundleStage.class);
     private Path jobDirectory;
 
     private Render(BundleRequest request, BundleExecutionContext context) {
@@ -107,16 +139,24 @@ public final class DefaultBundleRenderer implements BundleRenderer {
       boolean handedOver = false;
       try {
         jobDirectory = createJobDirectory();
-        validate();
-        Map<DocumentReference, Resolution.Spooled> spooled = Resolution.resolveAndSpool(
-            request.allDocuments(), resolvers, context, jobDirectory, limits);
-        log.info("Bundle {}: resolved {} unique reference(s)", request.externalId(),
-            spooled.size());
-        Map<String, Converted> converted = convertAll(spooled);
-        AssemblyOutcome assembly = assemble(converted);
+        timedStage(BundleStage.VALIDATE, () -> {
+          validate();
+          return null;
+        });
+        log.info("Validated bundle request: {} documents", request.allDocuments().size());
+        Map<DocumentReference, Resolution.Spooled> spooled = timedStage(BundleStage.RESOLVE,
+            () -> Resolution.resolveAndSpool(
+                request.allDocuments(), resolvers, context, jobDirectory, limits));
+        log.info("Resolved and spooled {} unique reference(s), {} bytes", spooled.size(),
+            spooled.values().stream().mapToLong(Resolution.Spooled::size).sum());
+        Map<String, Converted> converted =
+            timedStage(BundleStage.CONVERT, () -> convertAll(spooled));
+        log.info("Converted {} document(s) to PDF", converted.size());
+        AssemblyOutcome assembly = timedStage(BundleStage.ASSEMBLE, () -> assemble(converted));
         BundleResult result = buildResult(assembly, converted);
-        log.info("Bundle {}: rendered '{}', {} pages, {} warning(s)", request.externalId(),
-            request.fileName(), result.pageCount(), warnings.size());
+        metrics.rendered(result.documents().size(), result.pageCount(), assembly.size());
+        log.info("Rendered bundle '{}': {} pages, {} warning(s), timings {}",
+            request.fileName(), result.pageCount(), warnings.size(), describe(timings));
         handedOver = true;
         return result;
       } finally {
@@ -149,7 +189,15 @@ public final class DefaultBundleRenderer implements BundleRenderer {
         Map<DocumentReference, Resolution.Spooled> spooled) {
       Map<String, Converted> outcome = new LinkedHashMap<>();
       for (BundleDocument document : request.allDocuments()) {
-        outcome.put(document.id(), convertOne(document, spooled));
+        MDC.put(MDC_DOCUMENT_ID, document.id());
+        try {
+          long start = System.nanoTime();
+          outcome.put(document.id(), convertOne(document, spooled));
+          log.info("Converted document '{}' in {} ms", document.id(),
+              Duration.ofNanos(System.nanoTime() - start).toMillis());
+        } finally {
+          MDC.remove(MDC_DOCUMENT_ID);
+        }
       }
       return outcome;
     }
@@ -190,8 +238,6 @@ public final class DefaultBundleRenderer implements BundleRenderer {
       }
       Path producedPdf = requireInsideJobDirectory(document, handler, handled.pdfFile());
       handled.warnings().forEach(this::addWarning);
-      log.info("Bundle {}: converted document '{}' as {}", request.externalId(), document.id(),
-          effectiveType);
       return new Converted(document, producedPdf, effectiveType, spool.sha256());
     }
 
@@ -312,13 +358,33 @@ public final class DefaultBundleRenderer implements BundleRenderer {
       FileArtifact artifact = new FileArtifact(result.outputPdf(), request.fileName(),
           assembly.size(), sha256Of(result.outputPdf()), result.totalPages());
       Path directory = jobDirectory;
-      return new BundleResult(artifact, warnings, documents,
+      return new BundleResult(artifact, warnings, documents, Map.copyOf(timings),
           () -> JobDirectory.deleteRecursively(directory));
     }
 
     private void addWarning(BundleWarning warning) {
       warnings.add(warning);
-      log.warn("Bundle {}: {}: {}", request.externalId(), warning.code(), warning.message());
+      metrics.warning(warning.code());
+      log.warn("{}: {}", warning.code(), warning.message());
+    }
+
+    private <T> T timedStage(BundleStage stage, Supplier<T> body) {
+      MDC.put(MDC_STAGE, stage.name());
+      long start = System.nanoTime();
+      try {
+        return body.get();
+      } finally {
+        Duration elapsed = Duration.ofNanos(System.nanoTime() - start);
+        timings.put(stage, elapsed);
+        metrics.stage(stage, elapsed);
+      }
+    }
+
+    private static String describe(Map<BundleStage, Duration> timings) {
+      StringBuilder text = new StringBuilder("{");
+      timings.forEach((stage, duration) -> text.append(text.length() > 1 ? ", " : "")
+          .append(stage).append('=').append(duration.toMillis()).append("ms"));
+      return text.append('}').toString();
     }
   }
 
