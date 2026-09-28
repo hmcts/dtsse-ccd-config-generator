@@ -59,10 +59,22 @@ For an existing case, `start(reference, eventId).startExpectingSuccess()` opens 
 A user completes an event by opening it, changing what it showed, and submitting. `Started` continues that way: `edit(changes)` applies a `Consumer` to the started case, and `submitting(data)` replaces it. Both return the submission request, already sent as the same actor from the revision the event was started at, so a non-concurrent event rejects it when something else has committed in between:
 
 ```java
-var result = events.start(reference, "makeOrder").as(judge).startExpectingSuccess()
-    .edit(c -> c.setOrderNotes("agreed"))
+var result = events.start(reference, "addNote").as(caseworker).startExpectingSuccess()
+    .edit(c -> c.setNote("agreed"))
     .submitExpectingSuccess();
 ```
+
+An external event is driven the way its frontend drives it, typed by its `ExternalEventId`. `events.external(reference, MAKE_ORDER)` returns an `ExternalEvent<Start, Request>`: `start()` returns what the start handler sends, and `submit(request)` starts the event and posts the request from that revision, returning an `ExternalOutcome` with the status, the case history entry and the rows the event changed. Each outcome has an expecting method: `submitExpectingSuccess`, `submitExpectingRejection` for errors from the submit handler, `submitExpectingFailure(request, status)` for an HTTP refusal, and `startExpectingRejection()` for a start handler that refuses:
+
+```java
+ExternalEvent<MakeOrderStart, MakeOrderRequest> makeOrder = events.external(reference, MAKE_ORDER).as(judge);
+
+MakeOrderStart started = makeOrder.start();
+var outcome = makeOrder.submitExpectingSuccess(new MakeOrderRequest(START_DRAFT, draft));
+assertThat(outcome.audit().summary()).isEqualTo("Order draft started");
+```
+
+The typed handle is checked against the registered event. To post a payload the frontend's types cannot express, such as one of the wrong shape, use the untyped `events.external(reference, "ext:makeOrder")`, which takes any object.
 
 Register an actor with `events.registerActor("First", "Judge", "caseworker-pcs")`, or with an explicit `ActorDetails` when the uid or email matter; registration returns the `Actor` handle, whose `uid()` is the IDAM id the application sees. Start and submission requests take `.as(actor)`.
 
@@ -70,7 +82,7 @@ Register an actor with `events.registerActor("First", "Judge", "caseworker-pcs")
 
 On an accepted result, `storedData()` reads the saved blob as the typed case model, while `projectedCase()` includes the `CaseView` projection. `rawData()` returns the blob as JSON. `snapshot(reference)` reads the persisted blob, blob version, and case revision directly from `ccd.case_data`. Where the application's tables carry the SDK's row auditing, `changes()` lists every row the event inserted, updated or deleted, and `changes("orders")` those in one table, each with its old and new values as JSON.
 
-Do not put these tests in a `@Transactional` test method: the helper needs to observe the runtime's committed transaction. The default audit actor is an SDK test user. These tests exercise starting, submission and projection; they do not simulate CCD event permissions or page callbacks.
+Do not put these tests in a `@Transactional` test method: the helper needs to observe the runtime's committed transaction. The default audit actor is an SDK test user; `audit()` on an accepted result gives the case history entry the event wrote, with its `userId`, `summary` and `description`. These tests exercise starting, submission and projection; they do not simulate CCD event permissions or page callbacks.
 
 An exception that the application does not handle is rethrown from `start()` or `submit()` as it was raised, so a test can assert on it directly. Any other response that is not HTTP 200, such as a filter rejecting the request, fails the test with the status and body.
 
@@ -78,17 +90,15 @@ An exception that the application does not handle is rethrown from `start()` or 
 
 Every request carries `ServiceAuthorization: CcdEventTestSupport.SERVICE_AUTHORISATION`. Test support wraps each `AuthTokenValidator` bean from `service-auth-provider-java-client`, so that token is valid and belongs to `ccd_data`. Any other token still goes to the application's validator. An application that authorises CCD data store's S2S name through that validator needs no S2S stubbing.
 
-The user token is the actor's `authorisation()`, or `CcdEventTestSupport.DEFAULT_AUTHORISATION` when a request names no actor. The SDK resolves it to the actor for event audit. An application filter that looks the token up with its own IDAM client should answer from the `TestActors` bean, which knows every registered actor by its token. Declare one fake for that client in a shared test configuration and no test stubs it again:
+The user token is the actor's `authorisation()`, or `CcdEventTestSupport.DEFAULT_AUTHORISATION` when a request names no actor. The SDK resolves it to the actor for event audit.
 
-```java
-@Bean
-@Primary
-IdamUserInfoApi testActorUserInfoApi(TestActors actors) {
-    return token -> userInfo(actors.require(token));
-}
-```
+When the application uses Spring Cloud OpenFeign, test support also answers the platform calls its Feign clients make while handling an event, so a test declares no fakes for them:
 
-Feign registers its clients as primary beans, so demote the real one with a `BeanDefinitionRegistryPostProcessor` or give the fake the same bean name. pcs-api's `PcsCcdEventTestConfiguration` shows this along with fakes for its other external services.
+- IDAM `GET /o/userinfo` describes the actor that owns the bearer token, from the `TestActors` bean. An unknown token gets 401.
+- S2S `POST /lease` returns a service token that expires in a day, so `AuthTokenGenerator` works unchanged.
+- Role assignment `GET /am/role-assignments/actors/{id}` returns no assignments.
+
+Every other request, including IDAM token requests and role-assignment queries, goes to the application's own Feign client. The [identity integration test](../sdk/ccd-sdk-test-support/src/test/java/uk/gov/hmcts/ccd/sdk/testing/TestIdentityIntegrationTest.java) shows this behaviour.
 
 ## Existing application context
 

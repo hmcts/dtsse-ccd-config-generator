@@ -18,6 +18,7 @@ import uk.gov.hmcts.ccd.sdk.runtime.CcdCallbackExecutor;
     CaseProjectionService.class,
     DefinitionRegistry.class,
     CcdCallbackExecutor.class,
+    IdamExternalUserResolver.class,
     SupplementaryDataService.class,
     ServicePersistenceController.class,
     CallbackController.class
