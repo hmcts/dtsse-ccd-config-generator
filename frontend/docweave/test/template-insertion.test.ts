@@ -26,7 +26,7 @@ function listItem(id: string | null, text: string, nested?: ReturnType<
   );
 }
 
-function run(
+function insert(
   doc: ReturnType<typeof editorSchema.node>,
   selection: Selection,
   template = editorSchema.node(
@@ -34,7 +34,7 @@ function run(
     null,
     paragraph(null, "Template wording"),
   ),
-) {
+): EditorState {
   const state = EditorState.create({
     schema: editorSchema,
     doc,
@@ -47,7 +47,31 @@ function run(
   });
 
   assert.ok(transaction);
-  return transaction.doc;
+  return state.apply(transaction);
+}
+
+function run(
+  doc: ReturnType<typeof editorSchema.node>,
+  selection: Selection,
+  template?: ReturnType<typeof editorSchema.node>,
+) {
+  return insert(doc, selection, template).doc;
+}
+
+function type(state: EditorState, text: string) {
+  return state.apply(state.tr.insertText(text)).doc;
+}
+
+function positionOf(
+  doc: ReturnType<typeof editorSchema.node>,
+  id: string,
+): number {
+  let found: number | undefined;
+  doc.descendants((node, position) => {
+    if (node.attrs.id === id) found = position;
+  });
+  assert.ok(found !== undefined, `Node not found: ${id}`);
+  return found;
 }
 
 describe("template insertion", () => {
@@ -164,6 +188,232 @@ describe("template insertion", () => {
     assert.deepEqual(
       insertedItem.lastChild!.children.map((item) => item.textContent),
       ["Nested one", "Nested two"],
+    );
+  });
+
+  it("continues typing after the inserted wording, not in the clause", () => {
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      paragraph("paragraph:managed", "Original directions."),
+    );
+    const typed = type(
+      insert(doc, TextSelection.create(doc, 9)),
+      " EXTRA",
+    );
+
+    assert.deepEqual(
+      typed.children.map((node) => node.textContent),
+      ["Original directions.", "Template wording EXTRA"],
+    );
+  });
+
+  it("leaves selected clause wording alone when typing after insertion", () => {
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      paragraph("paragraph:managed", "Original directions."),
+    );
+    const typed = type(
+      insert(doc, TextSelection.create(doc, 1, 9)),
+      " EXTRA",
+    );
+
+    assert.deepEqual(
+      typed.children.map((node) => node.textContent),
+      ["Original directions.", "Template wording EXTRA"],
+    );
+  });
+
+  it("continues typing after wording inserted before a clause", () => {
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      paragraph("paragraph:managed", "Original directions."),
+    );
+    const typed = type(insert(doc, TextSelection.create(doc, 1)), " EXTRA");
+
+    assert.deepEqual(
+      typed.children.map((node) => node.textContent),
+      ["Template wording EXTRA", "Original directions."],
+    );
+  });
+
+  it("continues typing in a clause inserted into a list", () => {
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node(
+        "ordered_list",
+        { id: "ordered-list:clauses" },
+        listItem("item:managed", "Managed"),
+      ),
+    );
+    const typed = type(insert(doc, TextSelection.create(doc, 5)), " EXTRA");
+
+    assert.deepEqual(
+      typed.firstChild!.children.map((node) => node.textContent),
+      ["Managed", "Template wording EXTRA"],
+    );
+  });
+
+  it("inserts after a clause from the start of its later paragraph", () => {
+    const first = paragraph(null, "First paragraph.");
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node(
+        "ordered_list",
+        { id: "ordered-list:clauses" },
+        editorSchema.node("list_item", { id: "item:managed" }, [
+          first,
+          paragraph(null, "Second paragraph."),
+        ]),
+      ),
+    );
+    const inserted = run(doc, TextSelection.create(doc, 2 + first.nodeSize + 1));
+
+    assert.deepEqual(
+      inserted.firstChild!.children.map((node) => [
+        node.attrs.id,
+        node.textContent,
+      ]),
+      [
+        ["item:managed", "First paragraph.Second paragraph."],
+        [null, "Template wording"],
+      ],
+    );
+  });
+
+  it("inserts into a personal clause within a nested managed list", () => {
+    const nested = editorSchema.node(
+      "ordered_list",
+      { id: "ordered-list:nested" },
+      [
+        listItem("item:child", "Managed child"),
+        editorSchema.node(
+          "list_item",
+          null,
+          editorSchema.node("paragraph", { id: null }),
+        ),
+      ],
+    );
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node(
+        "ordered_list",
+        { id: "ordered-list:outer" },
+        listItem("item:parent", "Parent", nested),
+      ),
+    );
+    const child = doc.nodeAt(positionOf(doc, "item:child"))!;
+    const personal = positionOf(doc, "item:child") + child.nodeSize + 2;
+
+    const typed = type(
+      insert(doc, TextSelection.create(doc, personal)),
+      " EXTRA",
+    );
+    const outer = typed.firstChild!;
+    const insertedNested = outer.firstChild!.lastChild!;
+
+    assert.deepEqual(
+      outer.children.map((node) => node.attrs.id),
+      ["item:parent"],
+    );
+    assert.deepEqual(
+      insertedNested.children.map((node) => [
+        node.attrs.id,
+        node.children.map((child) => child.textContent),
+      ]),
+      [
+        ["item:child", ["Managed child"]],
+        [null, ["Template wording EXTRA"]],
+      ],
+    );
+  });
+
+  it("inserts a heading template into a personal clause as a clause", () => {
+    const personal = editorSchema.node(
+      "list_item",
+      null,
+      editorSchema.node("paragraph", { id: null }),
+    );
+    const nested = editorSchema.node(
+      "ordered_list",
+      { id: "ordered-list:nested" },
+      [
+        listItem("item:first", "First child"),
+        personal,
+        listItem("item:second", "Second child"),
+      ],
+    );
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node(
+        "ordered_list",
+        { id: "ordered-list:outer" },
+        listItem("item:parent", "Parent", nested),
+      ),
+    );
+    const template = editorSchema.node("doc", null, [
+      editorSchema.node("heading", { level: 2 }, editorSchema.text("Heading")),
+      paragraph(null, "Template wording"),
+    ]);
+    const start = positionOf(doc, "item:first") +
+      doc.nodeAt(positionOf(doc, "item:first"))!.nodeSize;
+
+    const inserted = run(doc, TextSelection.create(doc, start + 2), template);
+    const outer = inserted.firstChild!;
+
+    assert.deepEqual(outer.children.map((node) => node.attrs.id), [
+      "item:parent",
+    ]);
+    assert.deepEqual(
+      outer.firstChild!.lastChild!.children.map((node) => [
+        node.attrs.id,
+        node.firstChild!.type.name,
+        node.textContent,
+      ]),
+      [
+        ["item:first", "paragraph", "First child"],
+        [null, "paragraph", "Heading"],
+        [null, "paragraph", "Template wording"],
+        ["item:second", "paragraph", "Second child"],
+      ],
+    );
+  });
+
+  it("inserts a heading template after a personal clause with wording", () => {
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node("ordered_list", { id: "ordered-list:clauses" }, [
+        listItem("item:first", "First"),
+        listItem(null, "Mine"),
+        listItem("item:second", "Second"),
+      ]),
+    );
+    const template = editorSchema.node("doc", null, [
+      editorSchema.node("heading", { level: 2 }, editorSchema.text("Heading")),
+    ]);
+    const end = positionOf(doc, "item:second") - 2;
+
+    const inserted = run(doc, TextSelection.create(doc, end), template);
+
+    assert.equal(inserted.childCount, 1);
+    assert.deepEqual(
+      inserted.firstChild!.children.map((node) => [
+        node.attrs.id,
+        node.textContent,
+      ]),
+      [
+        ["item:first", "First"],
+        [null, "Mine"],
+        [null, "Heading"],
+        ["item:second", "Second"],
+      ],
     );
   });
 });

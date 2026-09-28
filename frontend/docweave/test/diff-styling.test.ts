@@ -375,6 +375,32 @@ describe("diff styling", () => {
     assert.equal(result.state.doc.firstChild!.childCount, 1);
   });
 
+  it("rejects indenting a generated clause beneath a user-authored clause", () => {
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node("ordered_list", { id: "ordered-list:clauses" }, [
+        listItem(null, "User authored"),
+        listItem("item:generated", "Generated"),
+      ]),
+    );
+    const state = EditorState.create({
+      schema: editorSchema,
+      doc,
+      plugins: [createDiffStylingPlugin()],
+    });
+    const transaction = listCommandTransaction(
+      state,
+      indentListItem,
+      "Generated",
+    );
+
+    const result = state.applyTransaction(transaction);
+
+    assert.equal(result.transactions.length, 0);
+    assert.ok(result.state.doc.eq(doc));
+  });
+
   it("allows outdenting a user-authored clause", () => {
     const userAuthored = listItem(null, "User authored");
     const generated = editorSchema.node(

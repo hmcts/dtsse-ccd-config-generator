@@ -104,6 +104,34 @@ describe("protected clause Enter handling", () => {
       ["item:generated", null],
     );
   });
+
+  it("inserts after a generated list item at the start of its later paragraph", () => {
+    const first = editorSchema.node(
+      "paragraph",
+      null,
+      editorSchema.text("First paragraph."),
+    );
+    const generated = editorSchema.node("list_item", { id: "item:generated" }, [
+      first,
+      editorSchema.node("paragraph", null, editorSchema.text("Second paragraph.")),
+    ]);
+    const list = editorSchema.node(
+      "ordered_list",
+      { id: "ordered-list:clauses" },
+      generated,
+    );
+    const doc = editorSchema.node("doc", null, list);
+    const transaction = pressEnter(doc, 2 + first.nodeSize + 1);
+
+    assert.deepEqual(
+      transaction.doc.firstChild!.children.map((node) => node.attrs.id),
+      ["item:generated", null],
+    );
+    assert.equal(
+      transaction.doc.firstChild!.firstChild!.textContent,
+      "First paragraph.Second paragraph.",
+    );
+  });
 });
 
 function listItem(id: string, text: string) {
