@@ -49,7 +49,7 @@ export const protectClausesFromSplittingOnEnter: Command = (
   const clauseDepth = isListItem ? $cursor.depth - 1 : $cursor.depth;
   // Only the start of the clause's first paragraph is the start of the clause.
   const atClauseStart = $cursor.parentOffset === 0 &&
-    (!isListItem || $cursor.index(clauseDepth) === 0);
+    $cursor.index(clauseDepth) === 0;
   const insertPosition = atClauseStart
     ? $cursor.before(clauseDepth)
     : $cursor.after(clauseDepth);

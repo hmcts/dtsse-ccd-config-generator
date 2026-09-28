@@ -39,9 +39,7 @@ type NodeJSON = Record<string, unknown> & {
 function toOutputJSON(node: NodeJSON): NodeJSON | undefined {
   if (node.type === "generated_text") {
     const text = node.attrs?.text;
-    if (!text) return undefined;
-    const { marks } = node;
-    return marks ? { type: "text", text, marks } : { type: "text", text };
+    return text ? { type: "text", text, marks: node.marks } : undefined;
   }
   const { id: _id, ...attrs } = node.attrs ?? {};
   const output: NodeJSON = { ...node, attrs };
