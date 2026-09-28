@@ -32,6 +32,31 @@ describe("renderHtml", () => {
     assert.doesNotMatch(html, /contenteditable|data-generated-text|id=/);
   });
 
+  it("keeps the formatting the reader gave a fact", () => {
+    const controller = createDocEditor();
+    controller.render(buildDoc((doc) => {
+      doc.paragraph("deadline", (content) => {
+        content.text("By ").fact("date", "1 October").text(".");
+      });
+    }));
+    const current = structuredClone(controller.getSnapshot().current) as {
+      content: Array<{ content: Array<{ marks?: unknown[] }> }>;
+    };
+    for (const node of current.content[0]!.content) {
+      node.marks = [{ type: "em" }, { type: "strong" }];
+    }
+
+    const html = renderHtml(
+      { ...controller.getSnapshot(), current },
+      { document },
+    );
+
+    assert.equal(
+      html,
+      "<p><em><strong>By 1 October.</strong></em></p>",
+    );
+  });
+
   it("leaves out a fact with no value rather than emitting an empty text node", () => {
     const controller = createDocEditor();
     controller.render(buildDoc((doc) => {

@@ -32,13 +32,16 @@ type NodeJSON = Record<string, unknown> & {
 };
 
 /**
- * Converts editor-schema JSON: facts become text, and IDs are left behind. A
- * fact with no value becomes nothing, since a text node may not be empty.
+ * Converts editor-schema JSON: facts become text with their formatting, and
+ * IDs are left behind. A fact with no value becomes nothing, since a text node
+ * may not be empty.
  */
 function toOutputJSON(node: NodeJSON): NodeJSON | undefined {
   if (node.type === "generated_text") {
     const text = node.attrs?.text;
-    return text ? { type: "text", text } : undefined;
+    if (!text) return undefined;
+    const { marks } = node;
+    return marks ? { type: "text", text, marks } : { type: "text", text };
   }
   const { id: _id, ...attrs } = node.attrs ?? {};
   const output: NodeJSON = { ...node, attrs };

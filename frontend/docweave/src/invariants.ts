@@ -3,6 +3,8 @@ import { type Node as ProseMirrorNode } from "prosemirror-model";
 interface ManagedNodeSnapshot {
   node: ProseMirrorNode;
   parentId: string | null;
+  /** The user-authored nodes between the managed parent and this node. */
+  wrappers: string;
   index: number;
 }
 
@@ -23,15 +25,21 @@ function snapshotManagedDocument(
   const childrenByParent = new Map<string | null, readonly string[]>();
 
   function visit(parent: ProseMirrorNode, parentId: string | null): void {
-    const children: Array<{ id: string; node: ProseMirrorNode }> = [];
+    const children: Array<
+      { id: string; node: ProseMirrorNode; wrappers: string }
+    > = [];
 
-    parent.descendants((node) => {
-      const id = managedId(node);
-      if (id === undefined) return true;
-
-      children.push({ id, node });
-      return false;
-    });
+    function collect(node: ProseMirrorNode, wrappers: string): void {
+      node.forEach((child) => {
+        const id = managedId(child);
+        if (id === undefined) {
+          collect(child, `${wrappers}/${child.type.name}`);
+        } else {
+          children.push({ id, node: child, wrappers });
+        }
+      });
+    }
+    collect(parent, "");
 
     childrenByParent.set(parentId, children.map((child) => child.id));
 
@@ -43,6 +51,7 @@ function snapshotManagedDocument(
       nodes.set(child.id, {
         node: child.node,
         parentId,
+        wrappers: child.wrappers,
         index,
       });
       visit(child.node, child.id);
@@ -140,6 +149,7 @@ export function hasSameManagedStructure(
       const afterNode = after.nodes.get(id);
       return afterNode?.node.type === beforeNode.node.type &&
         afterNode.parentId === beforeNode.parentId &&
+        afterNode.wrappers === beforeNode.wrappers &&
         afterNode.index === beforeNode.index;
     });
   } catch {
