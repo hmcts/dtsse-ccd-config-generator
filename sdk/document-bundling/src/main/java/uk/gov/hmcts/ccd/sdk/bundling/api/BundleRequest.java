@@ -1,0 +1,192 @@
+package uk.gov.hmcts.ccd.sdk.bundling.api;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * A complete, explicit description of one bundle: an ordered tree of sections and documents plus
+ * presentation choices.
+ *
+ * <p>The request is storage-agnostic — documents are opaque {@link DocumentReference}s — and
+ * workflow-agnostic: the same request renders from a CCD event, a scheduled task or a test.
+ */
+public final class BundleRequest {
+
+  private final UUID externalId;
+
+  private final String title;
+
+  private final String fileName;
+
+  private final BundleSection root;
+
+  private final BundlePresentation presentation;
+
+  private BundleRequest(Builder builder) {
+    this.externalId = builder.externalId;
+    this.title = builder.title;
+    this.fileName = builder.fileName;
+    this.root = builder.root;
+    this.presentation = builder.presentation;
+  }
+
+  /** Starts building a bundle request. */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  /**
+   * The consumer-minted UUID identifying this bundle request. Whether a new bundle replaces,
+   * versions, or coexists with a previous one is the service team's decision, expressed through the ids it mints.
+   */
+  public UUID externalId() {
+    return externalId;
+  }
+
+  /** The bundle title, rendered on the generated title page. */
+  public String title() {
+    return title;
+  }
+
+  /** The output PDF file name. */
+  public String fileName() {
+    return fileName;
+  }
+
+  /** The root of the ordered section/document tree. */
+  public BundleSection root() {
+    return root;
+  }
+
+  /** The presentation preset for the generated bundle. */
+  public BundlePresentation presentation() {
+    return presentation;
+  }
+
+  /** All documents in the tree, in deterministic render order. */
+  public List<BundleDocument> allDocuments() {
+    List<BundleDocument> documents = new ArrayList<>();
+    collectDocuments(root, documents);
+    return List.copyOf(documents);
+  }
+
+  private static void collectDocuments(BundleSection section, List<BundleDocument> into) {
+    into.addAll(section.documents());
+    for (BundleSection child : section.sections()) {
+      collectDocuments(child, into);
+    }
+  }
+
+  private static boolean hasPlaceholderSection(BundleSection section) {
+    if (section.emptySectionPolicy() == EmptySectionPolicy.INCLUDE_PLACEHOLDER) {
+      return true;
+    }
+    return section.sections().stream().anyMatch(BundleRequest::hasPlaceholderSection);
+  }
+
+  /**
+   * Builder for {@link BundleRequest}.
+   */
+  public static final class Builder {
+
+    private UUID externalId;
+    private String title;
+    private String fileName;
+    private BundleSection root;
+    private BundlePresentation presentation = BundlePresentation.courtDefault();
+
+    private Builder() {
+    }
+
+    /** Sets the consumer-minted UUID that identifies this bundle request. Required. */
+    public Builder externalId(UUID externalId) {
+      this.externalId = externalId;
+      return this;
+    }
+
+    /** Sets the bundle title. Required. */
+    public Builder title(String title) {
+      this.title = title;
+      return this;
+    }
+
+    /**
+     * Sets the output PDF file name. Required; must end with {@code .pdf} and contain no path
+     * separators or control characters.
+     */
+    public Builder fileName(String fileName) {
+      this.fileName = fileName;
+      return this;
+    }
+
+    /** Sets the root of the ordered section/document tree. Required. */
+    public Builder root(BundleSection root) {
+      this.root = root;
+      return this;
+    }
+
+    /**
+     * Sets the presentation preset. Defaults to {@link BundlePresentation#courtDefault()}.
+     */
+    public Builder presentation(BundlePresentation presentation) {
+      this.presentation = Validate.requireNonNull(presentation, "BundleRequest.presentation");
+      return this;
+    }
+
+    /**
+     * Builds the request, validating required fields, the output file name, document id
+     * uniqueness across the whole tree, and that the bundle has content.
+     */
+    public BundleRequest build() {
+      Validate.requireNonNull(externalId, "BundleRequest.externalId");
+      Validate.requireNonBlank(title, "BundleRequest.title");
+      validateFileName(fileName);
+      Validate.requireNonNull(root, "BundleRequest.root");
+
+      BundleRequest request = new BundleRequest(this);
+      List<BundleDocument> documents = request.allDocuments();
+      validateUniqueIds(documents);
+      if (documents.isEmpty() && !hasPlaceholderSection(root)) {
+        throw new IllegalArgumentException(
+            "A bundle request must contain at least one document or a section whose "
+                + "emptySectionPolicy is INCLUDE_PLACEHOLDER");
+      }
+      return request;
+    }
+
+    private static void validateFileName(String fileName) {
+      Validate.requireNonBlank(fileName, "BundleRequest.fileName");
+      boolean unsafe = fileName.contains("/")
+          || fileName.contains("\\")
+          || fileName.chars().anyMatch(c -> c < 0x20);
+      if (unsafe) {
+        throw new IllegalArgumentException(
+            "BundleRequest.fileName must not contain path separators or control characters: '"
+                + fileName + "'");
+      }
+      if (!fileName.toLowerCase(Locale.ROOT).endsWith(".pdf")) {
+        throw new IllegalArgumentException(
+            "BundleRequest.fileName must end with .pdf: '" + fileName + "'");
+      }
+    }
+
+    private static void validateUniqueIds(List<BundleDocument> documents) {
+      Map<String, Integer> counts = new LinkedHashMap<>();
+      for (BundleDocument document : documents) {
+        counts.merge(document.id(), 1, Integer::sum);
+      }
+      List<String> duplicates = counts.entrySet().stream()
+          .filter(entry -> entry.getValue() > 1)
+          .map(Map.Entry::getKey)
+          .toList();
+      if (!duplicates.isEmpty()) {
+        throw new IllegalArgumentException(
+            "Document ids must be unique within a bundle request; duplicates: " + duplicates);
+      }
+    }
+  }
+}

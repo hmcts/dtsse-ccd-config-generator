@@ -25,6 +25,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -44,6 +45,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineItem;
+import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineNode;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.client.methods.HttpPut;
@@ -94,7 +100,14 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import uk.gov.hmcts.divorce.bundling.CaseworkerCreateBundle;
+import uk.gov.hmcts.divorce.bundling.CaseworkerCreateBundleMissingDocument;
+import uk.gov.hmcts.divorce.bundling.DocmosisStubController;
+import uk.gov.hmcts.divorce.bundling.FixtureDocumentResolver;
+import uk.gov.hmcts.divorce.bundling.model.CaseBundle;
+import uk.gov.hmcts.divorce.callback.CallbackLoggingFilter;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
+import uk.gov.hmcts.divorce.stubs.StubDocumentStore;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
 import uk.gov.hmcts.divorce.simplecase.SimpleCaseConfiguration;
@@ -200,6 +213,12 @@ public class TestWithCCD extends CftlibTest {
 
     @Autowired
     private JmsTemplate jmsTemplate;
+
+    @Autowired
+    private StubDocumentStore stubDocumentStore;
+
+    @Autowired
+    private DocmosisStubController docmosisStub;
 
     private long firstEventId;
     private static final String BASE_URL = "http://localhost:4452";
@@ -602,6 +621,132 @@ public class TestWithCCD extends CftlibTest {
             firstEvent);
         var response = HttpClientBuilder.create().build().execute(e);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+    }
+
+    @Order(35)
+    @Test
+    public void createBundleRendersUploadsToCdamAndAttachesToCase() throws Exception {
+        String user = "TEST_CASE_WORKER_USER@mailinator.com";
+        int conversionsBefore = docmosisStub.convertedSources().size();
+
+        var request = prepareEventRequest(user, CaseworkerCreateBundle.CASEWORKER_CREATE_BUNDLE, Map.of());
+        var response = HttpClientBuilder.create().build().execute(request);
+        var responseBody = EntityUtils.toString(response.getEntity());
+        assertThat("bundle event should succeed: " + responseBody,
+            response.getStatusLine().getStatusCode(), equalTo(201));
+        Map<String, Object> payload = mapper.readValue(responseBody, new TypeReference<>() {});
+        @SuppressWarnings("unchecked")
+        Map<String, Object> afterSubmit = (Map<String, Object>) payload.get("after_submit_callback_response");
+        assertThat(afterSubmit.get("confirmation_header"), equalTo("Hearing bundle created"));
+
+        // The service's own bundle model, built from the SDK's result, is on the case.
+        var c = ccdApi.getCase(getAuthorisation(user), getServiceAuth(), String.valueOf(caseRef));
+        var caseData = mapper.readValue(mapper.writeValueAsString(c.getData()), CaseData.class);
+        assertThat(caseData.getCaseBundles(), hasSize(1));
+        CaseBundle bundle = caseData.getCaseBundles().get(0).getValue();
+        assertThat(bundle.getStitchStatus(), equalTo("DONE"));
+        assertThat(bundle.getTitle(), equalTo(CaseworkerCreateBundle.BUNDLE_TITLE));
+        assertThat(bundle.getFileName(), equalTo("case-" + caseRef + "-hearing-bundle.pdf"));
+        assertThat(bundle.getDocuments(), hasSize(4));
+        assertThat(bundle.getDocuments().get(0).getValue().getName(),
+            equalTo(CaseworkerCreateBundle.POTENTIAL_ENERGY_TITLE));
+        assertThat(bundle.getDocuments().get(0).getValue().getStartPage(), greaterThan(1));
+        String documentUrl = bundle.getStitchedDocument().getUrl();
+        assertThat(bundle.getStitchedDocument().getBinaryUrl(), equalTo(documentUrl + "/binary"));
+
+        // The consumer uploaded through the real embedded CDAM and attached the document to the
+        // case (case_id PATCHed onto the dm-store record), so it is not TTL-disposed.
+        String documentId = documentUrl.substring(documentUrl.length() - 36);
+        var storedDocument = stubDocumentStore.find(documentId).orElseThrow(
+            () -> new AssertionError("stitched document " + documentId + " missing from dm-store stub"));
+        assertThat(storedDocument.metadata().get("case_id"), equalTo(String.valueOf(caseRef)));
+        assertThat(fetchCdamDocument(documentId).path("metadata").path("case_id").asText(),
+            equalTo(String.valueOf(caseRef)));
+
+        // Download the stitched binary through CDAM and assert on it semantically.
+        var download = new HttpGet(CDAM_BASE_URL + "/cases/documents/" + documentId + "/binary");
+        download.addHeader("Authorization", getAuthorisation(user));
+        download.addHeader("ServiceAuthorization", cftlib().generateDummyS2SToken("nfdiv_case_api"));
+        byte[] pdfBytes;
+        try (var downloadResponse = HttpClientBuilder.create().build().execute(download)) {
+            assertThat(downloadResponse.getStatusLine().getStatusCode(), equalTo(200));
+            pdfBytes = EntityUtils.toByteArray(downloadResponse.getEntity());
+        }
+        try (PDDocument stitched = Loader.loadPDF(pdfBytes)) {
+            assertThat(stitched.getNumberOfPages(), equalTo(bundle.getPageCount()));
+            assertThat(stitched.getNumberOfPages(), greaterThanOrEqualTo(14));
+            String text = new PDFTextStripper().getText(stitched);
+            for (String expected : List.of(
+                    CaseworkerCreateBundle.BUNDLE_TITLE, CaseworkerCreateBundle.APPLICATIONS_SECTION,
+                    CaseworkerCreateBundle.EVIDENCE_SECTION, CaseworkerCreateBundle.CORRESPONDENCE_SECTION,
+                    CaseworkerCreateBundle.POTENTIAL_ENERGY_TITLE, CaseworkerCreateBundle.MEDICAL_REPORT_TITLE,
+                    CaseworkerCreateBundle.FLYING_PIG_TITLE,
+                    // The office document went through the app's Docmosis stub.
+                    "Stubbed Docmosis conversion of wordDocument2.docx",
+                    // The expected-but-empty section renders the standard visible placeholder.
+                    "There are no documents in this section.")) {
+                assertThat(text, containsString(expected));
+            }
+            List<String> bookmarks = collectBookmarkTitles(stitched.getDocumentCatalog().getDocumentOutline());
+            assertThat(bookmarks, hasItems(
+                CaseworkerCreateBundle.APPLICATIONS_SECTION,
+                CaseworkerCreateBundle.EVIDENCE_SECTION,
+                CaseworkerCreateBundle.CORRESPONDENCE_SECTION,
+                CaseworkerCreateBundle.POTENTIAL_ENERGY_TITLE));
+        }
+
+        List<String> conversions = docmosisStub.convertedSources();
+        assertThat(conversions.size(), equalTo(conversionsBefore + 1));
+        assertThat(conversions.get(conversionsBefore), equalTo("wordDocument2.docx"));
+        try (var httpTraffic = Files.lines(CallbackLoggingFilter.LOG_FILE.toAbsolutePath())) {
+            assertThat("CDAM upload should be captured in http-traffic.log",
+                httpTraffic.anyMatch(line -> line.contains("\"uri\":\"/documents\"")
+                    && line.contains("\"method\":\"POST\"") && line.contains(documentId)),
+                equalTo(true));
+        }
+    }
+
+    @Order(39)
+    @Test
+    public void createBundleWithMissingDocumentSurfacesErrorAndPublishesNothing() throws Exception {
+        String user = "TEST_CASE_WORKER_USER@mailinator.com";
+        String sqlCountByCase = "SELECT count(*) FROM case_bundles WHERE reference = :ref";
+        Integer before = db.queryForObject(sqlCountByCase, Map.of("ref", caseRef), Integer.class);
+        int documentsBefore = stubDocumentStore.size();
+
+        var request = prepareEventRequest(
+            user, CaseworkerCreateBundleMissingDocument.CASEWORKER_CREATE_BUNDLE_MISSING_DOC, Map.of());
+        var response = HttpClientBuilder.create().build().execute(request);
+        var responseBody = EntityUtils.toString(response.getEntity());
+        assertThat("bundle event should be rejected: " + responseBody,
+            response.getStatusLine().getStatusCode(), equalTo(422));
+        Map<String, Object> payload = mapper.readValue(responseBody, new TypeReference<>() {});
+        @SuppressWarnings("unchecked")
+        List<String> callbackErrors = (List<String>) payload.get("callbackErrors");
+        assertThat("the error should name the missing document and the typed reason",
+            callbackErrors, hasItem(allOf(
+                containsString("DOCUMENT_NOT_FOUND"),
+                containsString(CaseworkerCreateBundleMissingDocument.MISSING_DOCUMENT_ID),
+                containsString(FixtureDocumentResolver.PROVIDER))));
+
+        // Nothing was uploaded or recorded, and the earlier bundle is untouched.
+        assertThat(stubDocumentStore.size(), equalTo(documentsBefore));
+        assertThat(db.queryForObject(sqlCountByCase, Map.of("ref", caseRef), Integer.class), equalTo(before));
+        var c = ccdApi.getCase(getAuthorisation(user), getServiceAuth(), String.valueOf(caseRef));
+        var caseData = mapper.readValue(mapper.writeValueAsString(c.getData()), CaseData.class);
+        assertThat(caseData.getCaseBundles(), hasSize(before));
+        assertThat(before, greaterThan(0));
+    }
+
+    private static List<String> collectBookmarkTitles(PDOutlineNode node) {
+        List<String> titles = new ArrayList<>();
+        PDOutlineItem child = node.getFirstChild();
+        while (child != null) {
+            titles.add(child.getTitle());
+            titles.addAll(collectBookmarkTitles(child));
+            child = child.getNextSibling();
+        }
+        return titles;
     }
 
     @Order(36)
