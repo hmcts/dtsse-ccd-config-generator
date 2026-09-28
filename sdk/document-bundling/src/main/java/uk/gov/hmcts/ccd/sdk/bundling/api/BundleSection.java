@@ -1,5 +1,10 @@
 package uk.gov.hmcts.ccd.sdk.bundling.api;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -10,14 +15,19 @@ import java.util.List;
  * list order, followed by child sections in list order. Sections drive the table of contents,
  * bookmarks, and optional cover sheets.
  */
+@JsonDeserialize(builder = BundleSection.Builder.class)
 public final class BundleSection {
 
+  @JsonProperty
   private final String title;
 
+  @JsonProperty
   private final List<BundleDocument> documents;
 
+  @JsonProperty
   private final List<BundleSection> sections;
 
+  @JsonProperty
   private final EmptySectionPolicy emptySectionPolicy;
 
   private BundleSection(Builder builder) {
@@ -55,6 +65,8 @@ public final class BundleSection {
   /**
    * Builder for {@link BundleSection}.
    */
+  @JsonPOJOBuilder(withPrefix = "")
+  @JsonIgnoreProperties(ignoreUnknown = true)
   public static final class Builder {
 
     private final String title;
@@ -62,7 +74,8 @@ public final class BundleSection {
     private final List<BundleSection> sections = new ArrayList<>();
     private EmptySectionPolicy emptySectionPolicy = EmptySectionPolicy.OMIT;
 
-    private Builder(String title) {
+    @JsonCreator
+    private Builder(@JsonProperty("title") String title) {
       // The JSON path must enforce the same invariant as the builder(title) factory, so a
       // tampered stored request cannot smuggle in a blank section title.
       this.title = Validate.requireNonBlank(title, "BundleSection.title");

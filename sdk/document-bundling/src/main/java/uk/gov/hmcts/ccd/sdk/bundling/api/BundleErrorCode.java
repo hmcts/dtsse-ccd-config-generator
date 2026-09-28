@@ -28,5 +28,9 @@ public enum BundleErrorCode {
   /** PDF assembly of the bundle failed. */
   ASSEMBLY_FAILED,
   /** A configured maximum (documents, bytes, or pages) was breached. */
-  LIMIT_EXCEEDED
+  LIMIT_EXCEEDED,
+  /** A durable job's persisted request could not be read by the executing worker. */
+  JOB_REQUEST_UNREADABLE,
+  /** The bundle rendered but the consumer's completion handler failed to store it. */
+  COMPLETION_FAILED
 }

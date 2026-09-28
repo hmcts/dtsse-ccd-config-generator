@@ -102,6 +102,49 @@ in each stage. If a Micrometer `MeterRegistry` bean exists (or you call `.meterR
 the builder) the renderer publishes `ccd.bundling.stage` timers and `ccd.bundling.documents`,
 `pages`, `bytes`, `warnings{code}` and `failures{code}` counters.
 
+## Asynchronous bundling (job outbox)
+
+For bundles that should not be rendered inside a request, switch on the outbox with
+`ccd.bundling.job.enabled=true`. `OutboxBundleJobService.submit` inserts one row into
+`bundling.bundle_job` in your service's database using the caller's transaction, so the job exists
+exactly when the event that triggered it commits. `externalId` is the idempotency key: submitting
+the same id again returns the existing job.
+
+```java
+@Transactional
+public void onHearingListed(BundleRequest request) {
+  bundleJobService.submit(request, BundleExecutionContext.builder().caseReference(ref).build());
+}
+```
+
+`BundleJobWorker` polls (your service needs `@EnableScheduling`), claims rows with
+`SELECT ... FOR UPDATE SKIP LOCKED` under a lease, renders, and hands the open `BundleResult` to
+your `BundleJobCompletionHandler` bean. The handler stores the PDF and returns a small summary
+that is saved in the job's `result` column; the worker closes the result afterwards.
+
+```java
+@Bean
+BundleJobCompletionHandler bundleCompletion(CaseDocumentClient cdam) {
+  return (job, request, result) -> {
+    try (InputStream pdf = result.artifact().open()) {
+      return Map.of("documentUrl", cdam.upload(request.fileName(), pdf).url());
+    }
+  };
+}
+```
+
+Fetch and conversion failures are retried with backoff and the history is kept on the job;
+everything else, including an exception from your handler (`COMPLETION_FAILED`), fails the job
+on the spot. A worker that outlives its lease cannot overwrite the outcome recorded by the worker
+that took over. A `BundleDocumentSelector` bean lets you pick the documents at run time instead of
+at submit time, and `BundleProgressListener` beans receive state changes. The table
+`bundling.bundle_job` is created by the SDK's standard library migration (`SdkFlywayMigration`,
+run by the decentralised runtime's Flyway strategy before the application's own migrations).
+
+Properties under `ccd.bundling.job.*`: `enabled` (default `false`), `worker.enabled`, `worker.poll-delay` (`1s`), `worker.batch-size` (`5`),
+`worker.max-concurrent-renders` (`2`), `worker.lease-duration` (`5m`), `retry.max-attempts` (`3`),
+`retry.initial-delay` (`5s`), `retry.multiplier` (`2.0`), `retry.max-delay` (`5m`).
+
 ## Extending it
 
 ### Fetching documents: `DocumentResolver`
@@ -218,6 +261,5 @@ your event handlers can fake it.
 
 This is the first of a stack of changes. [document-bundling-scope.md](document-bundling-scope.md)
 has the design goals, the delivery plan, the feature matrix and the one-click bundle requirements
-coverage. In short: the job outbox for asynchronous bundling in
-PR3, and the rest of the microservice's rendering features (Docmosis cover pages, watermarks,
+coverage. In short: the rest of the microservice's rendering features (Docmosis cover pages, watermarks,
 source bookmarks, media-type detection, readability checks) plus audio and video link pages in PR4.
