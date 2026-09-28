@@ -68,6 +68,42 @@ describe("document reconciliation", () => {
     );
   });
 
+  it("keeps the reader's formatting on generated text whose value changes", () => {
+    const orderWithDate = (date: string) =>
+      buildDoc((doc) => {
+        doc.paragraph("deadline", (content) => {
+          content.text("By ").fact("date", date).text(".");
+        });
+      });
+    const previousTarget = orderWithDate("1 October");
+    const target = orderWithDate("2 October");
+    const marks = [
+      editorSchema.marks.strong!.create(),
+      editorSchema.marks.em!.create(),
+    ];
+    const state = EditorState.create({
+      schema: editorSchema,
+      doc: previousTarget,
+    });
+    const live = state.apply(
+      state.tr.addMark(0, previousTarget.content.size, marks[0]!)
+        .addMark(0, previousTarget.content.size, marks[1]!),
+    ).doc;
+    const transaction = EditorState.create({
+      schema: editorSchema,
+      doc: live,
+    }).tr;
+
+    reconcileDocument(transaction, previousTarget, target);
+
+    const paragraph = transaction.doc.firstChild!;
+    assert.equal(paragraph.child(1).attrs.text, "2 October");
+    assert.deepEqual(
+      paragraph.children.map((node) => node.marks.map((mark) => mark.type.name)),
+      [["em", "strong"], ["em", "strong"], ["em", "strong"]],
+    );
+  });
+
   it("updates generated text while preserving edited list-item wording", () => {
     const orderWithDate = (prefix: string, date: string) =>
       buildDoc((doc) => {
