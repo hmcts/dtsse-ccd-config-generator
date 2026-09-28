@@ -17,6 +17,9 @@ dependencies {
         transitive = false
     }
     implementation 'com.github.hmcts:service-auth-provider-java-client:5.3.5'
+    compileOnly 'io.github.openfeign:feign-core:13.5'
+    testImplementation platform('org.springframework.cloud:spring-cloud-dependencies:2024.0.2')
+    testImplementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
     api 'org.flywaydb:flyway-core'
     api 'org.flywaydb:flyway-database-postgresql'
     api 'org.postgresql:postgresql'

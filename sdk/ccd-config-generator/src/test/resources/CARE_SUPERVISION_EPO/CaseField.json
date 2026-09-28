@@ -1063,5 +1063,13 @@
     "Label": " ",
     "LiveFrom": "01/01/2017",
     "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "FieldType": "TextArea",
+    "ID": "sdkEventPayload",
+    "Label": " ",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
   }
 ]

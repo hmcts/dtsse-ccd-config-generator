@@ -41,7 +41,8 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
   private List<Map<String, Object>> buildEntries(ResolvedCCDConfig<T, S, R> config,
                                                  Event<T, R, S> event) {
     FieldCollection collection = event.getFields();
-    if (collection.getFields().isEmpty()) {
+    // An external event's frontend is not EXUI, so it has no pages or fields to lay out.
+    if (collection.getFields().isEmpty() || event.isExternal()) {
       return List.of();
     }
 

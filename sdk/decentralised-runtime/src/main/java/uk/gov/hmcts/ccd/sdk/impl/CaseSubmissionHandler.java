@@ -14,7 +14,7 @@ import uk.gov.hmcts.reform.ccd.client.model.SignificantItem;
  */
 interface CaseSubmissionHandler {
 
-  CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, String authorisation);
+  CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, IdamService.User user);
 
   /**
    * Result returned by a submission handler after it has prepared all in-transaction mutations.

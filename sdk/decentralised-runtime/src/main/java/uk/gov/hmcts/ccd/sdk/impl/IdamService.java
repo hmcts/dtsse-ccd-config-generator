@@ -5,6 +5,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalUser;
 import uk.gov.hmcts.reform.idam.client.IdamClient;
 import uk.gov.hmcts.reform.idam.client.models.UserInfo;
 
@@ -44,5 +45,11 @@ public class IdamService {
     return BEARER_PREFIX.concat(token);
   }
 
-  public record User(String authToken, UserInfo userDetails) {}
+  public record User(String authToken, UserInfo userDetails) {
+
+    /** This user as an external event's handler is given them. */
+    public ExternalUser toExternalUser() {
+      return new ExternalUser(userDetails.getUid(), userDetails.getRoles(), authToken);
+    }
+  }
 }

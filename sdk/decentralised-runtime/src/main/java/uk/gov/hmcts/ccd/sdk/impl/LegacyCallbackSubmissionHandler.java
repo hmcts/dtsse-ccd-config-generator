@@ -59,7 +59,8 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   }
 
   @Override
-  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, String authorisation) {
+  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, IdamService.User user) {
+    String authorisation = user.authToken();
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
