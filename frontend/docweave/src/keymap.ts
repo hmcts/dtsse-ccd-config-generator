@@ -12,10 +12,13 @@ import {
 } from "prosemirror-schema-list";
 import {
   type Command,
+  type EditorState,
   type Plugin,
   TextSelection,
+  type Transaction,
 } from "prosemirror-state";
 
+import { hasSameManagedStructure } from "./invariants.js";
 import { editorSchema } from "./schema.js";
 
 export const mac = typeof navigator !== "undefined" &&
@@ -28,6 +31,51 @@ export const indentListItem = sinkListItem(
 export const outdentListItem = liftListItem(
   editorSchema.nodes.list_item!,
 );
+
+/** Whether the cursor is in a clause the reader added, with no managed ID. */
+function inAddedClause(state: EditorState): boolean {
+  const { $from } = state.selection;
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const node = $from.node(depth);
+    if (node.type === editorSchema.nodes.list_item) {
+      return typeof node.attrs.id !== "string";
+    }
+  }
+  return false;
+}
+
+/**
+ * Runs a list command where the invariants would let its change through, and
+ * otherwise declines the key, so Tab and Shift+Tab move focus on as they do in
+ * any other control. Outdenting a clause the reader added keeps Shift+Tab even
+ * when the move is refused, so the refusal is announced rather than focus
+ * leaving the document unexplained; a refused Tab always moves on, so the
+ * document is never a keyboard trap.
+ */
+function whereAllowed(
+  command: Command,
+  announceRefusalInAddedClause: boolean,
+): Command {
+  return (state, dispatch, view) => {
+    let transaction: Transaction | undefined;
+    const handled = command(state, (dispatched) => {
+      transaction = dispatched;
+    }, view);
+    if (!handled || !transaction) return false;
+    if (
+      !hasSameManagedStructure(state.doc, transaction.doc) &&
+      !(announceRefusalInAddedClause && inAddedClause(state))
+    ) {
+      return false;
+    }
+    dispatch?.(transaction);
+    return true;
+  };
+}
+
+export const indentClauseOnTab = whereAllowed(indentListItem, false);
+
+export const outdentClauseOnTab = whereAllowed(outdentListItem, true);
 
 export const protectClausesFromSplittingOnEnter: Command = (
   state,
@@ -85,8 +133,8 @@ function buildKeymap(): Record<string, Command> {
   bind("Mod-i", toggleMark(editorSchema.marks.em!));
   bind("Mod-I", toggleMark(editorSchema.marks.em!));
 
-  bind("Tab", indentListItem);
-  bind("Shift-Tab", outdentListItem);
+  bind("Tab", indentClauseOnTab);
+  bind("Shift-Tab", outdentClauseOnTab);
 
   const splitListItemOnEnter = splitListItem(
     editorSchema.nodes.list_item!,

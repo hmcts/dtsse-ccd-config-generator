@@ -306,9 +306,8 @@ function revertAt(
 }
 
 /**
- * Reverts the innermost inserted or modified clause around the selection. This
- * is the keyboard route to the gutter buttons, which sit inside the editable
- * region where Tab is taken by indentation.
+ * Reverts the innermost inserted or modified clause around the selection,
+ * without first tabbing to its gutter button.
  */
 export const revertClauseAtSelection: Command = (state, dispatch) => {
   const { $from } = state.selection;

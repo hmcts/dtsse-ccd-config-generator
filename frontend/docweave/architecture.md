@@ -132,10 +132,14 @@ the mouse is the whole story:
 - Inserted and modified clauses carry a visually hidden marker ("Inserted
   clause.", "Modified clause.") before their wording, beside the gutter button
   that reverts them. The button works from the keyboard, and the shortcut
-  Mod+Alt+Z reverts the clause at the cursor, since a button inside the
-  editable region is awkward to reach when Tab indents.
+  Mod+Alt+Z reverts the clause at the cursor without tabbing to it.
 - A polite live region under the surface announces an edit the invariants
   refused, and a clause that was reverted.
+- Tab and Shift+Tab indent and outdent a numbered clause the reader added, and
+  a refused outdent there is announced. Anywhere else a move is refused or
+  there is nothing to indent beneath, including every generated clause, the
+  editor leaves them to the browser, so Tab always moves on to the next control
+  and the document is never a keyboard trap.
 - The toolbar follows the toolbar pattern: one Tab stop, arrow keys between
   buttons, Alt+F10 to reach it from the document. Alt+0 opens a dialog listing
   every shortcut.
