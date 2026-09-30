@@ -7,7 +7,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import lombok.AccessLevel;
@@ -21,6 +20,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.Start;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
+import uk.gov.hmcts.ccd.sdk.api.external.ClientContext;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalEventId;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalRejection;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalRejectionException;
@@ -61,7 +61,7 @@ public class Event<T, R extends HasRole, S> {
   private SubmitSlot<T, S> onSubmit;
   @Getter(AccessLevel.NONE)
   @Setter(AccessLevel.NONE)
-  private BiFunction<EventPayload<T, S>, ExternalUser, Object> onStart;
+  private StartSlot<T, S> onStart;
   // An external event's payload types: what its frontend submits, and what it is sent on start.
   // Null for other events; the start type is also null for an external event that sends nothing.
   @Setter(AccessLevel.NONE)
@@ -113,8 +113,14 @@ public class Event<T, R extends HasRole, S> {
    * Runs the start handler: the case for a decentralised event, an
    * {@link uk.gov.hmcts.ccd.sdk.api.external.ExternalStartResponse} for an external one.
    */
-  public Object start(EventPayload<T, S> event, ExternalUser user) {
-    return onStart.apply(event, user);
+  public Object start(EventPayload<T, S> event, ExternalUser user, ClientContext clientContext) {
+    return onStart.apply(event, user, clientContext);
+  }
+
+  /** The start phase's handler, taking what an external event's handler needs as well as the case. */
+  @FunctionalInterface
+  private interface StartSlot<T, S> {
+    Object apply(EventPayload<T, S> event, ExternalUser user, ClientContext clientContext);
   }
 
   /**
@@ -134,7 +140,7 @@ public class Event<T, R extends HasRole, S> {
   /** A decentralised event's start handler, for code that calls it directly; null for an external event. */
   @SuppressWarnings("unchecked")
   public Start<T, S> getStartHandler() {
-    return onStart == null || isExternal() ? null : event -> (T) onStart.apply(event, null);
+    return onStart == null || isExternal() ? null : event -> (T) onStart.apply(event, null, ClientContext.none());
   }
 
   /** A decentralised event's submit handler, for code that calls it directly; null for an external event. */
@@ -190,8 +196,8 @@ public class Event<T, R extends HasRole, S> {
 
     /** Sets an external event's start handler. Called by the SDK's external event builder. */
     public EventBuilder<T, R, S> externalStartHandler(ExternalStartHandler<?> start) {
-      this.onStart = (event, user) -> rejectingOnThrow(() ->
-          start.start(new ExternalStartRequest(event.caseReference(), user)));
+      this.onStart = (event, user, clientContext) -> rejectingOnThrow(() ->
+          start.start(new ExternalStartRequest(event.caseReference(), user, clientContext)));
       return this;
     }
 
@@ -353,7 +359,7 @@ public class Event<T, R extends HasRole, S> {
       this.onSubmit = value;
     }
 
-    private void onStart(BiFunction<EventPayload<T, S>, ExternalUser, Object> value) {
+    private void onStart(StartSlot<T, S> value) {
       this.onStart = value;
     }
 
@@ -365,7 +371,7 @@ public class Event<T, R extends HasRole, S> {
 
     /** Sets a decentralised event's start handler, which returns the case. */
     public EventBuilder<T, R, S> startHandler(Start<T, S> handler) {
-      this.onStart = handler == null ? null : (event, user) -> handler.start(event);
+      this.onStart = handler == null ? null : (event, user, clientContext) -> handler.start(event);
       return this;
     }
 

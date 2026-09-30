@@ -5,14 +5,10 @@ import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.SUPER_USER;
 import static uk.gov.hmcts.divorce.divorcecase.model.access.Permissions.CREATE_READ_UPDATE;
 import static uk.gov.hmcts.divorce.divorcecase.model.access.Permissions.CREATE_READ_UPDATE_DELETE;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalEventId;
@@ -42,10 +38,12 @@ public class ExternalGreetingEvent implements CCDConfig<CaseData, State, UserRol
     public record Reply(String message) {
     }
 
-    public record Farewell(String reason) {
+    /** Whom the frontend asks the start to greet. */
+    public record Addressee(String name) {
     }
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    public record Farewell(String reason) {
+    }
 
     @Autowired
     private NamedParameterJdbcTemplate db;
@@ -74,25 +72,9 @@ public class ExternalGreetingEvent implements CCDConfig<CaseData, State, UserRol
         if (State.Withdrawn.name().equals(state(start.caseReference()))) {
             return ExternalStartResponse.rejected("The case has been withdrawn");
         }
-        String name = clientContextName();
-        return ExternalStartResponse.started(new Greeting("hello " + (name == null ? start.user().id() : name)));
-    }
-
-    /**
-     * Whom the frontend asked to greet, if anyone: a frontend says what the case cannot in the
-     * Client-Context header, which CCD passes on to the start.
-     */
-    private String clientContextName() {
-        String clientContext = ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes())
-            .getRequest().getHeader("Client-Context");
-        if (clientContext == null) {
-            return null;
-        }
-        try {
-            return MAPPER.readTree(clientContext).path("name").asText(null);
-        } catch (JsonProcessingException e) {
-            throw ExternalRejection.because("The client context is not JSON");
-        }
+        // The frontend can say whom to greet in its client context.
+        String name = start.clientContext().as(Addressee.class).map(Addressee::name).orElse(start.user().id());
+        return ExternalStartResponse.started(new Greeting("hello " + name));
     }
 
     private ExternalSubmitResponse<State> greet(ExternalSubmitRequest<Reply> submit) {
