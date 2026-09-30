@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import { JSDOM } from "jsdom";
 
 import { buildDoc, createDocEditor, renderHtml } from "../src/index.js";
+import { clauses, edited, generatedOrder, userClause } from "./fixtures/order.js";
 
 describe("renderHtml", () => {
   const dom = new JSDOM("<!doctype html>");
@@ -125,6 +126,76 @@ describe("renderHtml", () => {
     assert.throws(
       () => renderHtml(controller.getSnapshot()),
       /needs a DOM document/,
+    );
+  });
+});
+
+describe("renderHtml with changes", () => {
+  const dom = new JSDOM("<!doctype html>");
+  const document = dom.window.document;
+
+  it("renders a document as generated without marks", () => {
+    const snapshot = generatedOrder();
+
+    assert.equal(
+      renderHtml(snapshot, { document, changes: true }),
+      renderHtml(snapshot, { document }),
+    );
+  });
+
+  it("marks a clause the reader wrote as inserted", () => {
+    const snapshot = edited(generatedOrder(), (current) => {
+      clauses(current).push(userClause("The defendant may apply to vary this order."));
+    });
+
+    const html = renderHtml(snapshot, { document, changes: true });
+
+    assert.match(
+      html,
+      /<li data-docweave-change="inserted"><p><ins>The defendant may apply to vary this order\.<\/ins><\/p><\/li><\/ol>$/,
+    );
+  });
+
+  it("shows a reworded clause's generated wording deleted and the reader's inserted, word by word", () => {
+    const snapshot = edited(generatedOrder(), (current) => {
+      clauses(current)[1]!.content![0]!.content = [
+        { type: "text", text: "The defendant must pay the claimant's fixed costs." },
+      ];
+    });
+
+    const html = renderHtml(snapshot, { document, changes: true });
+
+    assert.match(
+      html,
+      /<li data-docweave-change="modified"><p>The defendant must pay the claimant's <ins>fixed <\/ins>costs\.<\/p><\/li>/,
+    );
+  });
+
+  it("compares a fact's value as wording", () => {
+    const snapshot = edited(generatedOrder(), (current) => {
+      const possession = clauses(current)[0]!.content![0]!;
+      possession.content = [{ type: "text", text: "The defendant must give up possession by 8 October 2026." }];
+    });
+
+    const html = renderHtml(snapshot, { document, changes: true });
+
+    assert.match(html, /possession by <del>1<\/del><ins>8<\/ins> October 2026\./);
+  });
+
+  it("marks a paragraph the reader added to a generated clause as inserted", () => {
+    const snapshot = edited(generatedOrder(), (current) => {
+      clauses(current)[1]!.content!.push({
+        type: "paragraph",
+        attrs: { id: null },
+        content: [{ type: "text", text: "Costs are summarily assessed." }],
+      });
+    });
+
+    const html = renderHtml(snapshot, { document, changes: true });
+
+    assert.match(
+      html,
+      /<li data-docweave-change="modified"><p>The defendant must pay the claimant's costs\.<\/p><p><ins>Costs are summarily assessed\.<\/ins><\/p><\/li>/,
     );
   });
 });

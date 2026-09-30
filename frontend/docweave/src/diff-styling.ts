@@ -12,6 +12,11 @@ import {
   type EditorView,
 } from "prosemirror-view";
 
+import {
+  clauseMatchesGenerated,
+  clauseNodesById,
+  isClauseNode,
+} from "./changes.js";
 import { isElement } from "./dom.js";
 import { createUndoIcon } from "./icons.js";
 import { hasSameManagedStructure } from "./invariants.js";
@@ -32,22 +37,9 @@ export interface DiffStylingOptions {
 export const BLOCKED_EDIT_MESSAGE =
   "That edit was not made. Generated clauses and facts cannot be deleted or moved, but their wording can be edited.";
 
-interface ClauseSnapshot {
-  node: ProseMirrorNode;
-}
-
 type Revert = (state: EditorState) => Transaction | undefined;
 
 const diffStylingKey = new PluginKey<DiffStylingState>("diff-styling");
-
-function isClauseNode(
-  node: ProseMirrorNode,
-  parent: ProseMirrorNode | null,
-  doc: ProseMirrorNode,
-): boolean {
-  return (parent === doc && node.type.name !== "ordered_list") ||
-    parent?.type.name === "ordered_list";
-}
 
 export function deleteUserAuthoredNode(
   state: EditorState,
@@ -172,46 +164,6 @@ function createClauseMarker(
 
   container.append(description, button);
   return container;
-}
-
-function clauseSnapshotsById(
-  doc: ProseMirrorNode,
-): Map<string, ClauseSnapshot> {
-  const clauses = new Map<string, ClauseSnapshot>();
-
-  doc.descendants((node, _position, parent) => {
-    const id = node.attrs.id;
-    if (isClauseNode(node, parent, doc) && typeof id === "string") {
-      clauses.set(id, { node });
-    }
-  });
-  return clauses;
-}
-
-function clauseNodesById(doc: ProseMirrorNode): Map<string, ProseMirrorNode> {
-  return new Map(
-    [...clauseSnapshotsById(doc)].map(([id, clause]) => [id, clause.node]),
-  );
-}
-
-function clauseMatchesGenerated(
-  node: ProseMirrorNode,
-  generatedNode: ProseMirrorNode,
-): boolean {
-  if (!node.sameMarkup(generatedNode)) return false;
-  if (node.type.name !== "list_item") return node.eq(generatedNode);
-
-  const ownContent = node.children.filter(
-    (child) => child.type.name !== "ordered_list",
-  );
-  const generatedOwnContent = generatedNode.children.filter(
-    (child) => child.type.name !== "ordered_list",
-  );
-
-  return ownContent.length === generatedOwnContent.length &&
-    ownContent.every((child, index) =>
-      child.eq(generatedOwnContent[index]!)
-    );
 }
 
 function createDiffDecorations(
