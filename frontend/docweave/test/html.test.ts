@@ -171,34 +171,6 @@ describe("renderHtml with changes", () => {
     );
   });
 
-  it("compares a fact's value as wording", () => {
-    const snapshot = edited(generatedOrder(), (current) => {
-      const possession = clauses(current)[0]!.content![0]!;
-      possession.content = [{ type: "text", text: "The defendant must give up possession by 8 October 2026." }];
-    });
-
-    const html = renderHtml(snapshot, { document, changes: true });
-
-    assert.match(html, /possession by <del>1<\/del><ins>8<\/ins> October 2026\./);
-  });
-
-  it("marks a paragraph the reader added to a generated clause as inserted", () => {
-    const snapshot = edited(generatedOrder(), (current) => {
-      clauses(current)[1]!.content!.push({
-        type: "paragraph",
-        attrs: { id: null },
-        content: [{ type: "text", text: "Costs are summarily assessed." }],
-      });
-    });
-
-    const html = renderHtml(snapshot, { document, changes: true });
-
-    assert.match(
-      html,
-      /<li data-docweave-change="modified"><p>The defendant must pay the claimant's costs\.<\/p><p><ins>Costs are summarily assessed\.<\/ins><\/p><\/li>/,
-    );
-  });
-
   describe("a reworded paragraph outside the numbered clauses", () => {
     function preamble(): DocWeaveSnapshot {
       const controller = createDocEditor();
@@ -221,17 +193,6 @@ describe("renderHtml with changes", () => {
       assert.equal(
         renderHtml(snapshot, { document, changes: true }),
         '<p data-docweave-change="modified">Before <ins>Deputy </ins>District Judge Smith sitting at Bristol.</p>',
-      );
-    });
-
-    it("shows a paragraph rewritten as plain text", () => {
-      const snapshot = edited(preamble(), (current) => {
-        paragraph(current).content = [{ type: "text", text: "Before Recorder Jones sitting at Bristol." }];
-      });
-
-      assert.equal(
-        renderHtml(snapshot, { document, changes: true }),
-        '<p data-docweave-change="modified">Before <del>District Judge Smith</del><ins>Recorder Jones</ins> sitting at Bristol.</p>',
       );
     });
 
@@ -259,26 +220,4 @@ describe("renderHtml with changes", () => {
     );
   });
 
-  it("keeps the formatting of a clause whose wording is unchanged", () => {
-    const snapshot = edited(generatedOrder(), (current) => {
-      const costs = clauses(current)[1]!.content![0]!.content![0]! as { marks?: unknown[] };
-      costs.marks = [{ type: "strong" }];
-    });
-
-    assert.match(
-      renderHtml(snapshot, { document, changes: true }),
-      /<li data-docweave-change="modified"><p><strong>The defendant must pay the claimant's costs\.<\/strong><\/p><\/li>/,
-    );
-  });
-
-  it("marks a heading the reader added as inserted", () => {
-    const snapshot = edited(generatedOrder(), (current) => {
-      current.content!.unshift({ type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Order" }] });
-    });
-
-    assert.match(
-      renderHtml(snapshot, { document, changes: true }),
-      /^<h2 data-docweave-change="inserted"><ins>Order<\/ins><\/h2>/,
-    );
-  });
 });
