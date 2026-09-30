@@ -88,15 +88,8 @@ dependencies {
   implementation 'org.postgresql:postgresql:42.7.13'
 
 
-  implementation('com.github.hmcts:ccd-case-document-am-client:2.0.0') {
-    exclude group: 'org.springframework.boot', module: 'spring-boot-starter-jackson'
-    exclude group: 'org.springframework.boot', module: 'spring-boot-jackson'
-  }
-  // The Boot 4 client exposes Jackson 3 in its Spring configuration and model metadata. Its mapper
-  // is isolated in JacksonConfiguration; the application's primary HTTP mapper remains Jackson 2.
-  implementation('com.github.hmcts:core-case-data-store-client:6.1.0') {
-    exclude group: 'org.springframework.boot', module: 'spring-boot-jackson'
-  }
+  implementation 'com.github.hmcts:ccd-case-document-am-client:1.60.1'
+  implementation 'com.github.hmcts:core-case-data-store-client:5.4.0'
   implementation 'com.github.hmcts:idam-java-client:4.0.0'
   implementation 'com.github.hmcts.java-logging:logging:8.0.0'
   implementation 'com.github.hmcts:service-auth-provider-java-client:6.1.2'
