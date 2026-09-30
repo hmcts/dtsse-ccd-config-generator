@@ -140,9 +140,16 @@ class BundleJobOutboxIntegrationTest {
     BundleRequest seen = handled.get(0);
     assertThat(seen.title()).isEqualTo("Final hearing bundle");
     assertThat(seen.presentation().documentCoverSheets()).isTrue();
+    assertThat(seen.presentation().watermark()).contains(
+        uk.gov.hmcts.ccd.sdk.bundling.api.WatermarkPreset.allPages("hmcts-logo"));
+    assertThat(seen.coverPage()).contains(new uk.gov.hmcts.ccd.sdk.bundling.api.CoverPage(
+        "FL-FRM-GOR-ENG-12345.docx", java.util.Map.of("caseReference", "1234")));
     assertThat(seen.allDocuments()).extracting(BundleDocument::id)
         .containsExactly("doc-1", "doc-2", "doc-3");
-    assertThat(seen.allDocuments().get(2).confidential()).isTrue();
+    assertThat(seen.allDocuments().get(2).media().orElseThrow().duration())
+        .contains(Duration.ofMinutes(42));
+    assertThat(seen.coverPage().orElseThrow().templateName()).isEqualTo("FL-FRM-GOR-ENG-12345.docx");
+    assertThat(seen.presentation().watermark()).isPresent();
     // The worker closed the result: the renderer's job directory is gone.
     assertThat(Files.list(tempDir)).isEmpty();
 
@@ -308,6 +315,18 @@ class BundleJobOutboxIntegrationTest {
     worker.poll();
     assertThat(renderer.renders).hasSize(1);
 
+    // A retryable code whose cause is a permanent Docmosis answer (a missing template) is
+    // terminal too: retrying cannot fix it.
+    UUID missingTemplate = service.submit(simpleRequest(UUID.randomUUID()), CONTEXT).externalId();
+    FakeRenderer coverFails = new FakeRenderer(tempDir).onNextRender(FakeRenderer.failure(
+        new BundleGenerationException(BundleErrorCode.COVER_PAGE_FAILED, BundleStage.CONVERT,
+            "The cover page template could not be rendered.", "Check the template exists.",
+            List.of(), new uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderException(
+                "Docmosis returned HTTP 404", false))));
+    directWorker(coverFails).poll();
+    assertThat(job(missingTemplate).state()).isEqualTo(BundleJobState.FAILED);
+    assertThat(column(missingTemplate, "next_attempt_at")).isNull();
+
     // A throwing completion handler fails the rendered job with COMPLETION_FAILED; the raw
     // exception message stays out of the row, and the result is still closed.
     UUID unstored = service.submit(simpleRequest(UUID.randomUUID()), CONTEXT).externalId();
@@ -337,9 +356,9 @@ class BundleJobOutboxIntegrationTest {
     assertThat(job(corrupt).failure().orElseThrow().code())
         .isEqualTo(BundleErrorCode.JOB_REQUEST_UNREADABLE);
     assertThat(job(corrupt).failure().orElseThrow().message()).contains(corrupt.toString());
-    assertThat(job(futureVersion).failure().orElseThrow().code())
-        .isEqualTo(BundleErrorCode.JOB_REQUEST_UNREADABLE);
-    assertThat(job(futureVersion).failure().orElseThrow().message()).contains("version 99");
+    // A row written by a newer worker is left for that worker, never claimed by this one.
+    assertThat(job(futureVersion).state()).isEqualTo(BundleJobState.QUEUED);
+    assertThat(column(futureVersion, "lease_owner")).isNull();
     assertThat(renderer.renders).isEmpty();
   }
 
@@ -490,7 +509,10 @@ class BundleJobOutboxIntegrationTest {
     return BundleRequest.builder().externalId(id).title("Final hearing bundle")
         .fileName("final-hearing-bundle.pdf")
         .presentation(uk.gov.hmcts.ccd.sdk.bundling.api.BundlePresentation.courtDefault()
-            .withDocumentCoverSheets(true))
+            .withDocumentCoverSheets(true)
+            .withWatermark(uk.gov.hmcts.ccd.sdk.bundling.api.WatermarkPreset.allPages("hmcts-logo")))
+        .coverPage(new uk.gov.hmcts.ccd.sdk.bundling.api.CoverPage(
+            "FL-FRM-GOR-ENG-12345.docx", java.util.Map.of("caseReference", "1234")))
         .root(BundleSection.builder("Case file")
             .document(BundleDocument.builder().id("doc-1").title("Application form")
                 .date(java.time.LocalDate.of(2026, 3, 14))
@@ -499,8 +521,11 @@ class BundleJobOutboxIntegrationTest {
                 .document(BundleDocument.builder().id("doc-2").title("Medical report")
                     .confidential(true).reference(new DocumentReference("case-documents", "d2"))
                     .build())
-                .document(BundleDocument.builder().id("doc-3").title("Hearing transcript")
-                    .confidential(true).reference(new DocumentReference("case-documents", "d3"))
+                .document(BundleDocument.builder().id("doc-3").title("Hearing recording")
+                    .reference(new DocumentReference("media-store", "m1"))
+                    .media(uk.gov.hmcts.ccd.sdk.bundling.api.MediaPlaceholder.builder()
+                        .mediaType("audio/mpeg").accessUrl("https://media.example/m1")
+                        .duration(Duration.ofMinutes(42)).build())
                     .build())
                 .build())
             .build())

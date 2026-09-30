@@ -10,15 +10,20 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.graphics.PDXObject;
+import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
 import org.apache.pdfbox.pdmodel.interactive.action.PDAction;
 import org.apache.pdfbox.pdmodel.interactive.action.PDActionGoTo;
+import org.apache.pdfbox.pdmodel.interactive.action.PDActionURI;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationLink;
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.destination.PDDestination;
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.destination.PDPageDestination;
@@ -81,6 +86,26 @@ final class Pdfs {
     });
   }
 
+  static Path deepOutlinePdf(Path dir, int depth) {
+    return pdf(dir, "deep-outline-", document -> {
+      PDPage page = new PDPage();
+      document.addPage(page);
+      PDDocumentOutline outline = new PDDocumentOutline();
+      document.getDocumentCatalog().setDocumentOutline(outline);
+      PDOutlineItem parent = new PDOutlineItem();
+      parent.setTitle("Level 0");
+      parent.setDestination(page);
+      outline.addLast(parent);
+      for (int i = 1; i <= depth; i++) {
+        PDOutlineItem child = new PDOutlineItem();
+        child.setTitle("Level " + i);
+        child.setDestination(page);
+        parent.addLast(child);
+        parent = child;
+      }
+    });
+  }
+
   static BundlePresentation tocOnly() {
     return new BundlePresentation(true, false, false, PageNumbers.NONE, ConfidentialMarking.NONE);
   }
@@ -105,7 +130,7 @@ final class Pdfs {
   static AssemblyRequest described(BundlePresentation presentation, boolean titlePage,
       List<AssemblyNode> nodes) {
     return new AssemblyRequest("Title of the bundle", "stitched.pdf", Optional.of(DESCRIPTION),
-        presentation, titlePage, nodes);
+        presentation, titlePage, Optional.empty(), Optional.empty(), nodes);
   }
 
   interface Io<T> {
@@ -153,9 +178,32 @@ final class Pdfs {
     });
   }
 
+  // Counts the image XObjects reachable from a 1-based page's resources, through form XObjects.
+  static long imageCount(Path pdf, int page) {
+    return read(pdf, document -> countImages(document.getPage(page - 1).getResources()));
+  }
+
+  private static long countImages(PDResources resources) {
+    long count = 0;
+    for (org.apache.pdfbox.cos.COSName name : resources.getXObjectNames()) {
+      if (resources.isImageXObject(name)) {
+        count++;
+      } else {
+        PDXObject xobject = io(() -> resources.getXObject(name));
+        count += xobject instanceof PDFormXObject form ? countImages(form.getResources()) : 0;
+      }
+    }
+    return count;
+  }
+
   static List<Integer> internalLinkTargets(Path pdf, int page) {
     return links(pdf, page, link -> resolvePage(io(link::getDestination), link.getAction())).stream()
         .filter(target -> target >= 0).map(target -> target + 1).toList();
+  }
+
+  static List<String> uriLinks(Path pdf, int page) {
+    return links(pdf, page, link -> link.getAction() instanceof PDActionURI uri ? uri.getURI() : null)
+        .stream().filter(Objects::nonNull).toList();
   }
 
   static List<PDRectangle> linkRects(Path pdf, int page) {

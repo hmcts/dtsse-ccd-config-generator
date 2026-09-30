@@ -9,10 +9,15 @@ import java.time.Duration;
  *
  * <p>Every call the client makes is bounded by these settings: connection and read timeouts and
  * a source-size ceiling enforced before anything is sent. {@link #toString()} redacts the access
- * key so the record is safe to log.
+ * key so the record is safe to log. Either endpoint may be absent (the matching operation is
+ * then unavailable), but not both.
+ *
+ * @param convertEndpoint the absolute {@code /rs/convert} URI, or null
+ * @param renderEndpoint the absolute {@code /rs/render} URI, or null
  */
 public record DocmosisConnection(
     URI convertEndpoint,
+    URI renderEndpoint,
     String accessKey,
     Duration connectTimeout,
     Duration readTimeout,
@@ -33,7 +38,16 @@ public record DocmosisConnection(
 
   /** Validates the settings. Messages never include the access key. */
   public DocmosisConnection {
-    requireAbsolute("convertEndpoint", convertEndpoint);
+    if (convertEndpoint == null && renderEndpoint == null) {
+      throw new IllegalArgumentException(
+          "At least one of convertEndpoint and renderEndpoint must be provided");
+    }
+    if (convertEndpoint != null) {
+      requireAbsolute("convertEndpoint", convertEndpoint);
+    }
+    if (renderEndpoint != null) {
+      requireAbsolute("renderEndpoint", renderEndpoint);
+    }
     if (accessKey == null || accessKey.isBlank()) {
       throw new IllegalArgumentException("accessKey must be provided");
     }
@@ -44,11 +58,23 @@ public record DocmosisConnection(
     }
   }
 
-  /** Creates a connection with the default timeouts and size ceiling. */
+  /** A conversion-only connection. */
+  public DocmosisConnection(URI convertEndpoint, String accessKey, Duration connectTimeout,
+      Duration readTimeout, long maxSourceBytes) {
+    this(convertEndpoint, null, accessKey, connectTimeout, readTimeout, maxSourceBytes);
+  }
+
+  /** Creates a conversion-only connection with the default timeouts and size ceiling. */
   public static DocmosisConnection withDefaults(URI convertEndpoint, String accessKey) {
+    return withDefaults(convertEndpoint, null, accessKey);
+  }
+
+  /** Creates a connection with the default timeouts and size ceiling. */
+  public static DocmosisConnection withDefaults(
+      URI convertEndpoint, URI renderEndpoint, String accessKey) {
     return new DocmosisConnection(
-        convertEndpoint, accessKey, DEFAULT_CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT,
-        DEFAULT_MAX_SOURCE_BYTES);
+        convertEndpoint, renderEndpoint, accessKey, DEFAULT_CONNECT_TIMEOUT,
+        DEFAULT_READ_TIMEOUT, DEFAULT_MAX_SOURCE_BYTES);
   }
 
   private static void requireAbsolute(String name, URI endpoint) {
@@ -71,6 +97,7 @@ public record DocmosisConnection(
   @Override
   public String toString() {
     return "DocmosisConnection[convertEndpoint=" + convertEndpoint
+        + ", renderEndpoint=" + renderEndpoint
         + ", accessKey=<redacted>"
         + ", connectTimeout=" + connectTimeout
         + ", readTimeout=" + readTimeout

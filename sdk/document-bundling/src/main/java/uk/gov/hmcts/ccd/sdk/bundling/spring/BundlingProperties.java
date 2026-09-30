@@ -26,10 +26,14 @@ public class BundlingProperties {
   private Docmosis docmosis = new Docmosis();
   private Limits limits = new Limits();
 
-  /** Docmosis connection; office conversion is registered only when both values are set. */
+  /**
+   * Docmosis connection; office conversion needs {@code convert-endpoint}, cover pages need
+   * {@code render-endpoint}, both need {@code access-key}.
+   */
   @Data
   public static class Docmosis {
     private URI convertEndpoint;
+    private URI renderEndpoint;
     @ToString.Exclude
     private String accessKey;
     private Duration connectTimeout = DocmosisConnection.DEFAULT_CONNECT_TIMEOUT;
@@ -38,7 +42,8 @@ public class BundlingProperties {
 
     DocmosisConnection toConnection() {
       return new DocmosisConnection(
-          convertEndpoint, accessKey, connectTimeout, readTimeout, maxSourceBytes);
+          convertEndpoint, renderEndpoint, accessKey, connectTimeout, readTimeout,
+          maxSourceBytes);
     }
   }
 

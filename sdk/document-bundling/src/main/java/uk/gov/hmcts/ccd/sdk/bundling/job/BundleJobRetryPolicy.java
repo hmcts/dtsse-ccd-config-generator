@@ -6,16 +6,19 @@ import java.util.EnumSet;
 import java.util.Optional;
 import java.util.Set;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleErrorCode;
+import uk.gov.hmcts.ccd.sdk.bundling.api.BundleGenerationException;
+import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderException;
 
 /**
- * Bounded retry with exponential backoff, applied only to transient resolution and conversion
- * failures; validation, not-found, access-denied, assembly and completion failures are terminal.
+ * Bounded retry with exponential backoff, applied only to transient resolution, conversion and
+ * cover-page rendering failures; validation, not-found, access-denied, assembly and completion failures are terminal.
  */
 public class BundleJobRetryPolicy {
 
   private static final long UNCAPPED_DELAY_CEILING_MILLIS = Duration.ofDays(1).toMillis();
   private static final Set<BundleErrorCode> TRANSIENT_CODES = EnumSet.of(
-      BundleErrorCode.DOCUMENT_RESOLUTION_FAILED, BundleErrorCode.DOCUMENT_CONVERSION_FAILED);
+      BundleErrorCode.DOCUMENT_RESOLUTION_FAILED, BundleErrorCode.DOCUMENT_CONVERSION_FAILED,
+      BundleErrorCode.COVER_PAGE_FAILED);
 
   private final int maxAttempts;
   private final long initialDelayMillis;
@@ -33,8 +36,23 @@ public class BundleJobRetryPolicy {
     this.maxDelayMillis = maxDelay.toMillis();
   }
 
-  public boolean isTransient(BundleErrorCode code) {
-    return TRANSIENT_CODES.contains(code);
+  /**
+   * Whether a failure is worth retrying: a retryable code, unless a Docmosis failure in the
+   * cause chain says the server answered permanently (4xx, non-PDF body, bad payload).
+   */
+  public boolean isTransient(BundleGenerationException failure) {
+    if (!TRANSIENT_CODES.contains(failure.code())) {
+      return false;
+    }
+    for (Throwable cause = failure.getCause(); cause != null; cause = cause.getCause()) {
+      if (cause instanceof DocmosisRenderException docmosis) {
+        return docmosis.isTransientFailure();
+      }
+      if (cause.getCause() == cause) {
+        break;
+      }
+    }
+    return true;
   }
 
   public int maxAttempts() {

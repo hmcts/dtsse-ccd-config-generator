@@ -44,6 +44,7 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRenderer;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleResult;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleSection;
+import uk.gov.hmcts.ccd.sdk.bundling.api.CoverPage;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResolver;
 import uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocument;
@@ -61,6 +62,7 @@ class DocmosisConversionTest {
   private final AtomicReference<Responder> responder = new AtomicReference<>();
   private HttpServer server;
   private URI endpoint;
+  private URI renderEndpoint;
   private byte[] servedPdf;
   private Path source;
   @TempDir private Path outputDir;
@@ -71,9 +73,10 @@ class DocmosisConversionTest {
     servedPdf = pdfSaying(CONVERTED_TEXT);
     responder.set(exchange -> respond(exchange, 200, servedPdf));
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-    server.createContext("/rs/convert", exchange -> {
+    com.sun.net.httpserver.HttpHandler recording = exchange -> {
       String body = new String(exchange.getRequestBody().readAllBytes(), ISO_8859_1);
-      requests.add(new Recorded(exchange.getProtocol(), exchange.getRequestHeaders(), body));
+      requests.add(new Recorded(exchange.getProtocol(), exchange.getRequestHeaders(), body,
+          exchange.getRequestURI().getPath()));
       try {
         responder.get().respond(exchange);
       } catch (IOException | InterruptedException ignored) {
@@ -81,9 +84,12 @@ class DocmosisConversionTest {
       } finally {
         exchange.close();
       }
-    });
+    };
+    server.createContext("/rs/convert", recording);
+    server.createContext("/rs/render", recording);
     server.start();
     endpoint = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/rs/convert");
+    renderEndpoint = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/rs/render");
     source = Files.write(sourceDir.resolve("letter.docx"), SOURCE_BYTES);
   }
 
@@ -140,6 +146,57 @@ class DocmosisConversionTest {
     assertThat(requests.get(1).body())
         .contains("name=\"file\"; filename=\"wordDocument.doc\"\r\nContent-Type: " + DOC + "\r\n\r\n")
         .contains(new String(word, ISO_8859_1));
+  }
+
+  @Test
+  void renderSpeaksTheEmStitchingTemplateContractAndPrependsTheCoverPageThroughThePipeline() throws Exception {
+    DocmosisConnection connection = DocmosisConnection.withDefaults(endpoint, renderEndpoint, ACCESS_KEY);
+    assertThat(connection.toString()).contains("renderEndpoint=" + renderEndpoint).doesNotContain(ACCESS_KEY);
+    HttpDocmosisRenderService service = new HttpDocmosisRenderService(connection, outputDir);
+    assertThat(service.rendersTemplates()).isTrue();
+    Path result = service.renderTemplate("FL-FRM-GOR-ENG-12345.docx",
+        Map.of("caseReference", "1234", "hearingDate", java.time.LocalDate.of(2026, 3, 14)));
+
+    assertThat(Files.readAllBytes(result)).isEqualTo(servedPdf);
+    Files.delete(result);
+    assertThat(requests).hasSize(1);
+    Recorded request = requests.get(0);
+    assertThat(request.path()).isEqualTo("/rs/render");
+    assertThat(request.headers().getFirst("Content-Type")).startsWith("multipart/form-data; boundary=");
+    String boundary = request.headers().getFirst("Content-Type").substring("multipart/form-data; boundary=".length());
+    assertThat(request.body())
+        .contains("name=\"templateName\"\r\n\r\nFL-FRM-GOR-ENG-12345.docx\r\n")
+        .contains("name=\"accessKey\"\r\n\r\n" + ACCESS_KEY + "\r\n")
+        .containsPattern("name=\"outputName\"\r\n\r\n[0-9a-f-]{36}\\.pdf\r\n")
+        .contains("name=\"data\"\r\n\r\n{\"")
+        .contains("\"caseReference\":\"1234\"").contains("\"hearingDate\":[2026,3,14]")
+        .endsWith("--" + boundary + "--\r\n");
+
+    // Through the pipeline: the cover page is rendered at CONVERT and placed first, unnumbered.
+    BundleRenderer renderer = BundleRenderer.builder()
+        .resolver(resolverServing("wordDocument.doc", getClass()
+            .getResourceAsStream("/fixtures/em-stitching/wordDocument.doc").readAllBytes()))
+        .docmosis(service).build();
+    BundleRequest bundle = BundleRequest.builder()
+        .externalId(UUID.randomUUID()).title("Docmosis bundle").fileName("bundle.pdf")
+        .coverPage(new CoverPage("FL-FRM-GOR-ENG-12345.docx", Map.of("caseReference", "1234")))
+        .root(BundleSection.builder("Section A").document(
+            BundleDocument.builder().id("d1").title("Word letter").reference(WORD_REF).build()).build())
+        .build();
+    try (BundleResult rendered = renderer.render(bundle, BundleExecutionContext.empty());
+        InputStream in = rendered.artifact().open();
+        PDDocument pdf = Loader.loadPDF(in.readAllBytes())) {
+      PDFTextStripper stripper = new PDFTextStripper();
+      stripper.setStartPage(1);
+      stripper.setEndPage(1);
+      assertThat(stripper.getText(pdf)).contains(CONVERTED_TEXT).doesNotContain("of " + pdf.getNumberOfPages());
+      assertThat(pdf.getDocumentCatalog().getDocumentOutline().getFirstChild().getFirstChild().getTitle())
+          .isEqualTo("Cover Page");
+      assertThat(rendered.documents()).singleElement()
+          .satisfies(d -> assertThat(d.startPage()).isEqualTo(pdf.getNumberOfPages()));
+    }
+    assertThat(requests).extracting(Recorded::path).containsExactly("/rs/render", "/rs/convert", "/rs/render");
+    assertThat(outputDir).isEmptyDirectory();
   }
 
   @Test
@@ -250,6 +307,6 @@ class DocmosisConversionTest {
     void respond(HttpExchange exchange) throws IOException, InterruptedException;
   }
 
-  private record Recorded(String protocol, Headers headers, String body) {
+  private record Recorded(String protocol, Headers headers, String body, String path) {
   }
 }

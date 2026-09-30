@@ -68,13 +68,15 @@ class BundleRenderingObservabilityTest {
     try (BundleResult result = renderer.render(request(doc("d1", "Doc", "good")),
         BundleExecutionContext.empty())) {
       assertThat(result.timings()).containsKeys(BundleStage.VALIDATE, BundleStage.RESOLVE,
-          BundleStage.CONVERT, BundleStage.ASSEMBLE);
+          BundleStage.CONVERT, BundleStage.INSPECT, BundleStage.ASSEMBLE);
     }
 
     assertThat(MDC.get("externalId")).isEqualTo("caller-owned");
     assertThat(MDC.get("requestId")).isEqualTo("r-1");
     assertThat(MDC.get("stage")).isNull();
     assertThat(registry.get("ccd.bundling.stage").tag("stage", "convert").timer().count())
+        .isEqualTo(1);
+    assertThat(registry.get("ccd.bundling.stage").tag("stage", "inspect").timer().count())
         .isEqualTo(1);
     assertThat(registry.get("ccd.bundling.stage").tag("stage", "assemble").timer().count())
         .isEqualTo(1);

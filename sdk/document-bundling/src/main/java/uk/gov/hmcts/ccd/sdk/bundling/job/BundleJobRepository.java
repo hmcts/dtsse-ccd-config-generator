@@ -59,6 +59,7 @@ public class BundleJobRepository {
         with claimable as (
           select external_id from bundling.bundle_job
           where attempts < :maxAttempts
+            and request_version <= :maxVersion
             and ((state = 'QUEUED' and (next_attempt_at is null or next_attempt_at <= now()))
                  or (state = :inProgress and lease_expires_at <= now()))
           order by created_at, external_id
@@ -77,7 +78,8 @@ public class BundleJobRepository {
             job.transient_history::text as transient_history
         """,
         params("limit", limit, "leaseOwner", leaseOwner, "leaseMillis", leaseDuration.toMillis(),
-            "maxAttempts", maxAttempts, "inProgress", IN_PROGRESS),
+            "maxAttempts", maxAttempts, "inProgress", IN_PROGRESS,
+            "maxVersion", BundleJobJson.REQUEST_VERSION),
         (rs, n) -> new ClaimedBundleJob(
             new BundleJob(rs.getObject("external_id", UUID.class), BundleJobState.IN_PROGRESS,
                 rs.getInt("attempts"), instant(rs, "created_at"), instant(rs, "updated_at"),

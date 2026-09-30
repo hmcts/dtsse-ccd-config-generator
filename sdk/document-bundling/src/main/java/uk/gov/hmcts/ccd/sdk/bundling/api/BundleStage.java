@@ -8,6 +8,8 @@ public enum BundleStage {
   RESOLVE,
   /** Per-media-type conversion of each source to PDF. */
   CONVERT,
+  /** Readability inspection of every converted PDF before assembly. */
+  INSPECT,
   /** Assembly of the bundle: generated pages, contents, bookmarks, marks, pagination. */
   ASSEMBLE
 }
