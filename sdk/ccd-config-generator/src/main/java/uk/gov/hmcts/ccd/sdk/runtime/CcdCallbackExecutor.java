@@ -1,8 +1,10 @@
 package uk.gov.hmcts.ccd.sdk.runtime;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import lombok.SneakyThrows;
@@ -22,6 +24,7 @@ import uk.gov.hmcts.ccd.sdk.api.EventPayload;
 import uk.gov.hmcts.ccd.sdk.api.TypedPropertyGetter;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
+import uk.gov.hmcts.ccd.sdk.api.external.ClientContext;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalRejection;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalStartResponse;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalUser;
@@ -50,8 +53,14 @@ public class CcdCallbackExecutor {
     }
   }
 
-  @SneakyThrows
   public AboutToStartOrSubmitResponse aboutToStart(CallbackRequest request, String authorisation) {
+    return aboutToStart(request, authorisation, null);
+  }
+
+  /** Starts an event; an external event's start is also given the frontend's client context, as JSON. */
+  @SneakyThrows
+  public AboutToStartOrSubmitResponse aboutToStart(CallbackRequest request, String authorisation,
+                                                   String clientContext) {
     log.info("About to start event ID: {}", request.getEventId());
 
     var event = findCaseEvent(request);
@@ -67,7 +76,9 @@ public class CcdCallbackExecutor {
           new LinkedMultiValueMap<>()
       );
 
-      Object response = event.start(payload, event.isExternal() ? externalUser(authorisation) : null);
+      Object response = event.isExternal()
+          ? event.start(payload, externalUser(authorisation), clientContext(clientContext))
+          : event.start(payload, null, ClientContext.none());
       if (!event.isExternal()) {
         return AboutToStartOrSubmitResponse.builder().data(response).build();
       }
@@ -85,6 +96,20 @@ public class CcdCallbackExecutor {
 
     return findCallback(request, Event::getAboutToStartCallback)
         .handle(convertCaseDetails(request.getCaseDetails()));
+  }
+
+  /** Reads the frontend's context as whatever the start handler asks for, ignoring what it does not name. */
+  private ClientContext clientContext(String json) {
+    if (json == null || json.isBlank()) {
+      return ClientContext.none();
+    }
+    return ClientContext.reading(type -> {
+      try {
+        return mapper.readerFor(type).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).readValue(json);
+      } catch (IOException e) {
+        throw new IllegalArgumentException("The client context cannot be read as a " + type.getName(), e);
+      }
+    });
   }
 
   private ExternalUser externalUser(String authorisation) {
