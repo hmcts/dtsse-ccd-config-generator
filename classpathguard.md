@@ -123,13 +123,13 @@ exclusions are not supported. Nested classes must be listed separately.
 
 ## Current reviewed exceptions
 
-- The e2e fixture uses `core-case-data-store-client:6.1.0`, whose public Spring configuration and
-  model metadata use Jackson 3. The fixture supplies one exact Jackson 3 mapper bridge and permits
-  only its build file, bridge class and that exact client version. The application's primary HTTP
-  mapper and CCD wire contracts remain on Jackson 2.
 - Adoption allows only
   `com.github.hmcts:core-case-data-store-client:6.1.0`. The dependency's Jackson 3 findings remain
-  visible, and any version change requires review.
+  visible, and any version change requires review. The Boot 4 / Jackson 2 release
+  `core-case-data-store-client:5.4.0` removes the need for this exception once the Adoption
+  submodule adopts it.
+- The e2e fixture uses the Boot 4 / Jackson 2 releases `core-case-data-store-client:5.4.0` and
+  `ccd-case-document-am-client:1.60.1`, so it has no Jackson 3 exceptions.
 - NFDiv, PCS and SPTribs have no Jackson 3 exceptions. Their application mappers, round-trip
   tests and casing/null configuration remain on Jackson 2.
 
