@@ -35,6 +35,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.filter.OncePerRequestFilter;
 import uk.gov.hmcts.ccd.sdk.CCDDefinitionGenerator;
 import uk.gov.hmcts.ccd.sdk.CaseView;
@@ -301,6 +303,24 @@ class CcdEventTestSupportIntegrationTest {
   }
 
   @Test
+  void externalEventStartIsSentTheClientContext() {
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+    ExternalEvent<Greeting, Reply> greet = events.external(reference, GREET)
+        .withClientContext(Map.of("name", "Sam"));
+
+    assertThat(greet.start()).isEqualTo(new Greeting("hello original {\"name\":\"Sam\"}"));
+    assertThat(greet.submitExpectingSuccess(new Reply("hello back")).audit().summary()).isEqualTo("hello back");
+  }
+
+  @Test
+  void viewShowsTheCaseAsTheApplicationsCaseViewDoes() {
+    long reference = events.seed(TestState.Open, new TestCase("stored"));
+
+    assertThat(events.view(reference).value()).isEqualTo("as viewed");
+    assertThat(events.storedData(reference).value()).isEqualTo("stored");
+  }
+
+  @Test
   void externalEventHandlersCanRefuseToStartOrAcceptASubmission() {
     long grumpy = events.seed(TestState.Open, new TestCase("grumpy"));
     long reference = events.seed(TestState.Open, new TestCase("original"));
@@ -522,9 +542,13 @@ class CcdEventTestSupportIntegrationTest {
                 // The start handler loads what it needs; here, the case's stored value.
                 String value = jdbc.queryForObject("select data ->> 'value' from ccd.case_data where reference = ?",
                     String.class, start.caseReference());
+                // A frontend says what the case cannot, such as whom to greet, in the client context.
+                String clientContext = ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes())
+                    .getRequest().getHeader(CcdEventTestSupport.CLIENT_CONTEXT_HEADER);
                 return "grumpy".equals(value)
                     ? ExternalStartResponse.rejected("Not today")
-                    : ExternalStartResponse.started(new Greeting("hello " + value));
+                    : ExternalStartResponse.started(new Greeting("hello " + value
+                        + (clientContext == null ? "" : " " + clientContext)));
               });
           builder.decentralisedEvent("conflict", payload -> {
             throw new IllegalStateException("The case is already being changed");
@@ -571,7 +595,8 @@ class CcdEventTestSupportIntegrationTest {
 
         @Override
         public TestCase getCase(CaseViewRequest<TestState> request, TestCase blobCase) {
-          return blobCase;
+          // A case view can show a case differently from how it is stored.
+          return "stored".equals(blobCase.value()) ? new TestCase("as viewed") : blobCase;
         }
       };
     }
