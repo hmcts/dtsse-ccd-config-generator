@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { JSDOM } from "jsdom";
 
-import { buildDoc, createDocEditor, renderHtml } from "../src/index.js";
+import { buildDoc, createDocEditor, type DocWeaveSnapshot, renderHtml } from "../src/index.js";
 import { clauses, edited, generatedOrder, userClause } from "./fixtures/order.js";
 
 describe("renderHtml", () => {
@@ -196,6 +196,89 @@ describe("renderHtml with changes", () => {
     assert.match(
       html,
       /<li data-docweave-change="modified"><p>The defendant must pay the claimant's costs\.<\/p><p><ins>Costs are summarily assessed\.<\/ins><\/p><\/li>/,
+    );
+  });
+
+  describe("a reworded paragraph outside the numbered clauses", () => {
+    function preamble(): DocWeaveSnapshot {
+      const controller = createDocEditor();
+      controller.render(buildDoc((doc) => {
+        doc.paragraph("before", (content) => {
+          content.text("Before District Judge ").fact("judge", "Smith").text(" sitting at Bristol.");
+        });
+      }));
+      return controller.getSnapshot();
+    }
+
+    const paragraph = (current: { content?: unknown[] }) =>
+      current.content![0] as { content: Array<{ type: string; text?: string; attrs?: { text?: string } }> };
+
+    it("keeps the rest of the paragraph around the reworded wording", () => {
+      const snapshot = edited(preamble(), (current) => {
+        paragraph(current).content[0]!.text = "Before Deputy District Judge ";
+      });
+
+      assert.equal(
+        renderHtml(snapshot, { document, changes: true }),
+        '<p data-docweave-change="modified">Before <ins>Deputy </ins>District Judge Smith sitting at Bristol.</p>',
+      );
+    });
+
+    it("shows a paragraph rewritten as plain text", () => {
+      const snapshot = edited(preamble(), (current) => {
+        paragraph(current).content = [{ type: "text", text: "Before Recorder Jones sitting at Bristol." }];
+      });
+
+      assert.equal(
+        renderHtml(snapshot, { document, changes: true }),
+        '<p data-docweave-change="modified">Before <del>District Judge Smith</del><ins>Recorder Jones</ins> sitting at Bristol.</p>',
+      );
+    });
+
+    it("shows a fact the reader emptied as deleted", () => {
+      const snapshot = edited(preamble(), (current) => {
+        paragraph(current).content[1]!.attrs!.text = "";
+      });
+
+      assert.match(renderHtml(snapshot, { document, changes: true }), /Judge <del>Smith <\/del>sitting at Bristol/);
+    });
+  });
+
+  it("marks a paragraph the reader added before a generated one, leaving the generated one as it was", () => {
+    const snapshot = edited(generatedOrder(), (current) => {
+      clauses(current)[1]!.content!.unshift({
+        type: "paragraph",
+        attrs: { id: null },
+        content: [{ type: "text", text: "On the claimant's application:" }],
+      });
+    });
+
+    assert.match(
+      renderHtml(snapshot, { document, changes: true }),
+      /<li data-docweave-change="modified"><p><ins>On the claimant's application:<\/ins><\/p><p>The defendant must pay the claimant's costs\.<\/p><\/li>/,
+    );
+  });
+
+  it("keeps the formatting of a clause whose wording is unchanged", () => {
+    const snapshot = edited(generatedOrder(), (current) => {
+      const costs = clauses(current)[1]!.content![0]!.content![0]! as { marks?: unknown[] };
+      costs.marks = [{ type: "strong" }];
+    });
+
+    assert.match(
+      renderHtml(snapshot, { document, changes: true }),
+      /<li data-docweave-change="modified"><p><strong>The defendant must pay the claimant's costs\.<\/strong><\/p><\/li>/,
+    );
+  });
+
+  it("marks a heading the reader added as inserted", () => {
+    const snapshot = edited(generatedOrder(), (current) => {
+      current.content!.unshift({ type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Order" }] });
+    });
+
+    assert.match(
+      renderHtml(snapshot, { document, changes: true }),
+      /^<h2 data-docweave-change="inserted"><ins>Order<\/ins><\/h2>/,
     );
   });
 });

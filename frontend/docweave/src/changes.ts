@@ -61,10 +61,9 @@ export function clauseChange(
   generatedClauses: Map<string, ProseMirrorNode>,
 ): ClauseChange | undefined {
   const id = node.attrs.id;
-  if (id === null) return "inserted";
-  const generatedNode = typeof id === "string"
-    ? generatedClauses.get(id)
-    : undefined;
+  // Docweave only generates clauses with an ID; a heading has none at all.
+  if (typeof id !== "string") return "inserted";
+  const generatedNode = generatedClauses.get(id);
   return generatedNode && !clauseMatchesGenerated(node, generatedNode)
     ? "modified"
     : undefined;

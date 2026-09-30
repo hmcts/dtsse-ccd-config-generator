@@ -50,4 +50,12 @@ describe("describeChanges", () => {
 
     assert.deepEqual(describeChanges(snapshot), { inserted: 0, modified: 1, removed: 0 });
   });
+
+  it("counts a heading the reader added, since Docweave generates none", () => {
+    const snapshot = edited(generatedOrder(), (current) => {
+      current.content!.unshift({ type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Order" }] });
+    });
+
+    assert.deepEqual(describeChanges(snapshot), { inserted: 1, modified: 0, removed: 0 });
+  });
 });
