@@ -5,8 +5,11 @@ import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -40,6 +43,8 @@ public class CcdCallbackExecutor {
   private final ObjectProvider<ExternalUserResolver> users;
   private final Map<String, JavaType> caseTypeToJavaType = Maps.newHashMap();
 
+  private static final Pattern BASE64 = Pattern.compile("^[A-Za-z0-9+/]+={0,2}$");
+
   @Autowired
   public CcdCallbackExecutor(ResolvedConfigRegistry registry, ObjectMapper mapper,
                              ObjectProvider<ExternalUserResolver> users) {
@@ -53,11 +58,6 @@ public class CcdCallbackExecutor {
     }
   }
 
-  public AboutToStartOrSubmitResponse aboutToStart(CallbackRequest request, String authorisation) {
-    return aboutToStart(request, authorisation, null);
-  }
-
-  /** Starts an event; an external event's start is also given the frontend's client context, as JSON. */
   @SneakyThrows
   public AboutToStartOrSubmitResponse aboutToStart(CallbackRequest request, String authorisation,
                                                    String clientContext) {
@@ -76,9 +76,8 @@ public class CcdCallbackExecutor {
           new LinkedMultiValueMap<>()
       );
 
-      Object response = event.isExternal()
-          ? event.start(payload, externalUser(authorisation), clientContext(clientContext))
-          : event.start(payload, null, ClientContext.none());
+      Object response = event.start(payload, event.isExternal() ? externalUser(authorisation) : null,
+          clientContext(clientContext));
       if (!event.isExternal()) {
         return AboutToStartOrSubmitResponse.builder().data(response).build();
       }
@@ -98,11 +97,18 @@ public class CcdCallbackExecutor {
         .handle(convertCaseDetails(request.getCaseDetails()));
   }
 
-  /** Reads the frontend's context as whatever the start handler asks for, ignoring what it does not name. */
-  private ClientContext clientContext(String json) {
-    if (json == null || json.isBlank()) {
+  /**
+   * Reads the frontend's context as whatever the start handler asks for, ignoring what it does not
+   * name. The context is JSON, which XUI and CCD base64-encode, sometimes inside square brackets.
+   */
+  private ClientContext clientContext(String header) {
+    if (header == null || header.isBlank()) {
       return ClientContext.none();
     }
+    String unwrapped = header.startsWith("[") && header.endsWith("]")
+        ? header.substring(1, header.length() - 1) : header;
+    String json = BASE64.matcher(unwrapped).matches() && unwrapped.length() % 4 == 0
+        ? new String(Base64.getDecoder().decode(unwrapped), StandardCharsets.UTF_8) : unwrapped;
     return ClientContext.reading(type -> {
       try {
         return mapper.readerFor(type).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).readValue(json);

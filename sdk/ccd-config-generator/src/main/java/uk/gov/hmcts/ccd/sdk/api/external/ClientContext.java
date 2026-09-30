@@ -27,13 +27,7 @@ public final class ClientContext {
   /** A context holding this value, as a unit test of a start handler gives it. */
   public static ClientContext of(Object value) {
     Objects.requireNonNull(value);
-    return new ClientContext(type -> {
-      if (!type.isInstance(value)) {
-        throw new IllegalArgumentException("The client context is a " + value.getClass().getName()
-            + ", not a " + type.getName());
-      }
-      return value;
-    });
+    return new ClientContext(type -> type.cast(value));
   }
 
   /** A context the SDK reads from the frontend's JSON as whatever type the handler asks for. */
@@ -43,7 +37,7 @@ public final class ClientContext {
 
   /**
    * The context read as this type, leaving out anything the type does not name, or empty when the
-   * frontend sent none.
+   * frontend sent none. Throws IllegalArgumentException if the context cannot be read as the type.
    */
   public <T> Optional<T> as(Class<T> type) {
     return Optional.ofNullable(type.cast(reader.apply(type)));

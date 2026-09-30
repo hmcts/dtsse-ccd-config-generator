@@ -43,9 +43,7 @@ public final class ExternalEvent<O, I> {
   }
 
   /**
-   * The same event, started with this client context, as a frontend sends it to tell the start what
-   * it cannot learn from the case, such as which record the user chose; see
-   * {@link CcdEventTestSupport.StartRequest#withClientContext}.
+   * The same event, started with this client context; see {@link CcdEventTestSupport.StartRequest#withClientContext}.
    */
   public ExternalEvent<O, I> withClientContext(Object value) {
     return new ExternalEvent<>(eventId, starter, submitter, new Driver(driver.actor(), value));

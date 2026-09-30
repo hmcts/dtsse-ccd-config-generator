@@ -27,10 +27,6 @@ public class CallbackController {
     this.executor = executor;
   }
 
-  /**
-   * Starts an event. CCD passes on the frontend's Client-Context header, which tells an external
-   * event's start what the case cannot.
-   */
   @PostMapping("/about-to-start")
   public AboutToStartOrSubmitResponse aboutToStart(
       @RequestBody CallbackRequest request,
