@@ -41,6 +41,7 @@ import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalEventId;
+import uk.gov.hmcts.ccd.sdk.runtime.CallbackController;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.Classification;
 
@@ -58,9 +59,6 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
    * S2S token sent with every request. Test support accepts it as {@code ccd_data}.
    */
   public static final String SERVICE_AUTHORISATION = TestServiceAuthorisation.TOKEN;
-
-  /** The header a frontend sends context in, which CCD passes on to an event's start callback. */
-  public static final String CLIENT_CONTEXT_HEADER = "Client-Context";
 
   private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
   private static final TypeReference<Map<String, Object>> OBJECT_MAP = new TypeReference<>() {};
@@ -170,16 +168,10 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
     return caseType().storedData(reference);
   }
 
-  /**
-   * The case as the application's case view shows it to the default user; see {@link CaseType#view}.
-   */
   public Case view(long reference) {
     return caseType().view(reference);
   }
 
-  /**
-   * The case as the application's case view shows it to this actor; see {@link CaseType#view}.
-   */
   public Case view(long reference, Actor actor) {
     return caseType().view(reference, actor);
   }
@@ -404,15 +396,11 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
       return details;
     }
 
-    /**
-     * The case as the application's case view shows it to the default user, loaded the way CCD loads
-     * a case to show it or start an event on it.
-     */
+    /** The case as the application's case view shows it, loaded as CCD loads it. */
     public Case view(long reference) {
       return view(reference, TestIdamService.DEFAULT_TOKEN);
     }
 
-    /** The case as the application's case view shows it to this actor. */
     public Case view(long reference, Actor actor) {
       return view(reference, Objects.requireNonNull(actor).authorisation);
     }
@@ -697,9 +685,8 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
     }
 
     /**
-     * Sends this as the {@code Client-Context} header, as a frontend does to tell the event's start
-     * what it cannot learn from the case, such as which record the user chose. CCD passes the header
-     * on to the start callback only, so the case load and the submission do not see it.
+     * Sends this as JSON in the Client-Context header, which CCD passes on to the start only; a
+     * String is sent as it is, such as the base64 form XUI sends.
      */
     public StartRequest withClientContext(Object value) {
       this.clientContext = value;
@@ -725,7 +712,8 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
       MockHttpServletRequestBuilder aboutToStart = MockMvcRequestBuilders.post("/callbacks/about-to-start")
           .param("eventId", eventId);
       if (clientContext != null) {
-        aboutToStart.header(CLIENT_CONTEXT_HEADER, json(clientContext));
+        aboutToStart.header(CallbackController.CLIENT_CONTEXT_HEADER, clientContext instanceof String header
+            ? header : WIRE.valueToTree(clientContext).toString());
       }
       JsonNode response = send(aboutToStart, authorisation, request);
       return new Started(response, caseType, reference, eventId, authorisation,
