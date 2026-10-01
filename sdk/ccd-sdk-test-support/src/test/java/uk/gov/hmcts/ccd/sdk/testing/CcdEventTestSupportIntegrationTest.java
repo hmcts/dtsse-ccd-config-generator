@@ -10,7 +10,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import com.fasterxml.jackson.databind.node.NullNode;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -49,9 +51,11 @@ import uk.gov.hmcts.ccd.sdk.api.external.ExternalEventId;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalStartResponse;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.config.DecentralisedFlywayAutoConfiguration;
+import uk.gov.hmcts.ccd.sdk.runtime.CcdCallbackExecutor;
 import uk.gov.hmcts.reform.authorisation.exceptions.InvalidTokenException;
 import uk.gov.hmcts.reform.authorisation.filters.ServiceAuthFilter;
 import uk.gov.hmcts.reform.authorisation.validators.AuthTokenValidator;
+import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.Classification;
 
 @SpringBootTest(classes = CcdEventTestSupportIntegrationTest.TestApplication.class)
@@ -68,6 +72,9 @@ class CcdEventTestSupportIntegrationTest {
 
   @Autowired
   private AuthTokenValidator serviceTokens;
+
+  @Autowired
+  private CcdCallbackExecutor callbacks;
 
   @Test
   void decentralisedEventWritesAuditWithoutChangingBlob() {
@@ -301,6 +308,67 @@ class CcdEventTestSupportIntegrationTest {
   }
 
   @Test
+  void externalEventStartIsSentTheClientContext() {
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+    // The context can say more than the handler reads.
+    ExternalEvent<Greeting, Reply> greet = events.external(reference, GREET)
+        .withClientContext(new Visit("Sam", "42"));
+
+    assertThat(greet.start()).isEqualTo(new Greeting("hello Sam"));
+    assertThat(greet.submitExpectingSuccess(new Reply("hello back")).audit().summary()).isEqualTo("hello back");
+  }
+
+  @Test
+  void externalEventStartRejectsAClientContextItCannotRead() {
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+
+    assertThat(events.external(reference, GREET).withClientContext(Map.of("name", List.of("Sam")))
+        .startExpectingRejection()).containsExactly("The client context is not a valid Addressee");
+  }
+
+  @Test
+  void externalEventStartReadsTheClientContextHoweverCcdPassesItOn() {
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+    String json = "{\"name\":\"Sam\"}";
+    String base64 = Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8));
+
+    // Plain as a service's frontend sends it, and base64 as XUI does, which may come in brackets.
+    for (String header : List.of(json, base64, "[" + base64 + "]")) {
+      assertThat(startedWithHeader(reference, header).getData().toString()).as(header).contains("hello Sam");
+    }
+    for (String unreadable : List.of("not json", "[" + json + "]", "[\"Sam\"]")) {
+      assertThat(startedWithHeader(reference, unreadable).getErrors()).as(unreadable)
+          .containsExactly("The client context is not a valid Addressee");
+    }
+  }
+
+  private AboutToStartOrSubmitResponse<?, ?> startedWithHeader(long reference, String header) {
+    return callbacks.aboutToStart(CallbackRequest.builder()
+        .eventId(GREET.id())
+        .caseDetails(uk.gov.hmcts.reform.ccd.client.model.CaseDetails.builder()
+            .id(reference).caseTypeId(CASE_TYPE).data(Map.of()).build())
+        .build(), CcdEventTestSupport.DEFAULT_AUTHORISATION, header);
+  }
+
+  @Test
+  void externalEventWithoutAStartRefusesAClientContext() {
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+
+    assertThatThrownBy(() -> events.external(reference, WAVE).withClientContext(new Addressee("Sam"))
+        .submit(new Reply("hello")))
+        .isInstanceOf(AssertionError.class)
+        .hasMessageContaining("no start handler to send a client context");
+  }
+
+  @Test
+  void viewShowsTheCaseAsTheApplicationsCaseViewDoes() {
+    long reference = events.seed(TestState.Open, new TestCase("stored"));
+
+    assertThat(events.view(reference).value()).isEqualTo("as viewed");
+    assertThat(events.storedData(reference).value()).isEqualTo("stored");
+  }
+
+  @Test
   void externalEventHandlersCanRefuseToStartOrAcceptASubmission() {
     long grumpy = events.seed(TestState.Open, new TestCase("grumpy"));
     long reference = events.seed(TestState.Open, new TestCase("original"));
@@ -389,7 +457,17 @@ class CcdEventTestSupportIntegrationTest {
 
   static final ExternalEventId<Greeting, Reply> GREET = ExternalEventId.of("ext:greet", Greeting.class, Reply.class);
 
+  // Has no start, so its frontend submits straight away.
+  static final ExternalEventId<Void, Reply> WAVE = ExternalEventId.of("ext:wave", Reply.class);
+
   record Reply(String text) {
+  }
+
+  record Addressee(String name) {
+  }
+
+  /** A frontend's context naming more than the greeting reads. */
+  record Visit(String name, String orderId) {
   }
 
   record AuditedRow(String storedValue) {
@@ -522,10 +600,13 @@ class CcdEventTestSupportIntegrationTest {
                 // The start handler loads what it needs; here, the case's stored value.
                 String value = jdbc.queryForObject("select data ->> 'value' from ccd.case_data where reference = ?",
                     String.class, start.caseReference());
+                // A frontend says what the case cannot, such as whom to greet, in the client context.
+                String name = start.clientContext().as(Addressee.class).map(Addressee::name).orElse(value);
                 return "grumpy".equals(value)
                     ? ExternalStartResponse.rejected("Not today")
-                    : ExternalStartResponse.started(new Greeting("hello " + value));
+                    : ExternalStartResponse.started(new Greeting("hello " + name));
               });
+          builder.externalEvent(WAVE, submit -> ExternalSubmitResponse.accepted("Waved", "Waved")).forAllStates();
           builder.decentralisedEvent("conflict", payload -> {
             throw new IllegalStateException("The case is already being changed");
           }).forAllStates();
@@ -571,7 +652,8 @@ class CcdEventTestSupportIntegrationTest {
 
         @Override
         public TestCase getCase(CaseViewRequest<TestState> request, TestCase blobCase) {
-          return blobCase;
+          // A case view can show a case differently from how it is stored.
+          return "stored".equals(blobCase.value()) ? new TestCase("as viewed") : blobCase;
         }
       };
     }

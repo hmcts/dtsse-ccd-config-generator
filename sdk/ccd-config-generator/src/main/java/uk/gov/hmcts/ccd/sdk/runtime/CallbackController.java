@@ -18,6 +18,8 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 @RequestMapping("/callbacks")
 public class CallbackController {
 
+  public static final String CLIENT_CONTEXT_HEADER = "Client-Context";
+
   private final CcdCallbackExecutor executor;
 
   @Autowired
@@ -28,8 +30,9 @@ public class CallbackController {
   @PostMapping("/about-to-start")
   public AboutToStartOrSubmitResponse aboutToStart(
       @RequestBody CallbackRequest request,
-      @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorisation) {
-    return executor.aboutToStart(request, authorisation);
+      @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorisation,
+      @RequestHeader(value = CLIENT_CONTEXT_HEADER, required = false) String clientContext) {
+    return executor.aboutToStart(request, authorisation, clientContext);
   }
 
   @PostMapping("/about-to-submit")
