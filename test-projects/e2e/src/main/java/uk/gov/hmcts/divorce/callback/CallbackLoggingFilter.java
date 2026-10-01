@@ -27,7 +27,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Component
 public class CallbackLoggingFilter extends OncePerRequestFilter {
 
-    private static final Path LOG_FILE = Paths.get("build", "logs", "http-traffic.log");
+    public static final Path LOG_FILE = Paths.get("build", "logs", "http-traffic.log");
     private static final int MAX_REQUEST_BODY_BYTES = 16 * 1024 * 1024;
     private static final ReentrantLock FILE_LOCK = new ReentrantLock();
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
