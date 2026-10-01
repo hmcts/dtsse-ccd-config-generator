@@ -163,12 +163,22 @@ function markRewording(
   }
 }
 
-/** The index pairs of the longest run of items the two lists have in common, in order. */
+/**
+ * Beyond this many comparisons the diff would take too long and too much memory, so the two
+ * sides are shown as wholly replaced instead.
+ */
+const MAX_DIFF_COMPARISONS = 1_000_000;
+
+/**
+ * The index pairs of the longest run of items the two lists have in common, in order, or none
+ * when the lists are too long to compare.
+ */
 function longestCommonSubsequence<T>(
   from: readonly T[],
   to: readonly T[],
   same: (a: T, b: T) => boolean,
 ): Array<[number, number]> {
+  if (from.length * to.length > MAX_DIFF_COMPARISONS) return [];
   const lengths = Array.from({ length: from.length + 1 }, () => new Array<number>(to.length + 1).fill(0));
   for (let i = from.length - 1; i >= 0; i--) {
     for (let j = to.length - 1; j >= 0; j--) {

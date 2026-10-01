@@ -46,7 +46,8 @@ export function deleteUserAuthoredNode(
   position: number,
 ): Transaction | undefined {
   const node = state.doc.nodeAt(position);
-  if (!node || node.attrs.id !== null) return undefined;
+  // Docweave generates clauses with an ID; the reader wrote any without one, such as a heading.
+  if (!node || typeof node.attrs.id === "string") return undefined;
 
   const $position = state.doc.resolve(position);
   const parent = $position.parent;
@@ -178,7 +179,7 @@ function createDiffDecorations(
   doc.descendants((node, position, parent) => {
     const isClause = isClauseNode(node, parent, doc);
 
-    if (isClause && node.attrs.id === null) {
+    if (isClause && typeof node.attrs.id !== "string") {
       decorations.push(
         Decoration.node(position, position + node.nodeSize, {
           class:

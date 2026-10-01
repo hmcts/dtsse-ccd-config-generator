@@ -220,4 +220,18 @@ describe("renderHtml with changes", () => {
     );
   });
 
+
+  it("shows a reworded paragraph too long to compare word by word as wholly replaced", () => {
+    const words = (word: string) => Array.from({ length: 1500 }, () => word).join(" ");
+    const controller = createDocEditor();
+    controller.render(buildDoc((doc) => doc.paragraph("reasons", words("generated"))));
+    const snapshot = edited(controller.getSnapshot(), (current) => {
+      current.content![0]!.content = [{ type: "text", text: words("reworded") }];
+    });
+
+    assert.equal(
+      renderHtml(snapshot, { document, changes: true }),
+      `<p data-docweave-change="modified"><del>${words("generated")}</del><ins>${words("reworded")}</ins></p>`,
+    );
+  });
 });
