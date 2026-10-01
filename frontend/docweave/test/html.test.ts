@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import { JSDOM } from "jsdom";
 
 import { buildDoc, createDocEditor, renderHtml } from "../src/index.js";
+import { clauses, edited, generatedOrder, userClause } from "./fixtures/order.js";
 
 describe("renderHtml", () => {
   const dom = new JSDOM("<!doctype html>");
@@ -125,6 +126,89 @@ describe("renderHtml", () => {
     assert.throws(
       () => renderHtml(controller.getSnapshot()),
       /needs a DOM document/,
+    );
+  });
+});
+
+describe("renderHtml with changes", () => {
+  const dom = new JSDOM("<!doctype html>");
+  const document = dom.window.document;
+  const marked = (kind: string, description: string, wording: string) =>
+    `<li class="docweave-editor__clause docweave-editor__clause--${kind}">` +
+    `<p><span class="docweave-editor__visually-hidden">${description} </span>${wording}</p>`;
+
+  it("renders a document as generated without marks", () => {
+    const snapshot = generatedOrder();
+
+    assert.equal(
+      renderHtml(snapshot, { document, changes: true }),
+      renderHtml(snapshot, { document }),
+    );
+  });
+
+  it("marks the clauses the reader wrote and changed as the editor does, and no others", () => {
+    const snapshot = edited(generatedOrder(), (current) => {
+      clauses(current)[1]!.content![0]!.content = [
+        { type: "text", text: "The defendant must pay the claimant's fixed costs." },
+      ];
+      clauses(current).push(userClause("The defendant may apply to vary this order."));
+    });
+
+    assert.equal(
+      renderHtml(snapshot, { document, changes: true }),
+      "<p>IT IS ORDERED THAT:</p><ol>" +
+        "<li><p>The defendant must give up possession by 1 October 2026.</p></li>" +
+        marked("modified", "Modified clause.", "The defendant must pay the claimant's fixed costs.") + "</li>" +
+        marked("inserted", "Inserted clause.", "The defendant may apply to vary this order.") + "</li>" +
+        "</ol>",
+    );
+  });
+
+  it("marks a changed paragraph outside the numbered clauses", () => {
+    const snapshot = edited(generatedOrder(), (current) => {
+      current.content![0]!.content = [{ type: "text", text: "IT IS ORDERED BY CONSENT THAT:" }];
+    });
+
+    assert.match(
+      renderHtml(snapshot, { document, changes: true }),
+      /^<p class="docweave-editor__clause docweave-editor__clause--modified"><span class="docweave-editor__visually-hidden">Modified clause\. <\/span>IT IS ORDERED BY CONSENT THAT:<\/p>/,
+    );
+  });
+
+  it("gives an emptied or empty clause a line to show its mark on", () => {
+    const snapshot = edited(generatedOrder(), (current) => {
+      delete clauses(current)[1]!.content![0]!.content;
+      current.content!.push({ type: "paragraph", attrs: { id: null } });
+    });
+
+    const html = renderHtml(snapshot, { document, changes: true });
+
+    assert.match(html, new RegExp(`${marked("modified", "Modified clause.", "<br>")}</li></ol>`));
+    assert.match(
+      html,
+      /<p class="docweave-editor__clause docweave-editor__clause--inserted"><span class="docweave-editor__visually-hidden">Inserted clause\. <\/span><br><\/p>$/,
+    );
+  });
+
+  it("marks a changed nested clause on its own item, not on its parent", () => {
+    const controller = createDocEditor();
+    controller.render(buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => {
+        list.item("parent", "Parent clause.", (item) => {
+          item.orderedList("children", (children) => children.item("child", "Child clause."));
+        });
+      });
+    }));
+    const snapshot = edited(controller.getSnapshot(), (current) => {
+      current.content![0]!.content![0]!.content![1]!.content![0]!.content![0]!.content = [
+        { type: "text", text: "Reworded child." },
+      ];
+    });
+
+    assert.equal(
+      renderHtml(snapshot, { document, changes: true }),
+      "<ol><li><p>Parent clause.</p><ol>" + marked("modified", "Modified clause.", "Reworded child.") +
+        "</li></ol></li></ol>",
     );
   });
 });
