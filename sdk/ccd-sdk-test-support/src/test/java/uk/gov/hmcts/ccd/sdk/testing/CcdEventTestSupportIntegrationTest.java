@@ -10,7 +10,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import com.fasterxml.jackson.databind.node.NullNode;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -49,9 +51,11 @@ import uk.gov.hmcts.ccd.sdk.api.external.ExternalEventId;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalStartResponse;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.config.DecentralisedFlywayAutoConfiguration;
+import uk.gov.hmcts.ccd.sdk.runtime.CcdCallbackExecutor;
 import uk.gov.hmcts.reform.authorisation.exceptions.InvalidTokenException;
 import uk.gov.hmcts.reform.authorisation.filters.ServiceAuthFilter;
 import uk.gov.hmcts.reform.authorisation.validators.AuthTokenValidator;
+import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.Classification;
 
 @SpringBootTest(classes = CcdEventTestSupportIntegrationTest.TestApplication.class)
@@ -68,6 +72,9 @@ class CcdEventTestSupportIntegrationTest {
 
   @Autowired
   private AuthTokenValidator serviceTokens;
+
+  @Autowired
+  private CcdCallbackExecutor callbacks;
 
   @Test
   void decentralisedEventWritesAuditWithoutChangingBlob() {
@@ -317,6 +324,30 @@ class CcdEventTestSupportIntegrationTest {
 
     assertThat(events.external(reference, GREET).withClientContext(Map.of("name", List.of("Sam")))
         .startExpectingRejection()).containsExactly("The client context is not a valid Addressee");
+  }
+
+  @Test
+  void externalEventStartReadsTheClientContextHoweverCcdPassesItOn() {
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+    String json = "{\"name\":\"Sam\"}";
+    String base64 = Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8));
+
+    // Plain as a service's frontend sends it, and base64 as XUI does, which may come in brackets.
+    for (String header : List.of(json, base64, "[" + base64 + "]")) {
+      assertThat(startedWithHeader(reference, header).getData().toString()).as(header).contains("hello Sam");
+    }
+    for (String unreadable : List.of("not json", "[" + json + "]", "[\"Sam\"]")) {
+      assertThat(startedWithHeader(reference, unreadable).getErrors()).as(unreadable)
+          .containsExactly("The client context is not a valid Addressee");
+    }
+  }
+
+  private AboutToStartOrSubmitResponse<?, ?> startedWithHeader(long reference, String header) {
+    return callbacks.aboutToStart(CallbackRequest.builder()
+        .eventId(GREET.id())
+        .caseDetails(uk.gov.hmcts.reform.ccd.client.model.CaseDetails.builder()
+            .id(reference).caseTypeId(CASE_TYPE).data(Map.of()).build())
+        .build(), CcdEventTestSupport.DEFAULT_AUTHORISATION, header);
   }
 
   @Test
