@@ -13,21 +13,30 @@ import static uk.gov.hmcts.ccd.sdk.bundling.pdf.Pdfs.tocOnly;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
+import org.apache.pdfbox.cos.COSName;
+import org.apache.pdfbox.pdmodel.PDDestinationNameTreeNode;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDDocumentNameDictionary;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
 import org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
 import org.apache.pdfbox.pdmodel.interactive.action.PDActionGoTo;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationLink;
+import org.apache.pdfbox.pdmodel.interactive.documentnavigation.destination.PDDestination;
+import org.apache.pdfbox.pdmodel.interactive.documentnavigation.destination.PDNamedDestination;
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.destination.PDPageXYZDestination;
+import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDDocumentOutline;
+import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineItem;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.pdfbox.text.TextPosition;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +44,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundlePresentation;
 import uk.gov.hmcts.ccd.sdk.bundling.api.ConfidentialMarking;
+import uk.gov.hmcts.ccd.sdk.bundling.api.MediaPlaceholder;
 import uk.gov.hmcts.ccd.sdk.bundling.api.PageNumbers;
 
 class PdfBundleAssemblerTest {
@@ -73,6 +83,57 @@ class PdfBundleAssemblerTest {
         "Title of the bundle -> 1", "  " + PdfBundleAssembler.TITLE_PAGE_BOOKMARK + " -> 1",
         "  " + TocRenderer.INDEX_PAGE + " -> 2", "  Bundle Doc 1 -> 3", "  Bundle Doc 2 -> 5");
     assertThat(result.warnings()).isEmpty();
+  }
+
+  @Test
+  void mediaLinkPageShowsMetadataAndAClickableAbsoluteLinkAndParticipatesInTocBookmarksAndPagination()
+      throws IOException {
+    MediaPlaceholder placeholder = MediaPlaceholder.builder()
+        .accessUrl("https://media.example.org/recordings/day-2")
+        .duration(Duration.ofMinutes(65)).note("Playback requires case access").build();
+    AssemblyItem recording = new AssemblyItem("Hearing recording, day 2",
+        Optional.of(LocalDate.of(2024, 1, 12)), false, new MediaLinkPage("audio/mpeg", placeholder));
+    AssemblyItem bare = new AssemblyItem("Recording", Optional.empty(), false, new MediaLinkPage(
+        "video/mp4", MediaPlaceholder.builder().accessUrl("https://media.example.org/short").build()));
+    AssemblyResult result = assembler.assemble(request(tocOnly().withPageNumbers(PageNumbers.BOTTOM_CENTRE_N_OF_M),
+        doc("Bundle Doc 1", twoPage), recording, bare), workDir);
+    Path pdf = result.outputPdf();
+
+    assertThat(result.totalPages()).isEqualTo(5);
+    assertThat(Pdfs.pageText(pdf, 4)).contains("Hearing recording, day 2", "Date: 12 Jan 2024",
+        "Media type: audio/mpeg", "Duration: 1h 5m 0s", "Playback requires case access",
+        "https://media.example.org/recordings/day-2", "4 of 5");
+    assertThat(Pdfs.uriLinks(pdf, 4)).containsExactly("https://media.example.org/recordings/day-2");
+    assertThat(Pdfs.pageText(pdf, 5)).contains("Media type: video/mp4", "5 of 5").doesNotContain("Date:", "Duration:");
+    assertThat(Pdfs.pageText(pdf, 1)).contains("Hearing recording, day 2", "12 Jan 2024").doesNotContain("of 5");
+    assertThat(Pdfs.internalLinkTargets(pdf, 1)).containsExactly(2, 4, 5);
+    assertThat(Pdfs.outline(pdf)).contains("  Hearing recording, day 2 -> 4", "  Recording -> 5");
+    assertThat(result.items()).containsExactly(new AssembledItem("Bundle Doc 1", 2, 2),
+        new AssembledItem("Hearing recording, day 2", 4, 1), new AssembledItem("Recording", 5, 1));
+  }
+
+  @Test
+  void coverPageComesFirstUnnumberedAndBookmarkedBeforeTheTitleAndIndexPages() throws IOException {
+    Path cover = fixture("FL-FRM-GOR-ENG-12345.pdf");
+    int coverPages = Pdfs.read(cover, PDDocument::getNumberOfPages);
+    AssemblyRequest request = new AssemblyRequest("Title of the bundle", "stitched.pdf",
+        Optional.of(Pdfs.DESCRIPTION), tocOnly().withPageNumbers(PageNumbers.BOTTOM_CENTRE_N_OF_M), true,
+        Optional.of(cover), Optional.empty(), List.of(doc("Bundle Doc 1", twoPage)));
+
+    AssemblyResult result = assembler.assemble(request, workDir);
+    Path pdf = result.outputPdf();
+
+    assertThat(result.totalPages()).isEqualTo(coverPages + 2 + 2);
+    assertThat(Pdfs.pageText(pdf, 1)).contains("IN THE FAMILY COURT").doesNotContain(" of ");
+    assertThat(Pdfs.pageText(pdf, coverPages + 1)).contains("Title of the bundle").doesNotContain("Index");
+    assertThat(Pdfs.pageText(pdf, coverPages + 2)).contains("Index Page").doesNotContain("Cover");
+    assertThat(Pdfs.internalLinkTargets(pdf, coverPages + 2)).containsExactly(coverPages + 3);
+    assertThat(Pdfs.pageText(pdf, coverPages + 3)).contains((coverPages + 3) + " of " + result.totalPages());
+    assertThat(result.items()).containsExactly(new AssembledItem("Bundle Doc 1", coverPages + 3, 2));
+    assertThat(Pdfs.outline(pdf)).containsExactly("Title of the bundle -> 1",
+        "  " + PdfBundleAssembler.COVER_PAGE_BOOKMARK + " -> 1",
+        "  " + PdfBundleAssembler.TITLE_PAGE_BOOKMARK + " -> " + (coverPages + 1),
+        "  " + TocRenderer.INDEX_PAGE + " -> " + (coverPages + 2), "  Bundle Doc 1 -> " + (coverPages + 3));
   }
 
   @Test
@@ -290,6 +351,56 @@ class PdfBundleAssemblerTest {
   }
 
   @Test
+  void sourceOutlinesAreRebuiltNamedDestinationsResolvedAndCyclesTruncated() throws IOException {
+    Path named = Pdfs.pdf(tmp, "named-", document -> {
+      document.addPage(new PDPage());
+      PDPage page2 = new PDPage();
+      document.addPage(page2);
+      PDPageXYZDestination target = new PDPageXYZDestination();
+      target.setPage(page2);
+      PDDestinationNameTreeNode destinations = new PDDestinationNameTreeNode();
+      destinations.setNames(Map.of("target", target));
+      PDDocumentNameDictionary names = new PDDocumentNameDictionary(document.getDocumentCatalog());
+      names.setDests(destinations);
+      document.getDocumentCatalog().setNames(names);
+      PDPageXYZDestination pastTheEnd = new PDPageXYZDestination();
+      pastTheEnd.setPageNumber(500);
+      outline(document, item("jump by name", new PDNamedDestination("target")),
+          item("points past the end", pastTheEnd));
+    });
+    Path cyclic = Pdfs.pdf(tmp, "cyclic-", document -> {
+      PDPage page = new PDPage();
+      document.addPage(page);
+      PDOutlineItem self = item("Self-referencing", null);
+      self.setDestination(page);
+      outline(document, self);
+      self.getCOSObject().setItem(COSName.NEXT, self.getCOSObject()); // its own next sibling
+    });
+    AssemblyResult result = assembler.assemble(request(tocOnly(), doc("Named Doc", named),
+        doc("With Actions", fixture("outline_with_actions.pdf")), doc("Dangling", fixture("outline_with_named.pdf")),
+        doc("Deep", Pdfs.deepOutlinePdf(tmp, 20)), doc("Cyclic Doc", cyclic)), workDir);
+    List<String> outline = Pdfs.outline(result.outputPdf());
+    List<Integer> starts = result.items().stream().map(AssembledItem::startPage).toList();
+
+    assertThat(outline).containsSubsequence(
+        "  Named Doc -> 2", "    jump by name -> 3", "    points past the end",
+        "  With Actions -> " + starts.get(1), "    2001: A Space Odyssey -> " + starts.get(1),
+        "      link to IMDB", "      instant info -> " + starts.get(1), "    3-Iron -> " + (starts.get(1) + 1),
+        "  Dangling -> " + starts.get(2), "    link to test",
+        "  Deep -> " + starts.get(3), "    Level 0 -> " + starts.get(3),
+        "  ".repeat(22) + "Level 20 -> " + starts.get(3),
+        "  Cyclic Doc -> " + starts.get(4), "    Self-referencing -> " + starts.get(4));
+    assertThat(outline).filteredOn(entry -> entry.contains("Self-referencing")).hasSize(1);
+    assertThat(outline).filteredOn(entry -> entry.contains("points past the end") || entry.contains("link to test"))
+        .as("unresolvable destinations become targetless bookmarks, never a wrong page")
+        .allMatch(entry -> !entry.contains(" -> "));
+    assertThat(result.warnings()).singleElement().satisfies(warning -> {
+      assertThat(warning.code()).isEqualTo(PdfBundleAssembler.WARNING_OUTLINE_TRUNCATED);
+      assertThat(warning.documentId()).contains("Cyclic Doc");
+    });
+  }
+
+  @Test
   void fullyNonWinAnsiTitleGetsFallbackRowAndWarningAndLongBookmarkTitlesAreTrimmedNotMidSurrogate()
       throws IOException {
     Path onePage = textPdf(tmp, "x", 1);
@@ -346,4 +457,16 @@ class PdfBundleAssemblerTest {
     return found[0];
   }
 
+  private static PDOutlineItem item(String title, PDDestination destination) {
+    PDOutlineItem item = new PDOutlineItem();
+    item.setTitle(title);
+    item.setDestination(destination);
+    return item;
+  }
+
+  private static void outline(PDDocument document, PDOutlineItem... items) {
+    PDDocumentOutline outline = new PDDocumentOutline();
+    Arrays.stream(items).forEach(outline::addLast);
+    document.getDocumentCatalog().setDocumentOutline(outline);
+  }
 }

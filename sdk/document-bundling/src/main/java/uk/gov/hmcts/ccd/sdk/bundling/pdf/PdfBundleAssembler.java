@@ -15,6 +15,7 @@ import org.apache.pdfbox.multipdf.PDFMergerUtility;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.documentinterchange.logicalstructure.PDStructureTreeRoot;
+import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDDocumentOutline;
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,9 +29,13 @@ public final class PdfBundleAssembler {
 
   public static final String WARNING_EMPTY_SECTION_PAGE = "EMPTY_SECTION_PAGE_INCLUDED";
 
+  public static final String WARNING_OUTLINE_TRUNCATED = "OUTLINE_TRUNCATED";
+
   public static final String WARNING_TITLE_NOT_RENDERABLE = "TITLE_NOT_RENDERABLE";
 
   public static final String TITLE_PAGE_BOOKMARK = "Title Page";
+
+  public static final String COVER_PAGE_BOOKMARK = "Cover Page";
 
   static final long MAX_MAIN_MEMORY_BYTES = 64L * 1024 * 1024;
 
@@ -86,6 +91,7 @@ public final class PdfBundleAssembler {
     private final List<BundleWarning> warnings = new ArrayList<>();
     private final List<PageRange> numberedRanges = new ArrayList<>();
     private final List<PageRange> confidentialRanges = new ArrayList<>();
+    private final List<Path> intermediateFiles = new ArrayList<>();
     private PDDocument document;
     private OutlineBuilder outline;
     private TocRenderer toc;
@@ -106,6 +112,9 @@ public final class PdfBundleAssembler {
         this.document = merged;
         this.outline = new OutlineBuilder(merged, request.bundleTitle());
 
+        if (request.coverPage().isPresent()) {
+          appendCoverPage(request.coverPage().get());
+        }
         if (request.titlePage()) {
           GeneratedPages.addTitlePage(merged, request, fonts);
           outline.addItem(outline.root(), TITLE_PAGE_BOOKMARK, currentPage);
@@ -126,7 +135,19 @@ public final class PdfBundleAssembler {
         return new AssemblyResult(output, merged.getNumberOfPages(), assembledItems, warnings);
       } finally {
         closeSourceDocuments();
+        deleteIntermediateFiles();
       }
+    }
+
+    // As em-stitching: the cover page's own outline is dropped, and its pages are neither
+    // numbered nor listed in the contents.
+    private void appendCoverPage(Path coverPage) throws IOException {
+      PDDocument cover = Loader.loadPDF(coverPage.toFile(), streamCache);
+      openSourceDocuments.add(cover);
+      cover.getDocumentCatalog().setDocumentOutline(null);
+      merger.appendDocument(document, cover);
+      outline.addItem(outline.root(), COVER_PAGE_BOOKMARK, currentPage);
+      currentPage += cover.getNumberOfPages();
     }
 
     private void renderNodes(List<AssemblyNode> nodes, PDOutlineItem parentOutline)
@@ -167,6 +188,11 @@ public final class PdfBundleAssembler {
       }
       if (item.content() instanceof PdfSource source) {
         appendSourceDocument(item, drawnTitle, source, parentOutline, coverIndex);
+      } else if (item.content() instanceof MediaLinkPage media) {
+        final int pageIndex = currentPage;
+        GeneratedPages.addMediaLinkPage(document, drawnTitle, item.date(), media, fonts);
+        currentPage++;
+        finishGeneratedItem(item, drawnTitle, parentOutline, coverIndex, pageIndex);
       } else {
         final int pageIndex = currentPage;
         GeneratedPages.addEmptySectionPage(document, drawnTitle, fonts);
@@ -184,8 +210,13 @@ public final class PdfBundleAssembler {
       try {
         Path file = source.path();
         log.debug("Processing PDF, docTitle:{}, filename:{}", item.title(), file.getFileName());
+        if (request.watermark().isPresent() && !source.generated()) {
+          file = WatermarkRenderer.apply(file, request.watermark().get(), workDir, streamCache);
+          intermediateFiles.add(file);
+        }
         PDDocument newDoc = Loader.loadPDF(file.toFile(), streamCache);
         openSourceDocuments.add(newDoc);
+        final PDDocumentOutline sourceOutline = newDoc.getDocumentCatalog().getDocumentOutline();
         newDoc.getDocumentCatalog().setDocumentOutline(null);
         appendWithStructureTreeFallback(item, newDoc);
 
@@ -194,7 +225,16 @@ public final class PdfBundleAssembler {
         if (toc != null) {
           toc.addDocument(drawnTitle, item.date(), startIndex);
         }
-        outline.addItem(parentOutline, item.title(), coverIndex >= 0 ? coverIndex : startIndex);
+        PDOutlineItem documentOutlineItem = outline.addItem(parentOutline, item.title(),
+            coverIndex >= 0 ? coverIndex : startIndex);
+        if (!source.generated() && outline.copySourceOutline(documentOutlineItem, sourceOutline,
+            newDoc.getDocumentCatalog(), startIndex)) {
+          warnings.add(BundleWarning.forDocument(WARNING_OUTLINE_TRUNCATED,
+              "The document '" + item.title() + "' has an outline with a circular reference or"
+                  + " nesting deeper than " + OutlineBuilder.MAX_COPY_DEPTH
+                  + " levels; the excess was dropped from the bundle's bookmarks.",
+              item.title()));
+        }
         recordPlacement(item, coverIndex, startIndex, pages);
         currentPage += pages;
       } catch (IOException | RuntimeException e) {
@@ -281,6 +321,16 @@ public final class PdfBundleAssembler {
         for (int i = range.start(); i < range.endExclusive(); i++) {
           PdfUtility.addCenterText(document, document.getPage(i), "CONFIDENTIAL", 25,
               fonts.helveticaBold(), 14);
+        }
+      }
+    }
+
+    private void deleteIntermediateFiles() {
+      for (Path intermediate : intermediateFiles) {
+        try {
+          Files.deleteIfExists(intermediate);
+        } catch (IOException e) {
+          log.info("Could not delete intermediate file {}", intermediate);
         }
       }
     }

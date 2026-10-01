@@ -14,7 +14,7 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentFailure;
  * cannot read an old request fails clearly instead of guessing.
  */
 final class BundleJobJson {
-  static final int REQUEST_VERSION = 1;
+  static final int REQUEST_VERSION = 2;
 
   private static final TypeReference<Map<String, String>> STRING_MAP = new TypeReference<>() {
   };

@@ -51,7 +51,9 @@ final class Resolution {
       BundleExecutionContext context,
       Path jobDirectory,
       BundleLimits limits) {
-    List<BundleDocument> fetched = documents;
+    List<BundleDocument> fetched = documents.stream()
+        .filter(document -> document.media().isEmpty())
+        .toList();
     Set<DocumentReference> unique = new LinkedHashSet<>();
     fetched.forEach(document -> unique.add(document.reference()));
 

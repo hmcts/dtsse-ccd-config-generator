@@ -199,7 +199,7 @@ public class BundleJobWorker implements AutoCloseable {
       int total) {
     UUID id = claimed.job().externalId();
     int attempts = claimed.job().attempts();
-    if (!retryPolicy.isTransient(failure.code())) {
+    if (!retryPolicy.isTransient(failure)) {
       log.error("Bundle job {} failed with non-retryable {}: {}", id, failure.code(),
           failure.getMessage());
       failTerminally(id, failure.code(), failure.getMessage(), failure.documentFailures(), total);

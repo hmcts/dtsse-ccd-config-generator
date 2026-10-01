@@ -12,7 +12,9 @@ import static uk.gov.hmcts.ccd.sdk.bundling.render.RenderTestSupport.request;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.OptionalLong;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -29,13 +31,16 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleLimits;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRenderer;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRendererBuilder;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
+import uk.gov.hmcts.ccd.sdk.bundling.api.BundleSection;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleStage;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundlingExtension;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundlingExtensionContext;
+import uk.gov.hmcts.ccd.sdk.bundling.api.CoverPage;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentFailure;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentHandler;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference;
 import uk.gov.hmcts.ccd.sdk.bundling.api.HandledDocument;
+import uk.gov.hmcts.ccd.sdk.bundling.api.WatermarkPreset;
 import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderException;
 import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderService;
 
@@ -171,6 +176,19 @@ class BundleRenderingFailureTest {
   }
 
   @Test
+  void declaredPdfDetectedAsZipFailsContentInvalidNamingBothTypes() {
+    byte[] zip = new byte[64];
+    System.arraycopy(new byte[] {'P', 'K', 3, 4}, 0, zip, 0, 4);
+    resolver.source("zip", RenderTestSupport.Source.of(zip, "application/pdf", "archive.pdf"));
+
+    BundleGenerationException failure = expectFailure(request(doc("d1", "Zip", "zip")),
+        BundleErrorCode.DOCUMENT_CONTENT_INVALID, BundleStage.CONVERT);
+
+    assertThat(failure.getMessage()).contains("'application/pdf'").contains("ZIP container");
+    assertThat(detailOf(failure, "d1")).contains("application/pdf").contains("ZIP container");
+  }
+
+  @Test
   void anUnhandledMediaTypeFailsNamingTheRegisteredTypes() {
     resolver.source("msg", RenderTestSupport.Source.of(TEXT, "application/vnd.ms-outlook", "mail.msg"));
 
@@ -178,7 +196,7 @@ class BundleRenderingFailureTest {
         BundleErrorCode.MEDIA_TYPE_UNSUPPORTED, BundleStage.CONVERT);
 
     assertThat(failure.getMessage()).contains("'application/vnd.ms-outlook'").contains("'d1'")
-        .contains("application/pdf").contains("image/png");
+        .contains("application/pdf").contains("image/png").contains("audio/mpeg");
     assertThat(detailOf(failure, "d1")).contains("application/vnd.ms-outlook");
   }
 
@@ -202,6 +220,116 @@ class BundleRenderingFailureTest {
         request(doc("d1", "Word", "word")), BundleErrorCode.DOCUMENT_CONVERSION_FAILED, BundleStage.CONVERT);
 
     assertThat(detailOf(failure, "d1")).contains("Docmosis").contains("HTTP 503");
+  }
+
+  @Test
+  void handlerProducingAnEncryptedPdfFailsInspectionNamingTheDocument() {
+    BundleRenderer renderer = builder().extension(textHandler("encrypting", (source, ctx) -> {
+      try {
+        Path out = ctx.createTempFile(".pdf");
+        Files.write(out, encryptedPdf());
+        return HandledDocument.of(out);
+      } catch (IOException e) {
+        throw new java.io.UncheckedIOException(e);
+      }
+    })).build();
+
+    BundleGenerationException failure = expectFailure(renderer, request(doc("d1", "Note", "note")),
+        BundleErrorCode.DOCUMENT_INSPECTION_FAILED, BundleStage.INSPECT);
+
+    assertThat(failure.getMessage()).contains("'d1'").containsIgnoringCase("encrypted");
+    assertThat(detailOf(failure, "d1")).containsIgnoringCase("encrypted");
+  }
+
+  @Test
+  void sourcePagesBeyondTheTotalPageLimitFailAtInspectBeforeAssembly() {
+    BundleGenerationException failure = expectFailure(withLimits(100, 300 * MB, 1024 * MB, 1),
+        request(doc("d1", "First", "good"), doc("d2", "Second", "other")),
+        BundleErrorCode.LIMIT_EXCEEDED, BundleStage.INSPECT);
+
+    assertThat(failure.getMessage()).contains("maximum of 1 pages").contains("'d2'").contains("maxTotalPages");
+    assertThat(failure.documentFailures()).isEmpty();
+  }
+
+  @Test
+  void anUnregisteredWatermarkImageFailsValidationNamingTheRegisteredImages() throws IOException {
+    Path logo = Files.write(work.resolveSibling(work.getFileName() + "-logo.png"), fixture("schmcts.png"));
+    BundleRequest request = BundleRequest.builder().externalId(java.util.UUID.randomUUID())
+        .title("Watermarked").fileName("w.pdf")
+        .presentation(uk.gov.hmcts.ccd.sdk.bundling.api.BundlePresentation.courtDefault()
+            .withWatermark(WatermarkPreset.allPages("court-seal")))
+        .root(BundleSection.builder("Case file").document(doc("d1", "Fine", "good")).build()).build();
+
+    BundleGenerationException failure = expectFailure(builder().watermarkImage("hmcts", logo).build(), request,
+        BundleErrorCode.REQUEST_INVALID, BundleStage.VALIDATE);
+
+    assertThat(failure.getMessage()).contains("'court-seal'").contains("[hmcts]").contains("watermarkImage");
+    assertThat(resolver.batches).isEmpty();
+  }
+
+  @Test
+  void coverPageWithoutTheRenderEndpointFailsValidationNamingTheProperty() {
+    BundleRequest request = withCoverPage(doc("d1", "Fine", "good"));
+
+    BundleGenerationException none = expectFailure(request, BundleErrorCode.DOCMOSIS_NOT_CONFIGURED,
+        BundleStage.VALIDATE);
+    assertThat(none.getMessage()).contains("'FL-FRM-GOR-ENG-12345.docx'")
+        .contains("ccd.bundling.docmosis.render-endpoint");
+
+    // A conversion-only Docmosis service is not enough either.
+    DocmosisRenderService convertOnly = (source, fileName, mediaType) -> source;
+    BundleGenerationException convertOnlyFailure = expectFailure(builder().docmosis(convertOnly).build(), request,
+        BundleErrorCode.DOCMOSIS_NOT_CONFIGURED, BundleStage.VALIDATE);
+    assertThat(convertOnlyFailure.getMessage()).contains("render endpoint");
+    assertThat(resolver.batches).isEmpty();
+  }
+
+  @Test
+  void failingCoverPageRenderFailsTypedWithTheDocmosisDetail() {
+    DocmosisRenderService failing = new DocmosisRenderService() {
+      @Override
+      public Path convertToPdf(Path source, String fileName, String mediaType) {
+        return source;
+      }
+
+      @Override
+      public boolean rendersTemplates() {
+        return true;
+      }
+
+      @Override
+      public Path renderTemplate(String templateName, Map<String, Object> data) throws DocmosisRenderException {
+        throw new DocmosisRenderException("Docmosis returned HTTP 500 (server error)", true);
+      }
+    };
+
+    BundleGenerationException failure = expectFailure(builder().docmosis(failing).build(),
+        withCoverPage(doc("d1", "Fine", "good")), BundleErrorCode.COVER_PAGE_FAILED, BundleStage.CONVERT);
+
+    assertThat(failure.getMessage()).contains("'FL-FRM-GOR-ENG-12345.docx'").contains("HTTP 500");
+    assertThat(failure.documentFailures()).isEmpty();
+  }
+
+  private static BundleRequest withCoverPage(BundleDocument document) {
+    return BundleRequest.builder().externalId(java.util.UUID.randomUUID()).title("Covered").fileName("c.pdf")
+        .coverPage(new CoverPage("FL-FRM-GOR-ENG-12345.docx", Map.of("caseReference", "1234")))
+        .root(BundleSection.builder("Case file").document(document).build()).build();
+  }
+
+  @Test
+  void mediaPlaceholderWithAnUnregisteredTypeFailsValidation() {
+    BundleGenerationException failure = expectFailure(
+        request(doc("d1", "Fine", "good"), RenderTestSupport.mediaDoc("m1", "Recording", "audio/wav")),
+        BundleErrorCode.REQUEST_INVALID, BundleStage.VALIDATE);
+
+    assertThat(failure.getMessage()).contains("'m1'").contains("'audio/wav'");
+    assertThat(detailOf(failure, "m1")).contains("audio/wav");
+    assertThat(resolver.batches).as("validation precedes resolution").isEmpty();
+
+    BundleGenerationException contentType = expectFailure(
+        request(RenderTestSupport.mediaDoc("m2", "Not media", "application/pdf")),
+        BundleErrorCode.REQUEST_INVALID, BundleStage.VALIDATE);
+    assertThat(detailOf(contentType, "m2")).contains("content type").contains("application/pdf");
   }
 
   @Test

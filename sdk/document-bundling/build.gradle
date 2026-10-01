@@ -12,6 +12,8 @@ dependencies {
     // The job outbox's module-owned ObjectMapper; java.time support for the persisted request.
     implementation 'com.fasterxml.jackson.core:jackson-databind'
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+    // Optional components on the presentation record round-trip through the job outbox.
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jdk8'
     implementation 'org.springframework:spring-context'
     implementation 'org.springframework:spring-jdbc'
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'

@@ -12,6 +12,8 @@ public record AssemblyRequest(
     Optional<String> description,
     BundlePresentation presentation,
     boolean titlePage,
+    Optional<Path> coverPage,
+    Optional<Watermark> watermark,
     List<AssemblyNode> items) {
   public AssemblyRequest {
     Checks.requireNonBlank(bundleTitle, "AssemblyRequest.bundleTitle");
@@ -32,6 +34,8 @@ public record AssemblyRequest(
     }
     Checks.requireNonNull(description, "AssemblyRequest.description");
     Checks.requireNonNull(presentation, "AssemblyRequest.presentation");
+    Checks.requireNonNull(coverPage, "AssemblyRequest.coverPage");
+    Checks.requireNonNull(watermark, "AssemblyRequest.watermark");
     Checks.requireNonNull(items, "AssemblyRequest.items");
     items = List.copyOf(items);
   }
@@ -41,7 +45,7 @@ public record AssemblyRequest(
       String outputFileName,
       BundlePresentation presentation,
       List<AssemblyNode> items) {
-    return new AssemblyRequest(
-        bundleTitle, outputFileName, Optional.empty(), presentation, false, items);
+    return new AssemblyRequest(bundleTitle, outputFileName, Optional.empty(), presentation,
+        false, Optional.empty(), Optional.empty(), items);
   }
 }

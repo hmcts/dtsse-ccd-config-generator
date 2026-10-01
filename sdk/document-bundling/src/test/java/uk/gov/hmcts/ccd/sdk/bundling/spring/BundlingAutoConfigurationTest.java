@@ -49,6 +49,8 @@ class BundlingAutoConfigurationTest {
   private static final String CONVERT_ENDPOINT =
       "ccd.bundling.docmosis.convert-endpoint=https://docmosis.example/rs/convert";
   private static final String ACCESS_KEY = "ccd.bundling.docmosis.access-key=test-access-key";
+  private static final String RENDER_ENDPOINT =
+      "ccd.bundling.docmosis.render-endpoint=https://docmosis.example/rs/render";
 
   private final FixturePdfResolver caseDocuments = new FixturePdfResolver("case-documents");
   private final ApplicationContextRunner runner = new ApplicationContextRunner()
@@ -70,14 +72,23 @@ class BundlingAutoConfigurationTest {
     runner.run(context -> {
       assertThat(context).doesNotHaveBean(DocmosisRenderService.class);
       assertThat(context.getBean(BundleRenderer.class).handledMediaTypes())
-          .contains("application/pdf", "image/png").doesNotContain("application/msword", "text/plain");
+          .contains("application/pdf", "image/png", "audio/mpeg").doesNotContain("application/msword", "text/plain");
     });
     runner.withPropertyValues(CONVERT_ENDPOINT).run(context -> // half the pair is not enough
         assertThat(context.getBean(BundleRenderer.class).handledMediaTypes()).doesNotContain("application/msword"));
     runner.withPropertyValues(CONVERT_ENDPOINT, ACCESS_KEY).run(context -> {
-      assertThat(context.getBean(DocmosisRenderService.class)).isInstanceOf(HttpDocmosisRenderService.class);
+      DocmosisRenderService docmosis = context.getBean(DocmosisRenderService.class);
+      assertThat(docmosis).isInstanceOf(HttpDocmosisRenderService.class);
+      assertThat(docmosis.convertsFiles()).isTrue();
+      assertThat(docmosis.rendersTemplates()).as("no render endpoint: no cover pages").isFalse();
       assertThat(context.getBean(BundleRenderer.class).handledMediaTypes())
           .contains("application/msword", "text/plain", "application/pdf");
+    });
+    runner.withPropertyValues(RENDER_ENDPOINT, ACCESS_KEY).run(context -> { // cover pages without conversion
+      DocmosisRenderService docmosis = context.getBean(DocmosisRenderService.class);
+      assertThat(docmosis.rendersTemplates()).isTrue();
+      assertThat(docmosis.convertsFiles()).isFalse();
+      assertThat(context.getBean(BundleRenderer.class).handledMediaTypes()).doesNotContain("application/msword");
     });
   }
 

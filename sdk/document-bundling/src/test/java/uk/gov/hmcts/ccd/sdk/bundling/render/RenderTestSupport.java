@@ -9,6 +9,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HexFormat;
@@ -31,6 +32,7 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleResult;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleSection;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResolver;
+import uk.gov.hmcts.ccd.sdk.bundling.api.MediaPlaceholder;
 import uk.gov.hmcts.ccd.sdk.bundling.api.ResolutionFailure;
 import uk.gov.hmcts.ccd.sdk.bundling.api.ResolutionFailureReason;
 import uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocument;
@@ -61,6 +63,13 @@ final class RenderTestSupport {
   static BundleDocument doc(String id, String title, String referenceId) {
     return BundleDocument.builder().id(id).title(title).date(LocalDate.of(2026, 3, 14))
         .reference(new DocumentReference(PROVIDER, referenceId)).build();
+  }
+
+  static BundleDocument mediaDoc(String id, String title, String mediaType) {
+    return BundleDocument.builder().id(id).title(title).reference(new DocumentReference(PROVIDER, id))
+        .media(MediaPlaceholder.builder().accessUrl("https://media.example.net/recordings/" + id)
+            .mediaType(mediaType).duration(Duration.ofMinutes(42)).build())
+        .build();
   }
 
   static BundleRequest request(BundleDocument... documents) {

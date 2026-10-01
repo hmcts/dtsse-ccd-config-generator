@@ -646,7 +646,7 @@ public class TestWithCCD extends CftlibTest {
         assertThat(bundle.getStitchStatus(), equalTo("DONE"));
         assertThat(bundle.getTitle(), equalTo(CaseworkerCreateBundle.BUNDLE_TITLE));
         assertThat(bundle.getFileName(), equalTo("case-" + caseRef + "-hearing-bundle.pdf"));
-        assertThat(bundle.getDocuments(), hasSize(4));
+        assertThat(bundle.getDocuments(), hasSize(5));
         assertThat(bundle.getDocuments().get(0).getValue().getName(),
             equalTo(CaseworkerCreateBundle.POTENTIAL_ENERGY_TITLE));
         assertThat(bundle.getDocuments().get(0).getValue().getStartPage(), greaterThan(1));
@@ -673,7 +673,7 @@ public class TestWithCCD extends CftlibTest {
         }
         try (PDDocument stitched = Loader.loadPDF(pdfBytes)) {
             assertThat(stitched.getNumberOfPages(), equalTo(bundle.getPageCount()));
-            assertThat(stitched.getNumberOfPages(), greaterThanOrEqualTo(14));
+            assertThat(stitched.getNumberOfPages(), greaterThanOrEqualTo(15));
             String text = new PDFTextStripper().getText(stitched);
             for (String expected : List.of(
                     CaseworkerCreateBundle.BUNDLE_TITLE, CaseworkerCreateBundle.APPLICATIONS_SECTION,
@@ -682,6 +682,9 @@ public class TestWithCCD extends CftlibTest {
                     CaseworkerCreateBundle.FLYING_PIG_TITLE,
                     // The office document went through the app's Docmosis stub.
                     "Stubbed Docmosis conversion of wordDocument2.docx",
+                    // The MP3 is a generated link page, never fetched.
+                    CaseworkerCreateBundle.HEARING_RECORDING_TITLE, "Media type: audio/mpeg",
+                    CaseworkerCreateBundle.HEARING_RECORDING_NOTE, CaseworkerCreateBundle.HEARING_RECORDING_URL,
                     // The expected-but-empty section renders the standard visible placeholder.
                     "There are no documents in this section.")) {
                 assertThat(text, containsString(expected));
@@ -691,7 +694,8 @@ public class TestWithCCD extends CftlibTest {
                 CaseworkerCreateBundle.APPLICATIONS_SECTION,
                 CaseworkerCreateBundle.EVIDENCE_SECTION,
                 CaseworkerCreateBundle.CORRESPONDENCE_SECTION,
-                CaseworkerCreateBundle.POTENTIAL_ENERGY_TITLE));
+                CaseworkerCreateBundle.POTENTIAL_ENERGY_TITLE,
+                CaseworkerCreateBundle.HEARING_RECORDING_TITLE));
         }
 
         List<String> conversions = docmosisStub.convertedSources();

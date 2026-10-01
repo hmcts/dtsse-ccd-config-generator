@@ -10,6 +10,9 @@ import java.util.Optional;
 /**
  * One document in a bundle: immutable display metadata plus the opaque reference a
  * {@link DocumentResolver} turns into content.
+ *
+ * <p>A document carrying a {@link MediaPlaceholder} is rendered as a generated media link page;
+ * every other document's content is resolved and converted to PDF pages.
  */
 @JsonDeserialize(builder = BundleDocument.Builder.class)
 public final class BundleDocument {
@@ -29,12 +32,16 @@ public final class BundleDocument {
   @JsonProperty
   private final boolean confidential;
 
+  @JsonProperty
+  private final MediaPlaceholder media;
+
   private BundleDocument(Builder builder) {
     this.id = builder.id;
     this.title = builder.title;
     this.date = builder.date;
     this.reference = builder.reference;
     this.confidential = builder.confidential;
+    this.media = builder.media;
   }
 
   /** Starts building a bundle document. */
@@ -73,6 +80,14 @@ public final class BundleDocument {
   }
 
   /**
+   * The media placeholder metadata, present when this document is an audio or video item
+   * represented by a generated link page.
+   */
+  public Optional<MediaPlaceholder> media() {
+    return Optional.ofNullable(media);
+  }
+
+  /**
    * Builder for {@link BundleDocument}.
    */
   @JsonPOJOBuilder(withPrefix = "")
@@ -84,6 +99,7 @@ public final class BundleDocument {
     private LocalDate date;
     private DocumentReference reference;
     private boolean confidential;
+    private MediaPlaceholder media;
 
     private Builder() {
     }
@@ -117,6 +133,15 @@ public final class BundleDocument {
     /** Marks the document confidential. */
     public Builder confidential(boolean confidential) {
       this.confidential = confidential;
+      return this;
+    }
+
+    /**
+     * Supplies media placeholder metadata, marking this document as an audio or video item
+     * rendered as a generated link page.
+     */
+    public Builder media(MediaPlaceholder media) {
+      this.media = media;
       return this;
     }
 

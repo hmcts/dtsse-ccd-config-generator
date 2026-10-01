@@ -14,7 +14,7 @@ public interface ResolvedDocument extends AutoCloseable {
   /** The document content. Read once by the SDK; implementations need not support re-reading. */
   InputStream content();
 
-  /** The declared media type, normalised by the pipeline before handler lookup. */
+  /** The declared media type, validated against content-based detection by the pipeline. */
   String mediaType();
 
   /** The source file name. */

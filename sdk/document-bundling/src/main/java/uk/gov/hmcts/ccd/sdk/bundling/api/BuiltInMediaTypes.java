@@ -28,7 +28,8 @@ public final class BuiltInMediaTypes {
    * Converted via the shared Docmosis render service, registered only when Docmosis is
    * configured. This is {@code DocmosisConverter}'s accept list minus
    * {@code application/octet-stream}: blindly routing untyped content to Docmosis is a documented
-   * defect of the current service that this module deliberately does not replicate.
+   * defect of the current service that this module deliberately does not replicate — untyped
+   * content is media-type-detected from content instead.
    */
   public static final Set<String> OFFICE = Set.of(
       "application/msword",
@@ -44,6 +45,9 @@ public final class BuiltInMediaTypes {
       "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
       "application/rtf",
       "text/plain");
+
+  /** Represented by a generated, accessible media link page built from supplied metadata. */
+  public static final Set<String> MEDIA = Set.of("audio/mpeg", "video/mp4");
 
   private BuiltInMediaTypes() {
   }

@@ -11,7 +11,10 @@ final class RenderMetrics {
   private static final Set<String> BUILT_IN_WARNING_CODES = Set.of(
       PdfBundleAssembler.WARNING_EMPTY_SECTION_PAGE,
       PdfBundleAssembler.WARNING_STRUCTURE_TREE_REPLACED,
-      PdfBundleAssembler.WARNING_TITLE_NOT_RENDERABLE);
+      PdfBundleAssembler.WARNING_TITLE_NOT_RENDERABLE,
+      PdfBundleAssembler.WARNING_OUTLINE_TRUNCATED,
+      DefaultBundleRenderer.WARNING_MEDIA_TYPE_MISMATCH,
+      DefaultBundleRenderer.WARNING_NO_EXTRACTABLE_TEXT);
 
   private final MeterRegistry registry;
 

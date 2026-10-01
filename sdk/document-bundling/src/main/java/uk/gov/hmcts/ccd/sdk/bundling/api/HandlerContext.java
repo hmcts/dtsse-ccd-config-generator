@@ -12,7 +12,11 @@ import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderService;
  */
 public interface HandlerContext {
 
-  /** The bundle document being handled. */
+  /**
+   * The bundle document being handled. Media documents are never fetched: the pipeline passes a
+   * metadata-only {@link ResolvedDocument}, and the handler builds its page from this document's
+   * title, date and {@link BundleDocument#media() media placeholder}.
+   */
   BundleDocument document();
 
   /** Allocates a temporary file in the job-scoped directory; the SDK cleans it up with the job. */

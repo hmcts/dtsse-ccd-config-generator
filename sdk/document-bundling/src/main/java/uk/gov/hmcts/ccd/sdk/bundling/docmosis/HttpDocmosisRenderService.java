@@ -1,30 +1,40 @@
 package uk.gov.hmcts.ccd.sdk.bundling.docmosis;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublisher;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse;
-import java.net.http.HttpResponse.BodyHandlers;
+import java.net.http.HttpResponse.BodySubscriber;
+import java.net.http.HttpResponse.BodySubscribers;
 import java.net.http.HttpTimeoutException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
@@ -35,16 +45,18 @@ import org.slf4j.LoggerFactory;
 /**
  * {@link DocmosisRenderService} over the JDK HTTP client, speaking the exact multipart protocol
  * {@code em-stitching-api} already uses against the shared per-environment Docmosis instance:
- * {@code accessKey}/{@code outputName}/{@code file} parts to {@code /rs/convert}, pinned to
- * HTTP/1.1 so the wire matches what Docmosis sees from the current OkHttp clients.
+ * {@code accessKey}/{@code outputName}/{@code file} parts to {@code /rs/convert} and
+ * {@code templateName}/{@code accessKey}/{@code outputName}/{@code data} parts to
+ * {@code /rs/render}, pinned to HTTP/1.1 so the wire matches what Docmosis sees from the current
+ * OkHttp clients.
  *
  * <p>It deliberately does not carry over the known defects of the current integration: the
  * {@code file} part is tagged with the source's real media type rather than a hard-coded
  * {@code application/pdf} (sanitised to a plain {@code type/subtype} token so document-store
  * metadata cannot inject part headers); responses stream to a caller-owned temp file instead of
- * being buffered in memory; the source-size ceiling is enforced before anything is sent; the
- * read timeout bounds the whole exchange including the streamed body, not just the response
- * headers; a 2xx response
+ * being buffered in memory; the source-size ceiling is enforced before anything is sent and a
+ * derived output ceiling stops a runaway response from filling the disk; the read timeout bounds
+ * the whole exchange including the streamed body, not just the response headers; a 2xx response
  * whose body is not a PDF is a typed non-transient failure rather than garbage propagated into
  * the pipeline; transient failures (connect/IO errors, timeouts, and 5xx responses) are flagged
  * as such so callers can decide whether to resubmit while 4xx responses are permanent; and
@@ -56,10 +68,13 @@ public final class HttpDocmosisRenderService implements DocmosisRenderService {
 
   private static final String PDF_CONTENT_TYPE = "application/pdf";
   private static final byte[] PDF_MAGIC = "%PDF-".getBytes(StandardCharsets.US_ASCII);
+  private static final long MIN_OUTPUT_CEILING_BYTES = 16L * 1024 * 1024;
   private static final Pattern MEDIA_TYPE_TOKEN = Pattern.compile(
       "^[A-Za-z0-9!#$%&'*+.^_`|~-]+/[A-Za-z0-9!#$%&'*+.^_`|~-]+");
   private static final FileAttribute<Set<PosixFilePermission>> OWNER_ONLY =
       PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"));
+
+  private static final ObjectMapper JSON = JsonMapper.builder().findAndAddModules().build();
 
   private final DocmosisConnection connection;
   private final Path outputDirectory;
@@ -83,6 +98,11 @@ public final class HttpDocmosisRenderService implements DocmosisRenderService {
     Objects.requireNonNull(source, "source must be provided");
     Objects.requireNonNull(fileName, "fileName must be provided");
     Objects.requireNonNull(mediaType, "mediaType must be provided");
+    if (!convertsFiles()) {
+      throw new DocmosisRenderException(
+          "No Docmosis convert endpoint is configured; " + fileName + " was not converted.",
+          false);
+    }
     enforceSizeCeiling(source, fileName);
     String safeMediaType = sanitiseMediaType(mediaType);
     MultipartBody body = new MultipartBody();
@@ -90,6 +110,40 @@ public final class HttpDocmosisRenderService implements DocmosisRenderService {
     body.addField("outputName", fileName + ".pdf");
     addSourcePart(body, source, fileName, safeMediaType);
     return execute("convert", fileName, connection.convertEndpoint(), body);
+  }
+
+  @Override
+  public boolean convertsFiles() {
+    return connection.convertEndpoint() != null;
+  }
+
+  @Override
+  public boolean rendersTemplates() {
+    return connection.renderEndpoint() != null;
+  }
+
+  @Override
+  public Path renderTemplate(String templateName, Map<String, Object> data)
+      throws DocmosisRenderException {
+    Objects.requireNonNull(templateName, "templateName must be provided");
+    if (!rendersTemplates()) {
+      throw new DocmosisRenderException(
+          "No Docmosis render endpoint is configured; template " + templateName
+              + " was not rendered.", false);
+    }
+    String json;
+    try {
+      json = JSON.writeValueAsString(data == null ? Map.of() : data);
+    } catch (JsonProcessingException e) {
+      throw new DocmosisRenderException(
+          "The data for template " + templateName + " could not be serialised to JSON.", false, e);
+    }
+    MultipartBody body = new MultipartBody();
+    body.addField("templateName", templateName);
+    body.addField("accessKey", connection.accessKey());
+    body.addField("outputName", UUID.randomUUID() + ".pdf");
+    body.addField("data", json);
+    return execute("render", templateName, connection.renderEndpoint(), body);
   }
 
   private void enforceSizeCeiling(Path source, String fileName) throws DocmosisRenderException {
@@ -131,8 +185,10 @@ public final class HttpDocmosisRenderService implements DocmosisRenderService {
     final long started = System.nanoTime();
     // The whole exchange — including the streamed body, which HttpRequest.timeout() alone does
     // not bound — must finish within the read timeout.
-    CompletableFuture<HttpResponse<Path>> pending =
-        httpClient.sendAsync(request, BodyHandlers.ofFile(target));
+    CompletableFuture<HttpResponse<Path>> pending = httpClient.sendAsync(request, responseInfo ->
+        isSuccess(responseInfo.statusCode())
+            ? new BoundedFileSubscriber(target, outputCeilingBytes())
+            : BodySubscribers.replacing(target));
     HttpResponse<Path> response;
     try {
       response = pending.get(connection.readTimeout().toMillis(), TimeUnit.MILLISECONDS);
@@ -173,6 +229,12 @@ public final class HttpDocmosisRenderService implements DocmosisRenderService {
 
   private DocmosisRenderException mapExecutionFailure(
       String operation, String subject, Throwable cause) {
+    if (hasCause(cause, OutputCeilingExceededException.class)) {
+      return new DocmosisRenderException(
+          "Docmosis " + operation + " of " + subject + " was abandoned: the response exceeded"
+              + " the output ceiling of " + outputCeilingBytes() + " bytes.",
+          false, cause);
+    }
     if (hasCause(cause, HttpTimeoutException.class)) {
       return new DocmosisRenderException(
           "Docmosis " + operation + " of " + subject + " timed out after "
@@ -207,6 +269,12 @@ public final class HttpDocmosisRenderService implements DocmosisRenderService {
               + "); response body withheld from logs.",
           false);
     }
+  }
+
+  private long outputCeilingBytes() {
+    long max = connection.maxSourceBytes();
+    long scaled = max > Long.MAX_VALUE / 4 ? Long.MAX_VALUE : max * 4;
+    return Math.max(scaled, MIN_OUTPUT_CEILING_BYTES);
   }
 
   private Path createOutputFile() throws DocmosisRenderException {
@@ -260,6 +328,111 @@ public final class HttpDocmosisRenderService implements DocmosisRenderService {
         .replace("\"", "%22")
         .replace("\r", "%0D")
         .replace("\n", "%0A");
+  }
+
+  /**
+   * Streams the response body to the output file in chunks, failing the exchange if the body
+   * grows past the ceiling so a never-ending response cannot fill the disk.
+   */
+  private static final class BoundedFileSubscriber implements BodySubscriber<Path> {
+    private final Path target;
+    private final long ceilingBytes;
+    private final CompletableFuture<Path> result = new CompletableFuture<>();
+    private Flow.Subscription subscription;
+    private OutputStream out;
+    private long written;
+    private boolean done;
+
+    BoundedFileSubscriber(Path target, long ceilingBytes) {
+      this.target = target;
+      this.ceilingBytes = ceilingBytes;
+    }
+
+    @Override
+    public CompletionStage<Path> getBody() {
+      return result;
+    }
+
+    @Override
+    public void onSubscribe(Flow.Subscription subscription) {
+      this.subscription = subscription;
+      try {
+        out = Files.newOutputStream(
+            target, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+      } catch (IOException e) {
+        done = true;
+        subscription.cancel();
+        result.completeExceptionally(e);
+        return;
+      }
+      subscription.request(1);
+    }
+
+    @Override
+    public void onNext(List<ByteBuffer> buffers) {
+      if (done) {
+        return;
+      }
+      try {
+        for (ByteBuffer buffer : buffers) {
+          written += buffer.remaining();
+          if (written > ceilingBytes) {
+            throw new OutputCeilingExceededException(ceilingBytes);
+          }
+          byte[] chunk = new byte[buffer.remaining()];
+          buffer.get(chunk);
+          out.write(chunk);
+        }
+        subscription.request(1);
+      } catch (IOException e) {
+        done = true;
+        subscription.cancel();
+        closeQuietly();
+        result.completeExceptionally(e);
+      }
+    }
+
+    @Override
+    public void onError(Throwable throwable) {
+      if (done) {
+        return;
+      }
+      done = true;
+      closeQuietly();
+      result.completeExceptionally(throwable);
+    }
+
+    @Override
+    public void onComplete() {
+      if (done) {
+        return;
+      }
+      done = true;
+      try {
+        out.close();
+        result.complete(target);
+      } catch (IOException e) {
+        result.completeExceptionally(e);
+      }
+    }
+
+    private void closeQuietly() {
+      if (out == null) {
+        return;
+      }
+      try {
+        out.close();
+      } catch (IOException e) {
+        log.debug("Could not close output stream for {}", target, e);
+      }
+    }
+  }
+
+  /** Marks a response body that grew past the output ceiling. */
+  private static final class OutputCeilingExceededException extends IOException {
+    OutputCeilingExceededException(long ceilingBytes) {
+      super("response exceeded the output ceiling of " + ceilingBytes + " bytes");
+    }
   }
 
   /**

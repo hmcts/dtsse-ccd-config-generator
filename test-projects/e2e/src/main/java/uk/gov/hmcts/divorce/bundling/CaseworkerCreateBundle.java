@@ -6,6 +6,7 @@ import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.LEGAL_ADVISOR;
 import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.SUPER_USER;
 import static uk.gov.hmcts.divorce.divorcecase.model.access.Permissions.CREATE_READ_UPDATE;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +24,7 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleResult;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleSection;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference;
 import uk.gov.hmcts.ccd.sdk.bundling.api.EmptySectionPolicy;
+import uk.gov.hmcts.ccd.sdk.bundling.api.MediaPlaceholder;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
 import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
@@ -31,7 +33,8 @@ import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
  * The document-bundling SDK's worked example: a decentralised event that builds a
  * {@link BundleRequest} from case documents (fixture-backed here), renders it synchronously
  * through the auto-configured {@link BundleRenderer} — PDFs pass through, the image and the
- * office document are converted, the empty section renders a visible placeholder — then hands the finished PDF to {@link BundlePublisher}, which
+ * office document are converted, the MP3 becomes a generated link page, the empty section
+ * renders a visible placeholder — then hands the finished PDF to {@link BundlePublisher}, which
  * uploads it to CDAM, attaches it to the case and records the service's own bundle model.
  *
  * <p>Nothing is caught: a {@code BundleGenerationException} propagates, the platform rolls the
@@ -51,6 +54,10 @@ public class CaseworkerCreateBundle implements CCDConfig<CaseData, State, UserRo
     public static final String MEDICAL_REPORT_TITLE = "Claimant medical report";
     public static final String LOCATION_STATEMENT_TITLE = "Location statement";
     public static final String FLYING_PIG_TITLE = "Flying pig photograph";
+    public static final String HEARING_RECORDING_TITLE = "Hearing recording, day 2";
+    public static final String HEARING_RECORDING_URL =
+        "https://media.example.net/recordings/hearing-day-2.mp3";
+    public static final String HEARING_RECORDING_NOTE = "Playback requires case access";
 
     @Autowired
     private BundleRenderer bundleRenderer;
@@ -133,6 +140,19 @@ public class CaseworkerCreateBundle implements CCDConfig<CaseData, State, UserRo
                         .reference(new DocumentReference(
                             FixtureDocumentResolver.PROVIDER,
                             FixtureDocumentResolver.FLYING_PIG_JPG))
+                        .build())
+                    .document(BundleDocument.builder()
+                        .id("ev-2")
+                        .title(HEARING_RECORDING_TITLE)
+                        .date(LocalDate.of(2026, 3, 14))
+                        .reference(new DocumentReference(
+                            FixtureDocumentResolver.PROVIDER, "hearing-recording-day-2"))
+                        .media(MediaPlaceholder.builder()
+                            .mediaType("audio/mpeg")
+                            .accessUrl(HEARING_RECORDING_URL)
+                            .duration(Duration.ofMinutes(42))
+                            .note(HEARING_RECORDING_NOTE)
+                            .build())
                         .build())
                     .build())
                 .section(BundleSection.builder(CORRESPONDENCE_SECTION)
