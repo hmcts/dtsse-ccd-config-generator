@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -23,8 +24,8 @@ import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobAutoConfiguration;
 /**
  * Opt-in auto-configuration: a {@link BundleRenderer} assembled from every {@link DocumentResolver}
  * bean, every {@link BundlingExtension} bean (in {@code @Order} order), the Docmosis client when
- * {@code ccd.bundling.docmosis.*} is set, the consumer's {@code MeterRegistry} when one exists,
- * and the {@code ccd.bundling.*} properties. Every bean is
+ * {@code ccd.bundling.docmosis.access-key} and an endpoint are set, the consumer's
+ * {@code MeterRegistry} when one exists, and the {@code ccd.bundling.*} properties. Every bean is
  * {@code @ConditionalOnMissingBean}, so a consumer-defined bean of the same type wins.
  */
 @AutoConfiguration(before = BundleJobAutoConfiguration.class)
@@ -36,7 +37,9 @@ public class BundlingAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  @ConditionalOnProperty(prefix = "ccd.bundling.docmosis", name = {"convert-endpoint", "access-key"})
+  @ConditionalOnProperty(prefix = "ccd.bundling.docmosis", name = "access-key")
+  @ConditionalOnExpression("!'${ccd.bundling.docmosis.convert-endpoint:}'.isEmpty()"
+      + " or !'${ccd.bundling.docmosis.render-endpoint:}'.isEmpty()")
   public DocmosisRenderService bundlingDocmosisRenderService(BundlingProperties properties) {
     return new HttpDocmosisRenderService(
         properties.getDocmosis().toConnection(),

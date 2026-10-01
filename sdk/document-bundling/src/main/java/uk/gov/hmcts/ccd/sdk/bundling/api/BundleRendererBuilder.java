@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.bundling.api;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -8,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import uk.gov.hmcts.ccd.sdk.bundling.convert.DocmosisOfficeHandler;
 import uk.gov.hmcts.ccd.sdk.bundling.convert.ImageHandler;
+import uk.gov.hmcts.ccd.sdk.bundling.convert.MediaLinkHandler;
 import uk.gov.hmcts.ccd.sdk.bundling.convert.PdfPassthroughHandler;
 import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderService;
 import uk.gov.hmcts.ccd.sdk.bundling.render.DefaultBundleRenderer;
@@ -16,13 +18,15 @@ import uk.gov.hmcts.ccd.sdk.bundling.render.DefaultBundleRenderer;
  * Builds a {@link BundleRenderer}.
  *
  * <p>Defaults reproduce the output of the current stitching microservice: PDF passthrough, image
- * conversion, Docmosis-backed office conversion when Docmosis is configured, and the court-default
- * presentation. Extensions apply in registration order on top of the built-ins.
+ * conversion, Docmosis-backed office conversion when Docmosis is configured, generated media link
+ * pages, and the court-default presentation. Extensions apply in registration order on top of the
+ * built-ins.
  */
 public final class BundleRendererBuilder {
 
   private final Map<String, DocumentResolver> resolvers = new LinkedHashMap<>();
   private final List<BundlingExtension> extensions = new ArrayList<>();
+  private final Map<String, Path> watermarkImages = new LinkedHashMap<>();
   private DocmosisRenderService docmosis;
   private BundleLimits limits = BundleLimits.defaults();
   private int maxConcurrentRenders = 2;
@@ -62,6 +66,24 @@ public final class BundleRendererBuilder {
    */
   public BundleRendererBuilder docmosis(DocmosisRenderService docmosis) {
     this.docmosis = Validate.requireNonNull(docmosis, "docmosis");
+    return this;
+  }
+
+  /**
+   * Registers an approved watermark image (PNG or JPEG) under a name that
+   * {@link WatermarkPreset#imageName()} refers to. The file must exist; repeatable.
+   */
+  public BundleRendererBuilder watermarkImage(String name, Path image) {
+    Validate.requireNonBlank(name, "watermarkImage.name");
+    Validate.requireNonNull(image, "watermarkImage.image");
+    if (!Files.isRegularFile(image)) {
+      throw new IllegalArgumentException(
+          "Watermark image '" + name + "' is not a readable file: " + image);
+    }
+    if (watermarkImages.putIfAbsent(name, image) != null) {
+      throw new IllegalArgumentException(
+          "A watermark image named '" + name + "' is already registered");
+    }
     return this;
   }
 
@@ -114,7 +136,7 @@ public final class BundleRendererBuilder {
     HandlerRegistry registry = HandlerRegistry.create(builtInHandlers(), extensions);
     return new DefaultBundleRenderer(
         resolvers, docmosis, registry, limits, maxConcurrentRenders, meterRegistry,
-        tempDirectory);
+        tempDirectory, watermarkImages);
   }
 
   private Map<String, DocumentHandler> builtInHandlers() {
@@ -124,11 +146,15 @@ public final class BundleRendererBuilder {
     for (String type : BuiltInMediaTypes.IMAGES) {
       builtIns.put(type, imageHandler);
     }
-    if (docmosis != null) {
+    if (docmosis != null && docmosis.convertsFiles()) {
       DocmosisOfficeHandler officeHandler = new DocmosisOfficeHandler();
       for (String type : BuiltInMediaTypes.OFFICE) {
         builtIns.put(type, officeHandler);
       }
+    }
+    MediaLinkHandler mediaLinkHandler = new MediaLinkHandler();
+    for (String type : BuiltInMediaTypes.MEDIA) {
+      builtIns.put(type, mediaLinkHandler);
     }
     return builtIns;
   }

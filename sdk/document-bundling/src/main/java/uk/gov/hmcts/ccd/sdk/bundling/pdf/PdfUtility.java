@@ -11,6 +11,7 @@ import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.encoding.WinAnsiEncoding;
 import org.apache.pdfbox.pdmodel.interactive.action.PDActionGoTo;
+import org.apache.pdfbox.pdmodel.interactive.action.PDActionURI;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationLink;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDBorderStyleDictionary;
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.destination.PDPageXYZDestination;
@@ -112,6 +113,20 @@ final class PdfUtility {
     final float stringWidth = getStringWidth(text, font, fontSize);
     final float xxOffset = pageWidth - stringWidth - 53;
     addLink(document, from, to, text, xxOffset, yyOffset, font, fontSize, lineWidthFor(from), 1);
+  }
+
+  static void addUriLink(PDDocument document, PDPage page, String uri, String text,
+      float xxOffset, float yyOffset, PDType1Font font, float fontSize, int lineWidth)
+      throws IOException {
+    int noOfLines = Math.max(splitString(text, lineWidth, font, fontSize).length, 1);
+    final PDActionURI action = new PDActionURI();
+    action.setURI(uri);
+    final PDAnnotationLink link = new PDAnnotationLink();
+    link.setAction(action);
+    link.setRectangle(linkRectangle(page, xxOffset, yyOffset, noOfLines));
+    removeLinkBorder(link);
+    page.getAnnotations().add(link);
+    addText(document, page, text, xxOffset, yyOffset, font, fontSize, lineWidth);
   }
 
   static String sanitizeText(String rawString) {

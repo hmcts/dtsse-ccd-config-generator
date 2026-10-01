@@ -4,7 +4,7 @@ Golden rendering-parity baselines generated from **em-stitching-api commit
 `7c269a4d1b22b15e10dfceaeff59e4a92be777e8`** by running the service's real
 `PDFMerger`/`TableOfContents`/`PDFOutline` against its own fixtures.
 
-Per scenario (12 scenarios):
+Per scenario (17 scenarios):
 
 * `facts.json` — the authoritative semantic golden, produced by
   `uk.gov.hmcts.ccd.sdk.bundling.testsupport.PdfSemantics`: page count, page labels, per-page

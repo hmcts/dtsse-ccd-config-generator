@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -36,12 +37,16 @@ public final class BundleRequest {
   @JsonProperty
   private final BundlePresentation presentation;
 
+  @JsonProperty
+  private final CoverPage coverPage;
+
   private BundleRequest(Builder builder) {
     this.externalId = builder.externalId;
     this.title = builder.title;
     this.fileName = builder.fileName;
     this.root = builder.root;
     this.presentation = builder.presentation;
+    this.coverPage = builder.coverPage;
   }
 
   /** Starts building a bundle request. */
@@ -77,6 +82,11 @@ public final class BundleRequest {
     return presentation;
   }
 
+  /** The Docmosis cover page placed first in the bundle, if any. */
+  public Optional<CoverPage> coverPage() {
+    return Optional.ofNullable(coverPage);
+  }
+
   /** All documents in the tree, in deterministic render order. */
   public List<BundleDocument> allDocuments() {
     List<BundleDocument> documents = new ArrayList<>();
@@ -110,6 +120,7 @@ public final class BundleRequest {
     private String fileName;
     private BundleSection root;
     private BundlePresentation presentation = BundlePresentation.courtDefault();
+    private CoverPage coverPage;
 
     private Builder() {
     }
@@ -146,6 +157,15 @@ public final class BundleRequest {
      */
     public Builder presentation(BundlePresentation presentation) {
       this.presentation = Validate.requireNonNull(presentation, "BundleRequest.presentation");
+      return this;
+    }
+
+    /**
+     * Sets a Docmosis-rendered cover page, placed first in the bundle. Optional; requires the
+     * Docmosis render endpoint to be configured on the renderer.
+     */
+    public Builder coverPage(CoverPage coverPage) {
+      this.coverPage = coverPage;
       return this;
     }
 
