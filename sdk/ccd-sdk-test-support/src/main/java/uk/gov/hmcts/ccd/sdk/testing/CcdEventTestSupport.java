@@ -685,8 +685,8 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
     }
 
     /**
-     * Sends this as JSON in the Client-Context header, which CCD passes on to the start only; a
-     * String is sent as it is, such as the base64 form XUI sends.
+     * Sends this bean as JSON in the Client-Context header, as a service's frontend does, which CCD
+     * passes on to the start only.
      */
     public StartRequest withClientContext(Object value) {
       this.clientContext = value;
@@ -712,8 +712,7 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
       MockHttpServletRequestBuilder aboutToStart = MockMvcRequestBuilders.post("/callbacks/about-to-start")
           .param("eventId", eventId);
       if (clientContext != null) {
-        aboutToStart.header(CallbackController.CLIENT_CONTEXT_HEADER, clientContext instanceof String header
-            ? header : WIRE.valueToTree(clientContext).toString());
+        aboutToStart.header(CallbackController.CLIENT_CONTEXT_HEADER, WIRE.valueToTree(clientContext).toString());
       }
       JsonNode response = send(aboutToStart, authorisation, request);
       return new Started(response, caseType, reference, eventId, authorisation,

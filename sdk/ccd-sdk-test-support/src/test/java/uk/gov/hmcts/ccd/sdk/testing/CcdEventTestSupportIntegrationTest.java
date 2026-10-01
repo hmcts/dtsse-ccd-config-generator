@@ -10,9 +10,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import com.fasterxml.jackson.databind.node.NullNode;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -305,16 +303,12 @@ class CcdEventTestSupportIntegrationTest {
   @Test
   void externalEventStartIsSentTheClientContext() {
     long reference = events.seed(TestState.Open, new TestCase("original"));
-    // The context can name more than the handler reads.
+    // The context can say more than the handler reads.
     ExternalEvent<Greeting, Reply> greet = events.external(reference, GREET)
-        .withClientContext(Map.of("name", "Sam", "orderId", "42"));
+        .withClientContext(new Visit("Sam", "42"));
 
     assertThat(greet.start()).isEqualTo(new Greeting("hello Sam"));
     assertThat(greet.submitExpectingSuccess(new Reply("hello back")).audit().summary()).isEqualTo("hello back");
-    // XUI sends the context base64-encoded.
-    String base64 = Base64.getEncoder().encodeToString("{\"name\":\"Kim\"}".getBytes(StandardCharsets.UTF_8));
-    assertThat(events.external(reference, GREET).withClientContext(base64).start())
-        .isEqualTo(new Greeting("hello Kim"));
   }
 
   @Test
@@ -418,6 +412,10 @@ class CcdEventTestSupportIntegrationTest {
   }
 
   record Addressee(String name) {
+  }
+
+  /** A frontend's context naming more than the greeting reads. */
+  record Visit(String name, String orderId) {
   }
 
   record AuditedRow(String storedValue) {

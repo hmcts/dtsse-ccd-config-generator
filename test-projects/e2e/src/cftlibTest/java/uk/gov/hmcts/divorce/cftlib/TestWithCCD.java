@@ -28,6 +28,7 @@ import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -4221,19 +4222,24 @@ public class TestWithCCD extends CftlibTest {
     @Order(35)
     @Test
     public void externalEventStartIsSentTheFrontendsClientContext() throws Exception {
-        var get = buildRequest(EXTERNAL_EVENT_USER, "http://localhost:4452/cases/" + caseRef + "/event-triggers/"
-            + ExternalGreetingEvent.GREETING.id() + "?ignore-warning=false", HttpGet::new);
-        withCcdAccept(get, "*/*");
-        get.addHeader("Client-Context", "{\"name\":\"Sam\"}");
+        String json = mapper.writeValueAsString(new ExternalGreetingEvent.Addressee("Sam"));
+        // As a service's own frontend sends it, and base64-encoded, as XUI sends it.
+        for (String header : List.of(json, Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8)))) {
+            var get = buildRequest(EXTERNAL_EVENT_USER, "http://localhost:4452/cases/" + caseRef + "/event-triggers/"
+                + ExternalGreetingEvent.GREETING.id() + "?ignore-warning=false", HttpGet::new);
+            withCcdAccept(get, "*/*");
+            get.addHeader("Client-Context", header);
 
-        var response = HttpClientBuilder.create().build().execute(get);
+            var response = HttpClientBuilder.create().build().execute(get);
 
-        assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
-        var start = mapper.readTree(EntityUtils.toString(response.getEntity()));
-        var started = mapper.readValue(start.path("case_details").path("case_data").path("sdkEventPayload").asText(),
-            ExternalGreetingEvent.Greeting.class);
-        assertThat("CCD passes the frontend's client context on to the start", started,
-            equalTo(new ExternalGreetingEvent.Greeting("hello Sam")));
+            assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
+            var start = mapper.readTree(EntityUtils.toString(response.getEntity()));
+            var started = mapper.readValue(
+                start.path("case_details").path("case_data").path("sdkEventPayload").asText(),
+                ExternalGreetingEvent.Greeting.class);
+            assertThat("CCD passes the frontend's client context on to the start", started,
+                equalTo(new ExternalGreetingEvent.Greeting("hello Sam")));
+        }
     }
 
     @Order(36)
