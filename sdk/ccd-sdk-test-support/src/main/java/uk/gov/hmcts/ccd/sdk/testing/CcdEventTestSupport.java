@@ -41,6 +41,7 @@ import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalEventId;
+import uk.gov.hmcts.ccd.sdk.runtime.CallbackController;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.Classification;
 
@@ -167,6 +168,14 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
     return caseType().storedData(reference);
   }
 
+  public Case view(long reference) {
+    return caseType().view(reference);
+  }
+
+  public Case view(long reference, Actor actor) {
+    return caseType().view(reference, actor);
+  }
+
   public static final class Actor {
     private final String authorisation;
     private final ActorDetails details;
@@ -263,35 +272,38 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
       if (!registry.getRequiredEvent(caseTypeId, eventId).hasStartHandler()) {
         // Nothing to start: the frontend posts its payload straight away.
         return new ExternalEvent<>(eventId,
-            actor -> {
+            driver -> {
               throw new AssertionError("Event " + eventId + " has no start handler to send its frontend a payload");
             },
-            (actor, payload) -> {
+            (driver, payload) -> {
+              if (driver.clientContext() != null) {
+                throw new AssertionError("Event " + eventId + " has no start handler to send a client context");
+              }
               EventSubmission submission = event(reference, eventId, null).withPayload(payload);
-              return outcomeOf((actor == null ? submission : submission.as(actor)).submit());
+              return outcomeOf((driver.actor() == null ? submission : submission.as(driver.actor())).submit());
             },
-            null);
+            ExternalEvent.Driver.DEFAULT);
       }
       return new ExternalEvent<>(eventId,
-          actor -> {
-            Started started = started(reference, eventId, actor);
+          driver -> {
+            Started started = started(reference, eventId, driver);
             return started.errors().isEmpty()
                 ? new ExternalEvent.Started<O>(started.payload(), List.of())
                 : new ExternalEvent.Started<O>(null, started.errors());
           },
-          (actor, payload) -> {
-            Started started = started(reference, eventId, actor);
+          (driver, payload) -> {
+            Started started = started(reference, eventId, driver);
             if (!started.errors().isEmpty()) {
               throw new AssertionError("Expected " + eventId + " to start, got errors " + started.errors());
             }
             return outcomeOf(started.submittingPayload(payload).submit());
           },
-          null);
+          ExternalEvent.Driver.DEFAULT);
     }
 
-    private Started started(long reference, String eventId, Actor actor) {
-      StartRequest request = start(reference, eventId);
-      return (actor == null ? request : request.as(actor)).start();
+    private Started started(long reference, String eventId, ExternalEvent.Driver driver) {
+      StartRequest request = start(reference, eventId).withClientContext(driver.clientContext());
+      return (driver.actor() == null ? request : request.as(driver.actor())).start();
     }
 
     private Map<String, Object> stored(long reference) {
@@ -385,6 +397,25 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
       details.setData(mapper.convertValue(data, JSON_NODE_MAP));
       details.setSupplementaryData(Map.of());
       return details;
+    }
+
+    /** The case as the application's case view shows it, loaded as CCD loads it. */
+    public Case view(long reference) {
+      return view(reference, TestIdamService.DEFAULT_TOKEN);
+    }
+
+    public Case view(long reference, Actor actor) {
+      return view(reference, Objects.requireNonNull(actor).authorisation);
+    }
+
+    private Case view(long reference, String authorisation) {
+      return mapper.convertValue(loaded(reference, authorisation).path("case_data"), caseClass);
+    }
+
+    /** Loads the case from the application's persistence API, as CCD does, so the case view applies. */
+    private JsonNode loaded(long reference, String authorisation) {
+      return send(MockMvcRequestBuilders.get("/ccd-persistence/cases")
+          .param("case-refs", String.valueOf(reference)), authorisation, null).path(0).path("case_details");
     }
 
     /** Reads ccd.case_data.data directly, before CaseView projection. */
@@ -643,6 +674,7 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
     private final long reference;
     private final String eventId;
     private String authorisation = TestIdamService.DEFAULT_TOKEN;
+    private Object clientContext;
 
     private StartRequest(CaseType caseType, long reference, String eventId) {
       this.caseType = caseType;
@@ -655,13 +687,20 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
       return this;
     }
 
+    /**
+     * Sends this bean as JSON in the Client-Context header, as a service's frontend does, which CCD
+     * passes on to the start only.
+     */
+    public StartRequest withClientContext(Object value) {
+      this.clientContext = value;
+      return this;
+    }
+
     public Started start() {
       Map<String, Object> stored = caseType.stored(reference);
       caseType.checkAllowedState(registry.getRequiredEvent(caseType.caseTypeId, eventId), eventId, stored, null);
       // Loads the case the way CCD does before an event starts, so the case view applies.
-      JsonNode loaded = send(MockMvcRequestBuilders.get("/ccd-persistence/cases")
-          .param("case-refs", String.valueOf(reference)), authorisation, null);
-      JsonNode details = loaded.path(0).path("case_details");
+      JsonNode details = caseType.loaded(reference, authorisation);
       CallbackRequest request = CallbackRequest.builder()
           .eventId(eventId)
           .caseDetails(uk.gov.hmcts.reform.ccd.client.model.CaseDetails.builder()
@@ -673,8 +712,12 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
               .data(WIRE.convertValue(details.path("case_data"), OBJECT_MAP))
               .build())
           .build();
-      JsonNode response = send(MockMvcRequestBuilders.post("/callbacks/about-to-start")
-          .param("eventId", eventId), authorisation, request);
+      MockHttpServletRequestBuilder aboutToStart = MockMvcRequestBuilders.post("/callbacks/about-to-start")
+          .param("eventId", eventId);
+      if (clientContext != null) {
+        aboutToStart.header(CallbackController.CLIENT_CONTEXT_HEADER, WIRE.valueToTree(clientContext).toString());
+      }
+      JsonNode response = send(aboutToStart, authorisation, request);
       return new Started(response, caseType, reference, eventId, authorisation,
           ((Number) stored.get("case_revision")).longValue());
     }
