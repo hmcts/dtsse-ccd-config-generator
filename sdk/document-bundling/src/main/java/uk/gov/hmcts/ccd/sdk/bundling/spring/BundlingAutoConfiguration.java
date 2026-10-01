@@ -18,6 +18,7 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundlingExtension;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResolver;
 import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderService;
 import uk.gov.hmcts.ccd.sdk.bundling.docmosis.HttpDocmosisRenderService;
+import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobAutoConfiguration;
 
 /**
  * Opt-in auto-configuration: a {@link BundleRenderer} assembled from every {@link DocumentResolver}
@@ -26,7 +27,7 @@ import uk.gov.hmcts.ccd.sdk.bundling.docmosis.HttpDocmosisRenderService;
  * and the {@code ccd.bundling.*} properties. Every bean is
  * {@code @ConditionalOnMissingBean}, so a consumer-defined bean of the same type wins.
  */
-@AutoConfiguration
+@AutoConfiguration(before = BundleJobAutoConfiguration.class)
 @ConditionalOnProperty(prefix = "ccd.bundling", name = "enabled", matchIfMissing = true)
 @EnableConfigurationProperties(BundlingProperties.class)
 public class BundlingAutoConfiguration {

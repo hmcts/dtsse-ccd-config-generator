@@ -1,5 +1,9 @@
 package uk.gov.hmcts.ccd.sdk.bundling.api;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import java.time.LocalDate;
 import java.util.Optional;
 
@@ -7,16 +11,22 @@ import java.util.Optional;
  * One document in a bundle: immutable display metadata plus the opaque reference a
  * {@link DocumentResolver} turns into content.
  */
+@JsonDeserialize(builder = BundleDocument.Builder.class)
 public final class BundleDocument {
 
+  @JsonProperty
   private final String id;
 
+  @JsonProperty
   private final String title;
 
+  @JsonProperty
   private final LocalDate date;
 
+  @JsonProperty
   private final DocumentReference reference;
 
+  @JsonProperty
   private final boolean confidential;
 
   private BundleDocument(Builder builder) {
@@ -65,6 +75,8 @@ public final class BundleDocument {
   /**
    * Builder for {@link BundleDocument}.
    */
+  @JsonPOJOBuilder(withPrefix = "")
+  @JsonIgnoreProperties(ignoreUnknown = true)
   public static final class Builder {
 
     private String id;
