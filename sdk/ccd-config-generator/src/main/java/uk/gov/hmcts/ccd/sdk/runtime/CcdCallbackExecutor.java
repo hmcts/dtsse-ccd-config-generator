@@ -1,7 +1,9 @@
 package uk.gov.hmcts.ccd.sdk.runtime;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JavaType;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
 import java.io.IOException;
@@ -9,7 +11,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.regex.Pattern;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -43,8 +44,6 @@ public class CcdCallbackExecutor {
   private final ObjectProvider<ExternalUserResolver> users;
   private final Map<String, JavaType> caseTypeToJavaType = Maps.newHashMap();
 
-  private static final Pattern BASE64 = Pattern.compile("^[A-Za-z0-9+/]+={0,2}$");
-
   @Autowired
   public CcdCallbackExecutor(ResolvedConfigRegistry registry, ObjectMapper mapper,
                              ObjectProvider<ExternalUserResolver> users) {
@@ -76,13 +75,12 @@ public class CcdCallbackExecutor {
           new LinkedMultiValueMap<>()
       );
 
-      // Only an external event's start is told who started it and what the frontend said.
-      Object response = event.isExternal()
-          ? event.start(payload, externalUser(authorisation), clientContext(clientContext))
-          : event.start(payload, null, ClientContext.none());
       if (!event.isExternal()) {
-        return AboutToStartOrSubmitResponse.builder().data(response).build();
+        return AboutToStartOrSubmitResponse.builder()
+            .data(event.start(payload, null, ClientContext.none())).build();
       }
+      // Only an external event's start is told who started it and what the frontend said.
+      Object response = event.start(payload, externalUser(authorisation), clientContext(clientContext));
       return switch ((ExternalStartResponse<?>) response) {
         case ExternalRejection<?> rejected ->
             AboutToStartOrSubmitResponse.builder().errors(rejected.errors()).build();
@@ -108,18 +106,37 @@ public class CcdCallbackExecutor {
     if (header == null || header.isBlank()) {
       return ClientContext.none();
     }
-    String unwrapped = header.startsWith("[") && header.endsWith("]")
-        ? header.substring(1, header.length() - 1) : header;
-    // Anything that is not base64 is read as it was sent, so a JSON array keeps its brackets.
-    String json = BASE64.matcher(unwrapped).matches() && unwrapped.length() % 4 == 0
-        ? new String(Base64.getDecoder().decode(unwrapped), StandardCharsets.UTF_8) : header;
+    JsonNode json = json(header);
     return ClientContext.reading(type -> {
       try {
+        if (json == null) {
+          throw new IllegalArgumentException("The client context is neither JSON nor base64-encoded JSON");
+        }
         return mapper.readerFor(type).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).readValue(json);
-      } catch (IOException e) {
+      } catch (IOException | IllegalArgumentException e) {
+        // The frontend is only told the type it was not, so the reason is logged here.
+        log.warn("The client context cannot be read as a {}", type.getName(), e);
         throw new IllegalArgumentException("The client context cannot be read as a " + type.getName(), e);
       }
     });
+  }
+
+  /**
+   * Whatever is JSON is read as it was sent, so a JSON array keeps its brackets and a number is
+   * not taken for base64. Anything else is read as base64; null if it is neither.
+   */
+  private JsonNode json(String header) {
+    try {
+      return mapper.readTree(header);
+    } catch (JsonProcessingException notPlainJson) {
+      String unwrapped = header.startsWith("[") && header.endsWith("]")
+          ? header.substring(1, header.length() - 1) : header;
+      try {
+        return mapper.readTree(new String(Base64.getDecoder().decode(unwrapped), StandardCharsets.UTF_8));
+      } catch (JsonProcessingException | IllegalArgumentException notBase64Json) {
+        return null;
+      }
+    }
   }
 
   private ExternalUser externalUser(String authorisation) {

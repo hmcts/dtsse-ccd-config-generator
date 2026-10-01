@@ -1,8 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.api.external;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
@@ -15,9 +12,6 @@ import java.util.function.Function;
 public final class ClientContext {
 
   private static final ClientContext NONE = new ClientContext(type -> null);
-  // Reads a value given to of(...) as the runtime reads the frontend's JSON.
-  private static final ObjectMapper MAPPER = JsonMapper.builder().findAndAddModules()
-      .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).build();
 
   private final Function<Class<?>, Object> reader;
 
@@ -28,15 +22,6 @@ public final class ClientContext {
   /** The frontend sent no context. */
   public static ClientContext none() {
     return NONE;
-  }
-
-  /**
-   * A context holding this value, as a unit test of a start handler gives it. The handler reads it
-   * as it would the JSON a frontend sends, so it need not be the type the handler asks for.
-   */
-  public static ClientContext of(Object value) {
-    Objects.requireNonNull(value);
-    return new ClientContext(type -> MAPPER.convertValue(value, type));
   }
 
   /**
