@@ -4171,7 +4171,7 @@ public class TestWithCCD extends CftlibTest {
         assertThat(storesPayload, equalTo(false));
     }
 
-    @Order(35)
+    @Order(36)
     @Test
     public void externalEventStartIsSentTheFrontendsClientContext() throws Exception {
         String json = mapper.writeValueAsString(new ExternalGreetingEvent.Addressee("Sam"));
@@ -4194,7 +4194,7 @@ public class TestWithCCD extends CftlibTest {
         }
     }
 
-    @Order(36)
+    @Order(37)
     @Test
     public void externalEventRejectionReachesTheFrontendAndChangesNothing() throws Exception {
         var revision = caseDataRevision();
@@ -4219,7 +4219,7 @@ public class TestWithCCD extends CftlibTest {
             Map.of("ref", reference), Integer.class);
     }
 
-    @Order(37)
+    @Order(38)
     @Test
     public void externalEventRefusesAPayloadItCannotRead() throws Exception {
         var revision = caseDataRevision();
@@ -4238,7 +4238,7 @@ public class TestWithCCD extends CftlibTest {
         assertThat(auditCountForCase(caseRef), equalTo(audits));
     }
 
-    @Order(38)
+    @Order(39)
     @Test
     public void externalEventCanMoveTheCaseAndLaterRefuseToStart() throws Exception {
         long reference = createAdditionalCase("TEST_SOLICITOR@mailinator.com");

@@ -276,6 +276,9 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
               throw new AssertionError("Event " + eventId + " has no start handler to send its frontend a payload");
             },
             (driver, payload) -> {
+              if (driver.clientContext() != null) {
+                throw new AssertionError("Event " + eventId + " has no start handler to send a client context");
+              }
               EventSubmission submission = event(reference, eventId, null).withPayload(payload);
               return outcomeOf((driver.actor() == null ? submission : submission.as(driver.actor())).submit());
             },
