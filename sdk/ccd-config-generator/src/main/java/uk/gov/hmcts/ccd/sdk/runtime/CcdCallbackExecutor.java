@@ -76,8 +76,10 @@ public class CcdCallbackExecutor {
           new LinkedMultiValueMap<>()
       );
 
-      Object response = event.start(payload, event.isExternal() ? externalUser(authorisation) : null,
-          clientContext(clientContext));
+      // Only an external event's start is told who started it and what the frontend said.
+      Object response = event.isExternal()
+          ? event.start(payload, externalUser(authorisation), clientContext(clientContext))
+          : event.start(payload, null, ClientContext.none());
       if (!event.isExternal()) {
         return AboutToStartOrSubmitResponse.builder().data(response).build();
       }
