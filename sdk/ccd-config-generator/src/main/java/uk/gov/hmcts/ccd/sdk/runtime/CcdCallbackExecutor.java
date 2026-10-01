@@ -101,7 +101,8 @@ public class CcdCallbackExecutor {
 
   /**
    * Reads the frontend's context as whatever the start handler asks for, ignoring what it does not
-   * name. The context is JSON, which XUI and CCD base64-encode, sometimes inside square brackets.
+   * name. The context is JSON, plain as a service's frontend sends it or base64-encoded as XUI
+   * does, which may come inside square brackets; CCD passes on whichever the frontend sent.
    */
   private ClientContext clientContext(String header) {
     if (header == null || header.isBlank()) {
@@ -109,8 +110,9 @@ public class CcdCallbackExecutor {
     }
     String unwrapped = header.startsWith("[") && header.endsWith("]")
         ? header.substring(1, header.length() - 1) : header;
+    // Anything that is not base64 is read as it was sent, so a JSON array keeps its brackets.
     String json = BASE64.matcher(unwrapped).matches() && unwrapped.length() % 4 == 0
-        ? new String(Base64.getDecoder().decode(unwrapped), StandardCharsets.UTF_8) : unwrapped;
+        ? new String(Base64.getDecoder().decode(unwrapped), StandardCharsets.UTF_8) : header;
     return ClientContext.reading(type -> {
       try {
         return mapper.readerFor(type).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).readValue(json);
