@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.bundling.spring;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.file.Path;
 import java.util.List;
 import org.slf4j.Logger;
@@ -21,7 +22,8 @@ import uk.gov.hmcts.ccd.sdk.bundling.docmosis.HttpDocmosisRenderService;
 /**
  * Opt-in auto-configuration: a {@link BundleRenderer} assembled from every {@link DocumentResolver}
  * bean, every {@link BundlingExtension} bean (in {@code @Order} order), the Docmosis client when
- * {@code ccd.bundling.docmosis.*} is set, and the {@code ccd.bundling.*} properties. Every bean is
+ * {@code ccd.bundling.docmosis.*} is set, the consumer's {@code MeterRegistry} when one exists,
+ * and the {@code ccd.bundling.*} properties. Every bean is
  * {@code @ConditionalOnMissingBean}, so a consumer-defined bean of the same type wins.
  */
 @AutoConfiguration
@@ -47,7 +49,8 @@ public class BundlingAutoConfiguration {
       BundlingProperties properties,
       List<DocumentResolver> resolvers,
       ObjectProvider<BundlingExtension> extensions,
-      ObjectProvider<DocmosisRenderService> docmosis) {
+      ObjectProvider<DocmosisRenderService> docmosis,
+      ObjectProvider<MeterRegistry> meterRegistry) {
     BundleRendererBuilder builder = BundleRenderer.builder()
         .limits(properties.getLimits().toLimits())
         .maxConcurrentRenders(properties.getMaxConcurrentRenders())
@@ -56,6 +59,7 @@ public class BundlingAutoConfiguration {
     List<BundlingExtension> extensionList = extensions.orderedStream().toList();
     extensionList.forEach(builder::extension);
     docmosis.ifAvailable(builder::docmosis);
+    meterRegistry.ifAvailable(builder::meterRegistry);
     log.info("Auto-configured BundleRenderer: resolvers={}, docmosis={}, extensions={}",
         resolvers.stream().map(DocumentResolver::provider).toList(),
         docmosis.getIfAvailable() != null,
