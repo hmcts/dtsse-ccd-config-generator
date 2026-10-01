@@ -1,1 +1,3 @@
 uk.gov.hmcts.ccd.sdk.bundling.spring.BundlingAutoConfiguration
+uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobAutoConfiguration
+uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobFlywayAutoConfiguration

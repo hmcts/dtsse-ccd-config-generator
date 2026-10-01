@@ -1,5 +1,9 @@
 package uk.gov.hmcts.ccd.sdk.bundling.api;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -14,16 +18,22 @@ import java.util.UUID;
  * <p>The request is storage-agnostic — documents are opaque {@link DocumentReference}s — and
  * workflow-agnostic: the same request renders from a CCD event, a scheduled task or a test.
  */
+@JsonDeserialize(builder = BundleRequest.Builder.class)
 public final class BundleRequest {
 
+  @JsonProperty
   private final UUID externalId;
 
+  @JsonProperty
   private final String title;
 
+  @JsonProperty
   private final String fileName;
 
+  @JsonProperty
   private final BundleSection root;
 
+  @JsonProperty
   private final BundlePresentation presentation;
 
   private BundleRequest(Builder builder) {
@@ -91,6 +101,8 @@ public final class BundleRequest {
   /**
    * Builder for {@link BundleRequest}.
    */
+  @JsonPOJOBuilder(withPrefix = "")
+  @JsonIgnoreProperties(ignoreUnknown = true)
   public static final class Builder {
 
     private UUID externalId;

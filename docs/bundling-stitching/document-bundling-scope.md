@@ -27,7 +27,7 @@
 |---|---|---|
 | 1 | `stitching-core` | Synchronous renderer and public API; PDF, image and Docmosis office handlers; contents, cover sheets, bookmarks from the request tree, pagination, confidential header, title and empty-section pages; limits and concurrency permit; Spring auto-configuration; e2e reference integration (render, upload to CDAM, attach, record). |
 | 2 | `stitching-observability` | MDC keys, per-stage timings on the result, Micrometer meters. |
-| 3 | `stitching-outbox` | Durable execution: `ccd_bundle_job` table and module-owned Flyway migration, `submit` in the caller's transaction, lease-based worker, bounded retry, progress listeners, request JSON round-trip, `BundleJobCompletionHandler` for the consumer's upload. |
+| 3 | `stitching-outbox` | Durable execution: `bundling.bundle_job` table via the SDK's standard library migration, `submit` in the caller's transaction, lease-based worker, bounded retry, progress listeners, request JSON round-trip, `BundleJobCompletionHandler` for the consumer's upload. |
 | 4 | `stitching-rendering-features` | Everything the microservice renders that PR1 leaves out: Docmosis cover-page templates, approved image watermark presets, source-outline preservation, content-based media type detection, readability inspection (no-text warning), bounded Docmosis responses, and the new audio/video link pages. |
 | later | | CDAM resolver and destination adapters; characterisation harness and full design history; section 4. |
 
