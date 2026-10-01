@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.bundling.api;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -25,6 +26,7 @@ public final class BundleRendererBuilder {
   private DocmosisRenderService docmosis;
   private BundleLimits limits = BundleLimits.defaults();
   private int maxConcurrentRenders = 2;
+  private MeterRegistry meterRegistry;
   private Path tempDirectory;
 
   BundleRendererBuilder() {
@@ -93,6 +95,12 @@ public final class BundleRendererBuilder {
     return this;
   }
 
+  /** Publishes the ccd.bundling.* meters to the given Micrometer registry. Optional. */
+  public BundleRendererBuilder meterRegistry(MeterRegistry meterRegistry) {
+    this.meterRegistry = Validate.requireNonNull(meterRegistry, "meterRegistry");
+    return this;
+  }
+
   /**
    * Builds the renderer, validating the required ports and applying extensions to the built-in
    * handler registry.
@@ -105,7 +113,8 @@ public final class BundleRendererBuilder {
     }
     HandlerRegistry registry = HandlerRegistry.create(builtInHandlers(), extensions);
     return new DefaultBundleRenderer(
-        resolvers, docmosis, registry, limits, maxConcurrentRenders, tempDirectory);
+        resolvers, docmosis, registry, limits, maxConcurrentRenders, meterRegistry,
+        tempDirectory);
   }
 
   private Map<String, DocumentHandler> builtInHandlers() {
