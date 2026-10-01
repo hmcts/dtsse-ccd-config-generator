@@ -312,6 +312,24 @@ class CcdEventTestSupportIntegrationTest {
   }
 
   @Test
+  void externalEventStartRejectsAClientContextItCannotRead() {
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+
+    assertThat(events.external(reference, GREET).withClientContext(Map.of("name", List.of("Sam")))
+        .startExpectingRejection()).containsExactly("The client context is not a valid Addressee");
+  }
+
+  @Test
+  void externalEventWithoutAStartRefusesAClientContext() {
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+
+    assertThatThrownBy(() -> events.external(reference, WAVE).withClientContext(new Addressee("Sam"))
+        .submit(new Reply("hello")))
+        .isInstanceOf(AssertionError.class)
+        .hasMessageContaining("no start handler to send a client context");
+  }
+
+  @Test
   void viewShowsTheCaseAsTheApplicationsCaseViewDoes() {
     long reference = events.seed(TestState.Open, new TestCase("stored"));
 
@@ -407,6 +425,9 @@ class CcdEventTestSupportIntegrationTest {
   }
 
   static final ExternalEventId<Greeting, Reply> GREET = ExternalEventId.of("ext:greet", Greeting.class, Reply.class);
+
+  // Has no start, so its frontend submits straight away.
+  static final ExternalEventId<Void, Reply> WAVE = ExternalEventId.of("ext:wave", Reply.class);
 
   record Reply(String text) {
   }
@@ -554,6 +575,7 @@ class CcdEventTestSupportIntegrationTest {
                     ? ExternalStartResponse.rejected("Not today")
                     : ExternalStartResponse.started(new Greeting("hello " + name));
               });
+          builder.externalEvent(WAVE, submit -> ExternalSubmitResponse.accepted("Waved", "Waved")).forAllStates();
           builder.decentralisedEvent("conflict", payload -> {
             throw new IllegalStateException("The case is already being changed");
           }).forAllStates();
