@@ -133,6 +133,9 @@ describe("renderHtml", () => {
 describe("renderHtml with changes", () => {
   const dom = new JSDOM("<!doctype html>");
   const document = dom.window.document;
+  const marked = (kind: string, description: string, wording: string) =>
+    `<li class="docweave-editor__clause docweave-editor__clause--${kind}">` +
+    `<p><span class="docweave-editor__visually-hidden">${description} </span>${wording}</p>`;
 
   it("renders a document as generated without marks", () => {
     const snapshot = generatedOrder();
@@ -143,93 +146,36 @@ describe("renderHtml with changes", () => {
     );
   });
 
-  it("marks a clause the reader wrote as inserted", () => {
-    const snapshot = edited(generatedOrder(), (current) => {
-      clauses(current).push(userClause("The defendant may apply to vary this order."));
-    });
-
-    const html = renderHtml(snapshot, { document, changes: true });
-
-    assert.match(
-      html,
-      /<li data-docweave-change="inserted"><p><ins>The defendant may apply to vary this order\.<\/ins><\/p><\/li><\/ol>$/,
-    );
-  });
-
-  it("shows a reworded clause's generated wording deleted and the reader's inserted", () => {
+  it("marks the clauses the reader wrote and changed as the editor does, and no others", () => {
     const snapshot = edited(generatedOrder(), (current) => {
       clauses(current)[1]!.content![0]!.content = [
         { type: "text", text: "The defendant must pay the claimant's fixed costs." },
       ];
-    });
-
-    const html = renderHtml(snapshot, { document, changes: true });
-
-    assert.match(
-      html,
-      /<li data-docweave-change="modified"><p><del>The defendant must pay the claimant's costs\.<\/del><ins>The defendant must pay the claimant's fixed costs\.<\/ins><\/p><\/li>/,
-    );
-  });
-
-  it("shows a reworded paragraph outside the numbered clauses with its facts as they read", () => {
-    const controller = createDocEditor();
-    controller.render(buildDoc((doc) => {
-      doc.paragraph("before", (content) => {
-        content.text("Before District Judge ").fact("judge", "Smith").text(" sitting at Bristol.");
-      });
-    }));
-    const snapshot = edited(controller.getSnapshot(), (current) => {
-      current.content![0]!.content![0]!.text = "Before Deputy District Judge ";
+      clauses(current).push(userClause("The defendant may apply to vary this order."));
     });
 
     assert.equal(
       renderHtml(snapshot, { document, changes: true }),
-      '<p data-docweave-change="modified"><del>Before District Judge Smith sitting at Bristol.</del>' +
-        "<ins>Before Deputy District Judge Smith sitting at Bristol.</ins></p>",
+      "<p>IT IS ORDERED THAT:</p><ol>" +
+        "<li><p>The defendant must give up possession by 1 October 2026.</p></li>" +
+        marked("modified", "Modified clause.", "The defendant must pay the claimant's fixed costs.") + "</li>" +
+        marked("inserted", "Inserted clause.", "The defendant may apply to vary this order.") + "</li>" +
+        "</ol>",
     );
   });
 
-  it("keeps a clause's formatting, with nothing deleted or inserted, where its formatting alone changed", () => {
+  it("marks a changed paragraph outside the numbered clauses", () => {
     const snapshot = edited(generatedOrder(), (current) => {
-      Object.assign(clauses(current)[1]!.content![0]!.content![0]!, { marks: [{ type: "strong" }] });
+      current.content![0]!.content = [{ type: "text", text: "IT IS ORDERED BY CONSENT THAT:" }];
     });
 
     assert.match(
       renderHtml(snapshot, { document, changes: true }),
-      /<li data-docweave-change="modified"><p><strong>The defendant must pay the claimant's costs\.<\/strong><\/p><\/li>/,
+      /^<p class="docweave-editor__clause docweave-editor__clause--modified"><span class="docweave-editor__visually-hidden">Modified clause\. <\/span>IT IS ORDERED BY CONSENT THAT:<\/p>/,
     );
   });
 
-  it("marks a paragraph the reader added before a generated one, leaving the generated one as it was", () => {
-    const snapshot = edited(generatedOrder(), (current) => {
-      clauses(current)[1]!.content!.unshift({
-        type: "paragraph",
-        attrs: { id: null },
-        content: [{ type: "text", text: "On the claimant's application:" }],
-      });
-    });
-
-    assert.match(
-      renderHtml(snapshot, { document, changes: true }),
-      /<li data-docweave-change="modified"><p><ins>On the claimant's application:<\/ins><\/p><p>The defendant must pay the claimant's costs\.<\/p><\/li>/,
-    );
-  });
-
-  it("shows the generated wording deleted once where the reader also added a paragraph before it", () => {
-    const snapshot = edited(generatedOrder(), (current) => {
-      clauses(current)[1]!.content = [
-        { type: "paragraph", attrs: { id: null }, content: [{ type: "text", text: "On the claimant's application:" }] },
-        { ...clauses(current)[1]!.content![0]!, content: [{ type: "text", text: "The defendant must pay fixed costs." }] },
-      ];
-    });
-
-    assert.match(
-      renderHtml(snapshot, { document, changes: true }),
-      /<p><del>The defendant must pay the claimant's costs\.<\/del><ins>On the claimant's application:<\/ins><\/p><p><ins>The defendant must pay fixed costs\.<\/ins><\/p>/,
-    );
-  });
-
-  it("marks a reworded nested clause on its own item, not on its parent", () => {
+  it("marks a changed nested clause on its own item, not on its parent", () => {
     const controller = createDocEditor();
     controller.render(buildDoc((doc) => {
       doc.orderedList("clauses", (list) => {
@@ -246,7 +192,8 @@ describe("renderHtml with changes", () => {
 
     assert.equal(
       renderHtml(snapshot, { document, changes: true }),
-      '<ol><li><p>Parent clause.</p><ol><li data-docweave-change="modified"><p><del>Child clause.</del><ins>Reworded child.</ins></p></li></ol></li></ol>',
+      "<ol><li><p>Parent clause.</p><ol>" + marked("modified", "Modified clause.", "Reworded child.") +
+        "</li></ol></li></ol>",
     );
   });
 });

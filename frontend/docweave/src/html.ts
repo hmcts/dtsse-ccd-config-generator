@@ -1,9 +1,9 @@
 import { DOMSerializer, type Node as ProseMirrorNode } from "prosemirror-model";
 
 import {
+  CHANGE_DESCRIPTIONS,
   clauseChange,
   clauseNodesById,
-  ownContent,
   parseSnapshot,
 } from "./changes.js";
 import { type DocWeaveSnapshot } from "./controller.js";
@@ -13,11 +13,9 @@ export interface RenderHtmlOptions {
   /** The DOM used to build the markup; defaults to the global document. */
   document?: Document;
   /**
-   * Shows how the reader changed the generated document, clause by clause as
-   * the editor marks it: a clause they wrote is marked inserted, and a
-   * generated clause they reworded shows the generated wording deleted and
-   * theirs inserted, whole. Each changed clause says how in
-   * `data-docweave-change`.
+   * Marks the clauses the reader wrote or changed as the editor marks them
+   * for the reader, with its classes and the words it says before each, so
+   * the editor's stylesheet shows someone else what the reader saw.
    */
   changes?: boolean;
 }
@@ -80,32 +78,14 @@ function markClause(
 ): void {
   const change = clauseChange(clause, generatedClauses);
   if (change) {
-    element.setAttribute("data-docweave-change", change.kind);
-    const own = ownContent(clause);
-    // A list item's own paragraphs come before any nested list; any other clause is its own block.
-    const ownElements = clause.type.name === "list_item" ? [...element.children].slice(0, own.length) : [element];
-    const generatedOwn = change.kind === "modified" ? ownContent(change.generated) : [];
-    // A block that reads as a generated one does is left as it is, so formatting alone shows no change.
-    const reworded = ownElements.filter((_ownElement, index) => !generatedOwn.some(readsAs(own[index]!)));
-    reworded.forEach((ownElement) => wrapContent(ownElement, "ins"));
-    const replaced = generatedOwn.filter((block) => !own.some(readsAs(block)));
-    (reworded[0] ?? ownElements[0]!).prepend(...replaced.map((block) => {
-      const deleted = element.ownerDocument.createElement("del");
-      deleted.textContent = block.textContent;
-      return deleted;
-    }));
+    element.classList.add("docweave-editor__clause", `docweave-editor__clause--${change.kind}`);
+    const description = element.ownerDocument.createElement("span");
+    description.className = "docweave-editor__visually-hidden";
+    description.textContent = `${CHANGE_DESCRIPTIONS[change.kind]} `;
+    // A list item's wording starts in its first paragraph; any other clause is its own block.
+    (clause.type.name === "list_item" ? element.firstElementChild! : element).prepend(description);
   }
   if (clause.lastChild?.type.name === "ordered_list") {
     markChildren(clause.lastChild, element.lastElementChild!, generatedClauses);
   }
-}
-
-function readsAs(block: ProseMirrorNode): (other: ProseMirrorNode) => boolean {
-  return (other) => other.textContent === block.textContent;
-}
-
-function wrapContent(element: Element, tag: "ins"): void {
-  const wrapper = element.ownerDocument.createElement(tag);
-  wrapper.append(...element.childNodes);
-  element.append(wrapper);
 }

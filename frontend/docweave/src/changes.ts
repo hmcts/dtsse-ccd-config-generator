@@ -57,6 +57,12 @@ export type ClauseChange =
   | { kind: "inserted" }
   | { kind: "modified"; generated: ProseMirrorNode };
 
+/** Said before a changed clause, since its colour says nothing to a screen reader. */
+export const CHANGE_DESCRIPTIONS: Record<ClauseChange["kind"], string> = {
+  inserted: "Inserted clause.",
+  modified: "Modified clause.",
+};
+
 /**
  * Tells whether the reader wrote a clause, changed a generated one, or left
  * it as generated (undefined). Docweave generates every clause with an ID, so

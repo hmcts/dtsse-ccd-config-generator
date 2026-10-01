@@ -13,6 +13,7 @@ import {
 } from "prosemirror-view";
 
 import {
+  CHANGE_DESCRIPTIONS,
   clauseMatchesGenerated,
   clauseNodesById,
   isClauseNode,
@@ -131,12 +132,12 @@ interface ClauseMarker {
 
 const MARKERS: Record<"inserted" | "modified", ClauseMarker> = {
   inserted: {
-    description: "Inserted clause.",
+    description: CHANGE_DESCRIPTIONS.inserted,
     revertLabel: "Undo inserted clause",
     revertedMessage: "Inserted clause removed.",
   },
   modified: {
-    description: "Modified clause.",
+    description: CHANGE_DESCRIPTIONS.modified,
     revertLabel: "Undo changes to clause",
     revertedMessage: "Clause restored to its generated wording.",
   },

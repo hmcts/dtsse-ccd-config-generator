@@ -83,17 +83,13 @@ Docweave about it rather than reading its JSON. `renderHtml(snapshot)` renders
 the reader's document as the final HTML. `describeChanges(snapshot)` counts the
 clauses the reader wrote and the generated clauses they changed, in wording or
 formatting, so a service can tell someone reviewing it what changed; it needs
-no DOM, so it runs on a server. `renderHtml(snapshot, { changes: true })` shows
-those changes clause by clause, as the editor marks them, rather than word by
-word: a written clause is marked inserted, and a reworded clause shows the
-generated wording deleted and the reader's inserted, each whole, with
-`data-docweave-change` saying how each clause changed. Within a clause, a
-paragraph that still reads as generated is left as it is, so a clause whose
-formatting alone changed is marked but shows no deletion or insertion.
-Screen readers do not announce `ins` and
-`del`, so a service showing them should add visually hidden text, for example
-with `ins::before` and `del::before`. A clause is the same unit the editor
-marks and reverts, described under [Editing generated clauses](#editing-generated-clauses).
+no DOM, so it runs on a server. `renderHtml(snapshot, { changes: true })` marks
+those clauses as the editor marks them for the reader: each carries the
+editor's `docweave-editor__clause--inserted` or `--modified` class and the
+words the editor says before it for a screen reader, so the editor's
+stylesheet shows someone else, statically, what the reader saw. A clause is
+the same unit the editor marks and reverts, described under
+[Editing generated clauses](#editing-generated-clauses).
 
 ### Generated node identity
 
