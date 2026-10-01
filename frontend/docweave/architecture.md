@@ -81,13 +81,17 @@ control IDs.
 A snapshot is opaque to services: they store it and hand it back, and ask
 Docweave about it rather than reading its JSON. `renderHtml(snapshot)` renders
 the reader's document as the final HTML. `describeChanges(snapshot)` counts the
-clauses the reader wrote, the generated clauses they reworded and any generated
-clauses missing from their document, so a service can tell someone reviewing it
-what changed; it needs no DOM, so it runs on a server. `renderHtml(snapshot,
-{ changes: true })` shows those changes as tracked changes: a written clause is
-marked inserted, and a reworded clause shows the generated wording deleted and
-the reader's inserted, word by word. A clause is the same unit the editor marks
-and reverts, described under [Editing generated clauses](#editing-generated-clauses).
+clauses the reader wrote and the generated clauses they changed, in wording or
+formatting, so a service can tell someone reviewing it what changed; it needs
+no DOM, so it runs on a server. `renderHtml(snapshot, { changes: true })` shows
+those changes as tracked changes: a written clause is marked inserted, and a
+reworded clause shows the generated wording deleted and the reader's inserted,
+word by word, with `data-docweave-change` saying how each clause changed. A
+clause whose formatting alone changed is marked but keeps its formatting, with
+no deletion or insertion to show. Screen readers do not announce `ins` and
+`del`, so a service showing them should add visually hidden text, for example
+with `ins::before` and `del::before`. A clause is the same unit the editor
+marks and reverts, described under [Editing generated clauses](#editing-generated-clauses).
 
 ### Generated node identity
 

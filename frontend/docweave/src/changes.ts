@@ -30,9 +30,14 @@ export function clauseNodesById(
   return clauses;
 }
 
-/** A clause's own content: a list item's nested list holds clauses of its own. */
+/**
+ * A clause's own content: a list item's paragraphs, leaving its nested list,
+ * whose items are clauses of their own; any other clause is a single block.
+ */
 export function ownContent(clause: ProseMirrorNode): ProseMirrorNode[] {
-  return clause.children.filter((child) => child.type.name !== "ordered_list");
+  return clause.type.name === "list_item"
+    ? clause.children.filter((child) => child.type.name !== "ordered_list")
+    : [clause];
 }
 
 /** Whether a clause still reads as generated, leaving its nested clauses to themselves. */
@@ -40,44 +45,42 @@ export function clauseMatchesGenerated(
   node: ProseMirrorNode,
   generatedNode: ProseMirrorNode,
 ): boolean {
-  if (!node.sameMarkup(generatedNode)) return false;
-  if (node.type.name !== "list_item") return node.eq(generatedNode);
-
   const own = ownContent(node);
   const generatedOwn = ownContent(generatedNode);
-  return own.length === generatedOwn.length &&
+  return node.sameMarkup(generatedNode) &&
+    own.length === generatedOwn.length &&
     own.every((child, index) => child.eq(generatedOwn[index]!));
 }
 
-/** How the reader's clause differs from the one generated for it, if at all. */
-export type ClauseChange = "inserted" | "modified";
+/** How the reader's clause differs from the one generated for it. */
+export type ClauseChange =
+  | { kind: "inserted" }
+  | { kind: "modified"; generated: ProseMirrorNode };
 
 /**
  * Tells whether the reader wrote a clause, changed a generated one, or left
- * it as generated, as the editor marks it.
+ * it as generated (undefined). Docweave generates every clause with an ID, so
+ * a clause without one it generated, such as a heading, is the reader's.
  */
 export function clauseChange(
   node: ProseMirrorNode,
   generatedClauses: Map<string, ProseMirrorNode>,
 ): ClauseChange | undefined {
   const id = node.attrs.id;
-  // Docweave only generates clauses with an ID; a heading has none at all.
-  if (typeof id !== "string") return "inserted";
-  const generatedNode = generatedClauses.get(id);
-  return generatedNode && !clauseMatchesGenerated(node, generatedNode)
-    ? "modified"
-    : undefined;
+  const generated = typeof id === "string" ? generatedClauses.get(id) : undefined;
+  if (!generated) return { kind: "inserted" };
+  return clauseMatchesGenerated(node, generated) ? undefined : { kind: "modified", generated };
 }
 
 /**
  * How the reader changed the document generated for them, clause by clause:
- * how many clauses they wrote, how many generated clauses they reworded, and
- * how many generated clauses are no longer in their document.
+ * how many clauses they wrote and how many generated clauses they changed,
+ * in wording or formatting. The editor does not let them remove a generated
+ * clause.
  */
 export interface DocumentChanges {
   inserted: number;
   modified: number;
-  removed: number;
 }
 
 export function parseSnapshot(snapshot: DocWeaveSnapshot): {
@@ -98,17 +101,11 @@ export function parseSnapshot(snapshot: DocWeaveSnapshot): {
 export function describeChanges(snapshot: DocWeaveSnapshot): DocumentChanges {
   const { current, generated } = parseSnapshot(snapshot);
   const generatedClauses = clauseNodesById(generated);
-  const changes: DocumentChanges = { inserted: 0, modified: 0, removed: 0 };
-  const kept = new Set<string>();
-
+  const changes: DocumentChanges = { inserted: 0, modified: 0 };
   current.descendants((node, _position, parent) => {
     if (!isClauseNode(node, parent, current)) return;
-    if (typeof node.attrs.id === "string") kept.add(node.attrs.id);
     const change = clauseChange(node, generatedClauses);
-    if (change) changes[change] += 1;
+    if (change) changes[change.kind] += 1;
   });
-  for (const id of generatedClauses.keys()) {
-    if (!kept.has(id)) changes.removed += 1;
-  }
   return changes;
 }

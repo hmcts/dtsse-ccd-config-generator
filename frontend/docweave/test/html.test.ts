@@ -234,4 +234,38 @@ describe("renderHtml with changes", () => {
       `<p data-docweave-change="modified"><del>${words("generated")}</del><ins>${words("reworded")}</ins></p>`,
     );
   });
+
+  it("joins a replaced phrase into one change where only a space separates its words", () => {
+    const snapshot = edited(generatedOrder(), (current) => {
+      clauses(current)[1]!.content![0]!.content = [
+        { type: "text", text: "The defendant must pay the landlord's fees." },
+      ];
+    });
+
+    assert.match(
+      renderHtml(snapshot, { document, changes: true }),
+      /pay the <del>claimant's costs\.<\/del><ins>landlord's fees\.<\/ins>/,
+    );
+  });
+
+  it("marks a reworded nested clause on its own item, not on its parent", () => {
+    const controller = createDocEditor();
+    controller.render(buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => {
+        list.item("parent", "Parent clause.", (item) => {
+          item.orderedList("children", (children) => children.item("child", "Child clause."));
+        });
+      });
+    }));
+    const snapshot = edited(controller.getSnapshot(), (current) => {
+      current.content![0]!.content![0]!.content![1]!.content![0]!.content![0]!.content = [
+        { type: "text", text: "Reworded child." },
+      ];
+    });
+
+    assert.equal(
+      renderHtml(snapshot, { document, changes: true }),
+      '<ol><li><p>Parent clause.</p><ol><li data-docweave-change="modified"><p><del>Child clause.</del><ins>Reworded child.</ins></p></li></ol></li></ol>',
+    );
+  });
 });

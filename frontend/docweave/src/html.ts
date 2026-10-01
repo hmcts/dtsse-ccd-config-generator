@@ -54,24 +54,22 @@ export function renderHtml(
  */
 function markChanges(snapshot: DocWeaveSnapshot, container: HTMLElement): void {
   const { current, generated } = parseSnapshot(snapshot);
-  const generatedClauses = clauseNodesById(generated);
-  current.forEach((node, _offset, index) => {
-    const element = container.children[index]!;
-    if (node.type.name === "ordered_list") {
-      markList(node, element, generatedClauses);
-    } else {
-      markClause(node, element, generatedClauses);
-    }
-  });
+  markChildren(current, container, clauseNodesById(generated));
 }
 
-function markList(
-  list: ProseMirrorNode,
+/** Marks the clauses among a document's blocks or a list's items, and those of the lists among them. */
+function markChildren(
+  parent: ProseMirrorNode,
   element: Element,
   generatedClauses: Map<string, ProseMirrorNode>,
 ): void {
-  list.forEach((item, _offset, index) => {
-    markClause(item, element.children[index]!, generatedClauses);
+  parent.forEach((child, _offset, index) => {
+    const childElement = element.children[index]!;
+    if (child.type.name === "ordered_list") {
+      markChildren(child, childElement, generatedClauses);
+    } else {
+      markClause(child, childElement, generatedClauses);
+    }
   });
 }
 
@@ -80,32 +78,19 @@ function markClause(
   element: Element,
   generatedClauses: Map<string, ProseMirrorNode>,
 ): void {
-  // A list item's own paragraphs are its children, beside any nested list; any
-  // other clause is a single block.
-  const isItem = clause.type.name === "list_item";
-  const children = [...element.children];
-  const ownElements = isItem
-    ? children.filter((child) => child.tagName !== "OL")
-    : [element];
+  const own = ownContent(clause);
+  // A list item's own paragraphs come before any nested list; any other clause is its own block.
+  const ownElements = clause.type.name === "list_item" ? [...element.children].slice(0, own.length) : [element];
   const change = clauseChange(clause, generatedClauses);
-  if (change === "inserted") {
+  if (change?.kind === "inserted") {
     element.setAttribute("data-docweave-change", "inserted");
-    ownElements.forEach((own) => wrapContent(own, "ins"));
-  } else if (change === "modified") {
+    ownElements.forEach((ownElement) => wrapContent(ownElement, "ins"));
+  } else if (change?.kind === "modified") {
     element.setAttribute("data-docweave-change", "modified");
-    const generatedClause = generatedClauses.get(clause.attrs.id as string)!;
-    markRewording(
-      isItem ? ownContent(generatedClause) : [generatedClause],
-      isItem ? ownContent(clause) : [clause],
-      ownElements,
-    );
+    markRewording(ownContent(change.generated), own, ownElements);
   }
-  if (isItem) {
-    clause.forEach((child, _offset, index) => {
-      if (child.type.name === "ordered_list") {
-        markList(child, children[index]!, generatedClauses);
-      }
-    });
+  if (clause.lastChild?.type.name === "ordered_list") {
+    markChildren(clause.lastChild, element.lastElementChild!, generatedClauses);
   }
 }
 
@@ -120,7 +105,8 @@ function wrapContent(element: Element, tag: "ins" | "del"): void {
  * reader's. Blocks left as generated are matched first, so a block the reader
  * added before a generated one is inserted rather than read as rewording it;
  * between those, generated and reader's blocks are compared in turn, word by
- * word, and any left over are inserted or, for generated ones, deleted.
+ * word. Docweave generates a clause with one block, which the reader cannot
+ * remove, so no generated block is left over.
  */
 function markRewording(
   generatedBlocks: ProseMirrorNode[],
@@ -128,38 +114,23 @@ function markRewording(
   elements: Element[],
 ): void {
   const document = elements[0]!.ownerDocument;
-  const pairs = longestCommonSubsequence(generatedBlocks, blocks, (a, b) => a.eq(b));
-  let from = 0;
-  let to = 0;
-  const end: [number, number] = [generatedBlocks.length, blocks.length];
-  for (const [matchedFrom, matchedTo] of [...pairs, end]) {
-    while (from < matchedFrom || to < matchedTo) {
-      if (from < matchedFrom && to < matchedTo) {
-        // Formatting alone changed: the wording reads as it did, formatting kept.
-        if (generatedBlocks[from]!.textContent !== blocks[to]!.textContent) {
-          elements[to]!.replaceChildren(
-            ...wordDiff(generatedBlocks[from]!.textContent, blocks[to]!.textContent, document),
-          );
-        }
-        from++;
-        to++;
-      } else if (to < matchedTo) {
-        wrapContent(elements[to]!, "ins");
-        to++;
-      } else {
-        const removed = document.createElement("p");
-        removed.append(document.createElement("del"));
-        removed.firstChild!.textContent = generatedBlocks[from]!.textContent;
-        if (to < elements.length) {
-          elements[to]!.before(removed);
-        } else {
-          elements[elements.length - 1]!.after(removed);
-        }
-        from++;
-      }
+  let position = 0;
+  for (const edit of diff(generatedBlocks, blocks, (a, b) => a.eq(b))) {
+    if ("same" in edit) {
+      position += edit.same.length;
+      continue;
     }
-    from = matchedFrom + 1;
-    to = matchedTo + 1;
+    edit.ins.forEach((block, index) => {
+      const element = elements[position + index]!;
+      const generatedBlock = edit.del[index];
+      if (!generatedBlock) {
+        wrapContent(element, "ins");
+      } else if (generatedBlock.textContent !== block.textContent) {
+        // Where formatting alone changed, the wording reads as it did and keeps its formatting.
+        element.replaceChildren(...wordDiff(generatedBlock.textContent, block.textContent, document));
+      }
+    });
+    position += edit.ins.length;
   }
 }
 
@@ -169,16 +140,52 @@ function markRewording(
  */
 const MAX_DIFF_COMPARISONS = 1_000_000;
 
+type Edit<T> = { same: T[] } | { del: T[]; ins: T[] };
+
 /**
- * The index pairs of the longest run of items the two lists have in common, in order, or none
- * when the lists are too long to compare.
+ * One list changed into another: runs of items they share, and between them
+ * the items taken out and those put in. Lists too long to compare are wholly
+ * replaced.
  */
-function longestCommonSubsequence<T>(
+function diff<T>(from: readonly T[], to: readonly T[], same: (a: T, b: T) => boolean): Edit<T>[] {
+  const lengths = from.length * to.length > MAX_DIFF_COMPARISONS
+    ? undefined
+    : longestCommonSubsequenceLengths(from, to, same);
+  const edits: Edit<T>[] = [];
+  const add = (edit: Edit<T>): void => {
+    const last = edits[edits.length - 1];
+    if (last && "same" in last && "same" in edit) {
+      last.same.push(...edit.same);
+    } else if (last && "del" in last && "del" in edit) {
+      last.del.push(...edit.del);
+      last.ins.push(...edit.ins);
+    } else {
+      edits.push(edit);
+    }
+  };
+  let i = 0;
+  let j = 0;
+  while (lengths && i < from.length && j < to.length) {
+    if (same(from[i]!, to[j]!)) {
+      add({ same: [from[i++]!] });
+      j++;
+    } else if (lengths[i + 1]![j]! >= lengths[i]![j + 1]!) {
+      // Taken out before put in, as a word processor shows a replacement.
+      add({ del: [from[i++]!], ins: [] });
+    } else {
+      add({ del: [], ins: [to[j++]!] });
+    }
+  }
+  if (i < from.length || j < to.length) add({ del: from.slice(i), ins: to.slice(j) });
+  return edits;
+}
+
+/** For each pair of positions, how long a run of items the rest of the two lists have in common. */
+function longestCommonSubsequenceLengths<T>(
   from: readonly T[],
   to: readonly T[],
   same: (a: T, b: T) => boolean,
-): Array<[number, number]> {
-  if (from.length * to.length > MAX_DIFF_COMPARISONS) return [];
+): number[][] {
   const lengths = Array.from({ length: from.length + 1 }, () => new Array<number>(to.length + 1).fill(0));
   for (let i = from.length - 1; i >= 0; i--) {
     for (let j = to.length - 1; j >= 0; j--) {
@@ -187,65 +194,37 @@ function longestCommonSubsequence<T>(
         : Math.max(lengths[i + 1]![j]!, lengths[i]![j + 1]!);
     }
   }
-  const pairs: Array<[number, number]> = [];
-  let i = 0;
-  let j = 0;
-  while (i < from.length && j < to.length) {
-    if (same(from[i]!, to[j]!)) {
-      pairs.push([i++, j++]);
-    } else if (lengths[i + 1]![j]! >= lengths[i]![j + 1]!) {
-      i++;
-    } else {
-      j++;
-    }
-  }
-  return pairs;
+  return lengths;
 }
-
-type Chunk = { same: string } | { del: string; ins: string };
 
 /**
  * The generated wording changed into the reader's, word by word: the words
  * they share as text, and between them the generated words deleted, then the
- * reader's inserted, as a word processor shows a replacement. A lone space
- * between two changes joins them into one, so a replaced phrase reads as one.
+ * reader's inserted. A lone space between two changes joins them into one,
+ * so a replaced phrase reads as one.
  */
 function wordDiff(before: string, after: string, document: Document): Node[] {
-  const from = tokens(before);
-  const to = tokens(after);
-  const chunks: Chunk[] = [];
-  let i = 0;
-  let j = 0;
-  const end: [number, number] = [from.length, to.length];
-  for (const [matchedFrom, matchedTo] of [...longestCommonSubsequence(from, to, (a, b) => a === b), end]) {
-    const change = { del: from.slice(i, matchedFrom).join(""), ins: to.slice(j, matchedTo).join("") };
-    if (change.del || change.ins) chunks.push(change);
-    if (matchedFrom < from.length) chunks.push({ same: from[matchedFrom]! });
-    i = matchedFrom + 1;
-    j = matchedTo + 1;
-  }
-  const joined: Chunk[] = [];
-  for (const chunk of chunks) {
+  const edits = diff(tokens(before), tokens(after), (a, b) => a === b);
+  const joined: Edit<string>[] = [];
+  for (const edit of edits) {
     const previous = joined[joined.length - 1];
     const beforePrevious = joined[joined.length - 2];
-    if ("del" in chunk && previous && "same" in previous && /^\s+$/.test(previous.same) &&
+    if ("del" in edit && previous && "same" in previous && previous.same.join("") === " " &&
       beforePrevious && "del" in beforePrevious) {
       joined.pop();
-      beforePrevious.del += previous.same + chunk.del;
-      beforePrevious.ins += previous.same + chunk.ins;
-    } else if ("same" in chunk && previous && "same" in previous) {
-      previous.same += chunk.same;
+      beforePrevious.del.push(" ", ...edit.del);
+      beforePrevious.ins.push(" ", ...edit.ins);
     } else {
-      joined.push(chunk);
+      joined.push(edit);
     }
   }
-  return joined.flatMap((chunk): Node[] => {
-    if ("same" in chunk) return [document.createTextNode(chunk.same)];
+  return joined.flatMap((edit): Node[] => {
+    if ("same" in edit) return [document.createTextNode(edit.same.join(""))];
     return (["del", "ins"] as const)
-      .filter((tag) => chunk[tag])
+      .filter((tag) => edit[tag].length)
       .map((tag) => {
         const element = document.createElement(tag);
-        element.textContent = chunk[tag];
+        element.textContent = edit[tag].join("");
         return element;
       });
   });
