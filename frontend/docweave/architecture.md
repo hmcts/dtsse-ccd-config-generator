@@ -78,6 +78,19 @@ Editor state is persisted separately as a `DocWeaveSnapshot`, obtained with
 contains only the current and generated ProseMirror documents, never source
 control IDs.
 
+A snapshot is opaque to services: they store it and hand it back, and ask
+Docweave about it rather than reading its JSON. `renderHtml(snapshot)` renders
+the reader's document as the final HTML. `describeChanges(snapshot)` counts the
+clauses the reader wrote and the generated clauses they changed, in wording or
+formatting, so a service can tell someone reviewing it what changed; it needs
+no DOM, so it runs on a server. `renderHtml(snapshot, { changes: true })` marks
+those clauses as the editor marks them for the reader: each carries the
+editor's `docweave-editor__clause--inserted` or `--modified` class and the
+words the editor says before it for a screen reader, so the editor's
+stylesheet shows someone else, statically, what the reader saw. A clause is
+the same unit the editor marks and reverts, described under
+[Editing generated clauses](#editing-generated-clauses).
+
 ### Generated node identity
 
 Internally, generated paragraphs, list items, ordered lists and generated text
