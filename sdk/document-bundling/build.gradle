@@ -1,0 +1,16 @@
+dependencies {
+    api 'org.slf4j:slf4j-api'
+
+    // Same PDFBox version as em-stitching-api, so the ported rendering code stays a direct port
+    // while the characterisation goldens are established.
+    implementation 'org.apache.pdfbox:pdfbox:3.0.8'
+    implementation 'org.springframework:spring-context'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}

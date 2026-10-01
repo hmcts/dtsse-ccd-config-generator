@@ -79,6 +79,10 @@ dependencies {
   implementation 'com.github.hmcts:service-auth-provider-java-client:5.3.5'
   testImplementation 'com.github.hmcts:ccd-data-migration-support'
   implementation 'com.github.hmcts:task-management'
+  implementation 'com.github.hmcts:document-bundling'
+  // Same PDFBox version as document-bundling: the Docmosis stub controller generates PDFs with it
+  // and the cftlibTest suite asserts semantically on stitched output.
+  implementation 'org.apache.pdfbox:pdfbox:3.0.8'
 
   implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.9.1'
 
@@ -108,6 +112,8 @@ dependencies {
   cftlibTestImplementation 'org.junit.platform:junit-platform-console'
   cftlibTestImplementation 'jakarta.jms:jakarta.jms-api:3.1.0'
   cftlibTestImplementation 'com.github.hmcts:task-management'
+  cftlibTestImplementation 'com.github.hmcts:document-bundling'
+  cftlibTestImplementation 'org.apache.pdfbox:pdfbox:3.0.8'
 }
 
 springBoot {
