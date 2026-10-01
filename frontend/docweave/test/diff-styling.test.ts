@@ -842,6 +842,27 @@ describe("diff styling", () => {
     );
   });
 
+  it("marks a heading the reader added as inserted, as describeChanges counts it", () => {
+    const generatedDocument = editorSchema.node("doc", null, [
+      editorSchema.node("paragraph", { id: "paragraph:generated" }, editorSchema.text("Generated.")),
+    ]);
+    const liveDocument = editorSchema.node("doc", null, [
+      editorSchema.node("heading", { level: 2 }, editorSchema.text("Added")),
+      generatedDocument.firstChild!,
+    ]);
+    const plugin = createDiffStylingPlugin();
+    let state = EditorState.create({ schema: editorSchema, doc: liveDocument, plugins: [plugin] });
+    state = state.apply(setGeneratedDocument(state.tr, generatedDocument));
+
+    const decorationSet = plugin.props.decorations?.call(plugin, state);
+    assert.ok(decorationSet instanceof DecorationSet);
+    assert.equal(
+      decorationSet.find(undefined, undefined, (spec) => spec.diffKind === "inserted").length,
+      1,
+    );
+    assert.ok(deleteUserAuthoredNode(state, 0), "the added heading can be reverted");
+  });
+
   it("does not mark reconciled parent wording changed when preserving a user-authored child", () => {
     const previousItem = listItem("item:possession", "Old wording");
     const targetItem = listItem("item:possession", "New wording");

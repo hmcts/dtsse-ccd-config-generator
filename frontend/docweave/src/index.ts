@@ -16,6 +16,7 @@ export {
   type DocWeaveSnapshot,
   type DocEditorController,
 } from "./controller.js";
+export { describeChanges, type DocumentChanges } from "./changes.js";
 export { renderHtml, type RenderHtmlOptions } from "./html.js";
 export {
   createHttpTemplateProvider,
