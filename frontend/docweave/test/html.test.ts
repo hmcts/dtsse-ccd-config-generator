@@ -175,6 +175,21 @@ describe("renderHtml with changes", () => {
     );
   });
 
+  it("gives an emptied or empty clause a line to show its mark on", () => {
+    const snapshot = edited(generatedOrder(), (current) => {
+      delete clauses(current)[1]!.content![0]!.content;
+      current.content!.push({ type: "paragraph", attrs: { id: null } });
+    });
+
+    const html = renderHtml(snapshot, { document, changes: true });
+
+    assert.match(html, new RegExp(`${marked("modified", "Modified clause.", "<br>")}</li></ol>`));
+    assert.match(
+      html,
+      /<p class="docweave-editor__clause docweave-editor__clause--inserted"><span class="docweave-editor__visually-hidden">Inserted clause\. <\/span><br><\/p>$/,
+    );
+  });
+
   it("marks a changed nested clause on its own item, not on its parent", () => {
     const controller = createDocEditor();
     controller.render(buildDoc((doc) => {

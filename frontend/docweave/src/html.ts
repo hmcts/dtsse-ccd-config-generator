@@ -83,7 +83,10 @@ function markClause(
     description.className = "docweave-editor__visually-hidden";
     description.textContent = `${CHANGE_DESCRIPTIONS[change.kind]} `;
     // A list item's wording starts in its first paragraph; any other clause is its own block.
-    (clause.type.name === "list_item" ? element.firstElementChild! : element).prepend(description);
+    const wording = clause.type.name === "list_item" ? element.firstElementChild! : element;
+    // An empty block has no height to show its mark on; the editor gives it a line break too.
+    if (!wording.hasChildNodes()) wording.append(element.ownerDocument.createElement("br"));
+    wording.prepend(description);
   }
   if (clause.lastChild?.type.name === "ordered_list") {
     markChildren(clause.lastChild, element.lastElementChild!, generatedClauses);
