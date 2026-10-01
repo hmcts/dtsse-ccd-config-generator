@@ -38,6 +38,10 @@ public class ExternalGreetingEvent implements CCDConfig<CaseData, State, UserRol
     public record Reply(String message) {
     }
 
+    /** Whom the frontend asks the start to greet. */
+    public record Addressee(String name) {
+    }
+
     public record Farewell(String reason) {
     }
 
@@ -68,7 +72,9 @@ public class ExternalGreetingEvent implements CCDConfig<CaseData, State, UserRol
         if (State.Withdrawn.name().equals(state(start.caseReference()))) {
             return ExternalStartResponse.rejected("The case has been withdrawn");
         }
-        return ExternalStartResponse.started(new Greeting("hello " + start.user().id()));
+        // The frontend can say whom to greet in its client context.
+        String name = start.clientContext().as(Addressee.class).map(Addressee::name).orElse(start.user().id());
+        return ExternalStartResponse.started(new Greeting("hello " + name));
     }
 
     private ExternalSubmitResponse<State> greet(ExternalSubmitRequest<Reply> submit) {
