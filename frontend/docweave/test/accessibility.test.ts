@@ -314,6 +314,21 @@ describe("return journey from a source control", () => {
   const returnButton = () =>
     dom.window.document.querySelector<HTMLButtonElement>(".docweave-editor__return");
 
+  /** What each scroll during the action brought into view: a fact's ID, or "editor". */
+  function recordScrolls(action: () => void): Array<string | undefined> {
+    const scrolledTo: Array<string | undefined> = [];
+    const scrollIntoView = dom.window.Element.prototype.scrollIntoView;
+    dom.window.Element.prototype.scrollIntoView = function record(this: HTMLElement) {
+      scrolledTo.push(this.classList.contains("ProseMirror") ? "editor" : this.dataset.generatedText);
+    };
+    try {
+      action();
+    } finally {
+      dom.window.Element.prototype.scrollIntoView = scrollIntoView;
+    }
+    return scrolledTo;
+  }
+
   async function leaveForInput() {
     const docweave = await import("../src/index.js");
     const controller = docweave.createDocEditor({ mount: "#editor" });
@@ -346,14 +361,32 @@ describe("return journey from a source control", () => {
           .text(".");
       });
     }));
-    button.click();
+    const scrolledTo = recordScrolls(() => button.click());
 
+    assert.deepEqual(
+      scrolledTo,
+      ["generated-text:paragraph:possession:deadline"],
+      "the page scrolls back down to the fact",
+    );
     assert.equal(document.activeElement, surface);
     assert.ok(fact().classList.contains("ProseMirror-selectednode"));
     assert.equal(fact().textContent, "2 October 2026");
     assert.equal(status.textContent, "Returned to Possession deadline, 2 October 2026.");
     assert.equal(returnButton(), null, "the offer is withdrawn once used");
     assert.ok(surface.contains(document.activeElement));
+    controller.destroy();
+  });
+
+  it("returns to the document when the fact has gone from it", async () => {
+    const { docweave, controller, status, button } = await leaveForInput();
+
+    controller.render(docweave.buildDoc((doc) => {
+      doc.paragraph("heading", "IT IS ORDERED THAT:");
+    }));
+    const scrolledTo = recordScrolls(() => button.click());
+
+    assert.deepEqual(scrolledTo, ["editor"], "the page scrolls back down to the document");
+    assert.equal(status.textContent, "Returned to the document. The field you left is no longer in it.");
     controller.destroy();
   });
 
