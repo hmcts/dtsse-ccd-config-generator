@@ -43,7 +43,6 @@ export function createApp({
       autoescape: true,
       express: app,
       noCache: development,
-      watch: development,
     },
   );
 
