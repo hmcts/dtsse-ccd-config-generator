@@ -111,18 +111,21 @@ function returnToFact(
   const fact = factPosition(view, factId);
   if (!fact) {
     view.focus();
+    scrollToCentre(view, view.dom);
     announce?.("Returned to the document. The field you left is no longer in it.");
     return;
   }
   view.dispatch(
-    view.state.tr
-      .setSelection(NodeSelection.create(view.state.doc, fact.position))
-      .scrollIntoView(),
+    view.state.tr.setSelection(NodeSelection.create(view.state.doc, fact.position)),
   );
   // Focus goes to the editor, not the fact's span: ProseMirror only tracks the
   // selection while its own element is focused, and the node selection and
   // announcement together say where the reader has landed.
   view.focus();
+  // ProseMirror only scrolls to a selection the browser's own selection is
+  // already in, which it is not while the reader is on the page's control.
+  const factElement = view.nodeDOM(fact.position);
+  if (isElement(factElement)) scrollToCentre(view, factElement);
   const label = getFactLabel(view.state, factId);
   announce?.(
     `Returned to ${label ? describeFact(view.state, fact.node) : `generated field, ${fact.node.attrs.text as string}`}.`,
@@ -253,6 +256,16 @@ function sourceForFact(view: EditorView, factId: string): HTMLElement | undefine
     : view.dom.ownerDocument.getElementById(sourceId) ?? undefined;
 }
 
+function scrollToCentre(view: EditorView, element: Element): void {
+  const reduceMotion = view.dom.ownerDocument.defaultView?.matchMedia?.(
+    "(prefers-reduced-motion: reduce)",
+  ).matches ?? false;
+  element.scrollIntoView({
+    behavior: reduceMotion ? "auto" : "smooth",
+    block: "center",
+  });
+}
+
 function navigateToSource(
   view: EditorView,
   event: Event,
@@ -264,16 +277,9 @@ function navigateToSource(
   const focusTarget = source.matches(focusableSelector)
     ? source
     : source.querySelector<HTMLElement>(focusableSelector);
-  const reduceMotion = view.dom.ownerDocument.defaultView?.matchMedia?.(
-    "(prefers-reduced-motion: reduce)",
-  ).matches ?? false;
-
   event.preventDefault();
   focusTarget?.focus({ preventScroll: true });
-  source.scrollIntoView({
-    behavior: reduceMotion ? "auto" : "smooth",
-    block: "center",
-  });
+  scrollToCentre(view, source);
   // Without a control to focus the reader has not left the document, so there
   // is nothing to return from.
   return focusTarget ? source : undefined;
