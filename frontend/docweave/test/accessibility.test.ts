@@ -314,6 +314,24 @@ describe("return journey from a source control", () => {
   const returnButton = () =>
     dom.window.document.querySelector<HTMLButtonElement>(".docweave-editor__return");
 
+  /** How far the page scrolls during the action, with the document laid out below the viewport. */
+  function pageScrolls(action: () => void): number[] {
+    const below = () => new dom.window.DOMRect(0, 2000, 10, 20);
+    for (const prototype of [dom.window.Range.prototype, dom.window.Element.prototype]) {
+      Object.defineProperty(prototype, "getBoundingClientRect", { configurable: true, value: below });
+    }
+    Object.defineProperty(dom.window.Range.prototype, "getClientRects", {
+      configurable: true,
+      value: () => [below()],
+    });
+    const scrolls: number[] = [];
+    dom.window.scrollBy = ((_x: number, y: number) => {
+      scrolls.push(y);
+    }) as typeof dom.window.scrollBy;
+    action();
+    return scrolls;
+  }
+
   async function leaveForInput() {
     const docweave = await import("../src/index.js");
     const controller = docweave.createDocEditor({ mount: "#editor" });
@@ -346,14 +364,30 @@ describe("return journey from a source control", () => {
           .text(".");
       });
     }));
-    button.click();
+    const scrolls = pageScrolls(() => button.click());
 
+    assert.equal(scrolls.length, 1);
+    assert.ok(scrolls[0]! > 0, "the page scrolls back down to the fact");
     assert.equal(document.activeElement, surface);
     assert.ok(fact().classList.contains("ProseMirror-selectednode"));
     assert.equal(fact().textContent, "2 October 2026");
     assert.equal(status.textContent, "Returned to Possession deadline, 2 October 2026.");
     assert.equal(returnButton(), null, "the offer is withdrawn once used");
     assert.ok(surface.contains(document.activeElement));
+    controller.destroy();
+  });
+
+  it("returns to the document when the fact has gone from it", async () => {
+    const { docweave, controller, status, button } = await leaveForInput();
+
+    controller.render(docweave.buildDoc((doc) => {
+      doc.paragraph("heading", "IT IS ORDERED THAT:");
+    }));
+    const scrolls = pageScrolls(() => button.click());
+
+    assert.equal(scrolls.length, 1);
+    assert.ok(scrolls[0]! > 0, "the page scrolls back down to the document");
+    assert.equal(status.textContent, "Returned to the document. The field you left is no longer in it.");
     controller.destroy();
   });
 
