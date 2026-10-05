@@ -54,6 +54,10 @@ public class FieldCollection {
     private Parent parent;
     private PropertyUtils propertyUtils;
     private EventBuilder event;
+    // The size of {@link FieldCollection#fields} when a member scope that registers no field of its
+    // own was last opened from this builder, or -1: a fluent setter reaching lastField() with no
+    // field placed since would otherwise apply to whichever field happened to precede the scope.
+    private int scopeOpenedAt = -1;
 
     public static <Type, StateType, Parent> FieldCollectionBuilder<Type, StateType, Parent> builder(EventBuilder event,
         Parent parent, Class<Type> dataClass,
@@ -561,6 +565,11 @@ public class FieldCollection {
     }
 
     private FieldBuilder<?, StateType, Type, Parent> lastField() {
+      if (fields.isEmpty() || fields.size() == scopeOpenedAt) {
+        throw new IllegalStateException("No field to apply this setter to: place a field first. A"
+            + " setter chained after .done() of a member scope that registered no field of its own"
+            + " has no field to act on.");
+      }
       return fields.get(fields.size() - 1);
     }
 
@@ -654,6 +663,10 @@ public class FieldCollection {
 
       FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> builder =
           complex(fieldName, c);
+      if (null == this.rootFieldname && isUnwrapped.isEmpty()) {
+        // The root field registered above is what a setter chained after .done() applies to.
+        scopeOpenedAt = -1;
+      }
 
       if (isUnwrapped.isPresent()) {
         String prefix = isUnwrapped.get().prefix();
@@ -683,6 +696,7 @@ public class FieldCollection {
       FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> result =
           FieldCollectionBuilder.builder(event, this, c, propertyUtils);
       complexFields.add(result);
+      scopeOpenedAt = fields.size();
       result.rootFieldname = !isNullOrEmpty(unwrappedParentPrefix)
           ? unwrappedParentPrefix.concat(capitalize(fieldName))
           : fieldName;
