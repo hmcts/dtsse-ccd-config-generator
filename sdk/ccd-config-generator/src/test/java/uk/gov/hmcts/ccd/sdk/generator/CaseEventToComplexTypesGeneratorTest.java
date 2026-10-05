@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.LOCAL_AUTHORITY;
 
@@ -165,6 +166,53 @@ public class CaseEventToComplexTypesGeneratorTest {
                 assertThat(row).containsEntry("ListElementCode", "postcode");
                 assertThat(row).containsEntry("DisplayContext", "READONLY");
             });
+    }
+
+    /**
+     * A nested {@code .complex(...)} scope registers no field in the enclosing member scope, so a
+     * fluent setter chained after its {@code .done()} has nothing to apply to. It must fail rather than
+     * silently relabel whichever member was placed before the scope.
+     */
+    @Test
+    public void rejectsASetterChainedAfterANestedScope() {
+        ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> builder =
+            newBuilder();
+        var contact = builder.event("create")
+            .forState(EventComplexMemberState.Open)
+            .name("Create")
+            .grant(CRU, LOCAL_AUTHORITY)
+            .fields()
+            .complex(EventComplexMemberCaseData::getContact)
+            .optional(EventComplexMemberContact::getReference)
+            .complex(EventComplexMemberContact::getAddress)
+            .optional(EventComplexMemberNested::getPostcode)
+            .done();
+
+        assertThatThrownBy(() -> contact.eventLabel("Address block"))
+            .isInstanceOf(IllegalStateException.class);
+    }
+
+    /**
+     * A top-level {@code .complex(...)} registers its root field, so a setter chained after its
+     * {@code .done()} applies to that root's {@code CaseEventToFields} row.
+     */
+    @Test
+    public void appliesASetterChainedAfterATopLevelScopeToItsRoot() {
+        ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> builder =
+            newBuilder();
+        builder.event("create")
+            .forState(EventComplexMemberState.Open)
+            .name("Create")
+            .grant(CRU, LOCAL_AUTHORITY)
+            .fields()
+            .complex(EventComplexMemberCaseData::getContact)
+            .optional(EventComplexMemberContact::getReference)
+            .done()
+            .fieldShowCondition("contact=\"*\"");
+
+        assertThat(memberRows(builder, "create", "contact"))
+            .singleElement()
+            .satisfies(row -> assertThat(row).doesNotContainKey("FieldShowCondition"));
     }
 
     private ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> newBuilder() {
