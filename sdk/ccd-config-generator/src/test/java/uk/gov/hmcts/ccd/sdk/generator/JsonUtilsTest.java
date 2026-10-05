@@ -41,4 +41,19 @@ public class JsonUtilsTest {
 
   }
 
+  @Test
+  public void matchesAKeyPutWithANullValueOnlyAgainstAnotherNull() {
+    Map<String, Object> unscoped = Maps.newHashMap();
+    unscoped.put("name", "party");
+    unscoped.put("collection", null);
+    Map<String, Object> unscopedAgain = Maps.newHashMap(unscoped);
+    Map<String, Object> scoped = Maps.newHashMap(Map.of("name", "party", "collection", "applicants"));
+
+    List<Map<String, Object>> result = JsonUtils
+        .mergeInto(Lists.newArrayList(unscoped), Lists.newArrayList(unscopedAgain, scoped),
+            new JsonUtils.AddMissing(), "name", "collection");
+
+    assertThat(result).hasSize(2);
+  }
+
 }
