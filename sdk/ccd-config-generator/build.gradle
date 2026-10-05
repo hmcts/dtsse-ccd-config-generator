@@ -36,7 +36,7 @@ dependencies {
     testImplementation group: 'org.springframework.boot', name: 'spring-boot-starter-webmvc-test'
 
 
-    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.21.0'
     api 'com.google.guava:guava:33.7.1-jre'
 
     implementation 'com.fasterxml.jackson.core:jackson-databind'
