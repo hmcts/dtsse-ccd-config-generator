@@ -6,8 +6,9 @@ import java.util.Map;
 /**
  * EVENT_COMPLEX_TYPE_INERT_COLUMNS — drops the columns the definition-store importer never reads on
  * the {@code EventToComplexTypes} ({@code CaseEventToComplexTypes}) sheet, on both sides:
- * {@code CaseTypeID} (and its legacy {@code CaseTypeId} spelling) and the wizard-page columns
- * {@code PageLabel}, {@code PageDisplayOrder} and {@code PageFieldDisplayOrder}.
+ * {@code CaseTypeID} (and its legacy {@code CaseTypeId} spelling), the wizard-page columns
+ * {@code PageLabel}, {@code PageDisplayOrder} and {@code PageFieldDisplayOrder}, and
+ * {@code SecurityClassification}.
  *
  * <p><b>What the importer actually reads here.</b> {@code EventParser.parseCaseEventComplexTypes}
  * (ccd-definition-store-api, {@code excel-importer/.../parser/EventParser.java}) groups the sheet's
@@ -23,6 +24,10 @@ import java.util.Map;
  * confirms the asymmetry: {@code CASE_EVENT}, {@code CASE_FIELD} and {@code CASE_EVENT_TO_FIELDS} all
  * require {@code CASE_TYPE_ID}, while {@code CASE_EVENT_TO_COMPLEX_TYPES} has no branch at all, so the
  * column is not even required here.
+ *
+ * <p><b>Why {@code SecurityClassification} is inert.</b> A member's classification is declared on its
+ * {@code ComplexTypes} row, which the importer reads; {@code EventCaseFieldComplexTypeParser} has no
+ * mapping for it on this sheet and {@code EventComplexTypeEntity} has no column to hold it.
  *
  * <p><b>Why the page columns are inert.</b> Wizard pages are built by {@code WizardPageParser}, whose
  * constructor pins {@code sheetName = SheetName.CASE_EVENT_TO_FIELDS} alongside
@@ -53,7 +58,7 @@ import java.util.Map;
  * separate two rows of one group — {@code CaseTypeID} holds one constant value across a whole
  * definition, and the page columns describe the page the group's field sits on, not the member. The
  * rule runs in {@code normaliseSheets}, before rows are keyed, and is scoped to exactly this sheet: all
- * five columns are compared normally everywhere the importer reads them, {@code CaseEventToFields}
+ * six columns are compared normally everywhere the importer reads them, {@code CaseEventToFields}
  * above all.
  */
 public final class EventComplexTypeInertColumnsRule implements NormalisationRule {
@@ -65,7 +70,8 @@ public final class EventComplexTypeInertColumnsRule implements NormalisationRule
      */
     private static final List<String> INERT_COLUMNS = List.of(
         "CaseTypeID", "CaseTypeId",
-        "PageLabel", "PageDisplayOrder", "PageFieldDisplayOrder");
+        "PageLabel", "PageDisplayOrder", "PageFieldDisplayOrder",
+        "SecurityClassification");
 
     @Override
     public String name() {
