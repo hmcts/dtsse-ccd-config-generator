@@ -54,10 +54,11 @@ public abstract class BaseJsonLegacyController {
       return ResponseEntity.ok(aboutToSubmitResponse(data, List.of("JSON legacy validation error")));
     }
     if ("json-legacy-error-override".equals(data.get("note"))) {
-      data.put("setInAboutToSubmit", MARKER);
-      Map<String, Object> response = aboutToSubmitResponse(data, List.of());
-      response.put("error_message_override", ERROR_MESSAGE_OVERRIDE);
-      return ResponseEntity.ok(response);
+      return ResponseEntity.ok(aboutToSubmitResponse(data, List.of(), ERROR_MESSAGE_OVERRIDE));
+    }
+    if ("json-legacy-errors-and-override".equals(data.get("note"))) {
+      return ResponseEntity.ok(
+          aboutToSubmitResponse(data, List.of("JSON legacy validation error"), ERROR_MESSAGE_OVERRIDE));
     }
 
     data.put("setInAboutToSubmit", MARKER);
@@ -68,7 +69,8 @@ public abstract class BaseJsonLegacyController {
     }
     aboutToSubmitSawAuthorisation = authorisation != null && !authorisation.isBlank();
     aboutToSubmitSawServiceAuthorisation = serviceAuthorisation != null && !serviceAuthorisation.isBlank();
-    return ResponseEntity.ok(aboutToSubmitResponse(data, List.of()));
+    String override = "json-legacy-empty-override".equals(data.get("note")) ? "" : null;
+    return ResponseEntity.ok(aboutToSubmitResponse(data, List.of(), override));
   }
 
   public static Map<String, Object> acasDocumentCollectionItem(String id, String documentId, String hashToken) {
@@ -145,10 +147,19 @@ public abstract class BaseJsonLegacyController {
   }
 
   private Map<String, Object> aboutToSubmitResponse(Map<String, Object> data, List<String> errors) {
+    return aboutToSubmitResponse(data, errors, null);
+  }
+
+  private Map<String, Object> aboutToSubmitResponse(Map<String, Object> data,
+                                                    List<String> errors,
+                                                    String errorMessageOverride) {
     Map<String, Object> response = new LinkedHashMap<>();
     response.put("data", data);
     response.put("errors", errors);
     response.put("warnings", List.of());
+    if (errorMessageOverride != null) {
+      response.put("error_message_override", errorMessageOverride);
+    }
     return response;
   }
 

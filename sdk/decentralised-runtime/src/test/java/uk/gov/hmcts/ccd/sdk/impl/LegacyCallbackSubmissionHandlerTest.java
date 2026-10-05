@@ -150,41 +150,6 @@ class LegacyCallbackSubmissionHandlerTest {
     verify(cdamAttachService, never()).attachNewDocumentsAndStripHashes(any(), any(), any(), any());
   }
 
-  @Test
-  void rejectsWhenAboutToSubmitReturnsOnlyAnErrorMessageOverride() throws Exception {
-    setupEventConfig();
-    when(cdamAttachServiceProvider.getIfAvailable()).thenReturn(cdamAttachService);
-    when(executor.aboutToSubmit(any())).thenReturn(callbackResponse("{}", List.of(), "Override message"));
-
-    assertThatThrownBy(() -> handler.apply(event(), USER))
-        .isInstanceOfSatisfying(CallbackValidationException.class, ex ->
-            assertThat(ex.getErrors()).containsExactly("Override message"));
-
-    verify(cdamAttachService, never()).attachNewDocumentsAndStripHashes(any(), any(), any(), any());
-  }
-
-  @Test
-  void returnsErrorMessageOverrideAlongsideCallbackErrors() throws Exception {
-    setupEventConfig();
-    when(executor.aboutToSubmit(any()))
-        .thenReturn(callbackResponse("{}", List.of("callback error"), "Override message"));
-
-    assertThatThrownBy(() -> handler.apply(event(), USER))
-        .isInstanceOfSatisfying(CallbackValidationException.class, ex ->
-            assertThat(ex.getErrors()).containsExactly("Override message", "callback error"));
-  }
-
-  @Test
-  void doesNotRejectWhenErrorMessageOverrideIsEmptyOrNull() throws Exception {
-    setupEventConfig();
-    when(executor.aboutToSubmit(any()))
-        .thenReturn(callbackResponse("{}", List.of(), ""))
-        .thenReturn(callbackResponse("{}", List.of(), null));
-
-    assertThat(handler.apply(event(), USER).dataUpdate()).isPresent();
-    assertThat(handler.apply(event(), USER).dataUpdate()).isPresent();
-  }
-
   private void setupEventConfig() {
     setupEventConfig(Map.class);
   }
@@ -225,17 +190,9 @@ class LegacyCallbackSubmissionHandlerTest {
   private AboutToStartOrSubmitResponse<Map<String, JsonNode>, Object> callbackResponse(String dataJson,
                                                                                        List<String> errors)
       throws Exception {
-    return callbackResponse(dataJson, errors, null);
-  }
-
-  private AboutToStartOrSubmitResponse<Map<String, JsonNode>, Object> callbackResponse(String dataJson,
-                                                                                       List<String> errors,
-                                                                                       String errorMessageOverride)
-      throws Exception {
     return AboutToStartOrSubmitResponse.<Map<String, JsonNode>, Object>builder()
         .data(MAPPER.convertValue(read(dataJson), JSON_NODE_MAP))
         .errors(errors)
-        .errorMessageOverride(errorMessageOverride)
         .build();
   }
 
