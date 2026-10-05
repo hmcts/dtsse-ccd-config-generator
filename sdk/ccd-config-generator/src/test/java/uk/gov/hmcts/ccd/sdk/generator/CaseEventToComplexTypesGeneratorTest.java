@@ -18,6 +18,7 @@ import uk.gov.hmcts.ccd.sdk.ConfigBuilderImpl;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.reform.EventComplexMemberCaseData;
 import uk.gov.hmcts.reform.EventComplexMemberContact;
+import uk.gov.hmcts.reform.EventComplexMemberNested;
 import uk.gov.hmcts.reform.EventComplexMemberState;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 
@@ -136,6 +137,34 @@ public class CaseEventToComplexTypesGeneratorTest {
         assertThat(memberRows(builder, "create", "contact"))
             .singleElement()
             .satisfies(row -> assertThat(row).doesNotContainKeys("Publish", "PublishAs"));
+    }
+
+    /**
+     * A scope opened with {@code complexScope(getter, Type.class)} takes its member getters from
+     * {@code Type} rather than from the field's declared class, and registers no
+     * {@code CaseEventToFields} row of its own — for a field whose {@code @CCD(typeParameterClass)}
+     * names the class its complex type is generated from.
+     */
+    @Test
+    public void writesMembersOfAScopeTypedOnANamedClass() {
+        ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> builder =
+            newBuilder();
+        builder.event("create")
+            .forState(EventComplexMemberState.Open)
+            .name("Create")
+            .grant(CRU, LOCAL_AUTHORITY)
+            .fields()
+            .complexScope(EventComplexMemberCaseData::getContact, EventComplexMemberNested.class)
+            .readonly(EventComplexMemberNested::getPostcode)
+            .done();
+
+        assertThat(memberRows(builder, "create", "contact"))
+            .singleElement()
+            .satisfies(row -> {
+                assertThat(row).containsEntry("CaseFieldID", "contact");
+                assertThat(row).containsEntry("ListElementCode", "postcode");
+                assertThat(row).containsEntry("DisplayContext", "READONLY");
+            });
     }
 
     private ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> newBuilder() {
