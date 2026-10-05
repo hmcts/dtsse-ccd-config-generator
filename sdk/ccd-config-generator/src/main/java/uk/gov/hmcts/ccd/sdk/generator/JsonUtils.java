@@ -175,7 +175,17 @@ public class JsonUtils {
             }
             continue;
           }
-          if (!x.get(primaryKey).equals(generatedField.get(primaryKey).toString())) {
+          Object existingValue = x.get(primaryKey);
+          Object generatedValue = generatedField.get(primaryKey);
+          // A key put with a null value (SearchParty's unset SearchPartyCollectionFieldName) matches
+          // only another null.
+          if (existingValue == null || generatedValue == null) {
+            if (existingValue != generatedValue) {
+              return false;
+            }
+            continue;
+          }
+          if (!existingValue.equals(generatedValue.toString())) {
             return false;
           }
         }
