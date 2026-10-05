@@ -30,6 +30,8 @@ import uk.gov.hmcts.divorce.idam.User;
 @Slf4j
 public class CaseworkerAddNote implements CCDConfig<CaseData, State, UserRole> {
     public static final String CASEWORKER_ADD_NOTE = "caseworker-add-note";
+    public static final String ERROR_MESSAGE_OVERRIDE_NOTE = "error-message-override";
+    public static final String ERROR_MESSAGE_OVERRIDE = "Add note rejected by error message override";
 
     @Autowired
     private HttpServletRequest request;
@@ -77,6 +79,13 @@ public class CaseworkerAddNote implements CCDConfig<CaseData, State, UserRole> {
             "insert into case_notes(reference, author, note) values (:reference, :author, :note)",
             params
         );
+
+        if (ERROR_MESSAGE_OVERRIDE_NOTE.equals(caseData.getNote())) {
+            return AboutToStartOrSubmitResponse.<CaseData, State>builder()
+                .data(caseData)
+                .errorMessageOverride(ERROR_MESSAGE_OVERRIDE)
+                .build();
+        }
 
         return AboutToStartOrSubmitResponse.<CaseData, State>builder()
             .data(caseData)

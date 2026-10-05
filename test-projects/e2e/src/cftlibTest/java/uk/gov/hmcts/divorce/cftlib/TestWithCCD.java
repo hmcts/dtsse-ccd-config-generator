@@ -114,6 +114,7 @@ import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
 import uk.gov.hmcts.divorce.simplecase.SimpleCaseConfiguration;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseData;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseState;
+import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerPopulateSearchCriteria;
@@ -3227,6 +3228,51 @@ public class TestWithCCD extends CftlibTest {
         assertThat(auditCountForCase(caseRef), equalTo(auditsBefore));
     }
 
+    @Order(20)
+    @Test
+    public void legacyErrorMessageOverrideRollsBackSubmission() throws Exception {
+        Map<String, Object> params = Map.of("reference", caseRef);
+        String caseBefore = db.queryForObject(
+            "select data::text || case_revision from ccd.case_data where reference = :reference", params, String.class);
+        Integer notesBefore = db.queryForObject(
+            "select count(*) from case_notes where reference = :reference", params, Integer.class);
+        Integer outboxBefore = db.queryForObject(
+            "select count(*) from ccd.message_queue_candidates where reference = :reference", params, Integer.class);
+        Integer auditsBefore = auditCountForCase(caseRef);
+
+        var start = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            CaseworkerAddNote.CASEWORKER_ADD_NOTE
+        );
+        var request = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            CaseworkerAddNote.CASEWORKER_ADD_NOTE,
+            Map.of("note", CaseworkerAddNote.ERROR_MESSAGE_OVERRIDE_NOTE),
+            start.getToken()
+        );
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(422));
+
+        var payload = mapper.readValue(EntityUtils.toString(response.getEntity()), Map.class);
+        @SuppressWarnings("unchecked")
+        List<String> callbackErrors = (List<String>) payload.get("callbackErrors");
+        assertThat(callbackErrors, contains(CaseworkerAddNote.ERROR_MESSAGE_OVERRIDE));
+
+        assertThat(db.queryForObject(
+            "select data::text || case_revision from ccd.case_data where reference = :reference", params, String.class),
+            equalTo(caseBefore));
+        assertThat(db.queryForObject(
+            "select count(*) from case_notes where reference = :reference", params, Integer.class),
+            equalTo(notesBefore));
+        assertThat(db.queryForObject(
+            "select count(*) from ccd.message_queue_candidates where reference = :reference", params, Integer.class),
+            equalTo(outboxBefore));
+        assertThat(auditCountForCase(caseRef), equalTo(auditsBefore));
+    }
+
     @Order(21)
     @Test
     public void shouldPersistCaseLinksAndUpdateDerivedTable() throws Exception {
@@ -3952,6 +3998,25 @@ public class TestWithCCD extends CftlibTest {
             @SuppressWarnings("unchecked")
             List<String> callbackErrors = (List<String>) response.get("callbackErrors");
             assertThat(callbackErrors, equalTo(List.of("JSON legacy validation error")));
+            assertThat(storedData(caseType), equalTo(before));
+            assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(1));
+            assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(0));
+        }
+    }
+
+    @SneakyThrows
+    @Order(211)
+    @Test
+    void aboutToSubmitErrorMessageOverrideRollsBackJsonLegacySubmission() {
+        for (String caseType : jsonLegacyCaseTypes()) {
+            BaseJsonLegacyController.reset();
+            String before = storedData(caseType);
+
+            var response = submitJsonLegacyEventForCaseType(caseType, Map.of("note", "json-legacy-error-override"), 422);
+
+            @SuppressWarnings("unchecked")
+            List<String> callbackErrors = (List<String>) response.get("callbackErrors");
+            assertThat(callbackErrors, equalTo(List.of(BaseJsonLegacyController.ERROR_MESSAGE_OVERRIDE)));
             assertThat(storedData(caseType), equalTo(before));
             assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(1));
             assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(0));

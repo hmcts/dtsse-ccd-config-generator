@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 public abstract class BaseJsonLegacyController {
 
   public static final String MARKER = "json-legacy-about-to-submit";
+  public static final String ERROR_MESSAGE_OVERRIDE = "JSON legacy error message override";
   public static final String ACAS_DOCUMENT_NOTE = "json-legacy-acas-cdam-document";
   public static final String ACAS_DOCUMENT_WITH_NULL_HASH_NOTE = "json-legacy-acas-cdam-document-null-hash";
   public static final String EVENT_INPUT_DOCUMENT_ID = "11111111-1111-1111-1111-111111111111";
@@ -51,6 +52,12 @@ public abstract class BaseJsonLegacyController {
     Map<String, Object> data = new LinkedHashMap<>(caseData(request));
     if ("json-legacy-error".equals(data.get("note"))) {
       return ResponseEntity.ok(aboutToSubmitResponse(data, List.of("JSON legacy validation error")));
+    }
+    if ("json-legacy-error-override".equals(data.get("note"))) {
+      data.put("setInAboutToSubmit", MARKER);
+      Map<String, Object> response = aboutToSubmitResponse(data, List.of());
+      response.put("error_message_override", ERROR_MESSAGE_OVERRIDE);
+      return ResponseEntity.ok(response);
     }
 
     data.put("setInAboutToSubmit", MARKER);
