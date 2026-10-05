@@ -49,7 +49,7 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
         securityClassification,
         Optional.ofNullable(outcome.getEventMetadata()),
         Optional.ofNullable(outcome.getSignificantItem()),
-        () -> outcome);
+        savedCase -> outcome);
   }
 
   private SubmitResponse<?> prepareSubmitHandler(DecentralisedCaseEvent event, IdamService.User user) {

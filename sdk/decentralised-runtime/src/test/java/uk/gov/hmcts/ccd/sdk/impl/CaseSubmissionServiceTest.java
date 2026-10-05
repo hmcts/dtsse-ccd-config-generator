@@ -61,8 +61,7 @@ class CaseSubmissionServiceTest {
     when(legacyHandler.apply(eq(event), eq(user))).thenReturn(handlerResult());
     when(transactionCoordinator.execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any(), any()))
         .thenAnswer(invocation -> {
-          var work = invocation
-              .<Supplier<CaseEventTransactionCoordinator.CaseEventWrite<Supplier<SubmitResponse<?>>>>>getArgument(3);
+          Supplier<CaseEventTransactionCoordinator.CaseEventWrite<?>> work = invocation.getArgument(3);
           var write = work.get();
           return CaseEventTransactionCoordinator.TransactionResult.created(
               42L,
@@ -124,7 +123,7 @@ class CaseSubmissionServiceTest {
         Optional.empty(),
         Optional.empty(),
         Optional.empty(),
-        () -> SubmitResponse.builder().build()
+        savedCase -> SubmitResponse.builder().build()
     );
   }
 

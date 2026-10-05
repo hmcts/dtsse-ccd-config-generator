@@ -12,6 +12,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
+import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
@@ -91,14 +92,14 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
         securityClassification,
         Optional.ofNullable(outcome.eventMetadata()),
         Optional.ofNullable(outcome.significantItem()),
-        () -> {
+        savedCase -> {
           var builder = SubmitResponse.builder()
               .errors(errors)
               .warnings(warnings);
 
           SubmittedCallbackResponse submittedResponse = null;
           if (runSubmitted) {
-            submittedResponse = runSubmittedCallback(event).orElse(null);
+            submittedResponse = runSubmittedCallback(event, savedCase).orElse(null);
           }
 
           if (submittedResponse != null) {
@@ -147,7 +148,8 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     return new LegacySubmitOutcome(response, eventMetadata, significantItem, hasSubmitted);
   }
 
-  private Optional<SubmittedCallbackResponse> runSubmittedCallback(DecentralisedCaseEvent event) {
+  private Optional<SubmittedCallbackResponse> runSubmittedCallback(DecentralisedCaseEvent event,
+                                                                   DecentralisedCaseDetails savedCase) {
     String caseType = event.getEventDetails().getCaseType();
     String eventId = event.getEventDetails().getEventId();
     Event<?, ?, ?> eventConfig = registry.getRequiredEvent(caseType, eventId);
@@ -156,7 +158,9 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
       return Optional.empty();
     }
 
-    CallbackRequest request = buildCallbackRequest(event);
+    // The saved case is what CCD returns, including anything the CaseView derives from
+    // service-owned data written during submit, so the callback must see the same.
+    CallbackRequest request = buildCallbackRequest(event, savedCase.getCaseDetails());
     // Mirror CCD behaviour: any non-empty retry config equates to 3 attempts (initial call + 2 retries)
     // CCD ignores the actual numbers specified in the ccd definition!
     // https://github.com/hmcts/ccd-data-store-api/blob/master/src/main/java/uk/gov/hmcts/ccd/domain/service/callbacks/CallbackService.java#L41-L63
@@ -179,7 +183,12 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   }
 
   private CallbackRequest buildCallbackRequest(DecentralisedCaseEvent event) {
-    CaseDetails caseDetails = mapper.convertValue(event.getCaseDetails(), CaseDetails.class);
+    return buildCallbackRequest(event, event.getCaseDetails());
+  }
+
+  private CallbackRequest buildCallbackRequest(DecentralisedCaseEvent event,
+                                               uk.gov.hmcts.ccd.domain.model.definition.CaseDetails current) {
+    CaseDetails caseDetails = mapper.convertValue(current, CaseDetails.class);
     CaseDetails caseDetailsBefore = event.getCaseDetailsBefore() == null
         ? null
         : mapper.convertValue(event.getCaseDetailsBefore(), CaseDetails.class);

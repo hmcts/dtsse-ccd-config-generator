@@ -3,7 +3,7 @@ package uk.gov.hmcts.ccd.sdk.impl;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.Supplier;
+import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -67,11 +67,8 @@ public class CaseSubmissionService {
     }
   }
 
-  private CaseEventTransactionCoordinator.CaseEventWrite<Supplier<SubmitResponse<?>>> prepareSubmission(
-      DecentralisedCaseEvent event,
-      IdamService.User user,
-      CaseSubmissionHandler handler
-  ) {
+  private CaseEventTransactionCoordinator.CaseEventWrite<Function<DecentralisedCaseDetails, SubmitResponse<?>>>
+      prepareSubmission(DecentralisedCaseEvent event, IdamService.User user, CaseSubmissionHandler handler) {
     var handlerResult = handler.apply(event, user);
     applyHandlerChanges(event, handlerResult);
 
@@ -80,7 +77,7 @@ public class CaseSubmissionService {
         user,
         handlerResult.dataUpdate(),
         handlerResult.significantItem(),
-        handlerResult.responseSupplier()
+        handlerResult.responseBuilder()
     );
   }
 
@@ -89,7 +86,7 @@ public class CaseSubmissionService {
    */
   private DecentralisedSubmitEventResponse buildSuccessResponse(SubmissionOutcome outcome) {
     DecentralisedSubmitEventResponse response = new DecentralisedSubmitEventResponse();
-    SubmitResponse<?> handlerResponse = outcome.responseSupplier().get();
+    SubmitResponse<?> handlerResponse = outcome.responseBuilder().apply(outcome.savedCaseDetails());
 
     response.setCaseDetails(outcome.savedCaseDetails());
     response.setErrors(handlerResponse.getErrors());
@@ -142,7 +139,7 @@ public class CaseSubmissionService {
 
   private record SubmissionOutcome(
       DecentralisedCaseDetails savedCaseDetails,
-      Supplier<SubmitResponse<?>> responseSupplier
+      Function<DecentralisedCaseDetails, SubmitResponse<?>> responseBuilder
   ) {}
 
 }

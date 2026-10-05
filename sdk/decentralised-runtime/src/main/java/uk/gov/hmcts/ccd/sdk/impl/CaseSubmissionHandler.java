@@ -2,7 +2,8 @@ package uk.gov.hmcts.ccd.sdk.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Optional;
-import java.util.function.Supplier;
+import java.util.function.Function;
+import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.sdk.api.EventMetadata;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
@@ -19,8 +20,9 @@ interface CaseSubmissionHandler {
   /**
    * Result returned by a submission handler after it has prepared all in-transaction mutations.
    *
-   * <p>The {@code responseSupplier} is intentionally deferred and is invoked by
-   * {@link CaseSubmissionService} only after the database transaction has completed successfully.
+   * <p>The {@code responseBuilder} is intentionally deferred and is invoked by
+   * {@link CaseSubmissionService} only after the database transaction has completed successfully,
+   * with the case as saved and reloaded through the CaseView.
    * Use it for post-transaction response assembly such as submitted/post-submit callbacks,
    * confirmation header/body population, or other side-effecting response data.
    */
@@ -47,8 +49,9 @@ interface CaseSubmissionHandler {
        */
       Optional<SignificantItem> significantItem,
       /*
-       * Deferred response builder executed post-transaction by {@link CaseSubmissionService}.
+       * Deferred response builder executed post-transaction by {@link CaseSubmissionService}
+       * with the saved case.
        */
-      Supplier<SubmitResponse<?>> responseSupplier) {
+      Function<DecentralisedCaseDetails, SubmitResponse<?>> responseBuilder) {
   }
 }

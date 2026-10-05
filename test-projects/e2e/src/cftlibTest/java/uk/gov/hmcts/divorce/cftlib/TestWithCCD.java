@@ -1164,6 +1164,18 @@ public class TestWithCCD extends CftlibTest {
             equalTo(SubmittedConfirmationCallback.CONFIRMATION_BODY));
         assertThat(result.get("callback_response_status_code"), equalTo(200));
         assertThat(result.get("callback_response_status"), equalTo("CALLBACK_COMPLETED"));
+
+        // The submitted callback sees the saved case, including the note the CaseView loads from the
+        // service-owned table written during submit, and the before case still predates it.
+        @SuppressWarnings("unchecked")
+        var returnedNotes = ((List<Map<String, Map<String, Object>>>) ((Map<String, Object>) result.get("data"))
+            .get("notes")).stream()
+            .map(note -> note.get("value").get("note"))
+            .toList();
+        assertThat(returnedNotes, hasItem(SubmittedConfirmationCallback.SUBMIT_NOTE));
+        assertThat(SubmittedConfirmationCallback.submittedNotes, equalTo(returnedNotes));
+        assertThat(SubmittedConfirmationCallback.submittedBeforeNotes,
+            not(hasItem(SubmittedConfirmationCallback.SUBMIT_NOTE)));
     }
 
     @Order(13)

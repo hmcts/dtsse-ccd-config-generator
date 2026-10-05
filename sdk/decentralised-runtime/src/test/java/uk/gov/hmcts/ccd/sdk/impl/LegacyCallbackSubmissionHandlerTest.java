@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
+import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedEventDetails;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
@@ -27,9 +28,11 @@ import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
+import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
 import uk.gov.hmcts.ccd.sdk.impl.cdam.CdamAttachService;
 import uk.gov.hmcts.ccd.sdk.runtime.CcdCallbackExecutor;
 import uk.gov.hmcts.ccd.sdk.type.Document;
+import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 
 class LegacyCallbackSubmissionHandlerTest {
 
@@ -150,11 +153,46 @@ class LegacyCallbackSubmissionHandlerTest {
     verify(cdamAttachService, never()).attachNewDocumentsAndStripHashes(any(), any(), any(), any());
   }
 
+  @Test
+  void submittedCallbackReceivesSavedCaseAndOriginalBeforeCase() throws Exception {
+    Event<?, ?, ?> eventConfig = setupEventConfig(Map.class);
+    when(eventConfig.getSubmittedCallback()).thenReturn(mock(Submitted.class));
+    DecentralisedCaseEvent event = event();
+    event.getCaseDetailsBefore().setData(MAPPER.convertValue(read("""
+        {"note": "before"}
+        """), JSON_NODE_MAP));
+    when(executor.aboutToSubmit(any())).thenReturn(callbackResponse("""
+        {"note": "submitted"}
+        """, List.of()));
+
+    // The CaseView derives notes from a service-owned table the submit wrote to.
+    CaseDetails saved = new CaseDetails();
+    saved.setReference(event.getCaseDetails().getReference());
+    saved.setCaseTypeId("TestCase");
+    saved.setState("Submitted");
+    saved.setData(MAPPER.convertValue(read("""
+        {"note": "submitted", "notes": [{"value": {"note": "submitted"}}]}
+        """), JSON_NODE_MAP));
+    DecentralisedCaseDetails savedCase = new DecentralisedCaseDetails();
+    savedCase.setCaseDetails(saved);
+
+    handler.apply(event, USER).responseBuilder().apply(savedCase);
+
+    ArgumentCaptor<CallbackRequest> request = ArgumentCaptor.forClass(CallbackRequest.class);
+    verify(executor).submitted(request.capture());
+    assertThat(MAPPER.<JsonNode>valueToTree(request.getValue().getCaseDetails().getData()))
+        .isEqualTo(MAPPER.<JsonNode>valueToTree(saved.getData()));
+    assertThat(MAPPER.<JsonNode>valueToTree(request.getValue().getCaseDetailsBefore().getData()))
+        .isEqualTo(read("""
+            {"note": "before"}
+            """));
+  }
+
   private void setupEventConfig() {
     setupEventConfig(Map.class);
   }
 
-  private void setupEventConfig(Class<?> caseClass) {
+  private Event<?, ?, ?> setupEventConfig(Class<?> caseClass) {
     Event<?, ?, ?> eventConfig = mock(Event.class);
     when(eventConfig.getAboutToSubmitCallback()).thenReturn(mock(AboutToSubmit.class));
     when(eventConfig.getSubmittedCallback()).thenReturn(null);
@@ -163,6 +201,7 @@ class LegacyCallbackSubmissionHandlerTest {
     ResolvedCCDConfig<?, ?, ?> config = mock(ResolvedCCDConfig.class);
     when(config.getCaseClass()).thenReturn((Class) caseClass);
     doReturn(config).when(registry).getRequired("TestCase");
+    return eventConfig;
   }
 
   private DecentralisedCaseEvent event() {
