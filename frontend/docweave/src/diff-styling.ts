@@ -1,4 +1,5 @@
 import { type Node as ProseMirrorNode } from "prosemirror-model";
+import { closeHistory } from "prosemirror-history";
 import {
   type Command,
   type EditorState,
@@ -41,6 +42,7 @@ export const BLOCKED_EDIT_MESSAGE =
 type Revert = (state: EditorState) => Transaction | undefined;
 
 const diffStylingKey = new PluginKey<DiffStylingState>("diff-styling");
+const revertKey = new PluginKey("clause-revert");
 
 export function deleteUserAuthoredNode(
   state: EditorState,
@@ -253,7 +255,7 @@ function revertAt(
   if (!transaction) return false;
 
   if (dispatch) {
-    dispatch(transaction);
+    dispatch(closeHistory(transaction).setMeta(revertKey, true));
     pluginState?.announce?.(decoration!.spec.revertedMessage as string);
   }
   return true;
@@ -288,6 +290,13 @@ export function createDiffStylingPlugin(
 ): Plugin<DiffStylingState> {
   return new Plugin<DiffStylingState>({
     key: diffStylingKey,
+    appendTransaction(transactions, _oldState, state) {
+      // The revert is one undo step, separate from immediate follow-up typing.
+      if (transactions.some((transaction) => transaction.getMeta(revertKey))) {
+        return closeHistory(state.tr);
+      }
+      return null;
+    },
     // Ordinary edits must preserve the complete managed structure.
     filterTransaction(transaction, state) {
       if (transaction.getMeta(diffStylingKey)) return true;
