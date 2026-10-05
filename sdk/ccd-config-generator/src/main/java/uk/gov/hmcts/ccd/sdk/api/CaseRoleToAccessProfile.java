@@ -50,7 +50,7 @@ public class CaseRoleToAccessProfile<R extends HasRole> {
       CaseRoleToAccessProfileBuilder<R> result = CaseRoleToAccessProfile.builder();
       result.roleName = roleName;
       result.authorisation = new ArrayList<>();
-      result.accessProfiles = new ArrayList<>();
+      result.accessProfiles = new ArrayList<>(List.of(roleName));
       result.caseAccessCategories = new ArrayList<>();
       return result;
     }
@@ -62,7 +62,7 @@ public class CaseRoleToAccessProfile<R extends HasRole> {
     }
 
     /**
-     * Set the access profiles, <em>replacing</em> the default seeded from {@link HasRole#getRole()}
+     * Set the access profiles, <em>replacing</em> the default seeded from the role name
      * rather than adding to it. Unlike the other varargs methods here, calling this twice keeps only
      * the last set.
      */
