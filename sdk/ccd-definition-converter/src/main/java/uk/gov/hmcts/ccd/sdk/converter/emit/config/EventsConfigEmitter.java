@@ -1220,6 +1220,12 @@ public class EventsConfigEmitter implements SourceEmitter {
         // rather than a constant the team's role enum declares (finrem's [INTVRSOLICITOR1]).
         cb.add("\n    .defaultValue($S)", member.getDefaultValue());
       }
+      if (member.getPublish() != null) {
+        cb.add("\n    .publish($L)", member.getPublish());
+      }
+      if (notBlank(member.getPublishAs())) {
+        cb.add("\n    .publishAs($S)", member.getPublishAs());
+      }
       if (member.isRetainHiddenValue()) {
         cb.add("\n    .retainHiddenValue()");
       }

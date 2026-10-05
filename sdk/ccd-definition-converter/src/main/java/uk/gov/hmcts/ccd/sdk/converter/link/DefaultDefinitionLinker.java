@@ -2340,23 +2340,19 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
    *       {@code PageFieldDisplayOrder} — importer-ignored here too, since {@code WizardPageParser} is
    *       their only reader and it is pinned to {@code SheetName.CASE_EVENT_TO_FIELDS}: a page's label
    *       and ordering come from the event's {@code CaseEventToFields} rows, never from a member row.
-   *       All four are dropped from comparison by {@code EVENT_COMPLEX_TYPE_INERT_COLUMNS} (the two
+   *       {@code SecurityClassification} is importer-ignored here as well: a member's classification
+   *       is read from its {@code ComplexTypes} row, and {@code EventComplexTypeEntity} has no column
+   *       for it. All are dropped from comparison by {@code EVENT_COMPLEX_TYPE_INERT_COLUMNS} (the two
    *       display-order columns additionally by {@code DEFAULTS}), so grafting any of them would merely
    *       re-inject a value the comparator discards.
    *   </li>
    * </ul>
    *
-   * <p>{@code RetainHiddenValue} and {@code DefaultValue} are here for a third reason: the importer
-   * genuinely reads both on this sheet, and the member placement derives both — {@code Y} via
-   * {@code .retainHiddenValue()}, a default via the raw-string {@code .defaultValue(String)} setter —
-   * so a row carrying either needs no graft. {@code DefaultValue} is what makes the difference between
-   * a derived group that leaves a carrier and one that leaves none at all: the only
-   * {@code CaseEventToComplexTypes} rows finrem's contested definition ships with a tail beyond the
-   * generator's reach were its five {@code DefaultValue}-carrying member rows
-   * ({@code manageInterveners/intervener1..4}'s {@code intervenerOrganisation.OrgPolicyCaseAssignedRole}
-   * defaulting to the matching {@code [INTVRSOLICITORn]} role, and
-   * {@code nocRequest/changeOrganisationRequestField}'s {@code ApprovalStatus} defaulting to
-   * {@code 1}), each of which needed a whole passthrough file for that one column.</p>
+   * <p>{@code RetainHiddenValue}, {@code DefaultValue}, {@code Publish} and {@code PublishAs} are here
+   * for a third reason: the importer reads them on this sheet, and the member placement derives them —
+   * {@code .retainHiddenValue()}, the raw-string {@code .defaultValue(String)} setter (a member default
+   * is often a case-role literal such as finrem's {@code [INTVRSOLICITOR1]}), {@code .publish(boolean)}
+   * and {@code .publishAs(String)} — so a row carrying any of them needs no graft.</p>
    *
    * <p>Every OTHER column present on the input row IS an exotic tail column and IS grafted (see
    * {@link #etoctGraftRow}).</p>
@@ -2366,9 +2362,10 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       Columns.DISPLAY_CONTEXT, Columns.EVENT_ELEMENT_LABEL, Columns.EVENT_HINT_TEXT,
       Columns.FIELD_SHOW_CONDITION, Columns.PAGE_ID, Columns.HINT_TEXT, "LiveFrom",
       Columns.ID, Columns.FIELD_DISPLAY_ORDER, Columns.SHOW_SUMMARY_CHANGE_OPTION,
-      Columns.RETAIN_HIDDEN_VALUE, Columns.DEFAULT_VALUE,
+      Columns.RETAIN_HIDDEN_VALUE, Columns.DEFAULT_VALUE, Columns.PUBLISH, Columns.PUBLISH_AS,
       Columns.CASE_TYPE_ID, Columns.CASE_TYPE_ID_LOWER,
-      Columns.PAGE_LABEL, Columns.PAGE_DISPLAY_ORDER, Columns.PAGE_FIELD_DISPLAY_ORDER);
+      Columns.PAGE_LABEL, Columns.PAGE_DISPLAY_ORDER, Columns.PAGE_FIELD_DISPLAY_ORDER,
+      Columns.SECURITY_CLASSIFICATION);
 
   /**
    * The merge key for a DERIVED group's companion tail-graft: the columns the SDK generator itself
@@ -2562,6 +2559,16 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       String defaultValue = blankToNull(row.getString(Columns.DEFAULT_VALUE).orElse(null));
       if (defaultValue != null) {
         member = member.toBuilder().defaultValue(defaultValue).build();
+      }
+      // Publish and PublishAs are importer-read on this sheet (EventCaseFieldComplexTypeParser), and
+      // drive which member values an event publishes to Work Allocation.
+      Optional<Boolean> publish = row.getYesNo(Columns.PUBLISH);
+      if (publish.isPresent()) {
+        member = member.toBuilder().publish(publish.get()).build();
+      }
+      String publishAs = blankToNull(row.getString(Columns.PUBLISH_AS).orElse(null));
+      if (publishAs != null) {
+        member = member.toBuilder().publishAs(publishAs).build();
       }
       members.add(member);
     }

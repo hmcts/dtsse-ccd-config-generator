@@ -1085,7 +1085,7 @@ class DefaultDefinitionLinkerTest {
   void derivedGroupGraftsOnlyTheExoticTailAdditively() {
     GapCollector gaps = new GapCollector();
     // Same derivable group, but one row also carries an exotic tail column the generator never writes
-    // (SecurityClassification). Only that column is grafted -- not ID, not FieldDisplayOrder -- keyed
+    // (LiveTo). Only that column is grafted -- not ID, not FieldDisplayOrder -- keyed
     // on the generator-emitted columns, additively (no overwriteColumns).
     DefinitionIr ir = minimal("Minimal")
         .row(SheetName.CASE_FIELD,
@@ -1102,7 +1102,7 @@ class DefaultDefinitionLinkerTest {
         .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
             cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "contact",
                 "ListElementCode", "name", "DisplayContext", "MANDATORY", "FieldDisplayOrder", 1,
-                "SecurityClassification", "Private"))
+                "LiveTo", "31/12/2099"))
         .build();
 
     CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
@@ -1117,7 +1117,7 @@ class DefaultDefinitionLinkerTest {
     assertThat(sheet.getPrimaryKeys())
         .containsExactly("CaseEventID", "CaseFieldID", "ListElementCode", "FieldShowCondition");
     assertThat(sheet.getRows()).singleElement().satisfies(r -> {
-      assertThat(r).containsEntry("SecurityClassification", "Private");
+      assertThat(r).containsEntry("LiveTo", "31/12/2099");
       assertThat(r).containsKeys("CaseEventID", "CaseFieldID", "ListElementCode");
       assertThat(r).as("ID is an importer-ignored accepted difference, not grafted")
           .doesNotContainKey("ID");
@@ -1152,7 +1152,7 @@ class DefaultDefinitionLinkerTest {
         .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
             cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "contact",
                 "ListElementCode", "name", "DisplayContext", "MANDATORY",
-                "FieldShowCondition", "contactName=\"y\"", "SecurityClassification", "Private"))
+                "FieldShowCondition", "contactName=\"y\"", "LiveTo", "31/12/2099"))
         .build();
 
     CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
@@ -1189,7 +1189,7 @@ class DefaultDefinitionLinkerTest {
         .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
             cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "contact",
                 "ListElementCode", "name", "DisplayContext", "MANDATORY", "FieldDisplayOrder", 1,
-                "SecurityClassification", "Private"))
+                "LiveTo", "31/12/2099"))
         .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
             cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "contact",
                 "ListElementCode", "mystery", "DisplayContext", "OPTIONAL", "FieldDisplayOrder", 2))
@@ -1222,7 +1222,7 @@ class DefaultDefinitionLinkerTest {
     assertThat(sheet.getRows()).hasSize(2);
     assertThat(sheet.getRows()).anySatisfy(r -> {
       assertThat(r).as("the derived member's tail-graft carries only the exotic column")
-          .containsEntry("SecurityClassification", "Private");
+          .containsEntry("LiveTo", "31/12/2099");
       assertThat(r).containsEntry("ListElementCode", "name");
       assertThat(r).doesNotContainKey("ID");
     });

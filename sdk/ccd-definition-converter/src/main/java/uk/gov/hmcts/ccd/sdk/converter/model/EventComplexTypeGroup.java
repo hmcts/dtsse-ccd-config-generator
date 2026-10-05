@@ -139,6 +139,16 @@ public class EventComplexTypeGroup {
     String defaultValue;
 
     /**
+     * {@code Publish}, or null when the row leaves it unset. Emitted as {@code .publish(boolean)}.
+     */
+    Boolean publish;
+
+    /**
+     * {@code PublishAs}, or null. Emitted as {@code .publishAs(String)}.
+     */
+    String publishAs;
+
+    /**
      * The generated leaf member's declared {@code @CCD(hint)}, which the SDK's
      * {@code CaseEventToComplexTypesGenerator} cascades onto the row's {@code HintText} unless the
      * member placement overrides it. Carried so the linker can compare it with the input row's
