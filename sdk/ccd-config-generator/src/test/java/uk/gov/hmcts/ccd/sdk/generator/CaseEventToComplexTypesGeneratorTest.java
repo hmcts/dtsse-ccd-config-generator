@@ -88,6 +88,56 @@ public class CaseEventToComplexTypesGeneratorTest {
             .satisfies(row -> assertThat(row).doesNotContainKey("DefaultValue"));
     }
 
+    /**
+     * A member placed with {@code publish(...)} and {@code publishAs(...)} writes both columns, which
+     * the definition store's {@code EventCaseFieldComplexTypeParser} reads on this sheet.
+     */
+    @Test
+    public void writesTheMemberPublishAndPublishAs() {
+        ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> builder =
+            newBuilder();
+        builder.event("create")
+            .forState(EventComplexMemberState.Open)
+            .name("Create")
+            .grant(CRU, LOCAL_AUTHORITY)
+            .fields()
+            .complex(EventComplexMemberCaseData::getContact)
+            .optional(EventComplexMemberContact::getReference)
+            .publish(true)
+            .publishAs("contactReference")
+            .done();
+
+        assertThat(memberRows(builder, "create", "contact"))
+            .singleElement()
+            .satisfies(row -> {
+                assertThat(row).containsEntry("Publish", "Y");
+                assertThat(row).containsEntry("PublishAs", "contactReference");
+            });
+    }
+
+    /**
+     * A member on a {@code publishToCamunda()} event carries no {@code Publish} column unless placed
+     * with {@code publish(...)}: the event-level cascade writes {@code CaseEventToFields} only.
+     */
+    @Test
+    public void omitsTheMemberPublishColumnsWhenUnset() {
+        ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> builder =
+            newBuilder();
+        builder.event("create")
+            .forState(EventComplexMemberState.Open)
+            .name("Create")
+            .grant(CRU, LOCAL_AUTHORITY)
+            .publishToCamunda()
+            .fields()
+            .complex(EventComplexMemberCaseData::getContact)
+            .optional(EventComplexMemberContact::getReference)
+            .done();
+
+        assertThat(memberRows(builder, "create", "contact"))
+            .singleElement()
+            .satisfies(row -> assertThat(row).doesNotContainKeys("Publish", "PublishAs"));
+    }
+
     private ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> newBuilder() {
         ResolvedCCDConfig<EventComplexMemberCaseData, EventComplexMemberState, UserRole> config =
             new ResolvedCCDConfig<>(
