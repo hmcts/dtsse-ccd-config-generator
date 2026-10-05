@@ -3,7 +3,7 @@ package uk.gov.hmcts.ccd.sdk.type;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import lombok.Builder;
 import lombok.Data;
@@ -42,7 +42,7 @@ public class CaseMessage {
   private LocalDate hearingDate;
 
   @JsonProperty("createdOn")
-  private LocalDateTime createdOn;
+  private OffsetDateTime createdOn;
 
   @JsonProperty("createdBy")
   private String createdBy;
@@ -68,7 +68,7 @@ public class CaseMessage {
       @JsonProperty("attachments") List<ListValue<Document>> attachments,
       @JsonProperty("isHearingRelated") YesOrNo isHearingRelated,
       @JsonProperty("hearingDate") LocalDate hearingDate,
-      @JsonProperty("createdOn") LocalDateTime createdOn,
+      @JsonProperty("createdOn") OffsetDateTime createdOn,
       @JsonProperty("createdBy") String createdBy,
       @JsonProperty("parentId") String parentId,
       @JsonProperty("messageType") String messageType,
