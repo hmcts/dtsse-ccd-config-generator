@@ -224,6 +224,10 @@ final class RetrofitModelRebinder {
     }
 
     List<FixedListModel> reboundLists = new java.util.ArrayList<>();
+    Set<String> complexTypeIds = new java.util.HashSet<>();
+    if (model.getComplexTypes() != null) {
+      model.getComplexTypes().forEach(ct -> complexTypeIds.add(ct.getId()));
+    }
     for (FixedListModel list : model.getFixedLists()) {
       // A FixedList whose ID names a top-level type ALREADY in the model is not regenerated: emitting
       // a fresh enum of that simple name in the model package would be a duplicate-type compile error
@@ -237,7 +241,11 @@ final class RetrofitModelRebinder {
       // list ID onto that enum with @ComplexType(name), so the SDK emits the rows under the definition's
       // ID off the team's own enum — generating a companion as well would leave a second enum that
       // nothing references and no rows for the ID the definition uses.
-      if (!index.hasTopLevelType(list.getId())
+      // A list sharing its ID with a complex type was given a distinct Java name by the linker, so the
+      // model type named by the ID is that complex type, and only the enum's own name can collide.
+      String collidingName = complexTypeIds.contains(list.getId())
+          ? list.getJavaClassName() : list.getId();
+      if (!index.hasTopLevelType(collidingName)
           && !declaredBoundFixedListIds.contains(list.getId())) {
         reboundLists.add(list);
       }

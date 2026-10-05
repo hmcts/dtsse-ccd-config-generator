@@ -448,6 +448,37 @@ class DefaultDefinitionLinkerTest {
   }
 
   @Test
+  void fixedListSharingAComplexTypeIdIsGeneratedUnderADistinctEnumName() {
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = minimal("Minimal")
+        // ia's appealGroundsProtection: a list, and a one-member complex type of the same ID
+        // wrapping a MultiSelectList of it.
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "appealGroundsProtection", "Label", "Grounds",
+                "FieldType", "appealGroundsProtection"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "appealGroundsProtection", "ListElementCode", "values",
+                "FieldType", "MultiSelectList", "FieldTypeParameter", "appealGroundsProtection",
+                "ElementLabel", " "))
+        .row(SheetName.FIXED_LISTS,
+            cols("ID", "appealGroundsProtection", "ListElementCode", "protectionRefugeeConvention",
+                "ListElement", "Refugee Convention"))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    assertThat(model.getFixedLists()).filteredOn(fl -> "appealGroundsProtection".equals(fl.getId()))
+        .singleElement()
+        .satisfies(fl -> assertThat(fl.getJavaClassName()).isEqualTo("AppealGroundsProtectionList"));
+    assertThat(model.getComplexTypes())
+        .filteredOn(ct -> "appealGroundsProtection".equals(ct.getId()))
+        .singleElement()
+        .satisfies(ct -> assertThat(ct.getJavaClassName()).isEqualTo("AppealGroundsProtection"));
+    assertThat(model.getPassthroughSheets())
+        .noneMatch(s -> s.getRelativePath().contains("appealGroundsProtection"));
+  }
+
+  @Test
   void mapsFieldTypesAndFlagsUnmappedColumnCarriedAsShowCondition() {
     GapCollector gaps = new GapCollector();
     DefinitionIr ir = minimal("Minimal")

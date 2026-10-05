@@ -79,13 +79,11 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     // existing ENUM names; reserving the matching kind would wrongly suffix a reference to a
     // never-emitted type. The CCD wire ID always round-trips via @ComplexType(name).
     Map<String, String> fixedListEnumNames = new LinkedHashMap<>();
-    List<PassthroughSheet> fixedListPassthrough = new ArrayList<>();
     if (options.getRetrofitReservedFixedListNames() != null) {
       usedTypeNames.addAll(options.getRetrofitReservedFixedListNames());
     }
     final List<FixedListModel> fixedLists =
-        buildFixedLists(ir, caseTypeId, options, gaps, fixedListEnumNames, fixedListPassthrough,
-            complexTypeIds, usedTypeNames);
+        buildFixedLists(ir, caseTypeId, gaps, fixedListEnumNames, complexTypeIds, usedTypeNames);
     // Drop the reserved class names again before the complex-type pass: a complex type DOES bind to
     // an existing class of the same name (no companion), so keeping them reserved would suffix its
     // shared reference. The complex-type pass instead reserves existing enum names. Names actually
@@ -164,7 +162,6 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
 
     List<PassthroughSheet> passthroughSheets = buildPassthroughSheets(ir, options, gaps);
     passthroughSheets.addAll(complexTypeAuth.passthrough());
-    passthroughSheets.addAll(fixedListPassthrough);
     EventComplexTypeResult eventComplexTypes = buildEventToComplexTypesPassthrough(
         ir, caseTypeId, options, gaps, events, allComplexTypes, clustered.caseFields());
     passthroughSheets.addAll(eventComplexTypes.passthrough());
@@ -504,33 +501,13 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
    * @return the fixed list models, one per distinct ID
    */
   private List<FixedListModel> buildFixedLists(
-      DefinitionIr ir, String caseTypeId, ConversionOptions options, GapCollector gaps,
-      Map<String, String> enumNames, List<PassthroughSheet> passthrough,
+      DefinitionIr ir, String caseTypeId, GapCollector gaps, Map<String, String> enumNames,
       Set<String> complexTypeIds, Set<String> usedTypeNames) {
     Map<String, List<SheetRow>> byId = groupById(ir.rowsForCaseType(SheetName.FIXED_LISTS, caseTypeId));
     Set<String> referenced = referencedTypeParameters(ir, caseTypeId);
     List<FixedListModel> lists = new ArrayList<>();
     for (Map.Entry<String, List<SheetRow>> entry : byId.entrySet()) {
       String id = entry.getKey();
-      if (complexTypeIds.contains(id)) {
-        // The ID is also a complex type; generating an enum here would collide with the generated
-        // complex-type class of the same name. Skip the enum and pass the list rows through so the
-        // FixedLists sheet is still reproduced; any MultiSelectList/FixedList member referencing
-        // this ID falls back (via TypeMapper) to a String carrier with typeParameterOverride=<id>,
-        // preserving the field's FieldType/FieldTypeParameter exactly.
-        passthroughFixedList(id, entry.getValue(), options, passthrough);
-        gaps.add(GapEntry.builder()
-            .sheet("FixedLists")
-            .rowKey(id)
-            .column(Columns.ID)
-            .value(id)
-            .category(GapCategory.UNSUPPORTED_VALUE)
-            .action(GapAction.PASSTHROUGH_ROW)
-            .detail("FixedList ID '" + id + "' is also a ComplexType ID; the complex-type class"
-                + " takes the name, so no enum is generated and the list rows are passed through")
-            .build());
-        continue;
-      }
       if (!referenced.contains(id)) {
         // Orphan-path FixedList: no CaseField and no reachable ComplexType member references it, so
         // it is not in the SDK generator's type set (config.getTypes()) and FixedListGenerator emits
@@ -558,7 +535,11 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       // @ComplexType(name) for the emitted FixedLists ID/file name and every referencing field's
       // FieldTypeParameter — never the class name — so the sanitised enum name is invisible on the
       // wire and the list round-trips byte-identically. enumNames maps ID -> Java enum name.
-      String enumClassName = TypeClassNamer.allocate(TypeClassNamer.fixedListName(id), usedTypeNames);
+      // An ID that also names a complex type (ia's appealGroundsProtection: a list, and a one-member
+      // type wrapping a MultiSelectList of it) leaves the plain name to the complex-type class; the
+      // two are separate sheets keyed by @ComplexType(name), so only the Java names must differ.
+      String enumBase = TypeClassNamer.fixedListName(id) + (complexTypeIds.contains(id) ? "List" : "");
+      String enumClassName = TypeClassNamer.allocate(enumBase, usedTypeNames);
       enumNames.put(id, enumClassName);
       Set<String> usedConstants = new LinkedHashSet<>();
       List<FixedListModel.Item> items = new ArrayList<>();
@@ -683,41 +664,6 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       }
     }
     return referenced;
-  }
-
-  /**
-   * Routes a FixedList that cannot be represented as a generated enum through the passthrough
-   * machinery, one manifest entry per overlay suffix so the rows land in
-   * {@code FixedLists/<id>.json} verbatim (matching where the SDK's FixedListGenerator would
-   * write them). Rows are keyed by ListElementCode for the merge.
-   *
-   * @param id the FixedList ID
-   * @param rows the sheet rows for the list
-   * @param options the conversion options (supplies overlay predicates)
-   * @param passthrough the passthrough collector to append to
-   */
-  private void passthroughFixedList(
-      String id, List<SheetRow> rows, ConversionOptions options,
-      List<PassthroughSheet> passthrough) {
-    Map<String, List<SheetRow>> bySuffix = new LinkedHashMap<>();
-    for (SheetRow row : rows) {
-      String suffix = OverlayResolver.suffixFor(row.getOverlayTags(), options);
-      bySuffix.computeIfAbsent(suffix, k -> new ArrayList<>()).add(row);
-    }
-    for (Map.Entry<String, List<SheetRow>> entry : bySuffix.entrySet()) {
-      String suffix = entry.getKey();
-      List<Map<String, Object>> raw = new ArrayList<>();
-      for (SheetRow row : entry.getValue()) {
-        raw.add(new LinkedHashMap<>(row.getColumns()));
-      }
-      passthrough.add(PassthroughSheet.builder()
-          .relativePath("FixedLists/" + id + ".json")
-          .primaryKeys(List.of(Columns.LIST_ELEMENT_CODE))
-          .overlaySuffix(suffix)
-          .overlayCondition(OverlayResolver.conditionFor(suffix, options))
-          .rows(raw)
-          .build());
-    }
   }
 
   /**
