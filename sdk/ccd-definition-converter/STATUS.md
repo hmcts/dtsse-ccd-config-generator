@@ -23,18 +23,26 @@ tractable state. The reverse means the conversion is losing information.
 | Case type | Lane | CaseField IDs | Resolved | Exact | Residual | Graft (callback) | Graft (other) |
 |---|---|---:|---:|---:|---:|---:|---:|
 | `Benefit` | sscs-common | 590 | 93.6% | 26.9% | 11 | 302 | **0** |
-| `Asylum` | ia (generate mode) | — | — | — | **1** | — | — |
+| `Asylum` | ia-case-api (generate mode) | 2408 | — | — | **1** | 275 | 272 |
 | `GrantOfRepresentation` | probate-back-office | 547 | 88.1% | 40.0% | 6 | 318 | 40 |
 | `ET_EnglandWales` | et-ccd-callbacks | 1009 | 97.9% | 45.8% | 10 | 221 | 255 |
 | `FinancialRemedyContested` | finrem-case-orchestration-service | 957 | 99.5% | 40.9% | 98 | 178 | 26 |
 | `CIVIL` | civil-service | 1998 | 94.7% | 63.8% | 89 | 851 | 207 |
 | `PRLAPPS` | prl-cos-api | 2319 | 73.3% | 56.9% | 43 | 400 | 257 |
 | `CARE_SUPERVISION_EPO` | fpl-ccd-configuration | 1696 | 73.4% | 37.0% | 7 | 222 | **878** |
-| | | | | | **265** | **2492** | **1663** |
+| | | | | | **265** | **2767** | **1935** |
 
 `Benefit` is the existence proof: a real service's definition, converted with **no** non-callback
-graft at all. `Asylum` is map-based and uses generate mode, so it has no retrofitted model and no
-graft to measure.
+graft at all.
+
+`Asylum` is the one case type that does not retrofit: `AsylumCase extends HashMap<String, Object>`,
+so there are no typed members to annotate. Generate mode builds a typed model from the definition
+instead, and adds it alongside the map rather than patching it — so the Resolved and Exact columns,
+which measure matches against an existing model, do not apply. Its graft is measured on the
+generated branch ([ia-case-api#3450](https://github.com/hmcts/ia-case-api/pull/3450)), which
+compiles and generates against the published SDK. Of its 272 non-callback rows, 249 are
+`SecurityClassification`/`Publish` tail columns grafted onto members that are otherwise Java, and 23
+are `FixedLists` whose ID is also a `ComplexTypes` ID.
 
 Callback graft is a deliberate carve-out, not a shortfall. The converter emits no callback wiring —
 `CallBackURL*` and its retry columns are carried verbatim — so the generated definition is provably
@@ -43,8 +51,9 @@ per-event decision. That column shrinks only as teams migrate handlers, never as
 
 ## What the remaining non-callback graft is
 
-Every row below is a `CaseEventToComplexTypes` member the converter could not derive, as the lane's
-own `gap-report.md` states it.
+Causes as each lane's own `gap-report.md` states them. For the retrofit lanes these are
+`CaseEventToComplexTypes` members the converter could not derive; Asylum's are columns grafted onto
+members it did derive.
 
 | Lane | Rows | Dominant cause |
 |---|---:|---|
@@ -54,6 +63,7 @@ own `gap-report.md` states it.
 | civil | 207 | 49 member not found; 44 overlay-suffixed sibling; 10 field not declared; 9 overlay-suffixed group |
 | probate | 40 | 30 no `CaseEvent` declares the event; 10 intermediate segment not a walkable complex type |
 | finrem | 26 | 24 member not found — the `caseDocumentConfidentialityWarning0`–`7` labels |
+| Asylum | 272 | 249 `SecurityClassification`/`Publish` tail columns on derived members; 23 `FixedLists` whose ID is also a `ComplexTypes` ID |
 | sscs | 0 | — |
 
 Three causes account for most of it, and they are not the same kind of problem:
@@ -80,9 +90,10 @@ Residual is a ratchet, so any increase fails CI. Two lanes carry residual worth 
   `CaseTypeTab` `DisplayContextParameter` `#TABLE(...)`, 1 is a trailing space in an event name.
 - **civil, 89.** Dominated by `MultiSelectList` inference and divergently-named complex types.
 
-Not measured here: whether each lane's converted output **compiles** and **generates**. finrem is
-the only lane verified end to end (`compileJava` and `generateCCDConfig` both clean, 27 sheets /
-593 JSON files). The others are measured on emission only, so a lane's numbers say its definition
-converts — not that the result builds.
+Not measured here: whether each lane's converted output **compiles** and **generates**. Two lanes
+are verified end to end, both with `compileJava` and `generateCCDConfig` clean: finrem (27 sheets /
+593 JSON files) and Asylum (27 sheets / 625 JSON files, against the published
+`json-definition-converter-160.1-fb82ae3e` with no local overrides). The others are measured on
+emission only, so a lane's numbers say its definition converts — not that the result builds.
 
-Measured at 675361c7 on branch json-definition-converter.
+Retrofit lanes measured at 675361c7, Asylum at fb82ae3e, on branch json-definition-converter.
