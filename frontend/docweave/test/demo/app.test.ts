@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, it } from "node:test";
 
 import { JSDOM } from "jsdom";
@@ -11,6 +14,24 @@ import {
 import { createApp } from "../../examples/court-order/server/app.js";
 
 describe("court-order demo page", () => {
+  it("renders template edits on the next development request", async (t) => {
+    const projectRoot = await mkdtemp(path.join(tmpdir(), "docweave-demo-"));
+    t.after(() => rm(projectRoot, { recursive: true, force: true }));
+    const views = path.join(projectRoot, "examples", "court-order", "views");
+    await mkdir(views, { recursive: true });
+    const template = path.join(views, "index.njk");
+    await writeFile(template, "<h1>Original template</h1>");
+    const app = createApp({ development: true, projectRoot });
+
+    const original = await request(app).get("/playground/").expect(200);
+    assert.match(original.text, /Original template/);
+
+    await writeFile(template, "<h1>Updated template</h1>");
+    const updated = await request(app).get("/playground/").expect(200);
+    assert.match(updated.text, /Updated template/);
+    assert.doesNotMatch(updated.text, /Original template/);
+  });
+
   it("renders the playground controls, editor and collapsed inspector", async () => {
     const response = await request(createApp())
       .get("/playground/")
