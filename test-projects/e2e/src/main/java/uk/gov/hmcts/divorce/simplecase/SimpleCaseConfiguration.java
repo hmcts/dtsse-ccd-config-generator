@@ -27,6 +27,8 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
     public static final String JURISDICTION = "DIVORCE";
     public static final String CREATE_EVENT = "create-simple-case";
     public static final String FOLLOW_UP_EVENT = "simple-case-follow-up";
+    public static final String STATE_ONLY_EVENT = "simple-case-state-only";
+    public static final String EMPTY_DATA_EVENT = "simple-case-empty-data";
     public static final String START_CALLBACK_MARKER = "simple-case-start";
     public static final String SUBMIT_CALLBACK_MARKER = "simple-case-creation";
     public static final String FOLLOW_UP_CALLBACK_MARKER = "simple-case-follow-up-callback";
@@ -68,6 +70,24 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
             .optional(SimpleCaseData::getFollowUpNote)
             .optional(SimpleCaseData::getFollowUpMarker)
             .done();
+
+        configBuilder
+            .event(STATE_ONLY_EVENT)
+            .forState(SimpleCaseState.FOLLOW_UP)
+            .aboutToSubmitCallback(this::submitStateOnly)
+            .name("Simple case state only")
+            .description("About to submit returns a state and no data")
+            .grant(CREATE_READ_UPDATE, UserRole.CASE_WORKER)
+            .grantHistoryOnly(UserRole.SUPER_USER);
+
+        configBuilder
+            .event(EMPTY_DATA_EVENT)
+            .forState(SimpleCaseState.FOLLOW_UP)
+            .aboutToSubmitCallback(this::submitEmptyData)
+            .name("Simple case empty data")
+            .description("About to submit returns empty data")
+            .grant(CREATE_READ_UPDATE, UserRole.CASE_WORKER)
+            .grantHistoryOnly(UserRole.SUPER_USER);
 
         configBuilder
             .event(DISPOSAL_EVENT_ID)
@@ -149,6 +169,24 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
         return AboutToStartOrSubmitResponse.<SimpleCaseData, SimpleCaseState>builder()
             .data(caseData)
             .state(SimpleCaseState.FOLLOW_UP)
+            .build();
+    }
+
+    private AboutToStartOrSubmitResponse<SimpleCaseData, SimpleCaseState> submitStateOnly(
+        CaseDetails<SimpleCaseData, SimpleCaseState> details,
+        CaseDetails<SimpleCaseData, SimpleCaseState> before
+    ) {
+        return AboutToStartOrSubmitResponse.<SimpleCaseData, SimpleCaseState>builder()
+            .state(SimpleCaseState.FOLLOW_UP)
+            .build();
+    }
+
+    private AboutToStartOrSubmitResponse<SimpleCaseData, SimpleCaseState> submitEmptyData(
+        CaseDetails<SimpleCaseData, SimpleCaseState> details,
+        CaseDetails<SimpleCaseData, SimpleCaseState> before
+    ) {
+        return AboutToStartOrSubmitResponse.<SimpleCaseData, SimpleCaseState>builder()
+            .data(new SimpleCaseData())
             .build();
     }
 
