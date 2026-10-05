@@ -419,6 +419,24 @@ class ModelSourceIndexTest {
         .isEmpty();
   }
 
+  @Test
+  void aValueClassFieldHasAResolvableGetter(@TempDir Path work) throws Exception {
+    // fpl's ManageLegalCounselEventData: an immutable @Value event-data class unwrapped onto CaseData.
+    Path src = work.resolve("src");
+    write(src, "m", "EventData", "package m;\nimport lombok.Value;\n"
+        + "@Value\npublic class EventData { String legalCounsellors; }\n");
+    write(src, "m", "Plain", "package m;\n"
+        + "public class Plain { private String legalCounsellors; }\n");
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+
+    assertThat(index.hasResolvableGetter(index.byFqn("m.EventData").orElseThrow(),
+        "legalCounsellors")).isTrue();
+    assertThat(index.hasResolvableGetter(index.byFqn("m.Plain").orElseThrow(),
+        "legalCounsellors"))
+        .as("a class with no Lombok getter generation still has none")
+        .isFalse();
+  }
+
   private static void write(Path root, String pkgPath, String simpleName, String body)
       throws Exception {
     Path dir = root.resolve(pkgPath);

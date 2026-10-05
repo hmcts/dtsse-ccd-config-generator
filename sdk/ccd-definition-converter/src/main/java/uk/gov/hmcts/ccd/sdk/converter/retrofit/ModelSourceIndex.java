@@ -1186,11 +1186,16 @@ final class ModelSourceIndex {
         .anyMatch(v -> v.getNameAsString().equals(fieldName));
   }
 
+  /**
+   * Whether a type-level Lombok annotation generates a getter for every field: {@code @Data},
+   * {@code @Getter}, or {@code @Value} (which implies {@code @Getter}).
+   */
   private static boolean hasTypeLevelGetterGeneration(Type type) {
     return type.decl.getAnnotations().stream().anyMatch(a -> {
       String name = a.getNameAsString();
       return name.equals("Data") || name.endsWith(".Data")
-          || name.equals("Getter") || name.endsWith(".Getter");
+          || name.equals("Getter") || name.endsWith(".Getter")
+          || name.equals("Value") || name.endsWith(".Value");
     });
   }
 
