@@ -3162,6 +3162,7 @@ public class TestWithCCD extends CftlibTest {
     @Order(19)
     @Test
     public void aboutToSubmitCallbackCanOverrideEventMetadata() throws Exception {
+        var dataBefore = storedCaseData(caseRef);
         var start = ccdApi.startEvent(
             getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
             getServiceAuth(),
@@ -3189,6 +3190,11 @@ public class TestWithCCD extends CftlibTest {
             CaseworkerOverrideEventMetadata.METADATA_OVERRIDE_PREFIX + " summary",
             CaseworkerOverrideEventMetadata.METADATA_OVERRIDE_PREFIX + " description"
         );
+        // The callback returns metadata and no data, so the stored case data is kept.
+        var dataAfter = storedCaseData(caseRef);
+        assertThat(dataBefore.path("applicationType").isTextual(), is(true));
+        assertThat(dataAfter.path("applicationType"), equalTo(dataBefore.path("applicationType")));
+        assertThat(dataAfter.path("applicant1FirstName"), equalTo(dataBefore.path("applicant1FirstName")));
     }
 
     @Order(20)
@@ -3549,6 +3555,73 @@ public class TestWithCCD extends CftlibTest {
         assertThat(updatedCase.getState(), equalTo(SimpleCaseState.FOLLOW_UP.name()));
         assertThat(updatedData.getFollowUpMarker(), equalTo(SimpleCaseConfiguration.FOLLOW_UP_CALLBACK_MARKER));
         assertThat(updatedData.getFollowUpNote(), containsString("Follow up detail"));
+    }
+
+    @SneakyThrows
+    @Order(28)
+    @Test
+    void simpleCaseCallbackReturningOnlyAStateKeepsCaseData() {
+        var request = prepareEventRequestForCase(
+            simpleCaseRef,
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            SimpleCaseConfiguration.STATE_ONLY_EVENT,
+            Map.of()
+        );
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+
+        var storedData = storedCaseData(simpleCaseRef);
+        assertThat(storedData.path("subject").asText(), equalTo("Simple case subject"));
+        assertThat(storedData.path("description").asText(), equalTo("Initial simple case description"));
+        assertThat(storedData.path("followUpMarker").asText(),
+            equalTo(SimpleCaseConfiguration.FOLLOW_UP_CALLBACK_MARKER));
+        assertThat(db.queryForObject(
+            "select state from ccd.case_data where reference = :reference",
+            Map.of("reference", simpleCaseRef),
+            String.class
+        ), equalTo(SimpleCaseState.FOLLOW_UP.name()));
+        var auditData = mapper.readTree(db.queryForObject(
+            """
+            SELECT ce.data::text
+              FROM ccd.case_event ce
+              JOIN ccd.case_data cd ON cd.id = ce.case_data_id
+             WHERE cd.reference = :reference
+               AND ce.event_id = :eventId
+            """,
+            Map.of("reference", simpleCaseRef, "eventId", SimpleCaseConfiguration.STATE_ONLY_EVENT),
+            String.class
+        ));
+        assertThat(auditData.path("subject").asText(), equalTo("Simple case subject"));
+    }
+
+    @SneakyThrows
+    @Order(33)
+    @Test
+    void simpleCaseCallbackReturningEmptyDataReplacesCaseData() {
+        var request = prepareEventRequestForCase(
+            simpleCaseRef,
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            SimpleCaseConfiguration.EMPTY_DATA_EVENT,
+            Map.of()
+        );
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+
+        // As in CCD, data the callback returns replaces the case data even when it is empty.
+        var storedData = storedCaseData(simpleCaseRef);
+        assertThat(storedData.has("subject"), is(false));
+        assertThat(storedData.has("description"), is(false));
+        assertThat(storedData.has("followUpMarker"), is(false));
+    }
+
+    private JsonNode storedCaseData(long reference) throws IOException {
+        return mapper.readTree(db.queryForObject(
+            "select data::text from ccd.case_data where reference = :reference",
+            Map.of("reference", reference),
+            String.class
+        ));
     }
 
     @Order(34)

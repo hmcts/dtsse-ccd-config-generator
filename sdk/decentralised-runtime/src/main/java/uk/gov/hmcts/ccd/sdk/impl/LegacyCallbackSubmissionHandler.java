@@ -125,10 +125,10 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
       eventMetadata = callbackResponse.getEventMetadata();
       significantItem = callbackResponse.getSignificantItem();
 
-      Map<String, JsonNode> normalisedData = callbackResponse.getData() == null
-          ? Map.of()
-          : mapper.convertValue(callbackResponse.getData(), JSON_NODE_MAP);
-      event.getCaseDetails().setData(normalisedData);
+      // Mirror CCD: a callback that returns no data leaves the event's data as it was.
+      if (callbackResponse.getData() != null) {
+        event.getCaseDetails().setData(mapper.convertValue(callbackResponse.getData(), JSON_NODE_MAP));
+      }
 
       if (callbackResponse.getState() != null) {
         event.getCaseDetails().setState(callbackResponse.getState().toString());
