@@ -13,6 +13,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment: cftlib-acr-pull
     permissions:
       contents: read
       pull-requests: write
@@ -139,6 +140,7 @@ jobs:
 
   migration-check:
     runs-on: ubuntu-latest
+    environment: cftlib-acr-pull
     permissions:
       contents: read
       id-token: write
