@@ -183,7 +183,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
         String newPrefix = isNullOrEmpty(prefix) ? unwrapped.prefix() : prefix.concat(capitalize(unwrapped.prefix()));
         addPermissionsFromFields(fieldRolePermissions, field.getType(), newPrefix, access);
       } else if (null != access) {
-        String id = getFieldId(field, prefix);
+        String id = getFieldId(parent, field, prefix);
 
         for (Class<? extends HasAccessControl> klass : access) {
           HasAccessControl accessHolder = BeanUtils.instantiateClass(klass);

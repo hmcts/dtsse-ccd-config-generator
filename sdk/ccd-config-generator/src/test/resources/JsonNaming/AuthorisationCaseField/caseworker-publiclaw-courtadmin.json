@@ -1,0 +1,37 @@
+[
+  {
+    "CRUD": "CRU",
+    "CaseFieldID": "Party",
+    "CaseTypeID": "JsonNaming",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-courtadmin"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseFieldID": "SnakeParty",
+    "CaseTypeID": "JsonNaming",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-courtadmin"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseFieldID": "caseHistory",
+    "CaseTypeID": "JsonNaming",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-courtadmin"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseFieldID": "flatExplicit_name",
+    "CaseTypeID": "JsonNaming",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-courtadmin"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseFieldID": "flatName",
+    "CaseTypeID": "JsonNaming",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-courtadmin"
+  }
+]

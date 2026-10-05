@@ -1,0 +1,58 @@
+[
+  {
+    "CaseTypeID": "JsonNaming",
+    "FieldType": "NamingParty",
+    "ID": "Party",
+    "Label": " ",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "JsonNaming",
+    "FieldType": "SnakeParty",
+    "ID": "SnakeParty",
+    "Label": " ",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "JsonNaming",
+    "FieldType": "CaseHistoryViewer",
+    "ID": "caseHistory",
+    "Label": " ",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "JsonNaming",
+    "FieldType": "AddressUK",
+    "ID": "flatAddressUk",
+    "Label": " ",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "JsonNaming",
+    "FieldType": "Document",
+    "ID": "flatDocument",
+    "Label": " ",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "JsonNaming",
+    "FieldType": "Text",
+    "ID": "flatExplicit_name",
+    "Label": " ",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "JsonNaming",
+    "FieldType": "Text",
+    "ID": "flatName",
+    "Label": "Name",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  }
+]

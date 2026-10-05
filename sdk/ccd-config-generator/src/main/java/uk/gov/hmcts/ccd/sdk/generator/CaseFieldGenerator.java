@@ -134,7 +134,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       return;
     }
 
-    String id = getFieldId(field, idPrefix);
+    String id = getFieldId(ownerClass, field, idPrefix);
     Label label = field.getAnnotation(Label.class);
     JsonUtils.applyLabelAnnotation(fields, caseTypeId, label);
 
@@ -266,7 +266,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   private static Optional<Field> findCaseField(Class<?> caseClass, String fieldId) {
     return getCaseFields(caseClass)
         .stream()
-        .filter(candidate -> getFieldId(candidate).equals(fieldId))
+        .filter(candidate -> getFieldId(caseClass, candidate, null).equals(fieldId))
         .findFirst();
   }
 

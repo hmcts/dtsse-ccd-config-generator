@@ -85,6 +85,15 @@ public class E2EConfigGenerationTests {
         }
     }
 
+    @Test
+    public void appliesJsonNamingToDefinitionsAndFieldReferences() {
+        Map<String, File> expected = CcdConfigComparator.resourcesDirToMap("JsonNaming");
+        for (Map.Entry<String, File> entry : expected.entrySet()) {
+            File actual = new File(tmp.getRoot(), "JsonNaming/" + entry.getKey());
+            CcdConfigComparator.assertEquals(entry.getValue(), actual, JSONCompareMode.NON_EXTENSIBLE);
+        }
+    }
+
     @SneakyThrows
     private File resourceFile(String resourcePath) {
         URL url = Resources.getResource(resourcePath);

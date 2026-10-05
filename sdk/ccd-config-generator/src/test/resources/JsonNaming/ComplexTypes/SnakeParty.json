@@ -1,0 +1,18 @@
+[
+  {
+    "ElementLabel": " ",
+    "FieldType": "Text",
+    "ID": "SnakeParty",
+    "ListElementCode": "contact_name",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ElementLabel": "Name",
+    "FieldType": "Text",
+    "ID": "SnakeParty",
+    "ListElementCode": "name",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  }
+]

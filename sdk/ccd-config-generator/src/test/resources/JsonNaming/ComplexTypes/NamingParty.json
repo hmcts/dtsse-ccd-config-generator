@@ -1,0 +1,34 @@
+[
+  {
+    "ElementLabel": " ",
+    "FieldType": "Document",
+    "ID": "NamingParty",
+    "ListElementCode": "Document",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ElementLabel": " ",
+    "FieldType": "AddressUK",
+    "ID": "NamingParty",
+    "ListElementCode": "AddressUk",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ElementLabel": " ",
+    "FieldType": "Text",
+    "ID": "NamingParty",
+    "ListElementCode": "explicit_name",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ElementLabel": "Name",
+    "FieldType": "Text",
+    "ID": "NamingParty",
+    "ListElementCode": "Name",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  }
+]

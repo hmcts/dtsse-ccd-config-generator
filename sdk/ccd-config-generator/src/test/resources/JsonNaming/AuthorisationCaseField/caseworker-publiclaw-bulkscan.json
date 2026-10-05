@@ -1,0 +1,9 @@
+[
+  {
+    "CRUD": "CRU",
+    "CaseFieldID": "flatName",
+    "CaseTypeID": "JsonNaming",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-bulkscan"
+  }
+]

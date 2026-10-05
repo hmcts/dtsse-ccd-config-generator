@@ -1,0 +1,18 @@
+[
+  {
+    "CaseEventID": "editNames",
+    "CaseFieldID": "SnakeParty",
+    "DisplayContext": "MANDATORY",
+    "FieldDisplayOrder": 10,
+    "ListElementCode": "contact_name",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "CaseEventID": "editNames",
+    "CaseFieldID": "SnakeParty",
+    "DisplayContext": "MANDATORY",
+    "FieldDisplayOrder": 9,
+    "ListElementCode": "name",
+    "LiveFrom": "01/01/2017"
+  }
+]

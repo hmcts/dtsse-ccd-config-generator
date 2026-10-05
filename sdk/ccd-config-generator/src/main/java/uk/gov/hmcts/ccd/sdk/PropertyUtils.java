@@ -66,7 +66,7 @@ class PropertyUtils implements uk.gov.hmcts.ccd.sdk.api.PropertyUtils {
 
     Field declaredField = findField(c, name);
     if (declaredField != null) {
-      return declaredField.getName();
+      return FieldUtils.getJsonPropertyName(c, declaredField.getName());
     }
 
     String lowerCamel = CaseFormat.UPPER_CAMEL.to(CaseFormat.LOWER_CAMEL, name);
@@ -75,11 +75,11 @@ class PropertyUtils implements uk.gov.hmcts.ccd.sdk.api.PropertyUtils {
       // declared field name (`aField`)
       Field alternateField = findField(c, lowerCamel);
       if (alternateField != null) {
-        return alternateField.getName();
+        return FieldUtils.getJsonPropertyName(c, alternateField.getName());
       }
     }
 
-    return name;
+    return FieldUtils.getJsonPropertyName(c, name);
   }
 
   @Override
