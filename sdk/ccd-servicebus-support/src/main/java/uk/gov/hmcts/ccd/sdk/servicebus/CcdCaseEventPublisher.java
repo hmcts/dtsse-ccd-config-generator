@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.servicebus;
 
+import static uk.gov.hmcts.ccd.sdk.servicebus.CcdMessageQueueRepository.CaseHead;
 import static uk.gov.hmcts.ccd.sdk.servicebus.CcdMessageQueueRepository.MessageQueueCandidate;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -7,25 +8,40 @@ import jakarta.jms.JMSException;
 import jakarta.jms.Message;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
+import java.util.Map;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jms.core.JmsTemplate;
 import org.springframework.jms.core.MessagePostProcessor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Component
 @Slf4j
 @ConditionalOnProperty(name = "spring.jms.servicebus.enabled", havingValue = "true")
-@RequiredArgsConstructor
 public class CcdCaseEventPublisher {
 
   private final CcdMessageQueueRepository repository;
   private final JmsTemplate jmsTemplate;
   private final CcdServiceBusProperties properties;
   private final TransactionTemplate transactionTemplate;
+
+  public CcdCaseEventPublisher(CcdMessageQueueRepository repository, JmsTemplate jmsTemplate,
+                               CcdServiceBusProperties properties, PlatformTransactionManager transactionManager) {
+    this.repository = repository;
+    this.jmsTemplate = jmsTemplate;
+    this.properties = properties;
+    // Each batch owns its cases until it commits, independently of any caller's transaction.
+    this.transactionTemplate = new TransactionTemplate(transactionManager);
+    this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    this.transactionTemplate.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+  }
 
   public void publishPendingCaseEvents() {
     String destination = properties.getDestination();
@@ -35,23 +51,22 @@ public class CcdCaseEventPublisher {
     }
 
     int totalPublished = 0;
+    // Cases whose next message failed to send; not claimed again in this run so their messages stay in order.
+    Set<Long> failedCases = new HashSet<>();
 
     while (true) {
-      BatchResult result = transactionTemplate.execute(status -> publishBatch());
-      if (result == null || result.fetched() == 0) {
+      BatchResult result = transactionTemplate.execute(status -> publishBatch(failedCases));
+      if (result == null || result.claimed() == 0) {
         break;
       }
 
       totalPublished += result.published();
+      failedCases.addAll(result.failedCases());
+    }
 
-      if (result.published() == 0) {
-        log.error("Failed to publish any message_queue_candidates record(s) in current batch; aborting run");
-        break;
-      }
-
-      if (result.fetched() < properties.getBatchSize()) {
-        break;
-      }
+    if (!failedCases.isEmpty()) {
+      log.error("Failed to publish message_queue_candidates for {} case(s); they will be retried in a later run",
+          failedCases.size());
     }
 
     if (properties.getPublishedRetentionDays() > 0) {
@@ -69,20 +84,33 @@ public class CcdCaseEventPublisher {
     }
   }
 
-  private BatchResult publishBatch() {
-    List<MessageQueueCandidate> candidates =
-        repository.findUnpublishedMessages(properties.getMessageType(), properties.getBatchSize());
-    if (candidates.isEmpty()) {
+  private BatchResult publishBatch(Set<Long> excludedCases) {
+    List<CaseHead> heads = repository.claimCaseHeads(
+        properties.getMessageType(), excludedCases, properties.getBatchSize());
+    if (heads.isEmpty()) {
       return BatchResult.EMPTY;
     }
+
+    Map<Long, Long> headIdByCase = new HashMap<>();
+    heads.forEach(head -> headIdByCase.put(head.reference(), head.id()));
+
+    List<MessageQueueCandidate> candidates = repository.findOwnedUnpublishedMessages(
+        properties.getMessageType(), headIdByCase.keySet(), properties.getBatchSize());
+    checkStartsAtClaimedHeads(candidates, headIdByCase);
 
     log.info("Preparing to publish {} message_queue_candidates record(s) to {}", candidates.size(),
         properties.getDestination());
 
     List<Long> publishedIds = new ArrayList<>(candidates.size());
+    Set<Long> failedCases = new HashSet<>();
     for (MessageQueueCandidate candidate : candidates) {
+      if (failedCases.contains(candidate.reference())) {
+        continue;
+      }
       if (sendToServiceBus(candidate)) {
         publishedIds.add(candidate.id());
+      } else {
+        failedCases.add(candidate.reference());
       }
     }
 
@@ -91,11 +119,24 @@ public class CcdCaseEventPublisher {
       log.info("Marked {} message_queue_candidates record(s) as published", publishedIds.size());
     }
 
-    return new BatchResult(candidates.size(), publishedIds.size());
+    return new BatchResult(heads.size(), publishedIds.size(), failedCases);
   }
 
-  private record BatchResult(int fetched, int published) {
-    private static final BatchResult EMPTY = new BatchResult(0, 0);
+  private void checkStartsAtClaimedHeads(List<MessageQueueCandidate> candidates, Map<Long, Long> headIdByCase) {
+    if (candidates.isEmpty()) {
+      throw new IllegalStateException("No message_queue_candidates found for claimed cases " + headIdByCase.keySet());
+    }
+    Set<Long> seen = new HashSet<>();
+    for (MessageQueueCandidate candidate : candidates) {
+      if (seen.add(candidate.reference()) && candidate.id() != headIdByCase.get(candidate.reference())) {
+        throw new IllegalStateException("message_queue_candidates for reference " + candidate.reference()
+            + " start at id " + candidate.id() + " rather than claimed id " + headIdByCase.get(candidate.reference()));
+      }
+    }
+  }
+
+  private record BatchResult(int claimed, int published, Set<Long> failedCases) {
+    private static final BatchResult EMPTY = new BatchResult(0, 0, Set.of());
   }
 
   private boolean sendToServiceBus(MessageQueueCandidate candidate) {
