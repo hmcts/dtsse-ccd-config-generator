@@ -91,55 +91,71 @@ afterEach(() => {
 
 describe("rich-text clipboard paste", () => {
   for (const fixture of fixtures) {
-    it(
-      `parses captured ${fixture.source} HTML into the expected ProseMirror document`,
-      async () => {
-        const [{ createDocEditor }, html, text, expected, expectedHTML] =
-          await Promise.all([
-            import("../src/index.js"),
-            readFile(new URL(`${fixture.path}.html`, import.meta.url), "utf8"),
-            readFile(new URL(`${fixture.path}.txt`, import.meta.url), "utf8"),
-            readFile(new URL(fixture.expectedPath, import.meta.url), "utf8")
-              .then((content) => JSON.parse(content) as unknown),
-            readFile(new URL(expectedHTMLPath, import.meta.url), "utf8"),
-          ]);
-        const controller = createDocEditor({ mount: "#editor" });
-        const paste = new dom.window.Event("paste", {
-          bubbles: true,
-          cancelable: true,
-        });
-        Object.defineProperty(paste, "clipboardData", {
-          value: {
-            getData(type: string): string {
-              if (type === "text/html") return html;
-              if (type === "text/plain" || type === "Text") return text;
-              return "";
+    for (const template of [false, true]) {
+      it(
+        `preserves captured ${fixture.source} HTML in a ${template ? "saved template" : "document"}`,
+        async (t) => {
+          const [{ createDocEditor }, html, text, expected, expectedHTML] =
+            await Promise.all([
+              import("../src/index.js"),
+              readFile(new URL(`${fixture.path}.html`, import.meta.url), "utf8"),
+              readFile(new URL(`${fixture.path}.txt`, import.meta.url), "utf8"),
+              readFile(new URL(fixture.expectedPath, import.meta.url), "utf8")
+                .then((content) => JSON.parse(content) as unknown),
+              readFile(new URL(expectedHTMLPath, import.meta.url), "utf8"),
+            ]);
+          let readContent: () => unknown;
+          if (template) {
+            const { createTemplateDraft } = await import("../src/templates/dialog/editor.js");
+            const draft = createTemplateDraft(
+              dom.window.document.querySelector<HTMLElement>("#editor")!,
+              dom.window.document.createElement("input"),
+            );
+            readContent = () => draft.read().content.content;
+            t.after(() => draft.destroy());
+          } else {
+            const controller = createDocEditor({ mount: "#editor" });
+            readContent = () => controller.getSnapshot().current;
+            t.after(() => controller.destroy());
+          }
+          const paste = new dom.window.Event("paste", {
+            bubbles: true,
+            cancelable: true,
+          });
+          Object.defineProperty(paste, "clipboardData", {
+            value: {
+              getData(type: string): string {
+                if (type === "text/html") return html;
+                if (type === "text/plain" || type === "Text") return text;
+                return "";
+              },
             },
-          },
-        });
+          });
 
-        const editor = dom.window.document.querySelector(".ProseMirror");
-        assert.ok(editor);
-        editor.dispatchEvent(paste);
+          const editor = dom.window.document.querySelector(".ProseMirror");
+          assert.ok(editor);
+          editor.dispatchEvent(paste);
 
-        assert.equal(paste.defaultPrevented, true);
-        const actual = JSON.parse(
-          JSON.stringify(controller.getSnapshot().current),
-        ) as unknown;
-        assert.deepEqual(actual, expected);
+          assert.equal(paste.defaultPrevented, true);
+          const actual = JSON.parse(
+            JSON.stringify(readContent()),
+          ) as unknown;
+          assert.deepEqual(actual, expected);
 
-        const semanticHTML = editor.cloneNode(true) as HTMLElement;
-        for (
-          const widget of semanticHTML.querySelectorAll(".ProseMirror-widget")
-        ) {
-          widget.remove();
-        }
-        for (const element of semanticHTML.querySelectorAll("[class]")) {
-          element.removeAttribute("class");
-        }
-        assert.equal(semanticHTML.innerHTML, expectedHTML.trim());
-        controller.destroy();
-      },
-    );
+          if (!template) {
+            const semanticHTML = editor.cloneNode(true) as HTMLElement;
+            for (
+              const widget of semanticHTML.querySelectorAll(".ProseMirror-widget")
+            ) {
+              widget.remove();
+            }
+            for (const element of semanticHTML.querySelectorAll("[class]")) {
+              element.removeAttribute("class");
+            }
+            assert.equal(semanticHTML.innerHTML, expectedHTML.trim());
+          }
+        },
+      );
+    }
   }
 });
