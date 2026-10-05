@@ -100,7 +100,7 @@ for example `paragraph:order-text`, `ordered-list:order-clauses`,
 `item:give-possession` and
 `generated-text:item:give-possession:deadline`. They are distinct from the
 prefix-free public clause IDs. User-authored nodes have no managed ID and are
-preserved.
+preserved while the generated clause or top-level list containing them remains.
 
 Generated documents obey these invariants:
 
@@ -193,3 +193,15 @@ view state, the previous target and the new target:
   containers.
 - Preserve user-authored content where it belongs to clauses still present in
   the document.
+
+Removing a generated clause also removes any user-authored content inside it.
+Removing a top-level generated list removes the whole list, including independent
+clauses the reader added between its generated items. This also happens when its
+last generated item is removed: the builder omits the now-empty generated list.
+This is intentional; the reader's additions belong to that part of the document.
+Reconciliation is not an undoable edit, so neither Undo nor generating that list
+again restores the removed wording. Applications should keep a generated item in
+the list if the reader's additions must survive changes to its optional items.
+
+When only a nested generated list is removed and its parent clause remains,
+user-authored subclauses remain under that parent in an unmanaged list.
