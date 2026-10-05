@@ -5,6 +5,7 @@ import { wrapInList } from "prosemirror-schema-list";
 import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 
+import { createClipboardPlugin } from "../../clipboard.js";
 import {
   connectEditorToolbar,
   createEditorToolbar,
@@ -77,6 +78,7 @@ export function createTemplateDraft(
           },
         }),
         ...createKeymapPlugins(),
+        createClipboardPlugin(),
         history(),
       ],
     }),
