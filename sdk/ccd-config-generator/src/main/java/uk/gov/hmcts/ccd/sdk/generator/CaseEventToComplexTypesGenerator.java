@@ -99,6 +99,14 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
                              : field.getDefaultValue().toString();
             data.put("DefaultValue", value);
           }
+          // Only an explicit publish(...) or publishAs(...) is written: the event-level
+          // publishToCamunda() cascade applies to CaseEventToFields, not to complex-type members.
+          if (null != field.getPublish()) {
+            data.put("Publish", field.getPublish() ? "Y" : "N");
+          }
+          if (null != field.getPublishAs()) {
+            data.put("PublishAs", field.getPublishAs());
+          }
         }
         if (null != complex.getComplexFields()) {
           expand(complex.getComplexFields(), entries, eventId, rfn, locator);
