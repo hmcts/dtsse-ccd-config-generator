@@ -86,7 +86,7 @@ configure(javaProjects) {
 
     checkstyle {
         maxWarnings = 0
-        toolVersion = '14.1.0'
+        toolVersion = '14.3.0'
         sourceSets = [project.sourceSets.main]
     }
 
