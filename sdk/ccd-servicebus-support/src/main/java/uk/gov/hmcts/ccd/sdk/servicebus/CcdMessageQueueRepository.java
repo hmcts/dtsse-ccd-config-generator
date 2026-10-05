@@ -21,8 +21,9 @@ import org.springframework.stereotype.Repository;
 public class CcdMessageQueueRepository {
 
   // Locks the earliest unpublished message of each case, which gives this transaction ownership of the case.
-  // A locked head is skipped, and its successors are never candidates in its place.
-  private static final String CLAIM_CASE_HEADS = """
+  // A locked head is skipped, and its successors are never candidates in its place. A case's messages are
+  // inserted under its case_data row lock, so they commit in id order and the head stays its earliest message.
+  private static final String CLAIM_CASES = """
       WITH heads AS MATERIALIZED (
           SELECT DISTINCT ON (reference) id
             FROM ccd.message_queue_candidates
@@ -31,7 +32,7 @@ public class CcdMessageQueueRepository {
              AND NOT (reference = ANY(?))
            ORDER BY reference, id
       )
-      SELECT q.id, q.reference
+      SELECT q.reference
         FROM ccd.message_queue_candidates q
         JOIN heads ON heads.id = q.id
        WHERE q.published IS NULL
@@ -72,19 +73,19 @@ public class CcdMessageQueueRepository {
   private final ObjectMapper objectMapper;
 
   /**
-   * Claims the earliest unpublished message of up to {@code limit} cases, excluding the given cases.
-   * The claim lasts until the surrounding transaction ends.
+   * Claims up to {@code limit} cases with unpublished messages, excluding the given cases, and returns their
+   * references. The claim lasts until the surrounding transaction ends.
    */
-  public List<CaseHead> claimCaseHeads(String messageType, Collection<Long> excludedReferences, int limit) {
+  public List<Long> claimCases(String messageType, Collection<Long> excludedReferences, int limit) {
     return jdbcTemplate.query(
-        CLAIM_CASE_HEADS,
+        CLAIM_CASES,
         ps -> {
           ps.setString(1, messageType);
           ps.setArray(2, ps.getConnection().createArrayOf("bigint", excludedReferences.toArray()));
           ps.setString(3, messageType);
           ps.setInt(4, limit);
         },
-        (rs, rowNum) -> new CaseHead(rs.getLong("id"), rs.getLong("reference")));
+        (rs, rowNum) -> rs.getLong("reference"));
   }
 
   public List<MessageQueueCandidate> findOwnedUnpublishedMessages(String messageType,
@@ -140,8 +141,6 @@ public class CcdMessageQueueRepository {
       throw new DataRetrievalFailureException("Unable to parse message_information JSON", e);
     }
   }
-
-  public record CaseHead(long id, long reference) { }
 
   public record MessageQueueCandidate(
       long id,

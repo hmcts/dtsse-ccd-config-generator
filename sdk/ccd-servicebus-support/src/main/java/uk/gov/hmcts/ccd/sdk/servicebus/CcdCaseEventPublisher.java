@@ -1,7 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.servicebus;
 
-import static java.util.stream.Collectors.toMap;
-import static uk.gov.hmcts.ccd.sdk.servicebus.CcdMessageQueueRepository.CaseHead;
 import static uk.gov.hmcts.ccd.sdk.servicebus.CcdMessageQueueRepository.MessageQueueCandidate;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -11,7 +9,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -91,17 +88,14 @@ public class CcdCaseEventPublisher {
   }
 
   private BatchResult publishBatch(PublishRun run) {
-    List<CaseHead> heads = repository.claimCaseHeads(
+    List<Long> claimed = repository.claimCases(
         properties.getMessageType(), run.failedCases, properties.getBatchSize());
-    if (heads.isEmpty()) {
+    if (claimed.isEmpty()) {
       return BatchResult.EMPTY;
     }
 
-    Map<Long, Long> headIdByCase = heads.stream().collect(toMap(CaseHead::reference, CaseHead::id));
-
     List<MessageQueueCandidate> candidates = repository.findOwnedUnpublishedMessages(
-        properties.getMessageType(), headIdByCase.keySet(), properties.getBatchSize());
-    skipCasesNotStartingAtClaimedHead(candidates, headIdByCase, run.failedCases);
+        properties.getMessageType(), claimed, properties.getBatchSize());
 
     log.info("Preparing to publish {} message_queue_candidates record(s) to {}", candidates.size(),
         properties.getDestination());
@@ -128,27 +122,7 @@ public class CcdCaseEventPublisher {
       log.info("Marked {} message_queue_candidates record(s) as published", publishedIds.size());
     }
 
-    return new BatchResult(heads.size(), candidates.size(), publishedIds.size());
-  }
-
-  // Never expected given the case lock. A case whose messages don't start at its claimed head is left for a
-  // later run rather than aborting this one.
-  private void skipCasesNotStartingAtClaimedHead(List<MessageQueueCandidate> candidates,
-                                                 Map<Long, Long> headIdByCase, Set<Long> failedCases) {
-    if (candidates.isEmpty()) {
-      log.error("No message_queue_candidates found for claimed cases {}; skipping them", headIdByCase.keySet());
-      failedCases.addAll(headIdByCase.keySet());
-      return;
-    }
-    Set<Long> seen = new HashSet<>();
-    for (MessageQueueCandidate candidate : candidates) {
-      long claimedId = headIdByCase.get(candidate.reference());
-      if (seen.add(candidate.reference()) && candidate.id() != claimedId) {
-        log.error("message_queue_candidates for reference {} start at id {} rather than claimed id {}; skipping it",
-            candidate.reference(), candidate.id(), claimedId);
-        failedCases.add(candidate.reference());
-      }
-    }
+    return new BatchResult(claimed.size(), candidates.size(), publishedIds.size());
   }
 
   // A failing case is skipped for the rest of the run after its first failed send, so it adds one failure.
