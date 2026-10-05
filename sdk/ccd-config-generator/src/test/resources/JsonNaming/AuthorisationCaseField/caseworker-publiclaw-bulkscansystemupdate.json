@@ -1,6 +1,13 @@
 [
   {
     "CRUD": "CRU",
+    "CaseFieldID": "Reference",
+    "CaseTypeID": "JsonNaming",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-bulkscansystemupdate"
+  },
+  {
+    "CRUD": "CRU",
     "CaseFieldID": "flatName",
     "CaseTypeID": "JsonNaming",
     "LiveFrom": "01/01/2017",

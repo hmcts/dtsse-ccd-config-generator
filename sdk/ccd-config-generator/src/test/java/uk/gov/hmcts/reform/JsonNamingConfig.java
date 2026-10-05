@@ -44,11 +44,17 @@ public class JsonNamingConfig implements CCDConfig<JsonNamingConfig.CaseData, St
 
   @Getter
   @JsonNaming(PropertyNamingStrategies.UpperCamelCaseStrategy.class)
-  public static class CaseData {
+  public static class CaseData extends CaseReference {
     private NamingParty party;
     @JsonUnwrapped(prefix = "flat")
     private NamingParty flattened;
     private SnakeParty snakeParty;
+  }
+
+  @Getter
+  public static class CaseReference {
+    @CCD(access = BulkScan.class)
+    private String reference;
   }
 
   @Getter
@@ -62,7 +68,7 @@ public class JsonNamingConfig implements CCDConfig<JsonNamingConfig.CaseData, St
   public static class NamingParty extends NamedPerson {
     private Document document;
     private AddressUK addressUk;
-    @JsonProperty("explicit_name")
+    @JsonProperty("Explicit_name")
     private String explicitName;
   }
 

@@ -9,6 +9,14 @@
   },
   {
     "CaseTypeID": "JsonNaming",
+    "FieldType": "Text",
+    "ID": "Reference",
+    "Label": " ",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "JsonNaming",
     "FieldType": "SnakeParty",
     "ID": "SnakeParty",
     "Label": " ",

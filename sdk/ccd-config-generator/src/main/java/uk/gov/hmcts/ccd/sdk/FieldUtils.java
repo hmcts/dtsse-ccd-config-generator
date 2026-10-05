@@ -65,10 +65,10 @@ public class FieldUtils {
     Field field = ReflectionUtils.findField(caseDataClass, fieldName);
     if (field == null) {
       return getCaseFields(caseDataClass).stream()
+          .filter(candidate -> candidate.isAnnotationPresent(JsonUnwrapped.class))
           .filter(candidate -> getFieldId(caseDataClass, candidate, null).equals(fieldName))
-          .map(candidate -> candidate.getAnnotation(JsonUnwrapped.class))
-          .filter(java.util.Objects::nonNull)
-          .findFirst();
+          .findFirst()
+          .map(candidate -> candidate.getAnnotation(JsonUnwrapped.class));
     }
     ReflectionUtils.makeAccessible(field);
     return Optional.ofNullable(field.getAnnotation(JsonUnwrapped.class));

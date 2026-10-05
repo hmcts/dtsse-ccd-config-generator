@@ -5,8 +5,8 @@ import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.NoArgsConstructor;
 
 /**
- * {@link RoundTripParty} as a plain nested complex type. Uses Java field names on the wire,
- * because the config generator names complex type fields by their Java names.
+ * {@link RoundTripParty} as a plain nested complex type with a different naming strategy,
+ * covering a subclass override of the strategy used for inherited fields.
  */
 @NoArgsConstructor
 @JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
