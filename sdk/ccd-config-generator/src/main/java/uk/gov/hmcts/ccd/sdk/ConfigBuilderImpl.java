@@ -20,8 +20,8 @@ import uk.gov.hmcts.ccd.sdk.api.AccessType;
 import uk.gov.hmcts.ccd.sdk.api.AccessType.AccessTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.AccessTypeRole;
 import uk.gov.hmcts.ccd.sdk.api.AccessTypeRole.AccessTypeRoleBuilder;
-import uk.gov.hmcts.ccd.sdk.api.CCDAccessGroup;
 import uk.gov.hmcts.ccd.sdk.api.Banner;
+import uk.gov.hmcts.ccd.sdk.api.CCDAccessGroup;
 import uk.gov.hmcts.ccd.sdk.api.CaseCategory.CaseCategoryBuilder;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
 import uk.gov.hmcts.ccd.sdk.api.ComplexTypeAuthorisation;
@@ -318,8 +318,10 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     Set<List<String>> existingAccessTypeKeys = config.accessTypes.stream()
         .map(ConfigBuilderImpl::accessTypeKey)
         .collect(Collectors.toCollection(HashSet::new));
+    // A mapping declared against a literal role name carries no HasRole constant, so read its name
+    // from roleName instead — the same either/or RoleToAccessProfilesGenerator emits the row from.
     Set<String> mappedRoleNames = config.caseRoleToAccessProfiles.stream()
-        .map(profile -> profile.getRole().getRole())
+        .map(profile -> profile.getRole() != null ? profile.getRole().getRole() : profile.getRoleName())
         .collect(Collectors.toCollection(HashSet::new));
 
     Map<List<String>, AccessType> derivedAccessTypes = new LinkedHashMap<>();
