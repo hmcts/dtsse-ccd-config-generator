@@ -205,3 +205,13 @@ the list if the reader's additions must survive changes to its optional items.
 
 When only a nested generated list is removed and its parent clause remains,
 user-authored subclauses remain under that parent in an unmanaged list.
+
+## Template search
+
+The HTTP template provider extracts wording from the saved content and sends it
+in the backend's `searchableText` field on create and update. Formatting within a
+word does not split it, block boundaries separate words, and unresolved dates are
+left out. The backend combines that wording with the title and tags.
+
+Templates saved by older clients without searchable wording need to be saved
+again before searches can find them by their wording.
