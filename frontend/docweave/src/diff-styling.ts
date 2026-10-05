@@ -1,4 +1,5 @@
 import { type Node as ProseMirrorNode } from "prosemirror-model";
+import { closeHistory } from "prosemirror-history";
 import {
   type Command,
   type EditorState,
@@ -12,6 +13,12 @@ import {
   type EditorView,
 } from "prosemirror-view";
 
+import {
+  CHANGE_DESCRIPTIONS,
+  clauseMatchesGenerated,
+  clauseNodesById,
+  isClauseNode,
+} from "./changes.js";
 import { isElement } from "./dom.js";
 import { createUndoIcon } from "./icons.js";
 import { hasSameManagedStructure } from "./invariants.js";
@@ -32,29 +39,18 @@ export interface DiffStylingOptions {
 export const BLOCKED_EDIT_MESSAGE =
   "That edit was not made. Generated clauses and facts cannot be deleted or moved, but their wording can be edited.";
 
-interface ClauseSnapshot {
-  node: ProseMirrorNode;
-}
-
 type Revert = (state: EditorState) => Transaction | undefined;
 
 const diffStylingKey = new PluginKey<DiffStylingState>("diff-styling");
-
-function isClauseNode(
-  node: ProseMirrorNode,
-  parent: ProseMirrorNode | null,
-  doc: ProseMirrorNode,
-): boolean {
-  return (parent === doc && node.type.name !== "ordered_list") ||
-    parent?.type.name === "ordered_list";
-}
+const revertKey = new PluginKey("clause-revert");
 
 export function deleteUserAuthoredNode(
   state: EditorState,
   position: number,
 ): Transaction | undefined {
   const node = state.doc.nodeAt(position);
-  if (!node || node.attrs.id !== null) return undefined;
+  // Docweave generates clauses with an ID; the reader wrote any without one, such as a heading.
+  if (!node || typeof node.attrs.id === "string") return undefined;
 
   const $position = state.doc.resolve(position);
   const parent = $position.parent;
@@ -138,12 +134,12 @@ interface ClauseMarker {
 
 const MARKERS: Record<"inserted" | "modified", ClauseMarker> = {
   inserted: {
-    description: "Inserted clause.",
+    description: CHANGE_DESCRIPTIONS.inserted,
     revertLabel: "Undo inserted clause",
     revertedMessage: "Inserted clause removed.",
   },
   modified: {
-    description: "Modified clause.",
+    description: CHANGE_DESCRIPTIONS.modified,
     revertLabel: "Undo changes to clause",
     revertedMessage: "Clause restored to its generated wording.",
   },
@@ -174,46 +170,6 @@ function createClauseMarker(
   return container;
 }
 
-function clauseSnapshotsById(
-  doc: ProseMirrorNode,
-): Map<string, ClauseSnapshot> {
-  const clauses = new Map<string, ClauseSnapshot>();
-
-  doc.descendants((node, _position, parent) => {
-    const id = node.attrs.id;
-    if (isClauseNode(node, parent, doc) && typeof id === "string") {
-      clauses.set(id, { node });
-    }
-  });
-  return clauses;
-}
-
-function clauseNodesById(doc: ProseMirrorNode): Map<string, ProseMirrorNode> {
-  return new Map(
-    [...clauseSnapshotsById(doc)].map(([id, clause]) => [id, clause.node]),
-  );
-}
-
-function clauseMatchesGenerated(
-  node: ProseMirrorNode,
-  generatedNode: ProseMirrorNode,
-): boolean {
-  if (!node.sameMarkup(generatedNode)) return false;
-  if (node.type.name !== "list_item") return node.eq(generatedNode);
-
-  const ownContent = node.children.filter(
-    (child) => child.type.name !== "ordered_list",
-  );
-  const generatedOwnContent = generatedNode.children.filter(
-    (child) => child.type.name !== "ordered_list",
-  );
-
-  return ownContent.length === generatedOwnContent.length &&
-    ownContent.every((child, index) =>
-      child.eq(generatedOwnContent[index]!)
-    );
-}
-
 function createDiffDecorations(
   doc: ProseMirrorNode,
   generatedDocument?: ProseMirrorNode,
@@ -226,7 +182,7 @@ function createDiffDecorations(
   doc.descendants((node, position, parent) => {
     const isClause = isClauseNode(node, parent, doc);
 
-    if (isClause && node.attrs.id === null) {
+    if (isClause && typeof node.attrs.id !== "string") {
       decorations.push(
         Decoration.node(position, position + node.nodeSize, {
           class:
@@ -299,16 +255,15 @@ function revertAt(
   if (!transaction) return false;
 
   if (dispatch) {
-    dispatch(transaction);
+    dispatch(closeHistory(transaction).setMeta(revertKey, true));
     pluginState?.announce?.(decoration!.spec.revertedMessage as string);
   }
   return true;
 }
 
 /**
- * Reverts the innermost inserted or modified clause around the selection. This
- * is the keyboard route to the gutter buttons, which sit inside the editable
- * region where Tab is taken by indentation.
+ * Reverts the innermost inserted or modified clause around the selection,
+ * without first tabbing to its gutter button.
  */
 export const revertClauseAtSelection: Command = (state, dispatch) => {
   const { $from } = state.selection;
@@ -335,6 +290,13 @@ export function createDiffStylingPlugin(
 ): Plugin<DiffStylingState> {
   return new Plugin<DiffStylingState>({
     key: diffStylingKey,
+    appendTransaction(transactions, _oldState, state) {
+      // The revert is one undo step, separate from immediate follow-up typing.
+      if (transactions.some((transaction) => transaction.getMeta(revertKey))) {
+        return closeHistory(state.tr);
+      }
+      return null;
+    },
     // Ordinary edits must preserve the complete managed structure.
     filterTransaction(transaction, state) {
       if (transaction.getMeta(diffStylingKey)) return true;

@@ -31,8 +31,8 @@ public class FunctionalTest {
 
   //  https://docs.gradle.org/current/userguide/compatibility.html
   @Test
-  public void testGradle8MinJava21() {
-    checkTestProject("8.4");
+  public void testGradle8MinForSpringBoot4Java21() {
+    checkTestProject("8.14.5");
   }
 
   @Test
@@ -66,7 +66,7 @@ public class FunctionalTest {
         .withPluginClasspath()
         .withProjectDir(testProjectDir.getRoot())
         .withArguments(arguments)
-        .withGradleVersion("8.4")
+        .withGradleVersion("8.14.5")
         .build();
     assertEquals(TaskOutcome.SUCCESS, result.task(":verifySdkDependencies").getOutcome());
     for (String flag : Arrays.asList("decentralised", "runtimeIndexing", "caseEventServiceBus")) {

@@ -244,6 +244,40 @@ describe("generated document invariants", () => {
     );
   });
 
+  it("rejects a restored current document with a generated clause beneath a user-authored clause", () => {
+    const generated = buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => {
+        list.item("generated", "Generated wording");
+      });
+    });
+    const current = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node("ordered_list", { id: "ordered-list:clauses" }, [
+        editorSchema.node("list_item", null, [
+          editorSchema.node(
+            "paragraph",
+            null,
+            editorSchema.text("User-authored clause"),
+          ),
+          editorSchema.node(
+            "ordered_list",
+            null,
+            generated.firstChild!.firstChild!,
+          ),
+        ]),
+      ]),
+    );
+
+    assert.throws(
+      () => assertCurrentDocumentMatchesGenerated(current, generated),
+      {
+        message:
+          "Current document does not preserve the generated managed structure",
+      },
+    );
+  });
+
   it("allows restored current documents to contain ordinary user edits", () => {
     const generated = buildDoc((doc) => {
       doc.orderedList("clauses", (list) => {

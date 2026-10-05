@@ -15,6 +15,7 @@ import org.springframework.jms.support.converter.MappingJackson2MessageConverter
 /**
  * JMS MessageConverter that supports publishing JSON content types in Azure Service Bus.
  */
+@SuppressWarnings("removal")
 public class CcdMessageConverter extends MappingJackson2MessageConverter {
 
   @Override

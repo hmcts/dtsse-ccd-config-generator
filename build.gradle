@@ -4,6 +4,18 @@ tasks.register('check') {
     }
 }
 
+project(':adoption') {
+    pluginManager.withPlugin('hmcts.ccd.sdk') {
+        ccdSdk {
+            jackson2ClasspathGuard {
+                allowedComponents = [
+                    'com.github.hmcts:core-case-data-store-client:6.1.0'
+                ]
+            }
+        }
+    }
+}
+
 tasks.register('allTests')
 
 gradle.afterProject { project, _ ->
@@ -79,6 +91,7 @@ subprojects.each { subproject ->
                 task.dependsOn gradle.includedBuild('sdk').task(':ccd-runtime-indexing:jar')
                 task.dependsOn gradle.includedBuild('sdk').task(':ccd-servicebus-support:jar')
                 task.dependsOn gradle.includedBuild('sdk').task(':task-management:jar')
+                task.dependsOn gradle.includedBuild('sdk').task(':document-bundling:jar')
             }
         }
     }

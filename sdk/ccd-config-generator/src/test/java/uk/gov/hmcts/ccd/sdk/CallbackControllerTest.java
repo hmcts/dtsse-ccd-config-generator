@@ -10,7 +10,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.skyscreamer.jsonassert.JSONAssert;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.junit4.SpringRunner;
@@ -42,6 +42,14 @@ public class CallbackControllerTest {
   @Autowired
   private MockMvc mockMvc;
 
+  @Autowired
+  private ObjectMapper objectMapper;
+
+  @Test
+  public void usesJackson2ForHttpContracts() {
+    assertThat(objectMapper.version().getMajorVersion()).isEqualTo(2);
+  }
+
   @SneakyThrows
   @Test
   public void testAboutToStart() {
@@ -70,6 +78,10 @@ public class CallbackControllerTest {
     AboutToStartOrSubmitCallbackResponse response = getCallbackResponse(result);
     assertThat(response.getDataClassification()).containsExactly(Map.entry("field1", "PUBLIC"));
     assertThat(response.getSecurityClassification()).isEqualTo("PRIVATE");
+    assertThat(result.getResponse().getContentAsString())
+        .contains("\"data_classification\":{\"field1\":\"PUBLIC\"}")
+        .contains("\"security_classification\":\"PRIVATE\"")
+        .doesNotContain("dataClassification", "securityClassification");
   }
 
   @SneakyThrows
@@ -145,6 +157,10 @@ public class CallbackControllerTest {
                     (Resources.getResource("expected/response-notice-of-change-applied.json").getPath()),
             StandardCharsets.UTF_8);
     JSONAssert.assertEquals(responseString, result.getResponse().getContentAsString() , false);
+    assertThat(result.getResponse().getContentAsString())
+        .contains("\"errors\":null")
+        .contains("\"data_classification\":null")
+        .contains("\"security_classification\":null");
   }
 
   @SneakyThrows

@@ -28,6 +28,7 @@ public class CcdServiceBusJmsConfiguration {
   }
 
   @Bean
+  @SuppressWarnings("removal")
   public MessageConverter ccdServiceBusMessageConverter(ObjectMapper objectMapper) {
     MappingJackson2MessageConverter converter = new CcdMessageConverter();
     ObjectMapper mapper = objectMapper.copy();

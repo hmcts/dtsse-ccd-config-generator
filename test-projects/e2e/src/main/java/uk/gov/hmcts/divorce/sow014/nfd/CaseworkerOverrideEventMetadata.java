@@ -46,8 +46,8 @@ public class CaseworkerOverrideEventMetadata implements CCDConfig<CaseData, Stat
         final CaseDetails<CaseData, State> details,
         final CaseDetails<CaseData, State> beforeDetails
     ) {
+        // Returns no data, so the case data CCD submitted is kept as it is.
         return AboutToStartOrSubmitResponse.<CaseData, State>builder()
-            .data(details.getData())
             .eventMetadata(EventMetadata.builder()
                 .summary(METADATA_OVERRIDE_PREFIX + " summary")
                 .description(METADATA_OVERRIDE_PREFIX + " description")

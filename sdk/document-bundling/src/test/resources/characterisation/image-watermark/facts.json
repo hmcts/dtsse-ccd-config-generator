@@ -1,0 +1,11 @@
+{
+  "pageCount" : 1,
+  "pageLabels" : null,
+  "pages" : [
+    { "page" : 1, "text" : "", "pageNumberStamps" : [ ], "images" : [ { "width" : 263, "height" : 220, "pixelSha256" : "px:d12b60a7b235b3c3527ffec0354c7587eb5f98d90f47c1e21a05f803f3c4f58f" } ] }
+  ],
+  "outline" : [
+    { "title" : "Slide 1", "bold" : false, "targetPage" : 1, "children" : [ ] }
+  ],
+  "links" : [ ]
+}

@@ -78,6 +78,19 @@ Editor state is persisted separately as a `DocWeaveSnapshot`, obtained with
 contains only the current and generated ProseMirror documents, never source
 control IDs.
 
+A snapshot is opaque to services: they store it and hand it back, and ask
+Docweave about it rather than reading its JSON. `renderHtml(snapshot)` renders
+the reader's document as the final HTML. `describeChanges(snapshot)` counts the
+clauses the reader wrote and the generated clauses they changed, in wording or
+formatting, so a service can tell someone reviewing it what changed; it needs
+no DOM, so it runs on a server. `renderHtml(snapshot, { changes: true })` marks
+those clauses as the editor marks them for the reader: each carries the
+editor's `docweave-editor__clause--inserted` or `--modified` class and the
+words the editor says before it for a screen reader, so the editor's
+stylesheet shows someone else, statically, what the reader saw. A clause is
+the same unit the editor marks and reverts, described under
+[Editing generated clauses](#editing-generated-clauses).
+
 ### Generated node identity
 
 Internally, generated paragraphs, list items, ordered lists and generated text
@@ -87,7 +100,7 @@ for example `paragraph:order-text`, `ordered-list:order-clauses`,
 `item:give-possession` and
 `generated-text:item:give-possession:deadline`. They are distinct from the
 prefix-free public clause IDs. User-authored nodes have no managed ID and are
-preserved.
+preserved while the generated clause or top-level list containing them remains.
 
 Generated documents obey these invariants:
 
@@ -132,10 +145,14 @@ the mouse is the whole story:
 - Inserted and modified clauses carry a visually hidden marker ("Inserted
   clause.", "Modified clause.") before their wording, beside the gutter button
   that reverts them. The button works from the keyboard, and the shortcut
-  Mod+Alt+Z reverts the clause at the cursor, since a button inside the
-  editable region is awkward to reach when Tab indents.
+  Mod+Alt+Z reverts the clause at the cursor without tabbing to it.
 - A polite live region under the surface announces an edit the invariants
   refused, and a clause that was reverted.
+- Tab and Shift+Tab indent and outdent a numbered clause the reader added, and
+  a refused outdent there is announced. Anywhere else a move is refused or
+  there is nothing to indent beneath, including every generated clause, the
+  editor leaves them to the browser, so Tab always moves on to the next control
+  and the document is never a keyboard trap.
 - The toolbar follows the toolbar pattern: one Tab stop, arrow keys between
   buttons, Alt+F10 to reach it from the document. Alt+0 opens a dialog listing
   every shortcut.
@@ -176,3 +193,25 @@ view state, the previous target and the new target:
   containers.
 - Preserve user-authored content where it belongs to clauses still present in
   the document.
+
+Removing a generated clause also removes any user-authored content inside it.
+Removing a top-level generated list removes the whole list, including independent
+clauses the reader added between its generated items. This also happens when its
+last generated item is removed: the builder omits the now-empty generated list.
+This is intentional; the reader's additions belong to that part of the document.
+Reconciliation is not an undoable edit, so neither Undo nor generating that list
+again restores the removed wording. Applications should keep a generated item in
+the list if the reader's additions must survive changes to its optional items.
+
+When only a nested generated list is removed and its parent clause remains,
+user-authored subclauses remain under that parent in an unmanaged list.
+
+## Template search
+
+The HTTP template provider extracts wording from the saved content and sends it
+in the backend's `searchableText` field on create and update. Formatting within a
+word does not split it, block boundaries separate words, and unresolved dates are
+left out. The backend combines that wording with the title and tags.
+
+Templates saved by older clients without searchable wording need to be saved
+again before searches can find them by their wording.
