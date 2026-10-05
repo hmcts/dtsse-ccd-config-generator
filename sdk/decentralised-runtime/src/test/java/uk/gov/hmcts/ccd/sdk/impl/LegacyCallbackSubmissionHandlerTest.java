@@ -58,7 +58,7 @@ class LegacyCallbackSubmissionHandlerTest {
         }
         """, List.of()));
 
-    var result = handler.apply(event, USER);
+    var result = handler.apply(event, USER, false);
 
     assertThat(event.getCaseDetails().getData().get("generatedDocument").get("document_hash").asText())
         .isEqualTo("hash-token");
@@ -80,7 +80,7 @@ class LegacyCallbackSubmissionHandlerTest {
         }
         """, List.of()));
 
-    var result = handler.apply(event, USER);
+    var result = handler.apply(event, USER, false);
 
     assertThat(event.getCaseDetails().getData().get("generatedDocument").get("document_hash").asText())
         .isEqualTo("hash-token");
@@ -112,7 +112,7 @@ class LegacyCallbackSubmissionHandlerTest {
         }
         """, List.of()));
 
-    var result = handler.apply(event, USER);
+    var result = handler.apply(event, USER, false);
 
     assertThat(event.getCaseDetails().getData().get("generatedDocument").has("document_hash")).isFalse();
     assertThat(result.dataUpdate()).isPresent();
@@ -144,7 +144,7 @@ class LegacyCallbackSubmissionHandlerTest {
         }
         """, List.of("callback error")));
 
-    assertThatThrownBy(() -> handler.apply(event, USER))
+    assertThatThrownBy(() -> handler.apply(event, USER, false))
         .isInstanceOf(CallbackValidationException.class);
 
     verify(cdamAttachService, never()).attachNewDocumentsAndStripHashes(any(), any(), any(), any());

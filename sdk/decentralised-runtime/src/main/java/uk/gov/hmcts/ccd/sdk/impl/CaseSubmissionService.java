@@ -29,9 +29,14 @@ public class CaseSubmissionService {
   private final CaseEventTransactionCoordinator transactionCoordinator;
   private final CaseDataRepository caseDataRepository;
 
+  /**
+   * Submits the event, rejecting it on errors, or on warnings unless {@code ignoreWarning} says the
+   * user has chosen to ignore them.
+   */
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
                                                  String authorisation,
-                                                 UUID idempotencyKey) {
+                                                 UUID idempotencyKey,
+                                                 boolean ignoreWarning) {
     var eventConfig = getEventConfig(event);
     var user = idam.retrieveUser(authorisation);
     var handler = eventConfig.hasSubmitHandler() ? submitHandler : legacyHandler;
@@ -46,7 +51,7 @@ public class CaseSubmissionService {
               event.getCaseDetails().getReference(),
               idempotencyKey,
               startRevision,
-              () -> prepareSubmission(event, user, handler)
+              () -> prepareSubmission(event, user, handler, ignoreWarning)
           );
 
       if (transactionResult.replayed()) {
@@ -57,7 +62,7 @@ public class CaseSubmissionService {
       }
 
       var created = transactionResult.created().orElseThrow();
-      return buildSuccessResponse(new SubmissionOutcome(created.savedCase(), created.result()));
+      return buildSuccessResponse(new SubmissionOutcome(created.savedCase(), created.result()), ignoreWarning);
 
     } catch (CallbackValidationException e) {
       var response = new DecentralisedSubmitEventResponse();
@@ -70,9 +75,10 @@ public class CaseSubmissionService {
   private CaseEventTransactionCoordinator.CaseEventWrite<Supplier<SubmitResponse<?>>> prepareSubmission(
       DecentralisedCaseEvent event,
       IdamService.User user,
-      CaseSubmissionHandler handler
+      CaseSubmissionHandler handler,
+      boolean ignoreWarning
   ) {
-    var handlerResult = handler.apply(event, user);
+    var handlerResult = handler.apply(event, user, ignoreWarning);
     applyHandlerChanges(event, handlerResult);
 
     return new CaseEventTransactionCoordinator.CaseEventWrite<>(
@@ -87,13 +93,15 @@ public class CaseSubmissionService {
   /**
    * Builds the final HTTP response DTO from a successful transaction outcome.
    */
-  private DecentralisedSubmitEventResponse buildSuccessResponse(SubmissionOutcome outcome) {
+  private DecentralisedSubmitEventResponse buildSuccessResponse(SubmissionOutcome outcome, boolean ignoreWarning) {
     DecentralisedSubmitEventResponse response = new DecentralisedSubmitEventResponse();
     SubmitResponse<?> handlerResponse = outcome.responseSupplier().get();
 
     response.setCaseDetails(outcome.savedCaseDetails());
     response.setErrors(handlerResponse.getErrors());
     response.setWarnings(handlerResponse.getWarnings());
+    // CCD rejects a response with warnings unless it says they were ignored.
+    response.setIgnoreWarning(ignoreWarning);
 
     AfterSubmitCallbackResponse afterSubmit = new AfterSubmitCallbackResponse();
     afterSubmit.setConfirmationHeader(handlerResponse.getConfirmationHeader());

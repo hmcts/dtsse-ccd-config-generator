@@ -50,10 +50,14 @@ public abstract class BaseJsonLegacyController {
     aboutToSubmitAttempts++;
     Map<String, Object> data = new LinkedHashMap<>(caseData(request));
     if ("json-legacy-error".equals(data.get("note"))) {
-      return ResponseEntity.ok(aboutToSubmitResponse(data, List.of("JSON legacy validation error")));
+      return ResponseEntity.ok(aboutToSubmitResponse(data, List.of("JSON legacy validation error"),
+          List.of("JSON legacy warning")));
     }
 
     data.put("setInAboutToSubmit", MARKER);
+    if ("json-legacy-warning".equals(data.get("note"))) {
+      return ResponseEntity.ok(aboutToSubmitResponse(data, List.of(), List.of("JSON legacy warning")));
+    }
     if (ACAS_DOCUMENT_NOTE.equals(data.get("note"))) {
       addAcasVisibleDocument(data, "callback-acas-document", CALLBACK_DOCUMENT_ID, CALLBACK_DOCUMENT_HASH);
     } else if (ACAS_DOCUMENT_WITH_NULL_HASH_NOTE.equals(data.get("note"))) {
@@ -61,7 +65,7 @@ public abstract class BaseJsonLegacyController {
     }
     aboutToSubmitSawAuthorisation = authorisation != null && !authorisation.isBlank();
     aboutToSubmitSawServiceAuthorisation = serviceAuthorisation != null && !serviceAuthorisation.isBlank();
-    return ResponseEntity.ok(aboutToSubmitResponse(data, List.of()));
+    return ResponseEntity.ok(aboutToSubmitResponse(data, List.of(), List.of()));
   }
 
   public static Map<String, Object> acasDocumentCollectionItem(String id, String documentId, String hashToken) {
@@ -137,11 +141,12 @@ public abstract class BaseJsonLegacyController {
     );
   }
 
-  private Map<String, Object> aboutToSubmitResponse(Map<String, Object> data, List<String> errors) {
+  private Map<String, Object> aboutToSubmitResponse(Map<String, Object> data, List<String> errors,
+                                                    List<String> warnings) {
     Map<String, Object> response = new LinkedHashMap<>();
     response.put("data", data);
     response.put("errors", errors);
-    response.put("warnings", List.of());
+    response.put("warnings", warnings);
     return response;
   }
 

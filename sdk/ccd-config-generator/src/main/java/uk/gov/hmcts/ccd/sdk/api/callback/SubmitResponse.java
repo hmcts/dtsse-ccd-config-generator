@@ -28,6 +28,12 @@ public class SubmitResponse<State> {
 
   private List<String> warnings;
 
+  /**
+   * Not used. Whether warnings are ignored is the user's choice, which CCD sends with the event.
+   *
+   * @deprecated has no effect and will be removed.
+   */
+  @Deprecated
   private List<String> ignoreWarning;
 
   private State state;

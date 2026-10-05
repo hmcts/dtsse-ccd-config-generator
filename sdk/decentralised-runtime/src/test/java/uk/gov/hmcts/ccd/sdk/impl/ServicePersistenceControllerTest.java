@@ -43,19 +43,22 @@ public class ServicePersistenceControllerTest {
   @Test
   void createEventWithValidHeadersCallsSubmissionService() {
     CaseSubmissionService submissionService = mock(CaseSubmissionService.class);
+    DecentralisedCaseEvent event = mock(DecentralisedCaseEvent.class);
+    var request = new ServicePersistenceController.CreateEventRequest();
+    request.setEvent(event);
+    request.setIgnoreWarning(true);
     ServicePersistenceController controller = new ServicePersistenceController(
         submissionService, null, null, null);
-    DecentralisedCaseEvent event = mock(DecentralisedCaseEvent.class);
     UUID idempotencyKey = UUID.randomUUID();
     var expectedResponse = new DecentralisedSubmitEventResponse();
-    when(submissionService.submit(event, "Bearer token", idempotencyKey)).thenReturn(expectedResponse);
+    when(submissionService.submit(event, "Bearer token", idempotencyKey, true)).thenReturn(expectedResponse);
 
     ResponseEntity<DecentralisedSubmitEventResponse> response = controller.createEvent(
-        event, "Bearer token", idempotencyKey);
+        request, "Bearer token", idempotencyKey);
 
     assertThat(response.getStatusCode().value()).isEqualTo(200);
     assertThat(response.getBody()).isSameAs(expectedResponse);
-    verify(submissionService).submit(event, "Bearer token", idempotencyKey);
+    verify(submissionService).submit(event, "Bearer token", idempotencyKey, true);
     verifyNoMoreInteractions(submissionService);
   }
 }

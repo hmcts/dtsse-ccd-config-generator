@@ -17,7 +17,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
@@ -438,7 +441,7 @@ class CcdEventTestSupportIntegrationTest {
         .insert();
 
     var result = events.event(reference, "metadata", new TestCase("submitted"))
-        .submitExpectingSuccess();
+        .ignoringWarnings().submitExpectingSuccess();
 
     assertThat(result.errors()).isEmpty();
     assertThat(result.warnings()).containsExactly("check");
@@ -447,6 +450,67 @@ class CcdEventTestSupportIntegrationTest {
     assertThat(result.state()).isEqualTo(TestState.Closed);
     assertThat(result.classification()).isEqualTo(TestClassification.PRIVATE);
     assertThat(result.supplementaryData()).containsEntry("source", "fixture");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"warn", "legacyWarn"})
+  void warningsTheUserHasNotIgnoredRejectTheEventWithoutCommittingIt(String eventId) {
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+    UUID key = UUID.randomUUID();
+
+    var rejected = events.event(reference, eventId, new TestCase("written"))
+        .withIdempotencyKey(key).submitExpectingErrors();
+
+    assertThat(rejected.errors()).isEmpty();
+    assertThat(rejected.warnings()).containsExactly("check");
+    assertThat(rejected.storedData().value()).isEqualTo("original");
+    assertThat(rejected.snapshot().caseRevision()).isZero();
+    assertThat(caseEvents(reference)).isZero();
+    assertThat(warnedRows(reference)).isZero();
+
+    // The user ignores the warnings and submits again, as CCD retries with the same idempotency key.
+    var accepted = events.event(reference, eventId, new TestCase("written"))
+        .withIdempotencyKey(key).ignoringWarnings().submitExpectingSuccess();
+
+    assertThat(accepted.warnings()).containsExactly("check");
+    assertThat(accepted.audit().eventId()).isEqualTo(eventId);
+    assertThat(accepted.caseRevision()).isEqualTo(1);
+    assertThat(caseEvents(reference)).isEqualTo(1);
+    assertThat(warnedRows(reference)).isEqualTo(1);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"warn", "legacyWarn"})
+  void errorsRejectTheEventEvenWhenTheUserIgnoresWarnings(String eventId) {
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+
+    var rejected = events.event(reference, eventId, new TestCase("error"))
+        .ignoringWarnings().submitExpectingErrors();
+
+    assertThat(rejected.errors()).containsExactly("invalid");
+    assertThat(rejected.warnings()).containsExactly("check");
+    assertThat(rejected.storedData().value()).isEqualTo("original");
+    assertThat(caseEvents(reference)).isZero();
+    assertThat(warnedRows(reference)).isZero();
+  }
+
+  private long caseEvents(long reference) {
+    return jdbc.queryForObject("""
+        select count(*) from ccd.case_event e join ccd.case_data c on c.id = e.case_data_id
+        where c.reference = ?
+        """, Long.class, reference);
+  }
+
+  private long warnedRows(long reference) {
+    return jdbc.queryForObject("select count(*) from public.warned_rows where reference = ?",
+        Long.class, reference);
+  }
+
+  /** Writes a business row as the event's handler, then warns, and errors too when asked to. */
+  private static <T> T warning(JdbcTemplate jdbc, long reference, String value,
+                               BiFunction<List<String>, List<String>, T> response) {
+    jdbc.update("insert into public.warned_rows (reference) values (?)", reference);
+    return response.apply("error".equals(value) ? List.of("invalid") : List.of(), List.of("check"));
   }
 
   record TestCase(String value) {
@@ -571,6 +635,7 @@ class CcdEventTestSupportIntegrationTest {
 
     @Bean
     CCDConfig<TestCase, TestState, TestRole> config(JdbcTemplate jdbc) {
+      jdbc.execute("create table if not exists public.warned_rows (reference bigint not null)");
       return new CCDConfig<>() {
         @Override
         public Set<String> caseTypeIds() {
@@ -621,6 +686,13 @@ class CcdEventTestSupportIntegrationTest {
               .state(TestState.Closed)
               .caseSecurityClassification(Classification.PRIVATE)
               .build()).forAllStates();
+          builder.decentralisedEvent("warn", payload -> warning(jdbc, payload.caseReference(),
+              payload.caseData().value(), (errors, warnings) -> SubmitResponse.<TestState>builder()
+                  .errors(errors).warnings(warnings).build())).forAllStates();
+          builder.event("legacyWarn").forAllStates().aboutToSubmitCallback((details, before) ->
+              warning(jdbc, details.getId(), details.getData().value(), (errors, warnings) ->
+                  AboutToStartOrSubmitResponse.<TestCase, TestState>builder()
+                      .data(details.getData()).errors(errors).warnings(warnings).build()));
           builder.event("legacy").forAllStates().aboutToSubmitCallback((details, before) ->
               AboutToStartOrSubmitResponse.<TestCase, TestState>builder()
                   .data(new TestCase("from callback"))

@@ -1,7 +1,10 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import java.util.List;
 import java.util.UUID;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -56,7 +59,7 @@ class ServicePersistenceController {
   @SneakyThrows
   @PostMapping("/cases")
   public ResponseEntity<DecentralisedSubmitEventResponse> createEvent(
-      @RequestBody DecentralisedCaseEvent event,
+      @RequestBody CreateEventRequest request,
       @RequestHeader(value = "Authorization") String authorisation,
       @RequestHeader(value = IdempotencyEnforcer.IDEMPOTENCY_KEY_HEADER) UUID idempotencyKey) {
 
@@ -66,9 +69,10 @@ class ServicePersistenceController {
       return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
     }
     var response = submissionService.submit(
-        event,
+        request.getEvent(),
         authorisation,
-        idempotencyKey
+        idempotencyKey,
+        request.isIgnoreWarning()
     );
     return ResponseEntity.ok(response);
   }
@@ -106,4 +110,16 @@ class ServicePersistenceController {
     return ResponseEntity.ok(event);
   }
 
+  /**
+   * The event CCD submits, with the user's choice to ignore warnings sent alongside it as CCD's
+   * {@code ignore_warning}. A request without it has not ignored warnings.
+   */
+  @Data
+  static class CreateEventRequest {
+    @JsonUnwrapped
+    private DecentralisedCaseEvent event;
+
+    @JsonProperty("ignore_warning")
+    private boolean ignoreWarning;
+  }
 }

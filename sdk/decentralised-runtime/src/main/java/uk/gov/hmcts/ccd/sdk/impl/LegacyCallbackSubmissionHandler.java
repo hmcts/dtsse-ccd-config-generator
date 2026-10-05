@@ -59,7 +59,8 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   }
 
   @Override
-  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, IdamService.User user) {
+  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, IdamService.User user,
+                                           boolean ignoreWarning) {
     String authorisation = user.authToken();
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
@@ -69,9 +70,8 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     var outcome = prepareLegacySubmit(event);
 
     var submitResponse = outcome.response();
-    if (submitResponse.getErrors() != null && !submitResponse.getErrors().isEmpty()) {
-      throw new CallbackValidationException(submitResponse.getErrors(), submitResponse.getWarnings());
-    }
+    CallbackValidationException.throwIfRejected(
+        submitResponse.getErrors(), submitResponse.getWarnings(), ignoreWarning);
 
     attachNewCdamDocuments(event, authorisation, service, preCallbackData);
 

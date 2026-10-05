@@ -31,6 +31,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.util.CollectionUtils;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedEventDetails;
@@ -323,7 +324,8 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
                                       State initialState,
                                       UUID idempotencyKey,
                                       String authorisation,
-                                      Long startRevision) {
+                                      Long startRevision,
+                                      boolean ignoreWarning) {
       Event<?, ?, ?> eventConfig = registry.getRequiredEvent(caseTypeId, eventId);
       Map<String, Object> stored = initialState == null ? stored(reference) : null;
       checkAllowedState(eventConfig, eventId, stored, initialState);
@@ -349,17 +351,25 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
               .build())
           .build();
 
+      ObjectNode body = WIRE.valueToTree(event);
+      if (ignoreWarning) {
+        body.put("ignore_warning", true);
+      }
+
       DecentralisedSubmitEventResponse response;
       try {
         response = WIRE.convertValue(send(
             MockMvcRequestBuilders.post("/ccd-persistence/cases")
                 .header("Idempotency-Key", idempotencyKey.toString()),
-            authorisation, event), DecentralisedSubmitEventResponse.class);
+            authorisation, body), DecentralisedSubmitEventResponse.class);
       } catch (UnexpectedResponse failure) {
         return new Failed(failure, stored == null ? null : snapshot(reference));
       }
+      // CCD rejects errors, and warnings the response does not say were ignored.
+      boolean rejected = !CollectionUtils.isEmpty(response.getErrors())
+          || (!CollectionUtils.isEmpty(response.getWarnings()) && !Boolean.TRUE.equals(response.getIgnoreWarning()));
       // The response DTO starts with empty case details, so a rejection has none inside them.
-      if (response.getCaseDetails() == null || response.getCaseDetails().getCaseDetails() == null) {
+      if (rejected || response.getCaseDetails() == null || response.getCaseDetails().getCaseDetails() == null) {
         return stored == null ? new CreationRejected(response) : new Rejected(response, snapshot(reference));
       }
       Case projected = mapper.convertValue(response.getCaseDetails().getCaseDetails().getData(), caseClass);
@@ -540,6 +550,7 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
     private String authorisation = TestIdamService.DEFAULT_TOKEN;
     private Long startRevision;
     private Object payload;
+    private boolean ignoreWarning;
 
     private EventSubmission(CaseType caseType, long reference, String eventId, Case submittedData) {
       this.caseType = caseType;
@@ -573,9 +584,15 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
       return this;
     }
 
+    /** Submits as a user who has chosen to ignore the event's warnings, as CCD's ignore_warning says. */
+    public EventSubmission ignoringWarnings() {
+      this.ignoreWarning = true;
+      return this;
+    }
+
     public Submission submit() {
       return caseType.submitInternal(reference, eventId, submittedData, payload, null,
-          idempotencyKey, authorisation, startRevision);
+          idempotencyKey, authorisation, startRevision, ignoreWarning);
     }
 
     public Accepted submitExpectingSuccess() {
@@ -639,7 +656,7 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
 
     public Submission submit() {
       return caseType.submitInternal(reference, eventId, submittedData, null, initialState,
-          idempotencyKey, authorisation, null);
+          idempotencyKey, authorisation, null, false);
     }
 
     public Accepted submitExpectingSuccess() {

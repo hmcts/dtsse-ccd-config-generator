@@ -32,6 +32,7 @@ import uk.gov.hmcts.divorce.idam.User;
 public class DecentralisedCaseworkerAddNoteFailure implements CCDConfig<CaseData, State, UserRole> {
 
     public static final String CASEWORKER_DECENTRALISED_ADD_NOTE_FAIL = "caseworker-decentralised-add-note-fail";
+    public static final String WARNING_ONLY_NOTE = "Decentralised warning note";
 
     @Autowired
     private HttpServletRequest request;
@@ -82,8 +83,12 @@ public class DecentralisedCaseworkerAddNoteFailure implements CCDConfig<CaseData
         );
 
         log.info("Decentralised add note (failure) submitted for case {}", reference);
+        var errors = WARNING_ONLY_NOTE.equals(caseData.getNote())
+            ? List.<String>of()
+            : List.of("Simulated decentralised failure");
         return SubmitResponse.<State>builder()
-            .errors(List.of("Simulated decentralised failure"))
+            .errors(errors)
+            .warnings(List.of("Simulated decentralised warning"))
             .build();
     }
 }

@@ -3221,7 +3221,41 @@ public class TestWithCCD extends CftlibTest {
         List<String> callbackErrors = (List<String>) payload.get("callbackErrors");
         assertThat("callback errors should include simulated failure",
             callbackErrors, contains("Simulated decentralised failure"));
+        assertThat(payload.get("callbackWarnings"), equalTo(List.of("Simulated decentralised warning")));
 
+        Integer after = db.queryForObject(sqlCountByCase, Map.of("ref", caseRef), Integer.class);
+        assertThat(after, equalTo(before));
+        assertThat(auditCountForCase(caseRef), equalTo(auditsBefore));
+    }
+
+    @Order(20)
+    @Test
+    public void testDecentralisedSubmitHandlerWarningsAreRolledBack() throws Exception {
+        String sqlCountByCase = "SELECT count(*) FROM case_notes WHERE reference = :ref";
+        Integer before = db.queryForObject(sqlCountByCase, Map.of("ref", caseRef), Integer.class);
+        Integer auditsBefore = auditCountForCase(caseRef);
+
+        var start = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            DecentralisedCaseworkerAddNoteFailure.CASEWORKER_DECENTRALISED_ADD_NOTE_FAIL
+        );
+
+        var request = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            DecentralisedCaseworkerAddNoteFailure.CASEWORKER_DECENTRALISED_ADD_NOTE_FAIL,
+            Map.of("note", DecentralisedCaseworkerAddNoteFailure.WARNING_ONLY_NOTE),
+            start.getToken()
+        );
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(422));
+
+        var payload = mapper.readValue(EntityUtils.toString(response.getEntity()), Map.class);
+        assertThat(payload.get("callbackWarnings"), equalTo(List.of("Simulated decentralised warning")));
+
+        // CCD rejects the warning, so the handler's note and the event must not have been committed.
         Integer after = db.queryForObject(sqlCountByCase, Map.of("ref", caseRef), Integer.class);
         assertThat(after, equalTo(before));
         assertThat(auditCountForCase(caseRef), equalTo(auditsBefore));
@@ -3952,7 +3986,34 @@ public class TestWithCCD extends CftlibTest {
             @SuppressWarnings("unchecked")
             List<String> callbackErrors = (List<String>) response.get("callbackErrors");
             assertThat(callbackErrors, equalTo(List.of("JSON legacy validation error")));
+            assertThat(response.get("callbackWarnings"), equalTo(List.of("JSON legacy warning")));
             assertThat(storedData(caseType), equalTo(before));
+            assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(1));
+            assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(0));
+        }
+    }
+
+    @SneakyThrows
+    @Order(211)
+    @Test
+    void aboutToSubmitWarningsRollbackJsonLegacySubmission() {
+        for (String caseType : jsonLegacyCaseTypes()) {
+            BaseJsonLegacyController.reset();
+            String before = storedData(caseType);
+            String countEvents = """
+                select count(*) from ccd.case_event event
+                join ccd.case_data case_data on case_data.id = event.case_data_id
+                where case_data.reference = :reference
+                """;
+            var reference = Map.of("reference", jsonLegacyCaseRef(caseType));
+            Integer eventsBefore = db.queryForObject(countEvents, reference, Integer.class);
+
+            var response = submitJsonLegacyEventForCaseType(caseType, Map.of("note", "json-legacy-warning"), 422);
+
+            assertThat(response.get("callbackWarnings"), equalTo(List.of("JSON legacy warning")));
+            // CCD rejects the warning, so the callback's data and the event must not have been committed.
+            assertThat(storedData(caseType), equalTo(before));
+            assertThat(db.queryForObject(countEvents, reference, Integer.class), equalTo(eventsBefore));
             assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(1));
             assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(0));
         }

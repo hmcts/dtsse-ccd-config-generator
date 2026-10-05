@@ -30,15 +30,14 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
   private final ObjectMapper mapper;
 
   @Override
-  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, IdamService.User user) {
+  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, IdamService.User user,
+                                           boolean ignoreWarning) {
     log.info("[submit-handler] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
     var outcome = prepareSubmitHandler(event, user);
 
-    if (outcome.getErrors() != null && !outcome.getErrors().isEmpty()) {
-      throw new CallbackValidationException(outcome.getErrors(), outcome.getWarnings());
-    }
+    CallbackValidationException.throwIfRejected(outcome.getErrors(), outcome.getWarnings(), ignoreWarning);
 
     var state = Optional.ofNullable(outcome.getState()).map(Object::toString);
     var securityClassification = Optional.ofNullable(outcome.getCaseSecurityClassification());

@@ -14,7 +14,11 @@ import uk.gov.hmcts.reform.ccd.client.model.SignificantItem;
  */
 interface CaseSubmissionHandler {
 
-  CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, IdamService.User user);
+  /**
+   * Applies the event, rejecting it with a {@link CallbackValidationException} on errors, or on warnings
+   * unless {@code ignoreWarning} says the user has chosen to ignore them.
+   */
+  CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, IdamService.User user, boolean ignoreWarning);
 
   /**
    * Result returned by a submission handler after it has prepared all in-transaction mutations.

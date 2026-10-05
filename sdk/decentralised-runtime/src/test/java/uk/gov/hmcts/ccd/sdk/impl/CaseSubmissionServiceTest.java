@@ -58,7 +58,7 @@ class CaseSubmissionServiceTest {
         new UserInfo("sub", "uid", "name", "given", "family", List.of("caseworker"))
     );
     when(idam.retrieveUser("raw-token")).thenReturn(user);
-    when(legacyHandler.apply(eq(event), eq(user))).thenReturn(handlerResult());
+    when(legacyHandler.apply(eq(event), eq(user), eq(false))).thenReturn(handlerResult());
     when(transactionCoordinator.execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any(), any()))
         .thenAnswer(invocation -> {
           var work = invocation
@@ -71,9 +71,9 @@ class CaseSubmissionServiceTest {
           );
         });
 
-    service.submit(event, "raw-token", IDEMPOTENCY_KEY);
+    service.submit(event, "raw-token", IDEMPOTENCY_KEY, false);
 
-    verify(legacyHandler).apply(event, user);
+    verify(legacyHandler).apply(event, user, false);
     verify(transactionCoordinator).execute(
         eq(123456789L),
         eq(IDEMPOTENCY_KEY),
@@ -95,7 +95,7 @@ class CaseSubmissionServiceTest {
     when(transactionCoordinator.execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any(), any()))
         .thenReturn(CaseEventTransactionCoordinator.TransactionResult.replayed(99L));
     when(caseDataRepository.caseDetailsAtEvent(123456789L, 99L)).thenReturn(savedCaseDetails());
-    service.submit(event, "raw-token", IDEMPOTENCY_KEY);
+    service.submit(event, "raw-token", IDEMPOTENCY_KEY, false);
 
     verifyNoInteractions(legacyHandler);
   }
