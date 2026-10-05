@@ -4,6 +4,7 @@ import org.assertj.core.api.Condition;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
@@ -34,7 +35,9 @@ public class CaseFieldGeneratorTest {
                 // definition store's base types do not contain, and the import failed outright.
                 {"decimalField", "Number"},
                 {"longField", "Number"},
-                {"LongField", "Number"}
+                {"LongField", "Number"},
+                {"namedEnumField", "RenamedType"},
+                {"generatedEnumField", "FixedRadioList"}
         });
     }
 
@@ -50,7 +53,15 @@ public class CaseFieldGeneratorTest {
         private BigDecimal decimalField;
         private long longField;
         private Long LongField;
+        private NamedEnum namedEnumField;
+        private GeneratedEnum generatedEnumField;
     }
+
+    @ComplexType(name = "RenamedType")
+    private enum NamedEnum { A }
+
+    @ComplexType(name = "RENAMED_LIST", generate = true)
+    private enum GeneratedEnum { A }
 
     @Parameterized.Parameter
     public String fieldName;
