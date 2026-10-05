@@ -142,10 +142,15 @@ describe("editing surface", () => {
 
   it("announces an edit the invariants refuse, leaving the document as it was", async () => {
     const docweave = await import("../src/index.js");
-    const controller = docweave.createDocEditor({ mount: "#editor" });
+    const changes: unknown[] = [];
+    const controller = docweave.createDocEditor({
+      mount: "#editor",
+      onChange: (snapshot) => changes.push(snapshot),
+    });
     controller.render(buildTarget(docweave));
     const { surface, status } = editorElements();
-    const before = controller.getSnapshot().current;
+    const before = controller.getSnapshot();
+    changes.length = 0;
     assert.equal(status.getAttribute("aria-live"), "polite");
     assert.equal(status.textContent, "");
 
@@ -154,7 +159,8 @@ describe("editing surface", () => {
     keydown(surface, "Backspace");
 
     assert.equal(status.textContent, BLOCKED_EDIT_MESSAGE);
-    assert.deepEqual(controller.getSnapshot().current, before);
+    assert.deepEqual(controller.getSnapshot(), before);
+    assert.deepEqual(changes, [], "a refused edit must not report a changed snapshot");
     controller.destroy();
   });
 });
