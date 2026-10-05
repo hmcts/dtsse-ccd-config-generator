@@ -22,29 +22,39 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 @Slf4j
 public class FailingSubmittedCallback implements CCDConfig<CaseData, State, UserRole> {
 
-    public static int callbackAttempts = 0;
+    public static final String NO_RETRIES_EVENT_ID = "failing-submitted-no-retries";
+    public static final String RECOVER_NOTE = "recover-submitted-callback";
+    public static volatile int callbackAttempts = 0;
 
     @Override
     public void configure(final ConfigBuilder<CaseData, State, UserRole> configBuilder) {
-        new PageBuilder(configBuilder
-            .event(FailingSubmittedCallback.class.getSimpleName())
-            .forAllStates()
-            .name("Fail")
-            .description("Fail")
-            .submittedCallback(this::submitted)
-            .retries(3)
-            .grant(CREATE_READ_UPDATE,
-                CASE_WORKER, JUDGE)
-            .grant(CREATE_READ_UPDATE_DELETE,
-                SUPER_USER)
-            .grantHistoryOnly(LEGAL_ADVISOR, JUDGE))
-            .page("addCaseNotes")
-            .pageLabel("Add case notes")
-            .optional(CaseData::getNote);
+        for (String eventId : new String[] {FailingSubmittedCallback.class.getSimpleName(), NO_RETRIES_EVENT_ID}) {
+            var event = configBuilder.event(eventId)
+                .forAllStates()
+                .name("Failing submitted callback")
+                .description("Exercise submitted callback failure and recovery")
+                .submittedCallback(this::submitted)
+                .grant(CREATE_READ_UPDATE, CASE_WORKER, JUDGE)
+                .grant(CREATE_READ_UPDATE_DELETE, SUPER_USER)
+                .grantHistoryOnly(LEGAL_ADVISOR, JUDGE);
+            if (!NO_RETRIES_EVENT_ID.equals(eventId)) {
+                event.retries(3);
+            }
+            new PageBuilder(event)
+                .page("addCaseNotes")
+                .optional(CaseData::getNote)
+                .optional(CaseData::getSetInMidEvent);
+        }
     }
 
     private SubmittedCallbackResponse submitted(CaseDetails<CaseData, State> caseDetails, CaseDetails<CaseData, State> caseDetails1) {
         callbackAttempts++;
-        throw new RuntimeException();
+        if (RECOVER_NOTE.equals(caseDetails.getData().getNote()) && callbackAttempts == 2) {
+            return SubmittedCallbackResponse.builder()
+                .confirmationHeader(SubmittedConfirmationCallback.CONFIRMATION_HEADER)
+                .confirmationBody(SubmittedConfirmationCallback.CONFIRMATION_BODY)
+                .build();
+        }
+        throw new RuntimeException("Private callback diagnostic must not be returned to the caller");
     }
 }

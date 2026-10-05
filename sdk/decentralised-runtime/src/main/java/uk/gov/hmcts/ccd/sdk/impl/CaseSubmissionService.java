@@ -95,11 +95,17 @@ public class CaseSubmissionService {
     response.setErrors(handlerResponse.getErrors());
     response.setWarnings(handlerResponse.getWarnings());
 
-    AfterSubmitCallbackResponse afterSubmit = new AfterSubmitCallbackResponse();
-    afterSubmit.setConfirmationHeader(handlerResponse.getConfirmationHeader());
-    afterSubmit.setConfirmationBody(handlerResponse.getConfirmationBody());
-    ResponseEntity<AfterSubmitCallbackResponse> entity = ResponseEntity.ok(afterSubmit);
-    response.getCaseDetails().getCaseDetails().setAfterSubmitCallbackResponseEntity(entity);
+    var caseDetails = response.getCaseDetails().getCaseDetails();
+    if (handlerResponse.getCallbackErrorMessage() != null) {
+      caseDetails.setIncompleteCallbackResponse();
+      caseDetails.setCallbackErrorMessage(handlerResponse.getCallbackErrorMessage());
+    } else {
+      AfterSubmitCallbackResponse afterSubmit = new AfterSubmitCallbackResponse();
+      afterSubmit.setConfirmationHeader(handlerResponse.getConfirmationHeader());
+      afterSubmit.setConfirmationBody(handlerResponse.getConfirmationBody());
+      ResponseEntity<AfterSubmitCallbackResponse> entity = ResponseEntity.ok(afterSubmit);
+      caseDetails.setAfterSubmitCallbackResponseEntity(entity);
+    }
 
     return response;
   }

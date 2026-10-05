@@ -175,6 +175,11 @@ Under this model, case events proceed as follows:
 
 From the perspective of application development, callbacks therefore continue to function as before.
 
+If a Submitted callback fails after all attempts, the event and its history remain committed. The response
+contains `callback_response_status=INCOMPLETE_CALLBACK` and a `callback_error_message`, with no success
+confirmation. The callback response status code stays 200 for compatibility with CCD clients. Exception
+details are logged rather than returned to the caller. Existing retry configuration is unchanged.
+
 > **Note**
 >
 > CDAM attachment is separate from upload/storage. A document can be uploaded before it is attached to a case.

@@ -98,14 +98,13 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
               .errors(errors)
               .warnings(warnings);
 
-          SubmittedCallbackResponse submittedResponse = null;
           if (runSubmitted) {
-            submittedResponse = runSubmittedCallback(event).orElse(null);
-          }
-
-          if (submittedResponse != null) {
-            builder.confirmationHeader(submittedResponse.getConfirmationHeader());
-            builder.confirmationBody(submittedResponse.getConfirmationBody());
+            SubmittedCallbackOutcome submittedOutcome = runSubmittedCallback(event);
+            submittedOutcome.response().ifPresent(submittedResponse -> {
+              builder.confirmationHeader(submittedResponse.getConfirmationHeader());
+              builder.confirmationBody(submittedResponse.getConfirmationBody());
+            });
+            submittedOutcome.failureMessage().ifPresent(builder::callbackErrorMessage);
           }
           securityClassification.ifPresent(builder::caseSecurityClassification);
           return builder.build();
@@ -166,13 +165,13 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     return errors;
   }
 
-  private Optional<SubmittedCallbackResponse> runSubmittedCallback(DecentralisedCaseEvent event) {
+  private SubmittedCallbackOutcome runSubmittedCallback(DecentralisedCaseEvent event) {
     String caseType = event.getEventDetails().getCaseType();
     String eventId = event.getEventDetails().getEventId();
     Event<?, ?, ?> eventConfig = registry.getRequiredEvent(caseType, eventId);
 
     if (eventConfig.getSubmittedCallback() == null) {
-      return Optional.empty();
+      return new SubmittedCallbackOutcome(Optional.empty(), Optional.empty());
     }
 
     CallbackRequest request = buildCallbackRequest(event);
@@ -181,6 +180,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     // https://github.com/hmcts/ccd-data-store-api/blob/master/src/main/java/uk/gov/hmcts/ccd/domain/service/callbacks/CallbackService.java#L41-L63
     var retriesConfig = eventConfig.getRetries().get(Webhook.Submitted);
     int retries = retriesConfig == null || retriesConfig.isEmpty() ? 1 : 3;
+    Exception terminalFailure = null;
 
     for (int attempt = 0; attempt < retries; attempt++) {
       try {
@@ -188,13 +188,20 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
         log.debug("Submitted callback returned header={} body={}",
             submitted != null ? submitted.getConfirmationHeader() : null,
             submitted != null ? submitted.getConfirmationBody() : null);
-        return Optional.ofNullable(submitted);
+        return new SubmittedCallbackOutcome(Optional.ofNullable(submitted), Optional.empty());
       } catch (Exception ex) {
-        log.warn("Unsuccessful submitted callback for caseType={} eventId={}", caseType, eventId, ex);
+        terminalFailure = ex;
+        log.warn("Unsuccessful submitted callback attempt={} caseType={} eventId={}",
+            attempt + 1, caseType, eventId);
       }
     }
 
-    return Optional.of(SubmittedCallbackResponse.builder().build());
+    log.error("Submitted callback failed after all attempts for caseType={} eventId={}",
+        caseType, eventId, terminalFailure);
+    return new SubmittedCallbackOutcome(
+        Optional.empty(),
+        Optional.of("Submitted callback failed after " + retries + " attempt(s)")
+    );
   }
 
   private CallbackRequest buildCallbackRequest(DecentralisedCaseEvent event) {
@@ -214,6 +221,9 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
                                      EventMetadata eventMetadata,
                                      SignificantItem significantItem,
                                      boolean runSubmittedCallback) {}
+
+  private record SubmittedCallbackOutcome(Optional<SubmittedCallbackResponse> response,
+                                          Optional<String> failureMessage) {}
 
   private void attachNewCdamDocuments(DecentralisedCaseEvent event,
                                       String authorisation,

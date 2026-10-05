@@ -66,5 +66,18 @@
     "SecurityClassification": "Public",
     "PreConditionState(s)": "*",
     "PostConditionState": "*"
+  },
+  {
+    "ID": "json-legacy-create-submitted",
+    "Name": "JSON legacy create with submitted callback",
+    "Description": "Create with a submitted callback",
+    "CaseTypeID": "case-type-a",
+    "DisplayOrder": 105,
+    "EndButtonLabel": "Save and continue",
+    "ShowSummary": "N",
+    "ShowEventNotes": "N",
+    "SecurityClassification": "Public",
+    "PostConditionState": "Submitted",
+    "CallBackURLSubmittedEvent": "${ET_COS_URL}/case-type-a/submitted"
   }
 ]

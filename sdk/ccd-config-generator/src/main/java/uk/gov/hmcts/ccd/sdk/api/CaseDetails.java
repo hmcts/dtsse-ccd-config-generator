@@ -47,4 +47,7 @@ public class CaseDetails<T, S> {
   @JsonProperty("callback_response_status")
   private String callbackResponseStatus;
 
+  @JsonProperty("callback_error_message")
+  private String callbackErrorMessage;
+
 }

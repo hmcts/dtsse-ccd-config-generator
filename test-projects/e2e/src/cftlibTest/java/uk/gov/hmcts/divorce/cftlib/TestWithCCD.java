@@ -1164,6 +1164,7 @@ public class TestWithCCD extends CftlibTest {
             equalTo(SubmittedConfirmationCallback.CONFIRMATION_BODY));
         assertThat(result.get("callback_response_status_code"), equalTo(200));
         assertThat(result.get("callback_response_status"), equalTo("CALLBACK_COMPLETED"));
+        assertThat(result.get("callback_error_message"), nullValue());
     }
 
     @Order(13)
@@ -1290,34 +1291,67 @@ public class TestWithCCD extends CftlibTest {
     @SneakyThrows
     @Order(17)
     @Test
-    public void testSubmittedCallback() {
-        var token = ccdApi.startEvent(
-            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
-            getServiceAuth(), String.valueOf(caseRef), FailingSubmittedCallback.class.getSimpleName()).getToken();
+    public void submittedCallbackFailureIsReportedAsIncompleteAfterEventIsCommitted() throws Exception {
+        for (var scenario : Map.of(
+            FailingSubmittedCallback.class.getSimpleName(), 3,
+            FailingSubmittedCallback.NO_RETRIES_EVENT_ID, 1
+        ).entrySet()) {
+            FailingSubmittedCallback.callbackAttempts = 0;
+            String eventId = scenario.getKey();
+            String marker = "committed-" + eventId;
+            var start = ccdApi.startEvent(getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+                getServiceAuth(), String.valueOf(caseRef), eventId);
+            var request = prepareEventRequestWithToken("TEST_CASE_WORKER_USER@mailinator.com", eventId,
+                Map.of("setInMidEvent", marker), start.getToken());
 
-        var body = Map.of(
-            "data", Map.of(
-                "note", "Test!"
-            ),
-            "event", Map.of(
-                "id", FailingSubmittedCallback.class.getSimpleName(),
-                "summary", "summary",
-                "description", "description"
-            ),
-            "event_token", token,
-            "ignore_warning", false
-        );
+            try (var client = HttpClientBuilder.create().build(); var response = client.execute(request)) {
+                assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+                assertThat(FailingSubmittedCallback.callbackAttempts, equalTo(scenario.getValue()));
+                JsonNode result = mapper.readTree(EntityUtils.toString(response.getEntity()));
+                assertIncompleteSubmittedCallback(result, scenario.getValue());
+                assertThat(result.path("data").path("setInMidEvent").asText(), equalTo(marker));
+            }
+            assertThat(db.queryForObject("select data->>'setInMidEvent' from ccd.case_data where reference = :ref",
+                Map.of("ref", caseRef), String.class), equalTo(marker));
+            assertThat(db.queryForObject("""
+                select ce.data->>'setInMidEvent' from ccd.case_event ce
+                join ccd.case_data cd on cd.id = ce.case_data_id
+                where cd.reference = :ref and ce.event_id = :eventId order by ce.id desc limit 1
+                """, Map.of("ref", caseRef, "eventId", eventId), String.class), equalTo(marker));
+            assertThat(getLatestAuditEvent("TEST_CASE_WORKER_USER@mailinator.com", caseRef, eventId),
+                is(notNullValue()));
+        }
+    }
 
-        var e = buildRequest(
-            "TEST_CASE_WORKER_USER@mailinator.com",
-            BASE_URL + "/cases/" + caseRef + "/events",
-            HttpPost::new);
-        withCcdAccept(e, ACCEPT_CREATE_EVENT);
+    private void assertIncompleteSubmittedCallback(JsonNode result, int attempts) {
+        assertThat(result.path("callback_response_status").asText(), equalTo("INCOMPLETE_CALLBACK"));
+        assertThat(result.path("callback_response_status_code").asInt(), equalTo(200));
+        assertThat(result.path("callback_error_message").asText(),
+            equalTo("Submitted callback failed after " + attempts + " attempt(s)"));
+        assertThat(result.path("after_submit_callback_response").hasNonNull("confirmation_header"), is(false));
+        assertThat(result.path("after_submit_callback_response").hasNonNull("confirmation_body"), is(false));
+    }
 
-        e.setEntity(new StringEntity(mapper.writeValueAsString(body), ContentType.APPLICATION_JSON));
-        var response = HttpClientBuilder.create().build().execute(e);
-        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
-        assertThat(FailingSubmittedCallback.callbackAttempts, equalTo(3));
+    @Test
+    @Order(17)
+    void submittedCallbackCanRecoverOnRetry() throws Exception {
+        FailingSubmittedCallback.callbackAttempts = 0;
+        String eventId = FailingSubmittedCallback.class.getSimpleName();
+        var start = ccdApi.startEvent(getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(), String.valueOf(caseRef), eventId);
+        var request = prepareEventRequestWithToken("TEST_CASE_WORKER_USER@mailinator.com", eventId,
+            Map.of("note", FailingSubmittedCallback.RECOVER_NOTE), start.getToken());
+        try (var client = HttpClientBuilder.create().build(); var response = client.execute(request)) {
+            assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+            assertThat(FailingSubmittedCallback.callbackAttempts, equalTo(2));
+            JsonNode result = mapper.readTree(EntityUtils.toString(response.getEntity()));
+            assertThat(result.path("callback_response_status").asText(), equalTo("CALLBACK_COMPLETED"));
+            assertThat(result.hasNonNull("callback_error_message"), is(false));
+            assertThat(result.path("after_submit_callback_response").path("confirmation_header").asText(),
+                equalTo(SubmittedConfirmationCallback.CONFIRMATION_HEADER));
+            assertThat(result.path("after_submit_callback_response").path("confirmation_body").asText(),
+                equalTo(SubmittedConfirmationCallback.CONFIRMATION_BODY));
+        }
     }
 
     @SneakyThrows
@@ -4106,6 +4140,8 @@ public class TestWithCCD extends CftlibTest {
             assertThat(data.get("setInMidEvent"), equalTo("json-legacy-no-callback"));
             assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(0));
             assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(0));
+            assertThat(response.get("callback_error_message"), nullValue());
+            assertThat(response.get("callback_response_status"), not(equalTo("INCOMPLETE_CALLBACK")));
         }
     }
 
@@ -4143,8 +4179,38 @@ public class TestWithCCD extends CftlibTest {
         }
     }
 
+    @Test
+    @Order(213)
+    void externalSubmittedCallbackFailuresAreReportedAfterCommit() throws Exception {
+        for (int status : List.of(503, 0, -1)) {
+            HttpServer server = status >= 0 ? startExternalSubmittedCallbackServer(status) : null;
+            try {
+                for (String caseType : jsonLegacyCaseTypes()) {
+                    BaseJsonLegacyController.reset();
+                    String marker = "http-callback-failure-" + status;
+                    var response = submitJsonLegacyEventForCaseType(caseType,
+                        JSON_LEGACY_EXTERNAL_SUBMITTED_EVENT_ID, Map.of("setInMidEvent", marker), 201);
+                    assertIncompleteSubmittedCallback(mapper.valueToTree(response), 1);
+                    assertThat(BaseJsonLegacyController.externalSubmittedAttempts, equalTo(status >= 0 ? 1 : 0));
+                    assertThat(mapper.readTree(storedData(caseType)).path("setInMidEvent").asText(), equalTo(marker));
+                    assertThat(getLatestAuditEvent("TEST_CASE_WORKER_USER@mailinator.com", jsonLegacyCaseRef(caseType),
+                        JSON_LEGACY_EXTERNAL_SUBMITTED_EVENT_ID), is(notNullValue()));
+                }
+            } finally {
+                if (server != null) {
+                    server.stop(0);
+                }
+            }
+        }
+    }
+
     @SneakyThrows
     private HttpServer startExternalSubmittedCallbackServer() {
+        return startExternalSubmittedCallbackServer(200);
+    }
+
+    @SneakyThrows
+    private HttpServer startExternalSubmittedCallbackServer(int status) {
         HttpServer server = HttpServer.create(
             new InetSocketAddress(EXTERNAL_CALLBACK_HOST, EXTERNAL_CALLBACK_PORT),
             0
@@ -4162,12 +4228,21 @@ public class TestWithCCD extends CftlibTest {
                 BaseJsonLegacyController.externalSubmittedSawServiceAuthorisation =
                     hasText(exchange.getRequestHeaders().getFirst("ServiceAuthorization"));
 
+                // A silent endpoint exercises the SDK's HTTP request timeout.
+                if (status == 0) {
+                    try {
+                        Thread.sleep(3000);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                }
                 byte[] body = mapper.writeValueAsBytes(Map.of(
                     "confirmation_header", BaseJsonLegacyController.EXTERNAL_CONFIRMATION_HEADER,
                     "confirmation_body", BaseJsonLegacyController.EXTERNAL_CONFIRMATION_BODY
                 ));
                 exchange.getResponseHeaders().set("Content-Type", "application/json");
-                exchange.sendResponseHeaders(200, body.length);
+                exchange.sendResponseHeaders(status == 0 ? 200 : status, body.length);
                 exchange.getResponseBody().write(body);
             } finally {
                 exchange.close();
@@ -4293,6 +4368,11 @@ public class TestWithCCD extends CftlibTest {
             var firstResponse = HttpClientBuilder.create().build().execute(request);
             assertThat(firstResponse.getStatusLine().getStatusCode(), equalTo(201));
             assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(3));
+            JsonNode recovered = mapper.readTree(EntityUtils.toString(firstResponse.getEntity()));
+            assertThat(recovered.path("callback_response_status").asText(), equalTo("CALLBACK_COMPLETED"));
+            assertThat(recovered.hasNonNull("callback_error_message"), is(false));
+            assertThat(recovered.path("after_submit_callback_response").path("confirmation_body").asText(),
+                equalTo(BaseJsonLegacyController.CONFIRMATION_BODY));
 
             var duplicateRequest = prepareEventRequestWithToken(
                 "TEST_CASE_WORKER_USER@mailinator.com",
@@ -4304,6 +4384,55 @@ public class TestWithCCD extends CftlibTest {
             var duplicateResponse = HttpClientBuilder.create().build().execute(duplicateRequest);
             assertThat(duplicateResponse.getStatusLine().getStatusCode(), equalTo(201));
             assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(3));
+        }
+    }
+
+    @Test
+    @Order(216)
+    void failedSubmittedCallbackOnCaseCreationKeepsTheCommittedCase() throws Exception {
+        for (String caseType : jsonLegacyCaseTypes()) {
+            BaseJsonLegacyController.reset();
+            String user = "TEST_CASE_WORKER_USER@mailinator.com";
+            String eventId = "json-legacy-create-submitted";
+            String userToken = getAuthorisation(user);
+            var start = ccdApi.startForCaseworker(userToken, getServiceAuth(), idam.getUserInfo(userToken).getUid(),
+                NoFaultDivorce.JURISDICTION, caseType, eventId);
+            var request = buildRequest(user, BASE_URL + "/data/case-types/" + caseType + "/cases", HttpPost::new);
+            withCcdAccept(request, ACCEPT_CREATE_CASE);
+            request.setEntity(new StringEntity(mapper.writeValueAsString(Map.of(
+                "event_token", start.getToken(),
+                "event", Map.of("id", eventId),
+                "data", Map.of("note", "json-legacy-submitted-failure")
+            )), ContentType.APPLICATION_JSON));
+            try (var client = HttpClientBuilder.create().build(); var response = client.execute(request)) {
+                assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+                JsonNode result = mapper.readTree(EntityUtils.toString(response.getEntity()));
+                assertIncompleteSubmittedCallback(result, 1);
+                assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(1));
+                long reference = result.path("id").asLong();
+                assertThat(ccdApi.getCase(userToken, getServiceAuth(), String.valueOf(reference)).getState(),
+                    equalTo("Submitted"));
+                assertThat(db.queryForObject("select data->>'note' from ccd.case_data where reference = :ref",
+                    Map.of("ref", reference), String.class), equalTo("json-legacy-submitted-failure"));
+                assertThat(getLatestAuditEvent(user, reference, eventId), is(notNullValue()));
+            }
+        }
+    }
+
+    @Test
+    @Order(216)
+    void failedJsonSubmittedCallbackReturnsIncompleteWithCommittedData() throws Exception {
+        for (String caseType : jsonLegacyCaseTypes()) {
+            BaseJsonLegacyController.reset();
+            var response = submitJsonLegacyEventForCaseType(caseType,
+                Map.of("note", "json-legacy-submitted-failure"), 201);
+            assertIncompleteSubmittedCallback(mapper.valueToTree(response), 3);
+            assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(3));
+            assertThat(BaseJsonLegacyController.submittedSawCommittedData, is(true));
+            assertThat(mapper.readTree(storedData(caseType)).path("note").asText(),
+                equalTo("json-legacy-submitted-failure"));
+            assertThat(getLatestAuditEvent("TEST_CASE_WORKER_USER@mailinator.com", jsonLegacyCaseRef(caseType),
+                JSON_LEGACY_EVENT_ID), is(notNullValue()));
         }
     }
 

@@ -135,11 +135,14 @@ public abstract class BaseJsonLegacyController {
   public Map<String, Object> submitted(@RequestBody Map<String, Object> request) {
     int attempt = ++submittedAttempts;
     Map<String, Object> data = caseData(request);
+    submittedSawCommittedData = storedDataContainsMarker(caseReference(request));
+    if ("json-legacy-submitted-failure".equals(data.get("note"))) {
+      throw new IllegalStateException("Private HTTP callback diagnostic");
+    }
     if ("json-legacy-retry".equals(data.get("note")) && attempt < 3) {
       throw new IllegalStateException("retry submitted callback");
     }
 
-    submittedSawCommittedData = storedDataContainsMarker(caseReference(request));
     return Map.of(
         "confirmation_header", CONFIRMATION_HEADER,
         "confirmation_body", CONFIRMATION_BODY

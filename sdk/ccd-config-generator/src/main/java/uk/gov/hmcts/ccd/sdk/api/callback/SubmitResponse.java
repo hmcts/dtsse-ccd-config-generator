@@ -37,6 +37,10 @@ public class SubmitResponse<State> {
   @JsonIgnore
   private EventMetadata eventMetadata;
 
+  /** Post-commit callback failure, returned on the case details rather than as a validation error. */
+  @JsonIgnore
+  private String callbackErrorMessage;
+
   @JsonProperty("significant_item")
   private SignificantItem significantItem;
 }

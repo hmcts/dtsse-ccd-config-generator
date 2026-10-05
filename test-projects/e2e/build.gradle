@@ -294,6 +294,7 @@ cftlibTest {
   authMode = AuthMode.Local
   group = 'verification'
   environment 'ET_COS_URL', etCosUrl
+  environment 'DECENTRALISATION_EXTERNAL_CALLBACK_TIMEOUT', '2s'
 
   systemProperties([
     'junit.jupiter.execution.parallel.enabled'             : 'false',
