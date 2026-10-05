@@ -35,8 +35,10 @@ class SearchCasesResultFieldsGenerator<T, S, R extends HasRole> implements
       // once per (UseCase, AccessProfile) it is exposed under. Keying only on CaseFieldID collapsed
       // those to one last-wins row. Both columns retain their historic values (UseCase=orgcases,
       // empty UserRole) unless a field opts in, so the extra keys never tie apart existing configs
-      // and the emitted JSON stays byte-identical for them.
-      JsonUtils.mergeInto(output, jsonFields, new AddMissing(), "CaseFieldID", "UseCase", "UserRole");
+      // and the emitted JSON stays byte-identical for them. ListElementCode likewise separates two
+      // members of one complex field, and is absent on every row that does not set it.
+      JsonUtils.mergeInto(output, jsonFields, new AddMissing(), "CaseFieldID", "UseCase", "UserRole",
+          "ListElementCode");
     }
   }
 
