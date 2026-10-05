@@ -101,7 +101,7 @@ dependencies {
   implementation 'org.apache.pdfbox:pdfbox:3.0.8'
 
   implementation 'com.github.ben-manes.caffeine:caffeine:3.3.0'
-  implementation 'com.google.guava:guava:33.7.1-jre'
+  implementation 'com.google.guava:guava:33.7.2-jre'
 
   implementation 'org.projectlombok:lombok:1.18.48'
   annotationProcessor 'org.projectlombok:lombok:1.18.48'
