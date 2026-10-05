@@ -109,8 +109,13 @@ function returnToFact(
   announce?: (message: string) => void,
 ): void {
   const fact = factPosition(view, factId);
+  // Focus goes to the editor, not the fact's span: ProseMirror only tracks the
+  // selection while its own element is focused, and the node selection and
+  // announcement together say where the reader has landed. Focus comes first, as
+  // ProseMirror only scrolls to a selection the browser's selection is in.
+  view.focus();
   if (!fact) {
-    view.focus();
+    view.dispatch(view.state.tr.scrollIntoView());
     announce?.("Returned to the document. The field you left is no longer in it.");
     return;
   }
@@ -119,10 +124,6 @@ function returnToFact(
       .setSelection(NodeSelection.create(view.state.doc, fact.position))
       .scrollIntoView(),
   );
-  // Focus goes to the editor, not the fact's span: ProseMirror only tracks the
-  // selection while its own element is focused, and the node selection and
-  // announcement together say where the reader has landed.
-  view.focus();
   const label = getFactLabel(view.state, factId);
   announce?.(
     `Returned to ${label ? describeFact(view.state, fact.node) : `generated field, ${fact.node.attrs.text as string}`}.`,
