@@ -907,15 +907,14 @@ public final class RetrofitPatchEmitter {
     String refusal = retypeRefusal(property, declaredClass.get());
     if (refusal != null) {
       recordRetypeGap(sheet, rowKey, companion.getId(), property, target, refusal);
+      // withComplexCompanion names the companion on the field instead, so the member walk still
+      // resolves the companion's members.
+      recordPlannedRetype(property, declaredClass.get(), caseFieldId,
+          new RetrofitPlannedRetypes.Retype(target, companion.getId(), true));
       return;
     }
-    boolean recorded = caseFieldId != null
-        ? plannedRetypes.recordRootField(
-            ownerFqnOf(property, declaredClass.get()), property.memberName, caseFieldId,
-            new RetrofitPlannedRetypes.Retype(target, companion.getId()))
-        : plannedRetypes.recordMember(
-            ownerFqnOf(property, declaredClass.get()), property.memberName,
-            new RetrofitPlannedRetypes.Retype(target, companion.getId()));
+    boolean recorded = recordPlannedRetype(property, declaredClass.get(), caseFieldId,
+        new RetrofitPlannedRetypes.Retype(target, companion.getId(), false));
     if (!recorded) {
       // Another definition type already claimed this member (a root CaseData field that is also a
       // member of a complex type bound to the root class). Recording first and editing only on success
@@ -923,6 +922,14 @@ public final class RetrofitPatchEmitter {
       return;
     }
     editsFor(byFile, property.ownerFile).retype(property.memberName, target);
+  }
+
+  private boolean recordPlannedRetype(ResolvedProperty property, ModelSourceIndex.Type declaredClass,
+      String caseFieldId, RetrofitPlannedRetypes.Retype retype) {
+    String ownerFqn = ownerFqnOf(property, declaredClass);
+    return caseFieldId != null
+        ? plannedRetypes.recordRootField(ownerFqn, property.memberName, caseFieldId, retype)
+        : plannedRetypes.recordMember(ownerFqn, property.memberName, retype);
   }
 
   /**

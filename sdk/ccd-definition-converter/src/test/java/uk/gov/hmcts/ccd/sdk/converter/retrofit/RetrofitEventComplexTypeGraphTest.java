@@ -11,6 +11,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import uk.gov.hmcts.ccd.sdk.converter.link.EventComplexTypeResolver;
+import uk.gov.hmcts.ccd.sdk.converter.model.ComplexTypeModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.EventComplexTypeGroup;
 import uk.gov.hmcts.ccd.sdk.converter.model.FieldModel;
 
@@ -731,6 +732,90 @@ class RetrofitEventComplexTypeGraphTest {
         .id("applicant1DQHearing").javaName("applicant1DQHearing").fieldType("Hearing").build();
 
     assertThat(resolver.rootPlacement(field)).isEmpty();
+  }
+
+  @Test
+  void reportsTheHintThePatchWillPinOnAnInheritedMember(@TempDir Path work) throws Exception {
+    Path src = work.resolve("src");
+    // fpl's JudicialMessage inherits urgency from JudicialMessageMetaData, where the patch pins its
+    // hint. The plan is keyed by the declaring class, not the class the walk is on.
+    write(src, "m", "MetaData", "package m;\nimport lombok.Data;\n@Data\n"
+        + "public class MetaData {\n  private String urgency;\n}\n");
+    write(src, "m", "Message", "package m;\nimport lombok.Data;\n@Data\n"
+        + "public class Message extends MetaData {\n  private String subject;\n}\n");
+    write(src, "m", "CaseData", "package m;\nimport lombok.Data;\n@Data\npublic class CaseData {\n"
+        + "  private Message reply;\n}\n");
+    RetrofitPlannedHints hints = RetrofitPlannedHints.empty();
+    hints.record("m.MetaData", "urgency", "Add if it's urgent");
+
+    EventComplexTypeResolver resolver = resolverFor(
+        src, RetrofitPlannedSynthesis.empty(), RetrofitPinnedNames.empty(), hints);
+    FieldModel field = FieldModel.builder()
+        .id("reply").javaName("reply").fieldType("Message").build();
+
+    assertThat(resolve(resolver, field, "urgency").getDeclaredHint())
+        .isEqualTo("Add if it's urgent");
+  }
+
+  @Test
+  void resolvesAFieldNamingItsCompanionThroughTheCompanionAndTypesItsScopeOnIt(@TempDir Path work)
+      throws Exception {
+    Path src = work.resolve("src");
+    // fpl's allocationDecision: declared Allocation, whose accessors are called so the retype is
+    // refused, but typed AllocationDecision in the definition. The members are the companion's, so the
+    // walk must resolve them there and type the scopes on it — on the root, and on a hop reaching the
+    // same shape through a member. Below the companion, a member typed by a definition ID the model has
+    // a class for re-enters the team's model.
+    write(src, "m", "Allocation", "package m;\nimport lombok.Data;\n@Data\n"
+        + "public class Allocation {\n  private String proposal;\n}\n");
+    write(src, "m", "Judge", "package m;\nimport lombok.Data;\n@Data\n"
+        + "public class Judge {\n  private String level;\n}\n");
+    write(src, "m", "Holder", "package m;\nimport lombok.Data;\n@Data\n"
+        + "public class Holder {\n  private Allocation inner;\n}\n");
+    write(src, "m", "CaseData", "package m;\nimport lombok.Data;\n@Data\npublic class CaseData {\n"
+        + "  private Allocation allocationDecision;\n  private Holder holder;\n}\n");
+    ComplexTypeModel companion = ComplexTypeModel.builder()
+        .id("AllocationDecision").javaClassName("AllocationDecision")
+        .members(List.of(
+            FieldModel.builder().id("allocationDecision_Label").javaName("allocationDecision_Label")
+                .fieldType("Label").build(),
+            FieldModel.builder().id("judge").javaName("judge").fieldType("Judge").build()))
+        .build();
+    RetrofitPlannedRetypes retypes = RetrofitPlannedRetypes.empty();
+    RetrofitPlannedRetypes.Retype named =
+        new RetrofitPlannedRetypes.Retype("AllocationDecision", "AllocationDecision", true);
+    retypes.recordRootField("m.CaseData", "allocationDecision", "allocationDecision", named);
+    retypes.recordMember("m.Holder", "inner", named);
+
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    PropertyResolver.Resolution resolution =
+        new PropertyResolver(index).resolve(index.byFqn("m.CaseData").orElseThrow());
+    EventComplexTypeResolver resolver = new EventComplexTypeResolver(List.of(companion), PREDEFINED,
+        new RetrofitEventComplexTypeGraph(index, resolution,
+            index.byFqn("m.CaseData").orElseThrow(), RetrofitPlannedSynthesis.empty(), retypes,
+            RetrofitPlannedHints.empty(), RetrofitPinnedNames.empty()));
+    FieldModel root = FieldModel.builder()
+        .id("allocationDecision").javaName("allocationDecision").fieldType("AllocationDecision")
+        .build();
+    FieldModel holder = FieldModel.builder()
+        .id("holder").javaName("holder").fieldType("Holder").build();
+
+    assertThat(resolver.rootScopeType(root).getSimpleName()).isEqualTo("AllocationDecision");
+    EventComplexTypeGroup.Member label = resolve(resolver, root, "allocationDecision_Label");
+    assertThat(label.getLeafType().getSimpleName()).isEqualTo("AllocationDecision");
+    assertThat(label.getLeafGetter()).isEqualTo("getAllocationDecision_Label");
+
+    EventComplexTypeGroup.Member level = resolve(resolver, root, "judge.level");
+    assertThat(level.getHops()).singleElement()
+        .satisfies(hop -> assertThat(hop.getScopeType()).isNull());
+    assertThat(level.getLeafType().getModelFqn()).isEqualTo("m.Judge");
+
+    EventComplexTypeGroup.Member nested = resolve(resolver, holder, "inner.allocationDecision_Label");
+    assertThat(nested.getHops()).singleElement().satisfies(hop -> {
+      assertThat(hop.getGetter()).isEqualTo("getInner");
+      assertThat(hop.getScopeType().getSimpleName()).isEqualTo("AllocationDecision");
+    });
+    assertThat(resolver.rootScopeType(holder)).isNull();
   }
 
   @Test

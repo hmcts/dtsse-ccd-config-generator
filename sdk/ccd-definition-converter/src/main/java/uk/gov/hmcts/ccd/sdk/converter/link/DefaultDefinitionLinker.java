@@ -2584,6 +2584,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
             .rootGetter(rootPlacement.get().getter())
             .rootHops(rootPlacement.get().hops())
             .rootElementType(resolver.rootElementType(field))
+            .rootScopeType(resolver.rootScopeType(field))
             .members(members)
             .build(),
         unresolved);

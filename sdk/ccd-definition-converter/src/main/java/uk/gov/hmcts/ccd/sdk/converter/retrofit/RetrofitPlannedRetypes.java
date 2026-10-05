@@ -44,6 +44,13 @@ import java.util.Set;
  * generated output and so is absent from {@link ModelSourceIndex}. The graph therefore answers "no
  * binding" for a retyped field, which is exactly the signal {@code EventComplexTypeResolver} already
  * treats as "fall back to the type-id node".
+ *
+ * <p>A field whose retype is refused because its accessors are called is recorded too, flagged
+ * {@link Retype#declarationKept}: the patch names the companion on it with
+ * {@code @CCD(typeParameterClass)} instead, so its definition members are still the companion's.
+ * fpl's {@code CaseData.allocationDecision} is the case — declared {@code Allocation}, which backs the
+ * definition's {@code AllocationProposal}, but typed {@code AllocationDecision} in the definition, whose
+ * {@code Label} members {@code Allocation} does not have.
  */
 final class RetrofitPlannedRetypes {
 
@@ -54,8 +61,11 @@ final class RetrofitPlannedRetypes {
    * @param targetSimpleName the companion class's Java simple name (e.g. {@code DwpAT38DocumentCT})
    * @param definitionId the definition complex-type ID the companion is annotated with (e.g.
    *     {@code dwpAT38DocumentCT}) — the ID the walk descends by
+   * @param declarationKept true when the retype was refused and the field instead keeps its declared
+   *     class and names the companion with {@code @CCD(typeParameterClass)}: its members still come
+   *     from the companion, but a member scope must be opened typed on it explicitly
    */
-  record Retype(String targetSimpleName, String definitionId) {
+  record Retype(String targetSimpleName, String definitionId, boolean declarationKept) {
   }
 
   private final Map<String, Map<String, Retype>> byOwnerFqn = new LinkedHashMap<>();

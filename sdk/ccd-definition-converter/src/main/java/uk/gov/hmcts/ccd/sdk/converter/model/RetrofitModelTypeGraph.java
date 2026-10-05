@@ -45,6 +45,19 @@ public interface RetrofitModelTypeGraph {
   boolean rootIsCollection(String caseFieldId);
 
   /**
+   * Whether the root complex field keeps a declared class other than the one its definition complex
+   * type is generated from, naming that class with {@code @CCD(typeParameterClass)} instead. Its
+   * members then belong to the named class, so a scalar root's member scope must be opened typed on it
+   * rather than on the getter's declared type.
+   *
+   * @param caseFieldId the root complex field's CCD ID
+   * @return true when the declared class is kept and the generated class is only named
+   */
+  default boolean rootDeclarationKept(String caseFieldId) {
+    return false;
+  }
+
+  /**
    * Resolves one dotted {@code ListElementCode} segment against a model type: matches it to a member
    * whose effective CCD id (its {@code @JsonProperty} value, else its Java field name) equals the
    * segment, and returns the member's getter plus — when the member is itself a complex type or a
@@ -195,6 +208,7 @@ public interface RetrofitModelTypeGraph {
     private final String declaredHint;
     private final String nestedTypeId;
     private final List<Handle> unwrappedContainers;
+    private final boolean declarationKept;
 
     /**
      * Creates a member resolution for a member read off the parsed model, whose nested type is
@@ -243,12 +257,32 @@ public interface RetrofitModelTypeGraph {
      */
     public MemberResolution(String getter, Handle nested, boolean collection, String declaredHint,
         String nestedTypeId, List<Handle> unwrappedContainers) {
+      this(getter, nested, collection, declaredHint, nestedTypeId, unwrappedContainers, false);
+    }
+
+    /**
+     * Creates a member resolution for a member that keeps its declared class while its definition
+     * complex type is generated from the class {@code nestedTypeId} names (see
+     * {@link RetrofitModelTypeGraph#rootDeclarationKept}).
+     *
+     * @param getter the member's getter name
+     * @param nested the parsed nested type, or null when named by {@code nestedTypeId} or a leaf
+     * @param collection whether the member is a {@code Collection}
+     * @param declaredHint the member's declared {@code @CCD(hint)}, or null
+     * @param nestedTypeId the definition complex-type ID to descend by when {@code nested} is null
+     * @param unwrappedContainers the containers descended to reach the member, outermost first
+     * @param declarationKept whether a scalar member's scope must be opened typed on the class
+     *     {@code nestedTypeId} names rather than on its declared class
+     */
+    public MemberResolution(String getter, Handle nested, boolean collection, String declaredHint,
+        String nestedTypeId, List<Handle> unwrappedContainers, boolean declarationKept) {
       this.getter = getter;
       this.nested = nested;
       this.collection = collection;
       this.declaredHint = declaredHint;
       this.nestedTypeId = nestedTypeId;
       this.unwrappedContainers = unwrappedContainers == null ? List.of() : unwrappedContainers;
+      this.declarationKept = declarationKept;
     }
 
     /**
@@ -306,6 +340,16 @@ public interface RetrofitModelTypeGraph {
      */
     public String nestedTypeId() {
       return nestedTypeId;
+    }
+
+    /**
+     * Whether the member keeps its declared class while its members come from the class
+     * {@link #nestedTypeId()} names.
+     *
+     * @return true when a scalar member's scope must be opened typed on the named class
+     */
+    public boolean declarationKept() {
+      return declarationKept;
     }
   }
 }

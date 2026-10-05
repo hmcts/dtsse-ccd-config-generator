@@ -554,6 +554,66 @@ class EventsConfigEmitterTest {
   }
 
   @Test
+  void scalarRootKeepingItsDeclarationOpensAScopeTypedOnTheNamedClass() {
+    // fpl's allocationDecision is declared Allocation but typed AllocationDecision in the definition,
+    // whose Label members Allocation lacks. The page's COMPLEX row is still registered by the bare
+    // one-arg .complex(getter).done(), and the members hang off a separate scope typed on the named
+    // class; a nested hop keeping its declaration is opened the same way.
+    EventComplexTypeGroup.TypeRef decision =
+        EventComplexTypeGroup.TypeRef.builder().simpleName("AllocationDecision").build();
+    EventComplexTypeGroup.TypeRef judge =
+        EventComplexTypeGroup.TypeRef.builder().simpleName("JudgeDecision").build();
+    EventComplexTypeGroup group = EventComplexTypeGroup.builder()
+        .eventId("gatekeeping")
+        .caseFieldId("allocationDecision")
+        .rootGetter("getAllocationDecision")
+        .rootScopeType(decision)
+        .members(List.of(
+            EventComplexTypeGroup.Member.builder()
+                .hops(List.of())
+                .leafType(decision)
+                .leafGetter("getAllocationDecision_Label")
+                .contextMethod("readonly")
+                .build(),
+            EventComplexTypeGroup.Member.builder()
+                .hops(List.of(EventComplexTypeGroup.Hop.builder()
+                    .declaringType(decision)
+                    .getter("getJudge")
+                    .scopeType(judge)
+                    .build()))
+                .leafType(judge)
+                .leafGetter("getLevel")
+                .contextMethod("mandatory")
+                .build()))
+        .build();
+
+    PageModel.PageField field = PageModel.PageField.builder()
+        .caseFieldId("allocationDecision")
+        .displayContext("COMPLEX")
+        .build();
+    PageModel page = PageModel.builder().pageId("1").fields(List.of(field)).build();
+    EventModel event = EventModel.builder()
+        .id("gatekeeping").javaName("gatekeeping").name("Gatekeeping")
+        .preStates(List.of()).postState("Open").grants(Map.of()).pages(List.of(page))
+        .build();
+    FieldModel allocationDecision = FieldModel.builder()
+        .id("allocationDecision").javaName("allocationDecision").fieldType("AllocationDecision")
+        .build();
+    CaseTypeModel model = modelWithEvents(List.of(event), List.of(allocationDecision)).toBuilder()
+        .eventComplexTypeGroups(Map.of("gatekeeping\u001fallocationDecision", group))
+        .build();
+
+    String src = allSrc(new EventsConfigEmitter().emit(model, contextWith(40)));
+
+    assertThat(src).contains("fields.complex(CaseData::getAllocationDecision).done()");
+    assertThat(src).contains(
+        "fields.complexScope(CaseData::getAllocationDecision, AllocationDecision.class)");
+    assertThat(src).contains(".readonly(AllocationDecision::getAllocationDecision_Label)");
+    assertThat(src).contains(".complexScope(AllocationDecision::getJudge, JudgeDecision.class)");
+    assertThat(src).contains(".mandatory(JudgeDecision::getLevel)");
+  }
+
+  @Test
   void collectionRootedGroupOpensElementTypedScopeAndEmitsHintTriState() {
     // A Collection-rooted CaseEventToComplexTypes group: the collection field's own COMPLEX row is
     // registered by the one-arg .complex(getter).done(), and the element members are placed in a

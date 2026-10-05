@@ -420,7 +420,7 @@ class ModelSourceIndexTest {
   }
 
   @Test
-  void aValueClassFieldHasAResolvableGetter(@TempDir Path work) throws Exception {
+  void valueClassFieldHasAResolvableGetter(@TempDir Path work) throws Exception {
     // fpl's ManageLegalCounselEventData: an immutable @Value event-data class unwrapped onto CaseData.
     Path src = work.resolve("src");
     write(src, "m", "EventData", "package m;\nimport lombok.Value;\n"

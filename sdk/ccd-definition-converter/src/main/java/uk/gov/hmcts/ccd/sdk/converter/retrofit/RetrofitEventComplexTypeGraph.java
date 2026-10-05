@@ -135,9 +135,9 @@ public final class RetrofitEventComplexTypeGraph implements RetrofitModelTypeGra
       return Optional.empty();
     }
     if (plannedRetypes.forCaseField(caseFieldId).isPresent()) {
-      // The patch re-declares this field as a generated companion, which has no parsed class to hand
-      // back. Empty makes the caller descend the definition's own complex-type id instead — the
-      // companion's ComplexTypeModel — which is the type the field will actually have.
+      // The patch re-declares this field as a generated companion (or names one on it), which has no
+      // parsed class to hand back. Empty makes the caller descend the definition's own complex-type
+      // id instead — the companion's ComplexTypeModel — whose members are the field's.
       return Optional.empty();
     }
     // A collection field binds to its ELEMENT type (the members' owner); a scalar complex field to
@@ -155,6 +155,13 @@ public final class RetrofitEventComplexTypeGraph implements RetrofitModelTypeGra
     return property != null
         && property.declaredType instanceof ClassOrInterfaceType cit
         && COLLECTIONS.contains(cit.getNameAsString());
+  }
+
+  @Override
+  public boolean rootDeclarationKept(String caseFieldId) {
+    return plannedRetypes.forCaseField(caseFieldId)
+        .map(RetrofitPlannedRetypes.Retype::declarationKept)
+        .orElse(false);
   }
 
   @Override
@@ -218,17 +225,22 @@ public final class RetrofitEventComplexTypeGraph implements RetrofitModelTypeGra
     // .hintText/.noHintText disposition by comparing the row's own HintText against this one. Reading
     // the parsed declaration where the patch is about to pin a hint yields "equal, leave the cascade
     // unset" and then emits a HintText the definition never had — see RetrofitPlannedHints.
-    String declaredHint =
-        plannedHints.forMember(ownerType.fqn, member.fieldName).orElse(member.declaredHint);
+    // Both plans are keyed by the class DECLARING the field, which for an inherited member is a
+    // superclass of the type the walk is on.
+    String declaredHint = plannedHints.forMember(member.declaringFqn, member.fieldName)
+        .or(() -> plannedHints.forMember(ownerType.fqn, member.fieldName))
+        .orElse(member.declaredHint);
     Optional<RetrofitPlannedRetypes.Retype> retyped =
-        plannedRetypes.forMember(ownerType.fqn, member.fieldName);
+        plannedRetypes.forMember(member.declaringFqn, member.fieldName)
+            .or(() -> plannedRetypes.forMember(ownerType.fqn, member.fieldName));
     if (retyped.isPresent()) {
-      // The patch re-declares this member as a generated companion. The getter is unchanged (the field
+      // The patch re-declares this member as a generated companion, or names it with
+      // @CCD(typeParameterClass) where the re-declaration is refused. The getter is unchanged (the field
       // keeps its name), but the type to descend into is the companion's — named by its definition
       // complex-type id, exactly as a synthesised member's is, because the companion is generated output
       // with no parsed class to hand back.
       return Optional.of(new MemberResolution(getter, null, collection, declaredHint,
-          retyped.get().definitionId()));
+          retyped.get().definitionId(), List.of(), retyped.get().declarationKept()));
     }
     // The nested type to descend into for a further segment: the collection element type for a
     // collection member, else the member's declared class. Null when the member is a leaf (a scalar,
@@ -320,7 +332,7 @@ public final class RetrofitEventComplexTypeGraph implements RetrofitModelTypeGra
         for (VariableDeclarator var : field.getVariables()) {
           if (segment.equals(effectiveId(field, var))) {
             return Optional.of(new MemberField(
-                var.getNameAsString(), var.getType(), current.unit, declaredHint,
+                var.getNameAsString(), var.getType(), current.unit, current.fqn, declaredHint,
                 java.util.List.copyOf(containers)));
           }
           if (matchesNamingStrategy(strategy, field, var, segment)
@@ -333,7 +345,7 @@ public final class RetrofitEventComplexTypeGraph implements RetrofitModelTypeGra
             // to re-derive and cannot disagree with whichever idiom resolved it.
             pinnedNames.record(current.fqn, var.getNameAsString(), segment);
             return Optional.of(new MemberField(
-                var.getNameAsString(), var.getType(), current.unit, declaredHint,
+                var.getNameAsString(), var.getType(), current.unit, current.fqn, declaredHint,
                 java.util.List.copyOf(containers)));
           }
         }
@@ -518,7 +530,7 @@ public final class RetrofitEventComplexTypeGraph implements RetrofitModelTypeGra
 
   /** A member field matched by CCD id: its Java name, declared type, declaring unit and hint. */
   private record MemberField(String fieldName, Type declared,
-      com.github.javaparser.ast.CompilationUnit context, String declaredHint,
+      com.github.javaparser.ast.CompilationUnit context, String declaringFqn, String declaredHint,
       java.util.List<ModelSourceIndex.Type> unwrappedContainers) {
   }
 }

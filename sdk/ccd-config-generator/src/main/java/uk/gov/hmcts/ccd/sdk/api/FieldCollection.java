@@ -334,6 +334,23 @@ public class FieldCollection {
       return complex(propertyUtils.getPropertyName(dataClass, getter), c);
     }
 
+    /**
+     * {@link #complexScope(TypedPropertyGetter)} with the member scope typed on {@code scopeType}
+     * instead of the field's declared class — for a field whose {@code @CCD(typeParameterClass)} names
+     * the class its complex type is generated from while the field keeps a different declared type.
+     * The {@code ComplexTypes} rows, and so the members a {@code CaseEventToComplexTypes} row can
+     * address, come from {@code scopeType}, so that is the class the member getters must be taken from.
+     *
+     * @param getter the scalar complex field's getter
+     * @param scopeType the class the field's complex type is generated from
+     * @param <U> the type the returned member scope is typed on
+     * @return the member-scope builder for {@code scopeType}
+     */
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complexScope(
+        TypedPropertyGetter<Type, ?> getter, Class<U> scopeType) {
+      return complex(propertyUtils.getPropertyName(dataClass, getter), scopeType);
+    }
+
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> list(
         TypedPropertyGetter<Type, List<ListValue<U>>> getter) {
       return list(getter, null);

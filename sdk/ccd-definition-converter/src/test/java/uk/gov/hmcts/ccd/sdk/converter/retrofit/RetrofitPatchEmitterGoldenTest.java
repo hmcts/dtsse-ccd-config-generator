@@ -972,6 +972,19 @@ class RetrofitPatchEmitterGoldenTest {
     assertNoGapFor(emitter, "ShadowChild/childAddressedSummary");
   }
 
+  @Test
+  void plansAFieldNamingItsCompanionAsKeepingItsDeclaration() {
+    // The member walk reads this plan to resolve the field's members against the companion; the flag
+    // tells it the declared type is still SharedSummary, so a scope must be typed on the companion.
+    RetrofitPatchEmitter emitter = buildEmitter();
+    emitter.emit();
+    String party = MODEL_PACKAGE + ".common.Party";
+    assertThat(emitter.plannedRetypes().forMember(party, "readSummary"))
+        .contains(new RetrofitPlannedRetypes.Retype("ReadSummaryCT", "readSummaryCT", true));
+    assertThat(emitter.plannedRetypes().forMember(party, "firstSummary"))
+        .hasValueSatisfying(r -> assertThat(r.declarationKept()).isFalse());
+  }
+
   /**
    * Asserts no gap was recorded for a row key — the retype refusal was COVERED by naming the companion
    * on the field's {@code @CCD}, so there is nothing left for a human to place by hand.

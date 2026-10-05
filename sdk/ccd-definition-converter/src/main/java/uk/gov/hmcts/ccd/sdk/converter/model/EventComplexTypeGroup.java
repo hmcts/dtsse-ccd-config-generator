@@ -73,6 +73,14 @@ public class EventComplexTypeGroup {
   TypeRef rootElementType;
 
   /**
+   * The class a scalar root's member scope is typed on when it is not the root getter's declared
+   * type, else null: a field that keeps its declared class and names the class its complex type is
+   * generated from with {@code @CCD(typeParameterClass)}. When non-null the emitter opens the scope
+   * with {@code .complexScope(rootGetter, Type.class)}.
+   */
+  TypeRef rootScopeType;
+
+  /**
    * The per-member overrides, in input {@code FieldDisplayOrder} order.
    */
   List<Member> members;
@@ -246,6 +254,13 @@ public class EventComplexTypeGroup {
      * {@code .complex(getter)}.
      */
     TypeRef elementType;
+
+    /**
+     * The class a scalar hop's scope is typed on when it is not the member's declared type, else
+     * null — the hop analogue of {@link EventComplexTypeGroup#rootScopeType}. When non-null the
+     * emitter opens the hop with {@code .complexScope(getter, Type.class)}.
+     */
+    TypeRef scopeType;
   }
 
   /**

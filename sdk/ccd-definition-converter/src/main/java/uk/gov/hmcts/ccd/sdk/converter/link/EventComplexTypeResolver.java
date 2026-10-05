@@ -162,6 +162,24 @@ public final class EventComplexTypeResolver {
   }
 
   /**
+   * The class a scalar root's member scope must be typed on when the root field keeps a declared
+   * class other than the one its complex type is generated from (see
+   * {@link RetrofitModelTypeGraph#rootDeclarationKept}), else null — the getter's declared type
+   * already types the scope.
+   *
+   * @param field the case field
+   * @return the scope type ref, or null
+   */
+  public EventComplexTypeGroup.TypeRef rootScopeType(FieldModel field) {
+    if (modelGraph == null || !modelGraph.rootDeclarationKept(field.getId())
+        || modelGraph.rootIsCollection(field.getId())) {
+      return null;
+    }
+    Object node = rootNode(field);
+    return node == null ? null : typeRefOf(node);
+  }
+
+  /**
    * How the emitted config must reach the root complex field itself: its getter plus the
    * non-registering {@code @JsonUnwrapped} hops to descend first. In generate mode (and for a field the
    * team's model does not declare) this is simply {@code get} + the field's {@code javaName} invoked on
@@ -335,6 +353,7 @@ public final class EventComplexTypeResolver {
           .declaringType(typeRefOf(owner))
           .getter(member.getter)
           .elementType(member.collectionElementRef)
+          .scopeType(member.scopeRef)
           .build());
       currentType = next;
     }
@@ -435,14 +454,20 @@ public final class EventComplexTypeResolver {
       }
       EventComplexTypeGroup.TypeRef elementRef =
           m.collection() && nested != null ? typeRefOf(nested) : null;
+      EventComplexTypeGroup.TypeRef scopeRef =
+          m.declarationKept() && !m.collection() && nested != null ? typeRefOf(nested) : null;
       return new ResolvedMember(m.getter(), nested, m.declaredHint(), elementRef,
-          List.copyOf(m.unwrappedContainers()));
+          List.copyOf(m.unwrappedContainers()), scopeRef);
     }
     if (typeNode instanceof ComplexTypeModel model) {
       for (FieldModel member : model.getMembers()) {
         if (segment.equals(member.getId())) {
           String nestedId = nestedTypeId(member);
-          Object nested = typeNode(nestedId);
+          // A generated class types a member by its definition ID: the SDK class for a predefined ID,
+          // else the team's own class wherever the model declares one — so the walk re-enters the
+          // model there too.
+          Object nested = predefinedFqnById.containsKey(nestedId)
+              ? typeNode(nestedId) : byTypeId(nestedId);
           // A Collection member descends into its element type via the two-arg element-typed
           // .complex(getter, Element.class) scope; carry the element type ref so the emitter opens
           // the hop with that overload. A scalar complex member carries none (one-arg .complex).
@@ -558,11 +583,12 @@ public final class EventComplexTypeResolver {
   }
 
   private record ResolvedMember(String getter, Object nestedType, String declaredHint,
-      EventComplexTypeGroup.TypeRef collectionElementRef, List<Object> unwrappedContainers) {
+      EventComplexTypeGroup.TypeRef collectionElementRef, List<Object> unwrappedContainers,
+      EventComplexTypeGroup.TypeRef scopeRef) {
 
     ResolvedMember(String getter, Object nestedType, String declaredHint,
         EventComplexTypeGroup.TypeRef collectionElementRef) {
-      this(getter, nestedType, declaredHint, collectionElementRef, List.of());
+      this(getter, nestedType, declaredHint, collectionElementRef, List.of(), null);
     }
   }
 }

@@ -950,8 +950,11 @@ public class EventsConfigEmitter implements SourceEmitter {
         // COMPLEX CaseEventToFields row is still registered by the one-arg .complex(getter).done()
         // (unchanged from the no-group collection case), and the element members are placed in a
         // SEPARATE statement opening the element-typed .complex(getter, Element.class) scope — which
-        // registers no field, so it adds no second CaseEventToFields row.
-        boolean collectionRoot = group != null && group.getRootElementType() != null;
+        // registers no field, so it adds no second CaseEventToFields row. A scalar root whose members
+        // come from a class other than its declared one is split the same way, its scope opened with
+        // .complexScope(getter, Type.class).
+        boolean separateScope = group != null
+            && (group.getRootElementType() != null || group.getRootScopeType() != null);
         CodeBlock.Builder complexStmt = CodeBlock.builder();
         if (Boolean.FALSE.equals(field.getShowSummary())) {
           complexStmt.add("fields.complex($T::get$L, false)", caseData,
@@ -960,7 +963,7 @@ public class EventsConfigEmitter implements SourceEmitter {
           complexStmt.add("fields.complex($T::get$L)", caseData,
               capitalise(fieldModel.getJavaName()));
         }
-        if (group != null && !collectionRoot) {
+        if (group != null && !separateScope) {
           complexStmt.add(complexMemberChains(group, emitContext));
         }
         complexStmt.add(".done()");
@@ -969,7 +972,7 @@ public class EventsConfigEmitter implements SourceEmitter {
         // CaseEventToFields metadata as Java rather than via the retired column graft.
         complexStmt.add(fieldMetadataChain(field));
         cb.addStatement("$L", complexStmt.build());
-        if (collectionRoot) {
+        if (separateScope) {
           emitMemberScope(cb, group, caseData, emitContext);
         }
         continue;
@@ -1034,9 +1037,11 @@ public class EventsConfigEmitter implements SourceEmitter {
    *   {@code .complex(getter, Element.class)} scope — also the only form that type-checks, since the
    *   getter is a {@code List<…>} and a scope on the list could not place {@code Element::getMember};</li>
    *   <li>a scalar-rooted group opens {@code .complexScope(getter)}, the scalar analogue.</li>
+   *   <li>a scalar-rooted group whose field keeps a declared class other than the one its complex type
+   *   is generated from opens {@code .complexScope(getter, Type.class)}, typed on the generated one.</li>
    * </ul>
    *
-   * <p>Because neither registers a field, the group's root keeps whatever {@code CaseEventToFields} row
+   * <p>Because none registers a field, the group's root keeps whatever {@code CaseEventToFields} row
    * the input gave it — {@code COMPLEX}, {@code READONLY}, {@code OPTIONAL}, or none at all — and the
    * caller is free to emit that row separately (or not at all, for an orphan group; see
    * {@link #emitOrphanScopes}).
@@ -1068,6 +1073,9 @@ public class EventsConfigEmitter implements SourceEmitter {
     if (group.getRootElementType() != null) {
       scope.add(opener + "complex($T::$L, $T.class)", rootOwner, group.getRootGetter(),
           typeName(group.getRootElementType(), emitContext));
+    } else if (group.getRootScopeType() != null) {
+      scope.add(opener + "complexScope($T::$L, $T.class)", rootOwner, group.getRootGetter(),
+          typeName(group.getRootScopeType(), emitContext));
     } else {
       scope.add(opener + "complexScope($T::$L)", rootOwner, group.getRootGetter());
     }
@@ -1189,6 +1197,10 @@ public class EventsConfigEmitter implements SourceEmitter {
           cb.add("\n    .complex($T::$L, $T.class)",
               typeName(hop.getDeclaringType(), context), hop.getGetter(),
               typeName(hop.getElementType(), context));
+        } else if (hop.getScopeType() != null) {
+          cb.add("\n    .complexScope($T::$L, $T.class)",
+              typeName(hop.getDeclaringType(), context), hop.getGetter(),
+              typeName(hop.getScopeType(), context));
         } else {
           cb.add("\n    .complex($T::$L)",
               typeName(hop.getDeclaringType(), context), hop.getGetter());
