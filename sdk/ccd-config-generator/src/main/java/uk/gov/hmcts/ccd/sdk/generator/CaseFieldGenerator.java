@@ -258,12 +258,12 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     }
 
     // For a complex-typed field, @ComplexType(name) overrides the FieldType with the CCD type ID.
-    // An enum may now also carry @ComplexType(name) to preserve a renamed FixedList's list ID, but
-    // there the name is the FieldTypeParameter (a FixedRadioList), NOT the FieldType — so exclude
-    // enums, whose FieldType stays FixedList/FixedRadioList as resolveSimpleType decided.
+    // A generated enum (generate = true) may also carry @ComplexType(name) to preserve a renamed
+    // FixedList's list ID; there the name is the FieldTypeParameter of the FixedRadioList
+    // resolveSimpleType chose, NOT the FieldType. An enum that is not generated keeps the override.
     ComplexType complexType = field.getType().getAnnotation(ComplexType.class);
     if (complexType != null && !Strings.isNullOrEmpty(complexType.name())
-        && !field.getType().isEnum()) {
+        && !(field.getType().isEnum() && complexType.generate())) {
       type = complexType.name();
     }
 
