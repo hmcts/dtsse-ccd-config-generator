@@ -1,7 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
-import static org.apache.commons.lang3.StringUtils.capitalize;
+import static org.springframework.util.StringUtils.capitalize;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
