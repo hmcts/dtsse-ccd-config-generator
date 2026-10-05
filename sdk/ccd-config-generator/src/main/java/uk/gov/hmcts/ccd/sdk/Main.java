@@ -50,8 +50,9 @@ class Main {
     scanner.addIncludeFilter(new AnnotationTypeFilter(SpringBootConfiguration.class));
     var candidates = scanner.findCandidateComponents(basePackage);
     if (candidates.size() != 1) {
-      throw new RuntimeException("Expected a single SpringBootApplication but found "
-          + candidates.size());
+      throw new RuntimeException("Expected a single @SpringBootConfiguration under " + basePackage
+          + " but found " + candidates.size() + ": " + candidates.stream()
+              .map(BeanDefinition::getBeanClassName).toList());
     }
     BeanDefinition definition = candidates.iterator().next();
     String beanClassName = definition.getBeanClassName();

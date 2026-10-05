@@ -122,8 +122,10 @@ public class Field<Type, StateType, Parent, Grandparent> {
     }
 
     /**
-     * Sets this field's {@code DefaultValue} — {@code CaseEventToFields} for a top-level placement,
-     * {@code CaseEventToComplexTypes} for a member placed inside a {@code .complex(...)} scope.
+     * Sets this field's typed default, written as {@code DefaultValue} on the
+     * {@code CaseEventToComplexTypes} row of a member placed inside a {@code .complex(...)} scope. It
+     * is not written to {@code CaseEventToFields}: use {@link #defaultValue(String)} for a top-level
+     * placement.
      * Declaring the {@code String} overload below alongside this {@code Type}-typed setter Lombok
      * would otherwise generate means this one must be hand-written too (Lombok skips generation for
      * any property with an existing same-named builder method, regardless of arity).
@@ -241,6 +243,9 @@ public class Field<Type, StateType, Parent, Grandparent> {
      * {@link #hint} (the declared field hint) and from {@code caseEventFieldHint} (the
      * {@code EventHintText} column set by the {@code FieldCollectionBuilder}'s {@code eventHint}).
      * Passing {@code null} is equivalent to {@link #noHintText()}.
+     *
+     * <p>The definition store does not read {@code HintText} on this sheet, so this only reproduces a
+     * hand-written definition's rows; the hint XUI shows on the event is {@code EventHintText}.
      */
     public FieldBuilder<Type, StateType, Parent, Grandparent> hintText(String hintText) {
       this.eventComplexHintText = hintText;

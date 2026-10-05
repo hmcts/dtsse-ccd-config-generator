@@ -95,10 +95,9 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   void omitHistoryForRoles(R... roles);
 
   /**
-   * Emit AuthorisationCaseState rows only for the grants declared explicitly via
-   * {@link #grant(Object, Set, HasRole...)}. When set, no state permissions are inferred from
-   * event grants, so the generated AuthorisationCaseState contains exactly the rows this case
-   * type declares and nothing more.
+   * Emit AuthorisationCaseState rows only for the grants declared explicitly, via
+   * {@link #grant(Object, Set, HasRole...)} or {@code @CCD(access)} on a state constant. When set,
+   * no state permissions are inferred from event grants.
    *
    * <p>By default (when this is not called) AuthorisationCaseState is broadened by deriving
    * permissions from every event's grants, which produces wider access than an explicit
