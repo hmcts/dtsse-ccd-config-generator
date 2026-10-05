@@ -25,8 +25,6 @@ dependencies {
     testImplementation project(':decentralised-runtime')
     testImplementation 'org.testcontainers:testcontainers'
     testImplementation 'org.testcontainers:testcontainers-postgresql'
-    testRuntimeOnly 'org.flywaydb:flyway-database-postgresql'
-    testRuntimeOnly 'org.postgresql:postgresql'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

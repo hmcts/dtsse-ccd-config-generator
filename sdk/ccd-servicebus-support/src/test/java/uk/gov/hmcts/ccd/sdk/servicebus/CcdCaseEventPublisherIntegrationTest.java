@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
@@ -192,9 +193,7 @@ class CcdCaseEventPublisherIntegrationTest {
     }
 
     List<Long> sentIds() {
-      synchronized (sends) {
-        return sends.stream().map(Send::id).toList();
-      }
+      return sends.stream().map(Send::id).toList();
     }
 
     private void send(long id, long reference) {
@@ -203,7 +202,8 @@ class CcdCaseEventPublisherIntegrationTest {
       }
       try {
         sends.add(new Send(id, reference));
-        Thread.sleep(1);
+        // Uneven latency lets publishers overtake each other, as they would with a real broker.
+        Thread.sleep(ThreadLocalRandom.current().nextInt(4));
         if (failing.test(id)) {
           throw new IllegalStateException("Broker unavailable for message " + id);
         }

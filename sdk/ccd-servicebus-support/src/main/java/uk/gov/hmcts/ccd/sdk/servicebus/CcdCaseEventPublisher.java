@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.servicebus;
 
+import static java.util.stream.Collectors.toMap;
 import static uk.gov.hmcts.ccd.sdk.servicebus.CcdMessageQueueRepository.CaseHead;
 import static uk.gov.hmcts.ccd.sdk.servicebus.CcdMessageQueueRepository.MessageQueueCandidate;
 
@@ -8,7 +9,6 @@ import jakarta.jms.JMSException;
 import jakarta.jms.Message;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -61,7 +61,6 @@ public class CcdCaseEventPublisher {
       }
 
       totalPublished += result.published();
-      failedCases.addAll(result.failedCases());
     }
 
     if (!failedCases.isEmpty()) {
@@ -84,15 +83,14 @@ public class CcdCaseEventPublisher {
     }
   }
 
-  private BatchResult publishBatch(Set<Long> excludedCases) {
+  private BatchResult publishBatch(Set<Long> failedCases) {
     List<CaseHead> heads = repository.claimCaseHeads(
-        properties.getMessageType(), excludedCases, properties.getBatchSize());
+        properties.getMessageType(), failedCases, properties.getBatchSize());
     if (heads.isEmpty()) {
       return BatchResult.EMPTY;
     }
 
-    Map<Long, Long> headIdByCase = new HashMap<>();
-    heads.forEach(head -> headIdByCase.put(head.reference(), head.id()));
+    Map<Long, Long> headIdByCase = heads.stream().collect(toMap(CaseHead::reference, CaseHead::id));
 
     List<MessageQueueCandidate> candidates = repository.findOwnedUnpublishedMessages(
         properties.getMessageType(), headIdByCase.keySet(), properties.getBatchSize());
@@ -102,7 +100,6 @@ public class CcdCaseEventPublisher {
         properties.getDestination());
 
     List<Long> publishedIds = new ArrayList<>(candidates.size());
-    Set<Long> failedCases = new HashSet<>();
     for (MessageQueueCandidate candidate : candidates) {
       if (failedCases.contains(candidate.reference())) {
         continue;
@@ -119,7 +116,7 @@ public class CcdCaseEventPublisher {
       log.info("Marked {} message_queue_candidates record(s) as published", publishedIds.size());
     }
 
-    return new BatchResult(heads.size(), publishedIds.size(), failedCases);
+    return new BatchResult(heads.size(), publishedIds.size());
   }
 
   private void checkStartsAtClaimedHeads(List<MessageQueueCandidate> candidates, Map<Long, Long> headIdByCase) {
@@ -135,8 +132,8 @@ public class CcdCaseEventPublisher {
     }
   }
 
-  private record BatchResult(int claimed, int published, Set<Long> failedCases) {
-    private static final BatchResult EMPTY = new BatchResult(0, 0, Set.of());
+  private record BatchResult(int claimed, int published) {
+    private static final BatchResult EMPTY = new BatchResult(0, 0);
   }
 
   private boolean sendToServiceBus(MessageQueueCandidate candidate) {
