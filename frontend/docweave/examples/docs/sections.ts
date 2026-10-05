@@ -202,7 +202,7 @@ export const sections: readonly DocsSection[] = [
     title: "Numbered clauses",
     prose: [
       "Orders are mostly numbered clauses. An ordered list holds items, and an item may hold one nested ordered list. Items are clauses like paragraphs: they have an ID, and they may be edited but not deleted or reordered.",
-      "The reader can add their own numbered clauses between the generated ones. Those are kept when the document is rebuilt.",
+      "The reader can add their own numbered clauses between the generated ones. Those are kept while their top-level list remains. Removing that list, including by removing its last generated item, also removes the reader's clauses inside it. Removing a generated clause likewise removes any additions inside that clause. Undo and adding the generated wording back do not restore those additions.",
     ],
     tryThis: [
       "Untick costs. The clause goes and the numbering closes up.",

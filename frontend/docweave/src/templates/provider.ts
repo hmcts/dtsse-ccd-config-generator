@@ -40,8 +40,8 @@ export interface SaveTemplateInput {
 
 export interface TemplateProvider {
   /**
-   * Finds templates by their title and by their wording. A provider works the
-   * wording out from the content it stores, so no client has to describe it.
+   * Finds templates by their title and by their wording. The provider extracts
+   * searchable wording from content, so callers do not have to supply it.
    */
   search(query: string): Promise<TemplateSearchResult>;
   create(input: SaveTemplateInput): Promise<Template>;
@@ -186,6 +186,14 @@ function csrfToken(
   return typeof option === "function" ? option() : option;
 }
 
+function templateRequestBody(input: SaveTemplateInput): string {
+  const { document } = parseTemplateFragment(input.content);
+  return JSON.stringify({
+    ...input,
+    searchableText: document.textBetween(0, document.content.size, " ", () => ""),
+  });
+}
+
 export function createHttpTemplateProvider(
   options: HttpTemplateProviderOptions,
 ): TemplateProvider {
@@ -232,13 +240,13 @@ export function createHttpTemplateProvider(
     create(input) {
       return send<Template>("", {
         method: "POST",
-        body: JSON.stringify(input),
+        body: templateRequestBody(input),
       });
     },
     update(id, input) {
       return send<Template>(`/${encodeURIComponent(id)}`, {
         method: "PUT",
-        body: JSON.stringify(input),
+        body: templateRequestBody(input),
       });
     },
     delete(id, expectedRevision) {

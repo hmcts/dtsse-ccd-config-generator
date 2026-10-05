@@ -217,9 +217,10 @@ export function createDocEditorController(
       return generatedDocument;
     },
     dispatch(transaction: Transaction): void {
+      const before = state.doc;
       state = state.apply(transaction);
       notifyState();
-      if (transaction.docChanged) options.onChange?.(getSnapshot());
+      if (!state.doc.eq(before)) options.onChange?.(getSnapshot());
     },
     setStateListener(listener: (state: EditorState) => void): void {
       stateListener = listener;
