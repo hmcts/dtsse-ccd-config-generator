@@ -51,21 +51,28 @@ public class CcdCaseEventPublisher {
     }
 
     int totalPublished = 0;
-    // Cases whose next message failed to send; not claimed again in this run so their messages stay in order.
-    Set<Long> failedCases = new HashSet<>();
+    PublishRun run = new PublishRun(properties.getBatchSize());
 
-    while (true) {
-      BatchResult result = transactionTemplate.execute(status -> publishBatch(failedCases));
-      if (result == null || result.claimed() == 0) {
+    while (!run.brokerUnavailable()) {
+      BatchResult result = transactionTemplate.execute(status -> publishBatch(run));
+      if (result == null) {
         break;
       }
 
       totalPublished += result.published();
+
+      // A short claim and a short fetch mean nothing else is pending; anything newer waits for the next run.
+      if (result.claimed() < properties.getBatchSize() && result.fetched() < properties.getBatchSize()) {
+        break;
+      }
     }
 
-    if (!failedCases.isEmpty()) {
+    if (run.brokerUnavailable()) {
+      log.error("{} consecutive message_queue_candidates sends failed; aborting run", run.consecutiveFailedSends);
+    }
+    if (!run.failedCases.isEmpty()) {
       log.error("Failed to publish message_queue_candidates for {} case(s); they will be retried in a later run",
-          failedCases.size());
+          run.failedCases.size());
     }
 
     if (properties.getPublishedRetentionDays() > 0) {
@@ -83,9 +90,9 @@ public class CcdCaseEventPublisher {
     }
   }
 
-  private BatchResult publishBatch(Set<Long> failedCases) {
+  private BatchResult publishBatch(PublishRun run) {
     List<CaseHead> heads = repository.claimCaseHeads(
-        properties.getMessageType(), failedCases, properties.getBatchSize());
+        properties.getMessageType(), run.failedCases, properties.getBatchSize());
     if (heads.isEmpty()) {
       return BatchResult.EMPTY;
     }
@@ -94,20 +101,25 @@ public class CcdCaseEventPublisher {
 
     List<MessageQueueCandidate> candidates = repository.findOwnedUnpublishedMessages(
         properties.getMessageType(), headIdByCase.keySet(), properties.getBatchSize());
-    checkStartsAtClaimedHeads(candidates, headIdByCase);
+    skipCasesNotStartingAtClaimedHead(candidates, headIdByCase, run.failedCases);
 
     log.info("Preparing to publish {} message_queue_candidates record(s) to {}", candidates.size(),
         properties.getDestination());
 
     List<Long> publishedIds = new ArrayList<>(candidates.size());
     for (MessageQueueCandidate candidate : candidates) {
-      if (failedCases.contains(candidate.reference())) {
+      if (run.brokerUnavailable()) {
+        break;
+      }
+      if (run.failedCases.contains(candidate.reference())) {
         continue;
       }
       if (sendToServiceBus(candidate)) {
         publishedIds.add(candidate.id());
+        run.consecutiveFailedSends = 0;
       } else {
-        failedCases.add(candidate.reference());
+        run.failedCases.add(candidate.reference());
+        run.consecutiveFailedSends++;
       }
     }
 
@@ -116,24 +128,49 @@ public class CcdCaseEventPublisher {
       log.info("Marked {} message_queue_candidates record(s) as published", publishedIds.size());
     }
 
-    return new BatchResult(heads.size(), publishedIds.size());
+    return new BatchResult(heads.size(), candidates.size(), publishedIds.size());
   }
 
-  private void checkStartsAtClaimedHeads(List<MessageQueueCandidate> candidates, Map<Long, Long> headIdByCase) {
+  // Never expected given the case lock. A case whose messages don't start at its claimed head is left for a
+  // later run rather than aborting this one.
+  private void skipCasesNotStartingAtClaimedHead(List<MessageQueueCandidate> candidates,
+                                                 Map<Long, Long> headIdByCase, Set<Long> failedCases) {
     if (candidates.isEmpty()) {
-      throw new IllegalStateException("No message_queue_candidates found for claimed cases " + headIdByCase.keySet());
+      log.error("No message_queue_candidates found for claimed cases {}; skipping them", headIdByCase.keySet());
+      failedCases.addAll(headIdByCase.keySet());
+      return;
     }
     Set<Long> seen = new HashSet<>();
     for (MessageQueueCandidate candidate : candidates) {
-      if (seen.add(candidate.reference()) && candidate.id() != headIdByCase.get(candidate.reference())) {
-        throw new IllegalStateException("message_queue_candidates for reference " + candidate.reference()
-            + " start at id " + candidate.id() + " rather than claimed id " + headIdByCase.get(candidate.reference()));
+      long claimedId = headIdByCase.get(candidate.reference());
+      if (seen.add(candidate.reference()) && candidate.id() != claimedId) {
+        log.error("message_queue_candidates for reference {} start at id {} rather than claimed id {}; skipping it",
+            candidate.reference(), candidate.id(), claimedId);
+        failedCases.add(candidate.reference());
       }
     }
   }
 
-  private record BatchResult(int claimed, int published) {
-    private static final BatchResult EMPTY = new BatchResult(0, 0);
+  // A failing case is skipped for the rest of the run after its first failed send, so it adds one failure.
+  // Only a run of failures across as many cases as a batch, with no send succeeding between them, is treated
+  // as the broker being unavailable; a few poisoned cases never stop the others being published.
+  private static final class PublishRun {
+    // Cases whose next message failed to send; not claimed again in this run so their messages stay in order.
+    private final Set<Long> failedCases = new HashSet<>();
+    private final int maxConsecutiveFailedSends;
+    private int consecutiveFailedSends;
+
+    private PublishRun(int maxConsecutiveFailedSends) {
+      this.maxConsecutiveFailedSends = maxConsecutiveFailedSends;
+    }
+
+    private boolean brokerUnavailable() {
+      return consecutiveFailedSends >= maxConsecutiveFailedSends;
+    }
+  }
+
+  private record BatchResult(int claimed, int fetched, int published) {
+    private static final BatchResult EMPTY = new BatchResult(0, 0, 0);
   }
 
   private boolean sendToServiceBus(MessageQueueCandidate candidate) {

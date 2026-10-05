@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -83,6 +84,60 @@ class CcdCaseEventPublisherIntegrationTest {
 
     assertThat(retry.sentIds()).containsExactly(a1, a2, a3);
     assertThat(publishedIds()).containsExactlyInAnyOrder(a1, a2, a3, b1, b2, c1);
+  }
+
+  @Test
+  void publishesACaseWithMoreMessagesThanABatchInOneRun() {
+    seedCases(CASE_A);
+    List<Long> ids = new ArrayList<>();
+    for (int i = 0; i < 7; i++) {
+      ids.add(enqueue(CASE_A));
+    }
+
+    var broker = new RecordingJmsTemplate(id -> false);
+    publisher(broker, 3).publishPendingCaseEvents();
+
+    assertThat(broker.sentIds()).containsExactlyElementsOf(ids);
+    assertThat(unpublishedIds()).isEmpty();
+  }
+
+  @Test
+  void poisonedCasesFillingBatchesDoNotStopOtherCasesBeingPublished() {
+    List<Long> poisoned = List.of(3000000000000001L, 3000000000000002L, 3000000000000003L);
+    List<Long> healthy = List.of(3000000000000004L, 3000000000000005L, 3000000000000006L);
+    seedCases(poisoned.toArray(Long[]::new));
+    seedCases(healthy.toArray(Long[]::new));
+    Set<Long> poisonedIds = new HashSet<>();
+    for (long reference : poisoned) {
+      for (int i = 0; i < 4; i++) {
+        poisonedIds.add(enqueue(reference));
+      }
+    }
+    List<Long> healthyIds = healthy.stream().map(this::enqueue).toList();
+
+    var broker = new RecordingJmsTemplate(poisonedIds::contains);
+    // Each poisoned case fills a batch on its own, so three batches in a row publish nothing.
+    publisher(broker, 4).publishPendingCaseEvents();
+
+    assertThat(broker.sentIds()).filteredOn(poisonedIds::contains).hasSize(3);
+    assertThat(publishedIds()).containsExactlyInAnyOrderElementsOf(healthyIds);
+  }
+
+  @Test
+  void abortsRunWhenABatchWorthOfSendsInARowFail() {
+    List<Long> cases = new ArrayList<>();
+    for (long i = 0; i < 10; i++) {
+      cases.add(4000000000000000L + i);
+    }
+    seedCases(cases.toArray(Long[]::new));
+    cases.forEach(this::enqueue);
+
+    var broker = new RecordingJmsTemplate(id -> true);
+    publisher(broker, 3).publishPendingCaseEvents();
+
+    // One batch of failed sends, rather than one attempt for every pending case.
+    assertThat(broker.sentIds()).hasSize(3);
+    assertThat(publishedIds()).isEmpty();
   }
 
   @Test
