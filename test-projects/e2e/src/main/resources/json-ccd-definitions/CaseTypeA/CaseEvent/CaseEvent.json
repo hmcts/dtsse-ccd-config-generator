@@ -69,7 +69,7 @@
   },
   {
     "ID": "json-legacy-create-submitted",
-    "Name": "JSON legacy create with submitted callback",
+    "Name": "JSON create with callback",
     "Description": "Create with a submitted callback",
     "CaseTypeID": "case-type-a",
     "DisplayOrder": 105,
