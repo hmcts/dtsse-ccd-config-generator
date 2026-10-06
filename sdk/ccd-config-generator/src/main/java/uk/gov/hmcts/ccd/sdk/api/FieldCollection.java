@@ -419,14 +419,14 @@ public class FieldCollection {
     }
 
     /**
-     * Sets the most-recently-added complex-type member's event-level label. Emitted as
-     * {@code CaseEventToComplexTypes.EventElementLabel} for a member reached through
-     * {@link #complex}, and as {@code CaseEventToFields.CaseEventFieldLabel} for a top-level field.
+     * Sets the event-level label of the most-recently-added field or complex-type member. Emitted
+     * as {@code CaseEventToFields.CaseEventFieldLabel} for a top-level field, and as
+     * {@code CaseEventToComplexTypes.EventElementLabel} for a member placed inside a
+     * {@code .complex(...)} scope.
      *
      * <p>Fluent equivalent of the trailing {@code caseEventFieldLabel} parameter on the positional
-     * {@code optional}/{@code mandatory} overloads — provided so that member placements which have
-     * no such overload (notably {@code readonly}) can still carry a label. Default {@code null}
-     * omits the column, leaving output byte-identical to before this option existed.
+     * {@code optional}/{@code mandatory} overloads, usable after any placement that has no such
+     * overload ({@code readonly}, {@code *NoSummary}, etc.). Default {@code null} omits the column.
      */
     public FieldCollectionBuilder<Type, StateType, Parent> eventLabel(String label) {
       lastField().caseEventFieldLabel(label);
@@ -492,24 +492,21 @@ public class FieldCollection {
     }
 
     /**
-     * Sets the most-recently-added field's {@code CaseEventToFields.CaseEventFieldLabel} — usable
-     * after any context-selecting call ({@code readonly}, {@code *NoSummary}, etc.) that returns
-     * this builder rather than the field.
+     * Alias of {@link #eventLabel(String)}.
      */
     public FieldCollectionBuilder<Type, StateType, Parent> caseEventFieldLabel(String label) {
-      lastField().caseEventFieldLabel(label);
-      return this;
+      return eventLabel(label);
     }
 
     /**
-     * Sets the most-recently-added complex-type member's event-level hint text. Emitted as
-     * {@code CaseEventToComplexTypes.EventHintText} for a member reached through {@link #complex},
-     * and as {@code CaseEventToFields.CaseEventFieldHint} for a top-level field.
+     * Sets the event-level hint text of the most-recently-added field or complex-type member.
+     * Emitted as {@code CaseEventToFields.CaseEventFieldHint} for a top-level field, and as
+     * {@code CaseEventToComplexTypes.EventHintText} for a member placed inside a
+     * {@code .complex(...)} scope.
      *
      * <p>Fluent equivalent of the trailing {@code caseEventFieldHint} parameter on the positional
-     * {@code optional}/{@code mandatory} overloads — provided so that member placements which have
-     * no such overload (notably {@code readonly}) can still carry a hint. Default {@code null} omits
-     * the column, leaving output byte-identical to before this option existed.
+     * {@code optional}/{@code mandatory} overloads, usable after any placement that has no such
+     * overload ({@code readonly}, {@code *NoSummary}, etc.). Default {@code null} omits the column.
      */
     public FieldCollectionBuilder<Type, StateType, Parent> eventHint(String hint) {
       lastField().caseEventFieldHint(hint);
@@ -517,13 +514,10 @@ public class FieldCollection {
     }
 
     /**
-     * Sets the most-recently-added field's {@code CaseEventToFields.CaseEventFieldHint} — usable
-     * after any context-selecting call ({@code readonly}, {@code *NoSummary}, etc.) that returns
-     * this builder rather than the field.
+     * Alias of {@link #eventHint(String)}.
      */
     public FieldCollectionBuilder<Type, StateType, Parent> caseEventFieldHint(String hint) {
-      lastField().caseEventFieldHint(hint);
-      return this;
+      return eventHint(hint);
     }
 
     /**
