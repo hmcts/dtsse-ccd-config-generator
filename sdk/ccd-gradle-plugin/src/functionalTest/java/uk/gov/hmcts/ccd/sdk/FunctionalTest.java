@@ -36,6 +36,11 @@ public class FunctionalTest {
   }
 
   @Test
+  public void testGradle9() {
+    checkTestProject("9.7.1");
+  }
+
+  @Test
   public void versionlessLibrariesWithApplicationIndexing() throws IOException {
     checkSdkDependencies(false, "-PapplicationIndexing");
   }

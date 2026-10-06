@@ -45,7 +45,8 @@ change the behaviour of a later `check` invocation.
 
 `jackson2ClasspathGuard` uses ASM and never loads scanned classes. It scans:
 
-- every registered source set's compiled class directories;
+- every registered source set's compiled class directories and runtime classpath, except
+  those listed in `ignoredSourceSets`;
 - Gradle project dependencies;
 - first-party and third-party dependency JARs;
 - runtime-visible and runtime-invisible annotations;
@@ -108,6 +109,18 @@ ccdSdk {
     allowedComponents = [
       'com.github.hmcts:existing-jackson3-client:1.2.3'
     ]
+  }
+}
+```
+
+`ignoredSourceSets` skips source sets by name, along with their runtime classpaths. Use it
+for test-only source sets whose dependencies cannot be resolved where `check` runs, for
+example cftlib test runners that only run on GitHub Actions while Jenkins runs `check`:
+
+```groovy
+ccdSdk {
+  jackson2ClasspathGuard {
+    ignoredSourceSets = ['cftlib', 'cftlibTest']
   }
 }
 ```

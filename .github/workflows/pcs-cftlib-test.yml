@@ -7,7 +7,9 @@ on:
 jobs:
   pcs-cftlib-test:
     runs-on: ubuntu-latest
-    environment: cftlib-acr-pull
+    environment:
+      name: cftlib-acr-pull
+      deployment: false
     permissions:
       contents: read
       id-token: write
