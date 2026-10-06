@@ -19,11 +19,11 @@ function conflict(): TemplateRequestError {
 
 export function createInMemoryTemplateProvider(): TemplateProvider {
   const templates = new Map<string, Template>();
-  // Title and wording, worked out from the content as the backend does.
+  // Title and wording, worked out from the content as the HTTP provider does.
   const searchable = new Map<string, string>();
   const index = (id: string, input: SaveTemplateInput): void => {
     const { document } = parseTemplateFragment(input.content);
-    // Wording only, as the backend indexes it: a template's dates are not searched.
+    // A template's unresolved dates are not searched.
     const wording = document.textBetween(0, document.content.size, " ", () => "");
     searchable.set(id, `${input.title}\n${wording}`.toLocaleLowerCase());
   };

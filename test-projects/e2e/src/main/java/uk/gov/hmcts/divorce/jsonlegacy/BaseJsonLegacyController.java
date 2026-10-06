@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 public abstract class BaseJsonLegacyController {
 
   public static final String MARKER = "json-legacy-about-to-submit";
+  public static final String ERROR_MESSAGE_OVERRIDE = "JSON legacy error message override";
   public static final String ACAS_DOCUMENT_NOTE = "json-legacy-acas-cdam-document";
   public static final String ACAS_DOCUMENT_WITH_NULL_HASH_NOTE = "json-legacy-acas-cdam-document-null-hash";
   public static final String EVENT_INPUT_DOCUMENT_ID = "11111111-1111-1111-1111-111111111111";
@@ -52,6 +53,13 @@ public abstract class BaseJsonLegacyController {
     if ("json-legacy-error".equals(data.get("note"))) {
       return ResponseEntity.ok(aboutToSubmitResponse(data, List.of("JSON legacy validation error")));
     }
+    if ("json-legacy-error-override".equals(data.get("note"))) {
+      return ResponseEntity.ok(aboutToSubmitResponse(data, List.of(), ERROR_MESSAGE_OVERRIDE));
+    }
+    if ("json-legacy-errors-and-override".equals(data.get("note"))) {
+      return ResponseEntity.ok(
+          aboutToSubmitResponse(data, List.of("JSON legacy validation error"), ERROR_MESSAGE_OVERRIDE));
+    }
 
     data.put("setInAboutToSubmit", MARKER);
     if (ACAS_DOCUMENT_NOTE.equals(data.get("note"))) {
@@ -61,7 +69,8 @@ public abstract class BaseJsonLegacyController {
     }
     aboutToSubmitSawAuthorisation = authorisation != null && !authorisation.isBlank();
     aboutToSubmitSawServiceAuthorisation = serviceAuthorisation != null && !serviceAuthorisation.isBlank();
-    return ResponseEntity.ok(aboutToSubmitResponse(data, List.of()));
+    String override = "json-legacy-empty-override".equals(data.get("note")) ? "" : null;
+    return ResponseEntity.ok(aboutToSubmitResponse(data, List.of(), override));
   }
 
   public static Map<String, Object> acasDocumentCollectionItem(String id, String documentId, String hashToken) {
@@ -138,10 +147,19 @@ public abstract class BaseJsonLegacyController {
   }
 
   private Map<String, Object> aboutToSubmitResponse(Map<String, Object> data, List<String> errors) {
+    return aboutToSubmitResponse(data, errors, null);
+  }
+
+  private Map<String, Object> aboutToSubmitResponse(Map<String, Object> data,
+                                                    List<String> errors,
+                                                    String errorMessageOverride) {
     Map<String, Object> response = new LinkedHashMap<>();
     response.put("data", data);
     response.put("errors", errors);
     response.put("warnings", List.of());
+    if (errorMessageOverride != null) {
+      response.put("error_message_override", errorMessageOverride);
+    }
     return response;
   }
 

@@ -61,16 +61,12 @@ jobs:
           submodules: recursive
       - name: Classify changes
         id: changes
+        env:
+          BASE_SHA: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.merge_group.head_sha || github.event.pull_request.head.sha }}
         run: |
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "docs_only=false" >> "$GITHUB_OUTPUT"
-            echo "module_changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          base="${{ github.event.pull_request.base.sha }}"
-          head="${{ github.event.pull_request.head.sha }}"
-          git fetch --no-tags --prune --depth=1 origin "$base" "$head"
-          files=$(git diff --name-only "$base" "$head")
+          git fetch --no-tags --prune origin "$BASE_SHA" "$HEAD_SHA"
+          files=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
           if [ -z "$files" ]; then
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
             echo "module_changed=false" >> "$GITHUB_OUTPUT"
@@ -113,7 +109,7 @@ jobs:
         if: matrix.runSemanticDiff && steps.changes.outputs.docs_only != 'true' && steps.changes.outputs.module_changed != 'true'
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
           path: base
           fetch-depth: 0
           submodules: recursive

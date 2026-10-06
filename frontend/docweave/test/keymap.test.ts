@@ -8,7 +8,9 @@ import {
 } from "prosemirror-state";
 
 import {
+  indentClauseOnTab,
   indentListItem,
+  outdentClauseOnTab,
   outdentListItem,
   protectClausesFromSplittingOnEnter,
 } from "../src/keymap.js";
@@ -102,6 +104,34 @@ describe("protected clause Enter handling", () => {
     assert.deepEqual(
       transaction.doc.firstChild!.children.map((node) => node.attrs.id),
       ["item:generated", null],
+    );
+  });
+
+  it("inserts after a generated list item at the start of its later paragraph", () => {
+    const first = editorSchema.node(
+      "paragraph",
+      null,
+      editorSchema.text("First paragraph."),
+    );
+    const generated = editorSchema.node("list_item", { id: "item:generated" }, [
+      first,
+      editorSchema.node("paragraph", null, editorSchema.text("Second paragraph.")),
+    ]);
+    const list = editorSchema.node(
+      "ordered_list",
+      { id: "ordered-list:clauses" },
+      generated,
+    );
+    const doc = editorSchema.node("doc", null, list);
+    const transaction = pressEnter(doc, 2 + first.nodeSize + 1);
+
+    assert.deepEqual(
+      transaction.doc.firstChild!.children.map((node) => node.attrs.id),
+      ["item:generated", null],
+    );
+    assert.equal(
+      transaction.doc.firstChild!.firstChild!.textContent,
+      "First paragraph.Second paragraph.",
     );
   });
 });
@@ -213,5 +243,127 @@ describe("list indentation", () => {
     assert.equal(topLevelList.childCount, 2);
     assert.equal(topLevelList.lastChild!.attrs.id, "item:second");
     assert.equal(topLevelList.firstChild!.childCount, 1);
+  });
+});
+
+function runKeyCommand(
+  command: typeof indentClauseOnTab,
+  doc: ReturnType<typeof editorSchema.node>,
+  position: number,
+) {
+  const state = EditorState.create({
+    schema: editorSchema,
+    doc,
+    selection: TextSelection.create(doc, position),
+  });
+  let transaction: Transaction | undefined;
+  const handled = command(state, (dispatched) => {
+    transaction = dispatched;
+  });
+  return { handled, transaction };
+}
+
+function authoredItem(text: string) {
+  return editorSchema.node(
+    "list_item",
+    null,
+    editorSchema.node("paragraph", null, editorSchema.text(text)),
+  );
+}
+
+describe("Tab in the document", () => {
+  it("leaves Tab to the browser in a generated clause, which may not move", () => {
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node("ordered_list", { id: "ordered-list:clauses" }, [
+        listItem("item:first", "One"),
+        listItem("item:second", "Two"),
+      ]),
+    );
+    const position = positionInsideClause(doc, "item:second");
+
+    assert.deepEqual(runKeyCommand(indentClauseOnTab, doc, position), {
+      handled: false,
+      transaction: undefined,
+    });
+    assert.deepEqual(runKeyCommand(outdentClauseOnTab, doc, position), {
+      handled: false,
+      transaction: undefined,
+    });
+  });
+
+  it("leaves Tab to the browser where there is nothing to indent beneath", () => {
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node("ordered_list", null, authoredItem("Only")),
+    );
+
+    assert.equal(runKeyCommand(indentClauseOnTab, doc, 3).handled, false);
+  });
+
+  it("keeps Shift+Tab in a clause the reader added, so its refusal is announced", () => {
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node("ordered_list", { id: "ordered-list:clauses" }, [
+        listItem("item:first", "One"),
+        authoredItem("Added"),
+        listItem("item:third", "Three"),
+      ]),
+    );
+    const addedPosition = 2 + doc.firstChild!.firstChild!.nodeSize + 2;
+
+    // Lifting it out would split the generated list, which the invariants refuse.
+    const outdented = runKeyCommand(outdentClauseOnTab, doc, addedPosition);
+    assert.equal(outdented.handled, true);
+    assert.ok(outdented.transaction);
+  });
+
+  it("leaves a refused Tab to the browser even in a clause the reader added", () => {
+    // Indenting would reparent the generated item the added clause holds.
+    const added = editorSchema.node("list_item", null, [
+      editorSchema.node("paragraph", null, editorSchema.text("Added")),
+      editorSchema.node("ordered_list", null, listItem("item:nested", "Nested")),
+    ]);
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node("ordered_list", { id: "ordered-list:clauses" }, [
+        listItem("item:first", "One"),
+        added,
+      ]),
+    );
+    const addedPosition = 2 + doc.firstChild!.firstChild!.nodeSize + 2;
+
+    assert.equal(runKeyCommand(indentClauseOnTab, doc, addedPosition).handled, false);
+  });
+
+  it("indents and outdents a clause the reader added", () => {
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node("ordered_list", { id: "ordered-list:clauses" }, [
+        listItem("item:first", "One"),
+        authoredItem("Added"),
+      ]),
+    );
+    const addedPosition = 2 + doc.firstChild!.firstChild!.nodeSize + 2;
+
+    const indented = runKeyCommand(indentClauseOnTab, doc, addedPosition);
+    assert.equal(indented.handled, true);
+    const nested = indented.transaction!.doc.firstChild!.firstChild!.lastChild!;
+    assert.equal(nested.type.name, "ordered_list");
+    assert.equal(nested.textContent, "Added");
+
+    const indentedDoc = indented.transaction!.doc;
+    const outdented = runKeyCommand(
+      outdentClauseOnTab,
+      indentedDoc,
+      indented.transaction!.selection.from,
+    );
+    assert.equal(outdented.handled, true);
+    assert.equal(outdented.transaction!.doc.firstChild!.childCount, 2);
   });
 });

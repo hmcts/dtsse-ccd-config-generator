@@ -13,6 +13,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment:
+      name: cftlib-acr-pull
+      deployment: false
     permissions:
       contents: read
       pull-requests: write
@@ -31,7 +34,7 @@ jobs:
         fi
         base="${{ github.event.pull_request.base.sha }}"
         head="${{ github.event.pull_request.head.sha }}"
-        git fetch --no-tags --prune --depth=1 origin "$base" "$head"
+        git fetch --no-tags --prune origin "$base" "$head"
         files=$(git diff --name-only "$base" "$head")
         if [ -z "$files" ]; then
           echo "docs_only=false" >> "$GITHUB_OUTPUT"
@@ -139,6 +142,9 @@ jobs:
 
   migration-check:
     runs-on: ubuntu-latest
+    environment:
+      name: cftlib-acr-pull
+      deployment: false
     permissions:
       contents: read
       id-token: write
@@ -156,7 +162,7 @@ jobs:
         fi
         base="${{ github.event.pull_request.base.sha }}"
         head="${{ github.event.pull_request.head.sha }}"
-        git fetch --no-tags --prune --depth=1 origin "$base" "$head"
+        git fetch --no-tags --prune origin "$base" "$head"
         files=$(git diff --name-only "$base" "$head")
         if [ -z "$files" ]; then
           echo "docs_only=false" >> "$GITHUB_OUTPUT"

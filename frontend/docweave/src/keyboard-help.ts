@@ -32,7 +32,7 @@ export function editorShortcuts(
     },
     {
       keys: "Tab or Shift+Tab",
-      description: "Indent or outdent a numbered clause",
+      description: "Indent or outdent a numbered clause you added; elsewhere, move to the next or previous control",
     },
     {
       keys: "Enter, on a generated field",

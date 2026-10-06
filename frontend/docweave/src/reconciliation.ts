@@ -232,8 +232,17 @@ function reconcileModified(
 ): void {
   const live = requireManagedNode(transaction, change.id);
 
+  if (change.target.isLeaf) {
+    // A new value for a fact keeps any formatting the reader gave it.
+    transaction.setNodeMarkup(
+      live.position,
+      change.target.type,
+      change.target.attrs,
+    );
+    return;
+  }
+
   if (
-    change.target.isLeaf ||
     live.node.eq(change.previous) ||
     (change.target.type.name === "paragraph" &&
       !referenceClauseContentEqual(change.previous, change.target))

@@ -6,23 +6,47 @@ import {
 } from "prosemirror-model";
 import {
   type Command,
-  type Selection,
+  Selection,
+  type Transaction,
 } from "prosemirror-state";
 
 import { editorSchema } from "../schema.js";
 
-function managedClause(
+/** The nearest numbered clause, or generated paragraph, around a position. */
+function clauseAt(
   position: ResolvedPos,
 ): { depth: number; node: ProseMirrorNode } | undefined {
   for (let depth = position.depth; depth > 0; depth--) {
     const node = position.node(depth);
-    if ((node.type === editorSchema.nodes.paragraph ||
-      node.type === editorSchema.nodes.list_item) &&
-      typeof node.attrs.id === "string") {
+    if (node.type === editorSchema.nodes.list_item ||
+      (node.type === editorSchema.nodes.paragraph &&
+        typeof node.attrs.id === "string")) {
       return { depth, node };
     }
   }
   return undefined;
+}
+
+function isEmptyPersonalClause(node: ProseMirrorNode): boolean {
+  return typeof node.attrs.id !== "string" && node.childCount === 1 &&
+    node.firstChild!.content.size === 0;
+}
+
+/** Whether the position is where the clause's wording begins. */
+function atClauseStart(position: ResolvedPos, clauseDepth: number): boolean {
+  return position.parentOffset === 0 && position.index(clauseDepth) === 0;
+}
+
+/** Places the wording and leaves the caret after it. */
+function insertAndSelect(
+  transaction: Transaction,
+  from: number,
+  to: number,
+  content: Fragment,
+): void {
+  transaction.replaceWith(from, to, content);
+  const end = transaction.mapping.map(to, 1);
+  transaction.setSelection(Selection.near(transaction.doc.resolve(end), -1));
 }
 
 function listItems(document: ProseMirrorNode): Fragment {
@@ -58,13 +82,11 @@ export function insertTemplate(
   return (state, dispatch) => {
     if (!dispatch) return true;
 
-    let transaction = state.tr;
-    if (selection) transaction = transaction.setSelection(selection);
+    const transaction = state.tr;
+    if (selection) transaction.setSelection(selection);
 
-    const insertionPosition = transaction.selection.empty
-      ? transaction.selection.$from
-      : transaction.selection.$to;
-    const clause = managedClause(insertionPosition);
+    const { $to } = transaction.selection;
+    const clause = clauseAt($to);
 
     if (!clause) {
       let containsManagedNode = false;
@@ -79,31 +101,34 @@ export function insertTemplate(
           return true;
         },
       );
-      transaction = containsManagedNode
-        ? transaction.insert(
-          transaction.selection.to,
-          transaction.selection.$to.parent.type ===
-              editorSchema.nodes.ordered_list
+      if (containsManagedNode) {
+        insertAndSelect(
+          transaction,
+          $to.pos,
+          $to.pos,
+          $to.parent.type === editorSchema.nodes.ordered_list
             ? listItems(document)
             : document.content,
-        )
-        : transaction.replaceSelection(new Slice(document.content, 0, 0));
-      if (!transaction.docChanged) {
-        throw new Error("Template cannot be inserted at this position");
+        );
+      } else {
+        transaction.replaceSelection(new Slice(document.content, 0, 0));
       }
-      dispatch(transaction.scrollIntoView());
-      return true;
+    } else {
+      const before = $to.before(clause.depth);
+      const after = $to.after(clause.depth);
+      const content = clause.node.type === editorSchema.nodes.list_item
+        ? listItems(document)
+        : document.content;
+
+      if (isEmptyPersonalClause(clause.node)) {
+        // The template becomes the clause the reader has just started.
+        insertAndSelect(transaction, before, after, content);
+      } else {
+        const position = atClauseStart($to, clause.depth) ? before : after;
+        insertAndSelect(transaction, position, position, content);
+      }
     }
 
-    const insertBefore = insertionPosition.parentOffset === 0;
-    const position = insertBefore
-      ? insertionPosition.before(clause.depth)
-      : insertionPosition.after(clause.depth);
-    const content = clause.node.type === editorSchema.nodes.list_item
-      ? listItems(document)
-      : document.content;
-
-    transaction = transaction.insert(position, content);
     if (!transaction.docChanged) {
       throw new Error("Template cannot be inserted at this position");
     }

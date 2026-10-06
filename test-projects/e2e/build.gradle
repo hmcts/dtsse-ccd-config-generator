@@ -6,7 +6,7 @@ plugins {
   id 'io.spring.dependency-management' version '1.1.7'
   id 'jacoco'
   id 'hmcts.ccd.sdk'
-  id 'com.github.hmcts.rse-cft-lib' version '0.19.2395'
+  id 'com.github.hmcts.rse-cft-lib' version '0.19.2412'
 }
 
 group = 'uk.gov.hmcts'
@@ -19,6 +19,7 @@ ccd {
 }
 
 def jsonLegacyDefinitionsDir = layout.buildDirectory.dir('json-ccd-definitions')
+def etCosUrl = System.getenv('ET_COS_URL') ?: 'http://localhost:4013'
 
 tasks.register('generateJsonLegacyDefinitions') {
   def sourceDir = layout.projectDirectory.dir('src/main/resources/json-ccd-definitions/CaseTypeA')
@@ -78,16 +79,20 @@ dependencies {
   implementation 'com.github.hmcts:service-auth-provider-java-client:5.3.5'
   testImplementation 'com.github.hmcts:ccd-data-migration-support'
   implementation 'com.github.hmcts:task-management'
+  implementation 'com.github.hmcts:document-bundling'
+  // Same PDFBox version as document-bundling: the Docmosis stub controller generates PDFs with it
+  // and the cftlibTest suite asserts semantically on stitched output.
+  implementation 'org.apache.pdfbox:pdfbox:3.0.8'
 
   implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.9.1'
 
   implementation 'com.github.ben-manes.caffeine:caffeine:3.3.0'
-  implementation 'com.google.guava:guava:33.7.1-jre'
+  implementation 'com.google.guava:guava:33.7.2-jre'
 
-  implementation 'org.projectlombok:lombok'
-  annotationProcessor 'org.projectlombok:lombok'
-  cftlibAnnotationProcessor 'org.projectlombok:lombok'
-  cftlibTestAnnotationProcessor 'org.projectlombok:lombok'
+  implementation 'org.projectlombok:lombok:1.18.48'
+  annotationProcessor 'org.projectlombok:lombok:1.18.48'
+  cftlibAnnotationProcessor 'org.projectlombok:lombok:1.18.48'
+  cftlibTestAnnotationProcessor 'org.projectlombok:lombok:1.18.48'
 
   testImplementation('org.springframework.boot:spring-boot-starter-test') {
     exclude module: 'commons-logging'
@@ -107,6 +112,8 @@ dependencies {
   cftlibTestImplementation 'org.junit.platform:junit-platform-console'
   cftlibTestImplementation 'jakarta.jms:jakarta.jms-api:3.1.0'
   cftlibTestImplementation 'com.github.hmcts:task-management'
+  cftlibTestImplementation 'com.github.hmcts:document-bundling'
+  cftlibTestImplementation 'org.apache.pdfbox:pdfbox:3.0.8'
 }
 
 springBoot {
@@ -172,6 +179,7 @@ tasks.withType(CftlibExec).configureEach {
   dependsOn tasks.named('generateJsonLegacyDefinitions')
   authMode = AuthMode.Local
   environment 'POSTGRES_VERSION', '15'
+  environment 'ET_COS_URL', etCosUrl
   environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_E2E', 'http://localhost:4013'
   environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_case-type-a', 'http://localhost:4013'
   environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_case-type-b', 'http://localhost:4013'
@@ -257,6 +265,7 @@ tasks.named('generateCCDConfig').configure {
 cftlibTest {
   authMode = AuthMode.Local
   group = 'verification'
+  environment 'ET_COS_URL', etCosUrl
 
   systemProperties([
     'junit.jupiter.execution.parallel.enabled'             : 'false',

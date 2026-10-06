@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { history, redo, undo } from "prosemirror-history";
 import {
   type Command,
   EditorState,
@@ -14,6 +15,7 @@ import {
   deleteUserAuthoredNode,
   getGeneratedDocument,
   restoreGeneratedNode,
+  revertClauseAtSelection,
   setGeneratedDocument,
 } from "../src/diff-styling.js";
 import { indentListItem, outdentListItem } from "../src/keymap.js";
@@ -72,6 +74,57 @@ function listCommandTransaction(
 }
 
 describe("diff styling", () => {
+  for (const inserted of [false, true]) {
+    it(`keeps reverting an ${inserted ? "inserted" : "edited"} clause separate from earlier typing`, () => {
+      const generated = editorSchema.node("doc", null,
+        editorSchema.node("paragraph", { id: "paragraph:generated" }, editorSchema.text("Generated")));
+      let state = EditorState.create({
+        doc: generated,
+        plugins: [createDiffStylingPlugin(), history()],
+      });
+      state = state.apply(setGeneratedDocument(state.tr, generated));
+      // All actions happen at the same time, without a history timeout.
+      const dispatch = (tr: Transaction): void => { state = state.apply(tr.setTime(1000)); };
+      const edit = inserted
+        ? state.tr.insert(0, editorSchema.node("paragraph", null, editorSchema.text("Edited")))
+        : state.tr.insertText("Edited", 1, state.doc.firstChild!.nodeSize - 1);
+      dispatch(edit.setSelection(TextSelection.create(edit.doc, 1)));
+      const edited = state.doc;
+
+      assert.equal(revertClauseAtSelection(state, dispatch), true);
+      assert.ok(state.doc.eq(generated));
+      assert.equal(undo(state, dispatch), true);
+      assert.ok(state.doc.eq(edited), "Undo restores the wording before the revert");
+      assert.equal(undo(state, dispatch), true);
+      assert.ok(state.doc.eq(generated), "the earlier edit has its own undo step");
+      assert.equal(redo(state, dispatch), true);
+      assert.ok(state.doc.eq(edited));
+      assert.equal(redo(state, dispatch), true);
+      assert.ok(state.doc.eq(generated));
+    });
+  }
+
+  it("keeps typing after a clause revert in its own undo step", () => {
+    const generated = editorSchema.node("doc", null,
+      editorSchema.node("paragraph", { id: "paragraph:generated" }, editorSchema.text("Generated")));
+    let state = EditorState.create({
+      doc: generated,
+      plugins: [createDiffStylingPlugin(), history()],
+    });
+    state = state.apply(setGeneratedDocument(state.tr, generated));
+    const dispatch = (tr: Transaction): void => { state = state.apply(tr.setTime(1000)); };
+    dispatch(state.tr.insertText("Edited", 1, state.doc.firstChild!.nodeSize - 1));
+    const edited = state.doc;
+    assert.equal(revertClauseAtSelection(state, dispatch), true);
+    dispatch(state.tr.insertText(" more", state.doc.firstChild!.nodeSize - 1));
+    assert.equal(state.doc.textContent, "Generated more");
+
+    assert.equal(undo(state, dispatch), true);
+    assert.ok(state.doc.eq(generated), "only the follow-up typing is undone");
+    assert.equal(undo(state, dispatch), true);
+    assert.ok(state.doc.eq(edited), "a second Undo reverses the revert");
+  });
+
   it("retains the latest generated document as reconciliation baseline", () => {
     const generatedDocument = editorSchema.node(
       "doc",
@@ -373,6 +426,32 @@ describe("diff styling", () => {
 
     assert.equal(result.transactions.length, 1);
     assert.equal(result.state.doc.firstChild!.childCount, 1);
+  });
+
+  it("rejects indenting a generated clause beneath a user-authored clause", () => {
+    const doc = editorSchema.node(
+      "doc",
+      null,
+      editorSchema.node("ordered_list", { id: "ordered-list:clauses" }, [
+        listItem(null, "User authored"),
+        listItem("item:generated", "Generated"),
+      ]),
+    );
+    const state = EditorState.create({
+      schema: editorSchema,
+      doc,
+      plugins: [createDiffStylingPlugin()],
+    });
+    const transaction = listCommandTransaction(
+      state,
+      indentListItem,
+      "Generated",
+    );
+
+    const result = state.applyTransaction(transaction);
+
+    assert.equal(result.transactions.length, 0);
+    assert.ok(result.state.doc.eq(doc));
   });
 
   it("allows outdenting a user-authored clause", () => {
@@ -814,6 +893,27 @@ describe("diff styling", () => {
       ).length,
       1,
     );
+  });
+
+  it("marks a heading the reader added as inserted, as describeChanges counts it", () => {
+    const generatedDocument = editorSchema.node("doc", null, [
+      editorSchema.node("paragraph", { id: "paragraph:generated" }, editorSchema.text("Generated.")),
+    ]);
+    const liveDocument = editorSchema.node("doc", null, [
+      editorSchema.node("heading", { level: 2 }, editorSchema.text("Added")),
+      generatedDocument.firstChild!,
+    ]);
+    const plugin = createDiffStylingPlugin();
+    let state = EditorState.create({ schema: editorSchema, doc: liveDocument, plugins: [plugin] });
+    state = state.apply(setGeneratedDocument(state.tr, generatedDocument));
+
+    const decorationSet = plugin.props.decorations?.call(plugin, state);
+    assert.ok(decorationSet instanceof DecorationSet);
+    assert.equal(
+      decorationSet.find(undefined, undefined, (spec) => spec.diffKind === "inserted").length,
+      1,
+    );
+    assert.ok(deleteUserAuthoredNode(state, 0), "the added heading can be reverted");
   });
 
   it("does not mark reconciled parent wording changed when preserving a user-authored child", () => {

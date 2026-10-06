@@ -25,6 +25,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -45,6 +46,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineItem;
+import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineNode;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.client.methods.HttpPut;
@@ -95,7 +101,14 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import uk.gov.hmcts.divorce.bundling.CaseworkerCreateBundle;
+import uk.gov.hmcts.divorce.bundling.CaseworkerCreateBundleMissingDocument;
+import uk.gov.hmcts.divorce.bundling.DocmosisStubController;
+import uk.gov.hmcts.divorce.bundling.FixtureDocumentResolver;
+import uk.gov.hmcts.divorce.bundling.model.CaseBundle;
+import uk.gov.hmcts.divorce.callback.CallbackLoggingFilter;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
+import uk.gov.hmcts.divorce.stubs.StubDocumentStore;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
 import uk.gov.hmcts.divorce.simplecase.SimpleCaseConfiguration;
@@ -199,6 +212,12 @@ public class TestWithCCD extends CftlibTest {
 
     @Autowired
     private JmsTemplate jmsTemplate;
+
+    @Autowired
+    private StubDocumentStore stubDocumentStore;
+
+    @Autowired
+    private DocmosisStubController docmosisStub;
 
     private long firstEventId;
     private static final String BASE_URL = "http://localhost:4452";
@@ -601,6 +620,136 @@ public class TestWithCCD extends CftlibTest {
             firstEvent);
         var response = HttpClientBuilder.create().build().execute(e);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+    }
+
+    @Order(35)
+    @Test
+    public void createBundleRendersUploadsToCdamAndAttachesToCase() throws Exception {
+        String user = "TEST_CASE_WORKER_USER@mailinator.com";
+        int conversionsBefore = docmosisStub.convertedSources().size();
+
+        var request = prepareEventRequest(user, CaseworkerCreateBundle.CASEWORKER_CREATE_BUNDLE, Map.of());
+        var response = HttpClientBuilder.create().build().execute(request);
+        var responseBody = EntityUtils.toString(response.getEntity());
+        assertThat("bundle event should succeed: " + responseBody,
+            response.getStatusLine().getStatusCode(), equalTo(201));
+        Map<String, Object> payload = mapper.readValue(responseBody, new TypeReference<>() {});
+        @SuppressWarnings("unchecked")
+        Map<String, Object> afterSubmit = (Map<String, Object>) payload.get("after_submit_callback_response");
+        assertThat(afterSubmit.get("confirmation_header"), equalTo("Hearing bundle created"));
+
+        // The service's own bundle model, built from the SDK's result, is on the case.
+        var c = ccdApi.getCase(getAuthorisation(user), getServiceAuth(), String.valueOf(caseRef));
+        var caseData = mapper.readValue(mapper.writeValueAsString(c.getData()), CaseData.class);
+        assertThat(caseData.getCaseBundles(), hasSize(1));
+        CaseBundle bundle = caseData.getCaseBundles().get(0).getValue();
+        assertThat(bundle.getStitchStatus(), equalTo("DONE"));
+        assertThat(bundle.getTitle(), equalTo(CaseworkerCreateBundle.BUNDLE_TITLE));
+        assertThat(bundle.getFileName(), equalTo("case-" + caseRef + "-hearing-bundle.pdf"));
+        assertThat(bundle.getDocuments(), hasSize(5));
+        assertThat(bundle.getDocuments().get(0).getValue().getName(),
+            equalTo(CaseworkerCreateBundle.POTENTIAL_ENERGY_TITLE));
+        assertThat(bundle.getDocuments().get(0).getValue().getStartPage(), greaterThan(1));
+        String documentUrl = bundle.getStitchedDocument().getUrl();
+        assertThat(bundle.getStitchedDocument().getBinaryUrl(), equalTo(documentUrl + "/binary"));
+
+        // The consumer uploaded through the real embedded CDAM and attached the document to the
+        // case (case_id PATCHed onto the dm-store record), so it is not TTL-disposed.
+        String documentId = documentUrl.substring(documentUrl.length() - 36);
+        var storedDocument = stubDocumentStore.find(documentId).orElseThrow(
+            () -> new AssertionError("stitched document " + documentId + " missing from dm-store stub"));
+        assertThat(storedDocument.metadata().get("case_id"), equalTo(String.valueOf(caseRef)));
+        assertThat(fetchCdamDocument(documentId).path("metadata").path("case_id").asText(),
+            equalTo(String.valueOf(caseRef)));
+
+        // Download the stitched binary through CDAM and assert on it semantically.
+        var download = new HttpGet(CDAM_BASE_URL + "/cases/documents/" + documentId + "/binary");
+        download.addHeader("Authorization", getAuthorisation(user));
+        download.addHeader("ServiceAuthorization", cftlib().generateDummyS2SToken("nfdiv_case_api"));
+        byte[] pdfBytes;
+        try (var downloadResponse = HttpClientBuilder.create().build().execute(download)) {
+            assertThat(downloadResponse.getStatusLine().getStatusCode(), equalTo(200));
+            pdfBytes = EntityUtils.toByteArray(downloadResponse.getEntity());
+        }
+        try (PDDocument stitched = Loader.loadPDF(pdfBytes)) {
+            assertThat(stitched.getNumberOfPages(), equalTo(bundle.getPageCount()));
+            assertThat(stitched.getNumberOfPages(), greaterThanOrEqualTo(15));
+            String text = new PDFTextStripper().getText(stitched);
+            for (String expected : List.of(
+                    CaseworkerCreateBundle.BUNDLE_TITLE, CaseworkerCreateBundle.APPLICATIONS_SECTION,
+                    CaseworkerCreateBundle.EVIDENCE_SECTION, CaseworkerCreateBundle.CORRESPONDENCE_SECTION,
+                    CaseworkerCreateBundle.POTENTIAL_ENERGY_TITLE, CaseworkerCreateBundle.MEDICAL_REPORT_TITLE,
+                    CaseworkerCreateBundle.FLYING_PIG_TITLE,
+                    // The office document went through the app's Docmosis stub.
+                    "Stubbed Docmosis conversion of wordDocument2.docx",
+                    // The MP3 is a generated link page, never fetched.
+                    CaseworkerCreateBundle.HEARING_RECORDING_TITLE, "Media type: audio/mpeg",
+                    CaseworkerCreateBundle.HEARING_RECORDING_NOTE, CaseworkerCreateBundle.HEARING_RECORDING_URL,
+                    // The expected-but-empty section renders the standard visible placeholder.
+                    "There are no documents in this section.")) {
+                assertThat(text, containsString(expected));
+            }
+            List<String> bookmarks = collectBookmarkTitles(stitched.getDocumentCatalog().getDocumentOutline());
+            assertThat(bookmarks, hasItems(
+                CaseworkerCreateBundle.APPLICATIONS_SECTION,
+                CaseworkerCreateBundle.EVIDENCE_SECTION,
+                CaseworkerCreateBundle.CORRESPONDENCE_SECTION,
+                CaseworkerCreateBundle.POTENTIAL_ENERGY_TITLE,
+                CaseworkerCreateBundle.HEARING_RECORDING_TITLE));
+        }
+
+        List<String> conversions = docmosisStub.convertedSources();
+        assertThat(conversions.size(), equalTo(conversionsBefore + 1));
+        assertThat(conversions.get(conversionsBefore), equalTo("wordDocument2.docx"));
+        try (var httpTraffic = Files.lines(CallbackLoggingFilter.LOG_FILE.toAbsolutePath())) {
+            assertThat("CDAM upload should be captured in http-traffic.log",
+                httpTraffic.anyMatch(line -> line.contains("\"uri\":\"/documents\"")
+                    && line.contains("\"method\":\"POST\"") && line.contains(documentId)),
+                equalTo(true));
+        }
+    }
+
+    @Order(39)
+    @Test
+    public void createBundleWithMissingDocumentSurfacesErrorAndPublishesNothing() throws Exception {
+        String user = "TEST_CASE_WORKER_USER@mailinator.com";
+        String sqlCountByCase = "SELECT count(*) FROM case_bundles WHERE reference = :ref";
+        Integer before = db.queryForObject(sqlCountByCase, Map.of("ref", caseRef), Integer.class);
+        int documentsBefore = stubDocumentStore.size();
+
+        var request = prepareEventRequest(
+            user, CaseworkerCreateBundleMissingDocument.CASEWORKER_CREATE_BUNDLE_MISSING_DOC, Map.of());
+        var response = HttpClientBuilder.create().build().execute(request);
+        var responseBody = EntityUtils.toString(response.getEntity());
+        assertThat("bundle event should be rejected: " + responseBody,
+            response.getStatusLine().getStatusCode(), equalTo(422));
+        Map<String, Object> payload = mapper.readValue(responseBody, new TypeReference<>() {});
+        @SuppressWarnings("unchecked")
+        List<String> callbackErrors = (List<String>) payload.get("callbackErrors");
+        assertThat("the error should name the missing document and the typed reason",
+            callbackErrors, hasItem(allOf(
+                containsString("DOCUMENT_NOT_FOUND"),
+                containsString(CaseworkerCreateBundleMissingDocument.MISSING_DOCUMENT_ID),
+                containsString(FixtureDocumentResolver.PROVIDER))));
+
+        // Nothing was uploaded or recorded, and the earlier bundle is untouched.
+        assertThat(stubDocumentStore.size(), equalTo(documentsBefore));
+        assertThat(db.queryForObject(sqlCountByCase, Map.of("ref", caseRef), Integer.class), equalTo(before));
+        var c = ccdApi.getCase(getAuthorisation(user), getServiceAuth(), String.valueOf(caseRef));
+        var caseData = mapper.readValue(mapper.writeValueAsString(c.getData()), CaseData.class);
+        assertThat(caseData.getCaseBundles(), hasSize(before));
+        assertThat(before, greaterThan(0));
+    }
+
+    private static List<String> collectBookmarkTitles(PDOutlineNode node) {
+        List<String> titles = new ArrayList<>();
+        PDOutlineItem child = node.getFirstChild();
+        while (child != null) {
+            titles.add(child.getTitle());
+            titles.addAll(collectBookmarkTitles(child));
+            child = child.getNextSibling();
+        }
+        return titles;
     }
 
     @Order(36)
@@ -3001,6 +3150,7 @@ public class TestWithCCD extends CftlibTest {
     @Order(19)
     @Test
     public void aboutToSubmitCallbackCanOverrideEventMetadata() throws Exception {
+        var dataBefore = storedCaseData(caseRef);
         var start = ccdApi.startEvent(
             getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
             getServiceAuth(),
@@ -3028,6 +3178,11 @@ public class TestWithCCD extends CftlibTest {
             CaseworkerOverrideEventMetadata.METADATA_OVERRIDE_PREFIX + " summary",
             CaseworkerOverrideEventMetadata.METADATA_OVERRIDE_PREFIX + " description"
         );
+        // The callback returns metadata and no data, so the stored case data is kept.
+        var dataAfter = storedCaseData(caseRef);
+        assertThat(dataBefore.path("applicationType").isTextual(), is(true));
+        assertThat(dataAfter.path("applicationType"), equalTo(dataBefore.path("applicationType")));
+        assertThat(dataAfter.path("applicant1FirstName"), equalTo(dataBefore.path("applicant1FirstName")));
     }
 
     @Order(20)
@@ -3063,6 +3218,51 @@ public class TestWithCCD extends CftlibTest {
 
         Integer after = db.queryForObject(sqlCountByCase, Map.of("ref", caseRef), Integer.class);
         assertThat(after, equalTo(before));
+        assertThat(auditCountForCase(caseRef), equalTo(auditsBefore));
+    }
+
+    @Order(20)
+    @Test
+    public void legacyErrorMessageOverrideRollsBackSubmission() throws Exception {
+        Map<String, Object> params = Map.of("reference", caseRef);
+        String caseBefore = db.queryForObject(
+            "select data::text || case_revision from ccd.case_data where reference = :reference", params, String.class);
+        Integer notesBefore = db.queryForObject(
+            "select count(*) from case_notes where reference = :reference", params, Integer.class);
+        Integer outboxBefore = db.queryForObject(
+            "select count(*) from ccd.message_queue_candidates where reference = :reference", params, Integer.class);
+        Integer auditsBefore = auditCountForCase(caseRef);
+
+        var start = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            PublishedEvent.class.getSimpleName()
+        );
+        var request = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            PublishedEvent.class.getSimpleName(),
+            Map.of("note", PublishedEvent.ERROR_MESSAGE_OVERRIDE_NOTE),
+            start.getToken()
+        );
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(422));
+
+        var payload = mapper.readValue(EntityUtils.toString(response.getEntity()), Map.class);
+        @SuppressWarnings("unchecked")
+        List<String> callbackErrors = (List<String>) payload.get("callbackErrors");
+        assertThat(callbackErrors, contains(PublishedEvent.ERROR_MESSAGE_OVERRIDE));
+
+        assertThat(db.queryForObject(
+            "select data::text || case_revision from ccd.case_data where reference = :reference", params, String.class),
+            equalTo(caseBefore));
+        assertThat(db.queryForObject(
+            "select count(*) from case_notes where reference = :reference", params, Integer.class),
+            equalTo(notesBefore));
+        assertThat(db.queryForObject(
+            "select count(*) from ccd.message_queue_candidates where reference = :reference", params, Integer.class),
+            equalTo(outboxBefore));
         assertThat(auditCountForCase(caseRef), equalTo(auditsBefore));
     }
 
@@ -3352,6 +3552,73 @@ public class TestWithCCD extends CftlibTest {
         assertThat(updatedCase.getState(), equalTo(SimpleCaseState.FOLLOW_UP.name()));
         assertThat(updatedData.getFollowUpMarker(), equalTo(SimpleCaseConfiguration.FOLLOW_UP_CALLBACK_MARKER));
         assertThat(updatedData.getFollowUpNote(), containsString("Follow up detail"));
+    }
+
+    @SneakyThrows
+    @Order(28)
+    @Test
+    void simpleCaseCallbackReturningOnlyAStateKeepsCaseData() {
+        var request = prepareEventRequestForCase(
+            simpleCaseRef,
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            SimpleCaseConfiguration.STATE_ONLY_EVENT,
+            Map.of()
+        );
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+
+        var storedData = storedCaseData(simpleCaseRef);
+        assertThat(storedData.path("subject").asText(), equalTo("Simple case subject"));
+        assertThat(storedData.path("description").asText(), equalTo("Initial simple case description"));
+        assertThat(storedData.path("followUpMarker").asText(),
+            equalTo(SimpleCaseConfiguration.FOLLOW_UP_CALLBACK_MARKER));
+        assertThat(db.queryForObject(
+            "select state from ccd.case_data where reference = :reference",
+            Map.of("reference", simpleCaseRef),
+            String.class
+        ), equalTo(SimpleCaseState.FOLLOW_UP.name()));
+        var auditData = mapper.readTree(db.queryForObject(
+            """
+            SELECT ce.data::text
+              FROM ccd.case_event ce
+              JOIN ccd.case_data cd ON cd.id = ce.case_data_id
+             WHERE cd.reference = :reference
+               AND ce.event_id = :eventId
+            """,
+            Map.of("reference", simpleCaseRef, "eventId", SimpleCaseConfiguration.STATE_ONLY_EVENT),
+            String.class
+        ));
+        assertThat(auditData.path("subject").asText(), equalTo("Simple case subject"));
+    }
+
+    @SneakyThrows
+    @Order(33)
+    @Test
+    void simpleCaseCallbackReturningEmptyDataReplacesCaseData() {
+        var request = prepareEventRequestForCase(
+            simpleCaseRef,
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            SimpleCaseConfiguration.EMPTY_DATA_EVENT,
+            Map.of()
+        );
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+
+        // As in CCD, data the callback returns replaces the case data even when it is empty.
+        var storedData = storedCaseData(simpleCaseRef);
+        assertThat(storedData.has("subject"), is(false));
+        assertThat(storedData.has("description"), is(false));
+        assertThat(storedData.has("followUpMarker"), is(false));
+    }
+
+    private JsonNode storedCaseData(long reference) throws IOException {
+        return mapper.readTree(db.queryForObject(
+            "select data::text from ccd.case_data where reference = :reference",
+            Map.of("reference", reference),
+            String.class
+        ));
     }
 
     @Order(34)
@@ -3717,28 +3984,31 @@ public class TestWithCCD extends CftlibTest {
     @Order(210)
     @Test
     void dispatchesJsonDefinitionCallbacksToSpringController() {
+        // An empty error_message_override is not a rejection.
         for (String caseType : jsonLegacyCaseTypes()) {
-            BaseJsonLegacyController.reset();
+            for (String note : List.of("json-legacy-normal", "json-legacy-empty-override")) {
+                BaseJsonLegacyController.reset();
 
-            var response = submitJsonLegacyEventForCaseType(caseType, Map.of("note", "json-legacy-normal"), 201);
+                var response = submitJsonLegacyEventForCaseType(caseType, Map.of("note", note), 201);
 
-            @SuppressWarnings("unchecked")
-            Map<String, Object> data = (Map<String, Object>) response.get("data");
-            assertThat(data.get("setInAboutToSubmit"), equalTo(BaseJsonLegacyController.MARKER));
+                @SuppressWarnings("unchecked")
+                Map<String, Object> data = (Map<String, Object>) response.get("data");
+                assertThat(data.get("setInAboutToSubmit"), equalTo(BaseJsonLegacyController.MARKER));
 
-            @SuppressWarnings("unchecked")
-            Map<String, Object> afterSubmit =
-                (Map<String, Object>) response.get("after_submit_callback_response");
-            assertThat(afterSubmit.get("confirmation_header"),
-                equalTo(BaseJsonLegacyController.CONFIRMATION_HEADER));
-            assertThat(afterSubmit.get("confirmation_body"),
-                equalTo(BaseJsonLegacyController.CONFIRMATION_BODY));
+                @SuppressWarnings("unchecked")
+                Map<String, Object> afterSubmit =
+                    (Map<String, Object>) response.get("after_submit_callback_response");
+                assertThat(afterSubmit.get("confirmation_header"),
+                    equalTo(BaseJsonLegacyController.CONFIRMATION_HEADER));
+                assertThat(afterSubmit.get("confirmation_body"),
+                    equalTo(BaseJsonLegacyController.CONFIRMATION_BODY));
 
-            assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(1));
-            assertThat(BaseJsonLegacyController.aboutToSubmitSawAuthorisation, is(true));
-            assertThat(BaseJsonLegacyController.aboutToSubmitSawServiceAuthorisation, is(true));
-            assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(1));
-            assertThat(BaseJsonLegacyController.submittedSawCommittedData, is(true));
+                assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(1));
+                assertThat(BaseJsonLegacyController.aboutToSubmitSawAuthorisation, is(true));
+                assertThat(BaseJsonLegacyController.aboutToSubmitSawServiceAuthorisation, is(true));
+                assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(1));
+                assertThat(BaseJsonLegacyController.submittedSawCommittedData, is(true));
+            }
         }
     }
 
@@ -3746,18 +4016,26 @@ public class TestWithCCD extends CftlibTest {
     @Order(211)
     @Test
     void aboutToSubmitErrorsRollbackJsonLegacySubmission() {
+        String override = BaseJsonLegacyController.ERROR_MESSAGE_OVERRIDE;
+        Map<String, List<String>> expectedErrors = Map.of(
+            "json-legacy-error", List.of("JSON legacy validation error"),
+            "json-legacy-error-override", List.of(override),
+            "json-legacy-errors-and-override", List.of(override, "JSON legacy validation error")
+        );
         for (String caseType : jsonLegacyCaseTypes()) {
-            BaseJsonLegacyController.reset();
-            String before = storedData(caseType);
+            for (var expected : expectedErrors.entrySet()) {
+                BaseJsonLegacyController.reset();
+                String before = storedData(caseType);
 
-            var response = submitJsonLegacyEventForCaseType(caseType, Map.of("note", "json-legacy-error"), 422);
+                var response = submitJsonLegacyEventForCaseType(caseType, Map.of("note", expected.getKey()), 422);
 
-            @SuppressWarnings("unchecked")
-            List<String> callbackErrors = (List<String>) response.get("callbackErrors");
-            assertThat(callbackErrors, equalTo(List.of("JSON legacy validation error")));
-            assertThat(storedData(caseType), equalTo(before));
-            assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(1));
-            assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(0));
+                @SuppressWarnings("unchecked")
+                List<String> callbackErrors = (List<String>) response.get("callbackErrors");
+                assertThat(callbackErrors, equalTo(expected.getValue()));
+                assertThat(storedData(caseType), equalTo(before));
+                assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(1));
+                assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(0));
+            }
         }
     }
 
