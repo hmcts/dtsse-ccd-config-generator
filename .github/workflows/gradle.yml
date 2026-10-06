@@ -66,7 +66,7 @@ jobs:
       run: az acr login --name hmctsprod
     - name: Run SDK checks and e2e test
       if: steps.changes.outputs.docs_only != 'true'
-      run: ./gradlew :sdk:check :e2e:check -i --stacktrace
+      run: ./gradlew :sdk:check :e2e:check pcs:testClasses nfdiv:testClasses sptribs:testClasses adoption:testClasses -i --stacktrace
     - name: Generate aggregate coverage report
       if: steps.changes.outputs.docs_only != 'true'
       run: ./gradlew :sdk:jacocoAggregateReport
