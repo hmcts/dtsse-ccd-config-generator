@@ -505,7 +505,7 @@ For the less common columns — searching *within* a complex field (`ListElement
 
 `FieldShowCondition` is valid only on the input sheets and `ResultsOrdering` only on the result sheets (the definition-store importer rejects the wrong one for a given sheet); `ListElementCode` is valid on all four. Calling the lambda once per element code emits one row each, so a complex field can expose several of its leaves.
 
-The `searchCasesFields()` (`SearchCasesResultFields` sheet) builder takes the same lambda overload for its two extra columns — an `AccessProfile`/`UserRole` scope and the `UseCase`. Both default to their historic values (empty `UserRole`, `UseCase = orgcases`) when unset, so plain `.field(...)` calls are unchanged; scope a field to several roles or use cases by calling it once per combination (both columns are part of the row's identity, so the rows stay distinct):
+The `searchCasesFields()` (`SearchCasesResultFields` sheet) builder takes the same lambda overload for its two extra columns — an `AccessProfile`/`UserRole` scope and the `UseCase`. Both default to an empty `UserRole` and `UseCase = orgcases` when unset; scope a field to several roles or use cases by calling it once per combination (both columns are part of the row's identity, so the rows stay distinct):
 
 ```java
   builder.searchCasesFields()
@@ -514,7 +514,7 @@ The `searchCasesFields()` (`SearchCasesResultFields` sheet) builder takes the sa
         f -> f.role(CASEWORKER).useCase("WORKBASKET"));
 ```
 
-The `searchCasesFields()` sheet's `DisplayContextParameter`/`ResultsOrdering` columns have two entry points that render differently, so existing definitions stay byte-identical. The long-standing **positional** overload — `field(id, label, displayContext, listElementCode, resultsOrdering)` — preserves its historic (mis-wired) rendering: those two columns are emitted only when the corresponding argument is non-null, but the value written is always the row's `ListElementCode`. Use the **fluent** lambda when you want the actual column value:
+`DisplayContextParameter` and `ResultsOrdering` can be set either positionally — `field(id, label, displayContext, listElementCode, resultsOrdering)` — or through the lambda:
 
 ```java
   builder.searchCasesFields()

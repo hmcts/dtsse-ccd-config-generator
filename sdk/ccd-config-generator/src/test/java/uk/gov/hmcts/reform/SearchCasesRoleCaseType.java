@@ -11,13 +11,14 @@ import uk.gov.hmcts.reform.fpl.enums.UserRole;
 /**
  * Exercises the {@code searchCasesFields().field(id, label, Consumer)} sub-builder that scopes a
  * {@code SearchCasesResultFields} row to an {@code AccessProfile}/{@code UserRole} and/or a
- * {@code UseCase}. The generator previously hardcoded an empty {@code UserRole} and
- * {@code UseCase=orgcases} for every row; this fixture pins that:
+ * {@code UseCase}:
  *
  * <ul>
- *   <li>a plain field keeps the historic empty {@code UserRole} + {@code orgcases} default;</li>
+ *   <li>a plain field gets the default empty {@code UserRole} + {@code orgcases};</li>
  *   <li>the same {@code caseName} field appears once per {@code (UserRole, UseCase)} it is scoped to,
- *       kept distinct because both columns are part of the row's merge key.</li>
+ *       kept distinct because both columns are part of the row's merge key;</li>
+ *   <li>the fluent and positional overloads both emit their own
+ *       {@code DisplayContextParameter}/{@code ResultsOrdering} values.</li>
  * </ul>
  */
 @Component
@@ -29,18 +30,13 @@ public class SearchCasesRoleCaseType
     builder.caseType("SearchCasesRole", "SearchCasesRole", "Search cases role/use-case case type");
 
     builder.searchCasesFields()
-        // Historic default row: no role (empty UserRole), no useCase (orgcases).
         .field(SearchCasesRoleCaseData::getCaseName, "Case name")
-        // Same field scoped to a role under a custom use case.
         .field(SearchCasesRoleCaseData::getCaseName, "Case name",
             f -> f.role(LOCAL_AUTHORITY).useCase("WORKBASKET"))
-        // Same field, different role + use case: a distinct row.
         .field(SearchCasesRoleCaseData::getCaseName, "Case name",
             f -> f.role(HMCTS_ADMIN).useCase("SEARCH"))
-        // The fluent lambda carriers write the actual DisplayContextParameter/ResultsOrdering value,
-        // unlike the mis-wired positional field(...) overload. This pins that path emitting the real
-        // "#DATETIMEDISPLAY(...)"/"1:ASC" rather than echoing the ListElementCode.
         .field("[CASE_REFERENCE]", "Case Number",
-            f -> f.displayContextParameter("#DATETIMEDISPLAY(d MMMM yyyy)").resultsOrdering("1:ASC"));
+            f -> f.displayContextParameter("#DATETIMEDISPLAY(d MMMM yyyy)").resultsOrdering("1:ASC"))
+        .field("[CREATED_DATE]", "Created", "#DATETIMEDISPLAY(dd/MM/yyyy)", "createdLeaf", "2:DESC");
   }
 }

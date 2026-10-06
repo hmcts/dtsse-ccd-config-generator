@@ -294,8 +294,9 @@ public class E2EConfigGenerationTests {
     @SneakyThrows
     @Test
     public void emitsSearchCasesRoleAndUseCase() {
-        // Role/use-case scoping of SearchCasesResultFields rows, keeping the historic default row
-        // (empty UserRole, UseCase=orgcases) byte-identical alongside the opted-in rows.
+        // Role/use-case scoping of SearchCasesResultFields rows alongside the default row (empty
+        // UserRole, UseCase=orgcases), and the DisplayContextParameter/ResultsOrdering values of
+        // both the fluent and positional overloads.
         File expected = resourceFile("SearchCasesRole/SearchCasesResultFields/SearchCasesResultFields.json");
         File actual =
             new File(tmp.getRoot(), "SearchCasesRole/SearchCasesResultFields/SearchCasesResultFields.json");
