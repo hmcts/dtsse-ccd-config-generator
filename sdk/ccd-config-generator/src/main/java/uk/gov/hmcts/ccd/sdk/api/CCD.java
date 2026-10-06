@@ -28,7 +28,7 @@ public @interface CCD {
   /**
    * The state's {@code Description} column, when it needs to differ from {@link #label()} (the
    * state's {@code Name}). Only meaningful on a {@code State} enum constant; empty (the default)
-   * keeps today's behaviour of {@code Description == Name}.
+   * makes the {@code Description} equal to the {@code Name}.
    */
   String description() default "";
 

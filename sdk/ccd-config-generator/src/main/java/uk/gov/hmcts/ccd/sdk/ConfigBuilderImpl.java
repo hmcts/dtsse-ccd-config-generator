@@ -319,10 +319,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     Set<List<String>> existingAccessTypeKeys = config.accessTypes.stream()
         .map(ConfigBuilderImpl::accessTypeKey)
         .collect(Collectors.toCollection(HashSet::new));
-    // A mapping declared against a literal role name carries no HasRole constant, so read its name
-    // from roleName instead — the same either/or RoleToAccessProfilesGenerator emits the row from.
     Set<String> mappedRoleNames = config.caseRoleToAccessProfiles.stream()
-        .map(profile -> profile.getRole() != null ? profile.getRole().getRole() : profile.getRoleName())
+        .map(CaseRoleToAccessProfile::getRoleName)
         .collect(Collectors.toCollection(HashSet::new));
 
     Map<List<String>, AccessType> derivedAccessTypes = new LinkedHashMap<>();

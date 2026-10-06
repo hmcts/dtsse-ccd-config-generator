@@ -92,7 +92,7 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
    * {@code field.publish(boolean)} overrides the event-level {@code publishToCamunda()} cascade:
    * {@code publish(false)} opts the field out of a publishing event, while {@code publish(true)}
    * (or {@code publishAs}, which implies it) publishes the field even on a non-publishing event.
-   * With no explicit value the cascade applies as before. The definition store rejects a
+   * With no explicit value the cascade applies. The definition store rejects a
    * {@code Publish} column on {@code COMPLEX} fields, so neither the cascade nor an explicit
    * override is written there.
    */
@@ -205,10 +205,9 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
   }
 
   private void applyDefaultValue(Map<String, Object> row, Field field) {
-    // Only the opt-in fluent defaultValue(String) setter populates caseEventDefaultValue; the
-    // long-standing positional optional/mandatory defaultValue argument sets Field.defaultValue,
-    // which feeds CaseEventToComplexTypes alone. Reading the dedicated carrier here keeps this
-    // sheet byte-identical for every consumer that never calls the new setter.
+    // Only the fluent defaultValue(String) setter populates caseEventDefaultValue; the positional
+    // optional/mandatory defaultValue argument sets Field.defaultValue, which feeds
+    // CaseEventToComplexTypes alone.
     if (field.getCaseEventDefaultValue() == null) {
       return;
     }
