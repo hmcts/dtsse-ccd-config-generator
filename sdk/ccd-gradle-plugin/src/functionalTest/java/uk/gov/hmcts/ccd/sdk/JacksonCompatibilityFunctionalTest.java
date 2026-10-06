@@ -278,6 +278,27 @@ public class JacksonCompatibilityFunctionalTest {
   }
 
   @Test
+  public void classpathGuardSkipsIgnoredSourceSetsWithoutResolvingTheirClasspath() throws IOException {
+    String build = """
+        plugins { id 'hmcts.ccd.sdk' }
+        repositories { mavenLocal(); mavenCentral() }
+        sourceSets { localOnly }
+        // Resolvable only where this source set's tests run, not where check does.
+        dependencies { localOnlyImplementation 'org.example.unpublished:not-on-any-repository:1.0' }
+        %s
+        """;
+    write("build.gradle", build.formatted(""));
+    assertTrue(runner("jackson2ClasspathGuard").buildAndFail().getOutput()
+        .contains("not-on-any-repository"));
+
+    write("build.gradle", build.formatted(
+        "ccdSdk { jackson2ClasspathGuard { ignoredSourceSets = ['localOnly'] } }"));
+    BuildResult result = runner("jackson2ClasspathGuard").build();
+
+    assertEquals(TaskOutcome.SUCCESS, result.task(":jackson2ClasspathGuard").getOutcome());
+  }
+
+  @Test
   public void exactReviewedExceptionsRemainVisibleAndDoNotHideOtherFindings() throws IOException {
     write("build.gradle", """
         plugins { id 'hmcts.ccd.sdk' }

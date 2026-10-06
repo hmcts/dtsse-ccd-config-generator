@@ -21,6 +21,7 @@ public class JacksonClasspathGuardExtension {
     private List<String> allowedSourceFiles = new ArrayList<>();
     private List<String> allowedClasses = new ArrayList<>();
     private List<String> allowedComponents = new ArrayList<>();
+    private List<String> ignoredSourceSets = new ArrayList<>();
 
     public List<String> getFirstPartyGroups() {
       return firstPartyGroups;
@@ -52,6 +53,18 @@ public class JacksonClasspathGuardExtension {
 
     public void setAllowedComponents(List<String> allowedComponents) {
       this.allowedComponents = new ArrayList<>(allowedComponents);
+    }
+
+    /**
+     * Source sets whose classes and runtime classpath the guard skips, e.g. a test-only source
+     * set whose dependencies the CI that runs {@code check} cannot (and need not) resolve.
+     */
+    public List<String> getIgnoredSourceSets() {
+      return ignoredSourceSets;
+    }
+
+    public void setIgnoredSourceSets(List<String> ignoredSourceSets) {
+      this.ignoredSourceSets = new ArrayList<>(ignoredSourceSets);
     }
 
   }

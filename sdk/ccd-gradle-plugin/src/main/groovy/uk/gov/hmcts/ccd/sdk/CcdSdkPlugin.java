@@ -21,6 +21,7 @@ import org.gradle.api.logging.Logging;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.tasks.JavaExec;
+import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.api.tasks.compile.JavaCompile;
 import org.gradle.jvm.toolchain.JavaLanguageVersion;
@@ -182,13 +183,15 @@ public class CcdSdkPlugin implements Plugin<Project> {
           var java = project.getExtensions().getByType(JavaPluginExtension.class);
           task.getJavaVersion().set(java.getToolchain().getLanguageVersion()
               .orElse(JavaLanguageVersion.of(Runtime.version().feature())).map(JavaLanguageVersion::asInt));
-          sourceSets.all(sourceSet -> {
+          var guardedSourceSets = sourceSets.matching(sourceSet -> !verification.getJackson2ClasspathGuard()
+              .getIgnoredSourceSets().contains(sourceSet.getName()));
+          guardedSourceSets.all(sourceSet -> {
             task.getProjectClasses().from(sourceSet.getOutput().getClassesDirs());
             task.dependsOn(sourceSet.getClassesTaskName());
             task.dependsOn(project.getConfigurations()
                 .getByName(sourceSet.getRuntimeClasspathConfigurationName()));
           });
-          var artifacts = project.provider(() -> resolvedRuntimeArtifacts(project, sourceSets));
+          var artifacts = project.provider(() -> resolvedRuntimeArtifacts(project, guardedSourceSets, sourceSets));
           task.getDependencyArtifacts().from(artifacts.map(results -> results.stream()
               .map(ResolvedArtifactResult::getFile).toList()));
           task.getArtifactMetadata().set(artifacts.map(results -> results.stream()
@@ -205,8 +208,8 @@ public class CcdSdkPlugin implements Plugin<Project> {
   }
 
   private static java.util.List<ResolvedArtifactResult> resolvedRuntimeArtifacts(
-      Project project, SourceSetContainer sourceSets) {
-    return sourceSets.stream()
+      Project project, java.util.Collection<SourceSet> guardedSourceSets, SourceSetContainer sourceSets) {
+    return guardedSourceSets.stream()
         .map(sourceSet -> project.getConfigurations().getByName(sourceSet.getRuntimeClasspathConfigurationName()))
         .flatMap(configuration -> configuration.getIncoming().getArtifacts().getArtifacts().stream())
         .filter(result -> !isCurrentProject(result.getId().getComponentIdentifier(), project))
