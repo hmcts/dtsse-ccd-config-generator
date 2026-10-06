@@ -205,6 +205,16 @@ public class JacksonCompatibilityFunctionalTest {
 
   @Test
   public void classpathGuardIgnoresCurrentProjectTestFixturesArtifact() throws IOException {
+    assertCurrentProjectTestFixturesIgnored(runner("jackson2ClasspathGuard"));
+  }
+
+  // The current-project check used BuildIdentifier.isCurrentBuild(), which Gradle 9 removed.
+  @Test
+  public void classpathGuardIgnoresCurrentProjectTestFixturesArtifactOnGradle9() throws IOException {
+    assertCurrentProjectTestFixturesIgnored(runner("jackson2ClasspathGuard").withGradleVersion("9.7.1"));
+  }
+
+  private void assertCurrentProjectTestFixturesIgnored(GradleRunner runner) throws IOException {
     write("build.gradle", """
         plugins {
           id 'hmcts.ccd.sdk'
@@ -216,7 +226,7 @@ public class JacksonCompatibilityFunctionalTest {
     write("src/testFixtures/java/Fixture.java", "public class Fixture {}\n");
     write("src/test/java/FixtureTest.java", "class FixtureTest { Fixture fixture; }\n");
 
-    BuildResult result = runner("jackson2ClasspathGuard").build();
+    BuildResult result = runner.build();
 
     assertEquals(TaskOutcome.SUCCESS, result.task(":jackson2ClasspathGuard").getOutcome());
     assertFalse(result.getOutput().contains("Missing component metadata"));

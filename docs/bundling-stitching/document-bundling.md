@@ -131,12 +131,14 @@ public void onHearingListed(BundleRequest request) {
 `BundleJobWorker` polls (your service needs `@EnableScheduling`), claims rows with
 `SELECT ... FOR UPDATE SKIP LOCKED` under a lease, renders, and hands the open `BundleResult` to
 your `BundleJobCompletionHandler` bean. The handler stores the PDF and returns a small summary
-that is saved in the job's `result` column; the worker closes the result afterwards.
+that is saved in the job's `result` column; the worker closes the result afterwards. The
+`BundleJobContext` it receives carries the selector parameters and execution context the job was
+submitted with, so the handler knows which case the bundle belongs to.
 
 ```java
 @Bean
 BundleJobCompletionHandler bundleCompletion(CaseDocumentClient cdam) {
-  return (job, request, result) -> {
+  return (job, jobContext, request, result) -> {
     try (InputStream pdf = result.artifact().open()) {
       return Map.of("documentUrl", cdam.upload(request.fileName(), pdf).url());
     }
@@ -152,7 +154,48 @@ at submit time, and `BundleProgressListener` beans receive state changes. The ta
 `bundling.bundle_job` is created by the SDK's standard library migration (`SdkFlywayMigration`,
 run by the decentralised runtime's Flyway strategy before the application's own migrations).
 
-Properties under `ccd.bundling.job.*`: `enabled` (default `false`), `worker.enabled`, `worker.poll-delay` (`1s`), `worker.batch-size` (`5`),
+### A bundle that is always current
+
+To regenerate a bundle whenever its inputs change (say, every time a document is added to the
+case), submit selector parameters under a coalesce key from the transaction that made the change,
+and register a `BundleDocumentSelector` that compiles the request when the job runs:
+
+```java
+bundleJobService.submitCoalesced("case-bundle:" + caseId, Map.of("caseId", caseId.toString()),
+    BundleExecutionContext.builder().caseReference(ref).build());
+```
+
+Submissions with the same key collapse onto the job that is still waiting for its first claim.
+Ten documents uploaded in one event, or in ten quick events, give one render, and the job's
+`coalescedSubmissions` counts what it absorbed. Joining a waiting job is an upsert that locks its
+row until the submitting transaction commits, and the worker's `SKIP LOCKED` claim passes over a
+locked row, so a joined job is never claimed before the change that joined it is visible to its
+selector. Once a job is claimed it stops absorbing submissions: a change made mid-render queues one
+follow-up. Two concurrent transactions submitting the same key end up on the same job, the second
+waiting on the first's row. Because joining takes a row lock, a transaction submitting several keys
+should submit them in a consistent order, or two such transactions can deadlock.
+
+The waiting job keeps the selector parameters and execution context it was first submitted with,
+so make the parameters a function of the key; a submission whose parameters differ is logged and
+its parameters ignored. Keys are at most 255 characters. Submit under READ COMMITTED: under
+REPEATABLE READ or SERIALIZABLE a racing coalesced submission can fail with a serialization error
+(SQLSTATE 40001) that the caller must retry.
+
+Renders for one key can still overlap (an in-flight job and its follow-up on different pods), and
+a retried job can finish after a newer one. Among completed jobs, the one with the greatest
+`BundleJob.claimedAt()` reflects the newest state: its selector ran after that claim, so it saw
+every change submitted before it. Break ties by `externalId`, and fall back to `submittedAt` for a
+job claimed before `claimed_at` existed. `findLatest(key)` returns the job that reflects the newest
+state, for a "regenerating..." status: the waiting job if there is one, otherwise the most recently
+claimed. The completion handler receives the job's `BundleJobContext` (selector parameters and
+execution context), so it knows which case the bundle is for. Rows are never deleted by the
+module; an always-current bundle adds one per burst of changes, so purge old terminal rows on your
+own schedule if the table grows.
+
+pcs-api's `CaseBundleTrigger` is a worked example: a Hibernate listener that submits from the
+before-commit hook, so every path that adds, amends or removes a document is covered.
+
+Properties under `ccd.bundling.job.*`: `enabled` (default `false`), `worker.enabled` (`true`), `worker.poll-delay` (`1s`), `worker.batch-size` (`5`),
 `worker.max-concurrent-renders` (`2`), `worker.lease-duration` (`5m`), `retry.max-attempts` (`3`),
 `retry.initial-delay` (`5s`), `retry.multiplier` (`2.0`), `retry.max-delay` (`5m`).
 

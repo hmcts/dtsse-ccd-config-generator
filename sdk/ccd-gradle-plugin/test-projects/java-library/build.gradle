@@ -37,5 +37,5 @@ dependencies {
 
 application {
     // Define the main class for the application.
-    mainClassName = 'java.library.App'
+    mainClass = 'java.library.App'
 }

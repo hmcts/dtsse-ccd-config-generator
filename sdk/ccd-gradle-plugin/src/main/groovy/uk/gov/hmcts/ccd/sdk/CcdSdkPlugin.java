@@ -221,8 +221,9 @@ public class CcdSdkPlugin implements Plugin<Project> {
 
   private static boolean isCurrentProject(ComponentIdentifier identifier, Project project) {
     return identifier instanceof ProjectComponentIdentifier projectIdentifier
-        && projectIdentifier.getBuild().isCurrentBuild()
-        && projectIdentifier.getProjectPath().equals(project.getPath());
+        // Build-tree paths identify a project across included builds; BuildIdentifier
+        // .isCurrentBuild() was removed in Gradle 9, which consumers such as pcs-api now run.
+        && projectIdentifier.getBuildTreePath().equals(project.getBuildTreePath());
   }
 
   private static boolean isCurrentProjectOutput(File artifact, SourceSetContainer sourceSets) {
