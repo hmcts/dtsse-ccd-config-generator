@@ -16,7 +16,8 @@ public class BundleJobProperties {
   /** The scheduled worker that claims and executes outbox rows. */
   @Data
   public static class Worker {
-    private boolean enabled = false;
+    // Matches the auto-configuration, which runs the worker unless this is set to false.
+    private boolean enabled = true;
 
     private Duration pollDelay = Duration.ofSeconds(1);
 
