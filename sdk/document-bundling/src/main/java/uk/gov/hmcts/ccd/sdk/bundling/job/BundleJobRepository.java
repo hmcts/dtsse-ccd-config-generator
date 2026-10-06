@@ -69,7 +69,7 @@ public class BundleJobRepository {
         on conflict (coalesce_key)
           where coalesce_key is not null and state = 'QUEUED' and attempts = 0
         do update set coalesced_submissions = bundle_job.coalesced_submissions + 1,
-          last_coalesced_at = clock_timestamp(), updated_at = now()
+          last_coalesced_at = clock_timestamp(), updated_at = clock_timestamp()
         returning external_id, selector_parameters::text as selector_parameters
         """,
         params("externalId", externalId, "coalesceKey", coalesceKey,

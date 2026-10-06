@@ -63,9 +63,11 @@ public class OutboxBundleJobService {
     if (coalesceKey == null || coalesceKey.isBlank()) {
       throw new IllegalArgumentException("coalesceKey must not be blank");
     }
-    if (coalesceKey.length() > MAX_COALESCE_KEY_LENGTH) {
+    // varchar(255) counts characters, not UTF-16 code units.
+    int keyLength = coalesceKey.codePointCount(0, coalesceKey.length());
+    if (keyLength > MAX_COALESCE_KEY_LENGTH) {
       throw new IllegalArgumentException("coalesceKey must be at most " + MAX_COALESCE_KEY_LENGTH
-          + " characters, was " + coalesceKey.length());
+          + " characters, was " + keyLength);
     }
     Objects.requireNonNull(selectorParameters, "selectorParameters must not be null");
     Objects.requireNonNull(context, "context must not be null");
