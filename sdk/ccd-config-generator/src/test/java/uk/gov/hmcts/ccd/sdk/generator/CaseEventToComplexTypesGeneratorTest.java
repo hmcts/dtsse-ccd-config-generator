@@ -187,6 +187,67 @@ public class CaseEventToComplexTypesGeneratorTest {
             .satisfies(row -> assertThat(row).doesNotContainKey("FieldShowCondition"));
     }
 
+    /**
+     * The merge keys are {@code CaseEventID, CaseFieldID, ListElementCode, FieldShowCondition,
+     * DefaultValue}. A member placed with no show condition has no {@code FieldShowCondition} on
+     * either row, so {@code DefaultValue} still decides: two placements with different defaults stay
+     * separate rows.
+     */
+    @Test
+    public void keepsMemberRowsWithNoShowConditionApartByDefaultValue() {
+        ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> builder =
+            newBuilder();
+        builder.event("create")
+            .forState(EventComplexMemberState.Open)
+            .name("Create")
+            .grant(CRU, LOCAL_AUTHORITY)
+            .fields()
+            .complex(EventComplexMemberCaseData::getContact)
+            .optional(EventComplexMemberContact::getReference)
+            .defaultValue("[APPLICANT]")
+            .optional(EventComplexMemberContact::getReference)
+            .defaultValue("[RESPONDENT]")
+            .done();
+
+        assertThat(memberRows(builder, "create", "contact"))
+            .hasSize(2)
+            .allSatisfy(row -> {
+                assertThat(row).containsEntry("ListElementCode", "reference");
+                assertThat(row).doesNotContainKey("FieldShowCondition");
+            })
+            .extracting(row -> row.get("DefaultValue"))
+            .containsExactlyInAnyOrder("[APPLICANT]", "[RESPONDENT]");
+    }
+
+    /**
+     * Two placements of a member with no show condition and the same {@code DefaultValue} agree on
+     * every merge key, so they merge into one row.
+     */
+    @Test
+    public void mergesMemberRowsWithNoShowConditionAndTheSameDefaultValue() {
+        ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> builder =
+            newBuilder();
+        builder.event("create")
+            .forState(EventComplexMemberState.Open)
+            .name("Create")
+            .grant(CRU, LOCAL_AUTHORITY)
+            .fields()
+            .complex(EventComplexMemberCaseData::getContact)
+            .optional(EventComplexMemberContact::getReference)
+            .defaultValue("[APPLICANT]")
+            .optional(EventComplexMemberContact::getReference)
+            .defaultValue("[APPLICANT]")
+            .done();
+
+        assertThat(memberRows(builder, "create", "contact"))
+            .singleElement()
+            .satisfies(row -> {
+                assertThat(row).containsEntry("ListElementCode", "reference");
+                assertThat(row).containsEntry("DefaultValue", "[APPLICANT]");
+                assertThat(row).doesNotContainKey("FieldShowCondition");
+            });
+    }
+
     private ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> newBuilder() {
         ResolvedCCDConfig<EventComplexMemberCaseData, EventComplexMemberState, UserRole> config =
             new ResolvedCCDConfig<>(

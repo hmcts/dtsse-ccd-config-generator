@@ -56,4 +56,32 @@ public class JsonUtilsTest {
     assertThat(result).hasSize(2);
   }
 
+  @Test
+  public void keepsRowsApartOnALaterKeyWhenAnEarlierKeyIsAbsentOnBoth() {
+    Map<String, Object> first = Maps.newHashMap(Map.of("id", "applicant", "element", "firstName"));
+    Map<String, Object> second = Maps.newHashMap(Map.of("id", "applicant", "element", "lastName"));
+
+    List<Map<String, Object>> result = JsonUtils
+        .mergeInto(Lists.newArrayList(first), Lists.newArrayList(second),
+            new JsonUtils.AddMissing(), "id", "role", "element");
+
+    assertThat(result).containsExactly(
+        Map.of("id", "applicant", "element", "firstName"),
+        Map.of("id", "applicant", "element", "lastName"));
+  }
+
+  @Test
+  public void mergesRowsWhoseKeysAllMatchWithOneAbsentOnBoth() {
+    Map<String, Object> existing = Maps.newHashMap(Map.of("id", "applicant", "element", "firstName"));
+    Map<String, Object> generated = Maps.newHashMap(Map.of(
+        "id", "applicant", "element", "firstName", "label", "First name"));
+
+    List<Map<String, Object>> result = JsonUtils
+        .mergeInto(Lists.newArrayList(existing), Lists.newArrayList(generated),
+            new JsonUtils.AddMissing(), "id", "role", "element");
+
+    assertThat(result).containsExactly(
+        Map.of("id", "applicant", "element", "firstName", "label", "First name"));
+  }
+
 }
