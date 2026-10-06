@@ -46,7 +46,7 @@ public class CallbackLoggingFilter extends OncePerRequestFilter {
         HttpServletResponse response,
         FilterChain filterChain
     ) throws ServletException, IOException {
-        ContentCachingRequestWrapper cachingRequest = new ContentCachingRequestWrapper(request);
+        ContentCachingRequestWrapper cachingRequest = new ContentCachingRequestWrapper(request, MAX_REQUEST_BODY_BYTES);
         ContentCachingResponseWrapper cachingResponse = new ContentCachingResponseWrapper(response);
         long start = System.nanoTime();
 

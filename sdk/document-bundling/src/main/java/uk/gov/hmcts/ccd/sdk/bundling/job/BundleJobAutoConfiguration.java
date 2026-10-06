@@ -19,7 +19,7 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRenderer;
  * bundling.bundle_job is created by the SDK's standard library migration, registered in
  * BundleJobFlywayAutoConfiguration.
  */
-@AutoConfiguration(afterName = "org.springframework.boot.jdbc.autoconfigure.JdbcTemplateAutoConfiguration")
+@AutoConfiguration(afterName = "org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration")
 @ConditionalOnProperty(prefix = "ccd.bundling.job", name = "enabled")
 @EnableConfigurationProperties(BundleJobProperties.class)
 public class BundleJobAutoConfiguration {
