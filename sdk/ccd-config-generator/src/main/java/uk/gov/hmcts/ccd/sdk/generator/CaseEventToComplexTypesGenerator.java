@@ -84,7 +84,7 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
           }
           data.put("FieldDisplayOrder", field.getFieldDisplayOrder());
           // HintText tri-state: an unset member (the default) cascades its declared @CCD(hint) onto
-          // the event row as before; a member placed with .hintText(value)/.noHintText() overrides
+          // the event row; a member placed with .hintText(value)/.noHintText() overrides
           // that — a non-null value is emitted verbatim, a null value suppresses the column.
           if (field.isEventComplexHintTextOverridden()) {
             if (!Strings.isNullOrEmpty(field.getEventComplexHintText())) {
@@ -93,7 +93,7 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
           } else if (!Strings.isNullOrEmpty(field.getHint())) {
             data.put("HintText", field.getHint());
           }
-          // DefaultValue comes from either carrier: the typed one the long-standing positional
+          // DefaultValue comes from either carrier: the typed one the positional
           // optional/mandatory(getter, showCondition, defaultValue) overloads populate, or the raw
           // string one the fluent defaultValue(String) setter populates. A member is reachable only
           // through a .complex(...) scope, whose fields never appear on CaseEventToFields, so reading

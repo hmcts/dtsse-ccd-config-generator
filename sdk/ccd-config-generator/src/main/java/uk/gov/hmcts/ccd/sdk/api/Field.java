@@ -46,10 +46,10 @@ public class Field<Type, StateType, Parent, Grandparent> {
    * placed inside a {@code .complex(...)} scope, distinct from {@link #hint} (the member's declared
    * {@code @CCD(hint)}, which {@code CaseEventToComplexTypesGenerator} otherwise cascades onto every
    * event row that places the member). When {@link #eventComplexHintTextOverridden} is {@code false}
-   * (the default) that cascade applies unchanged, so output is byte-identical for every existing
-   * consumer. When it is {@code true}, this value replaces the cascade: a non-null value is emitted
-   * verbatim as the row's {@code HintText}; a null value suppresses the column entirely. Set via the
-   * fluent {@code hintText(String)} / {@code noHintText()} builder methods.
+   * (the default) that cascade applies. When it is {@code true}, this value replaces the cascade: a
+   * non-null value is emitted verbatim as the row's {@code HintText}; a null value suppresses the
+   * column entirely. Set via the fluent {@code hintText(String)} / {@code noHintText()} builder
+   * methods.
    *
    * <p>This is NOT the same column as {@code caseEventFieldHint} (set via {@code eventHint(...)}),
    * which writes {@code CaseEventToComplexTypes.EventHintText} — the per-event hint override — rather
@@ -228,7 +228,7 @@ public class Field<Type, StateType, Parent, Grandparent> {
     /**
      * Sets this field's {@code CaseEventToFields.ShowSummaryContentOption}, the display order of
      * this field's content within the event's check-your-answers summary. {@code null} (the
-     * default) omits the column, matching output produced before this option existed.
+     * default) omits the column.
      */
     public FieldBuilder<Type, StateType, Parent, Grandparent> showSummaryContentOption(int order) {
       this.showSummaryContentOption = order;

@@ -442,8 +442,8 @@ public class FieldCollection {
      *
      * <p>DISTINCT from {@link #eventHint(String)}: that writes the {@code EventHintText} column (the
      * per-event hint override), whereas this writes {@code HintText} (the field-level hint the
-     * generator derives from {@code @CCD(hint)}). Leaving it unset keeps today's cascade, byte-identical
-     * for every existing consumer. Passing {@code null} is equivalent to {@link #noHintText()}.
+     * generator derives from {@code @CCD(hint)}). Leaving it unset keeps the cascade. Passing
+     * {@code null} is equivalent to {@link #noHintText()}.
      */
     public FieldCollectionBuilder<Type, StateType, Parent> hintText(String hintText) {
       lastField().hintText(hintText);
@@ -525,8 +525,7 @@ public class FieldCollection {
      * wizard page the member is shown on within the event. Unlike {@link #page(String)} — which
      * switches the page context for a top-level event field and drives {@code CaseEventToFields} —
      * this tags a single member row emitted by {@link #complex} expansion, which otherwise carries
-     * no page. Default {@code null} omits the column, leaving output byte-identical to before this
-     * option existed.
+     * no page. Default {@code null} omits the column.
      *
      * <p>Note: the definition-store importer parses complex-type rows without a page column, so this
      * value is carried purely for round-trip fidelity with hand-authored definitions; it does not

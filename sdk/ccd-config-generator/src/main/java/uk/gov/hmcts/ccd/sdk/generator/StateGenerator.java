@@ -43,7 +43,7 @@ class StateGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R
     String name = ccd != null && !Strings.isNullOrEmpty(ccd.label()) ? ccd.label() :
         enumConstant.toString();
     field.put("Name", name);
-    // Description defaults to Name (today's behaviour); @CCD#description() overrides it.
+    // Description defaults to Name; @CCD#description() overrides it.
     String description = ccd != null && !Strings.isNullOrEmpty(ccd.description()) ? ccd.description() : name;
     field.put("Description", description);
     String hint = ccd != null ? ccd.hint() : "";

@@ -53,7 +53,7 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
    * Sets the CaseType sheet's {@code PrintableDocumentsUrl} column, the webhook the definition
    * store calls to obtain a printable representation of a case (consumed via
    * {@code CaseTypeEntity.getPrintWebhook()} at import time). Empty (the default) omits the
-   * column, matching output produced before this option existed.
+   * column.
    */
   default void printableDocumentsUrl(String url) {
     // Default no-op for backward compatibility; implementations may override.
@@ -117,12 +117,12 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   /**
    * Emit the {@code JurisdictionID} column on generated {@code CaseRoles} rows. By default the
-   * column is omitted so that output is byte-identical to before this option existed; call this to
-   * opt in when a definition needs the jurisdiction stamped on each case role.
+   * column is omitted; call this to opt in when a definition needs the jurisdiction stamped on each
+   * case role.
    *
    * <p>The jurisdiction is taken from {@link #jurisdiction(String, String, String)}. The importer's
    * {@code CaseRoleParser} reads only {@code ID}/{@code Name}/{@code Description}, so the column is
-   * additive: it is tolerated when present and its absence is the historic default.
+   * additive: it is tolerated when present and optional when absent.
    */
   default void emitCaseRoleJurisdiction() {
     // Default no-op for backward compatibility; implementations may override.
@@ -176,7 +176,10 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
    *
    * @param roleName the literal role name to map, emitted verbatim as {@code RoleName}
    */
-  CaseRoleToAccessProfileBuilder<R> roleToAccessProfile(String roleName);
+  default CaseRoleToAccessProfileBuilder<R> roleToAccessProfile(String roleName) {
+    // Default no-op for backward compatibility: the returned builder is not registered.
+    return CaseRoleToAccessProfileBuilder.builder(roleName);
+  }
 
   CaseCategory.CaseCategoryBuilder categories(R caseRole);
 

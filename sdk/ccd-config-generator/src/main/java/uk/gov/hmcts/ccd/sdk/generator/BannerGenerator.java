@@ -19,7 +19,7 @@ import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 /**
  * Writes the jurisdiction service-notice banner set via {@link
  * uk.gov.hmcts.ccd.sdk.api.ConfigBuilder#banner}, read by {@code BannerParser}. Configs that
- * never call {@code banner(...)} emit no {@code Banner.json}, matching today's output.
+ * never call {@code banner(...)} emit no {@code Banner.json}.
  */
 @Component
 public class BannerGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
