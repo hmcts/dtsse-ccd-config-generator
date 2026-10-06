@@ -203,5 +203,7 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
    * @param url an optional link target; pass {@code null} or {@code ""} if the banner carries no link
    * @param urlText the link text shown for {@code url}; pass {@code null} or {@code ""} if unused
    */
-  void banner(boolean enabled, String description, String url, String urlText);
+  default void banner(boolean enabled, String description, String url, String urlText) {
+    // Default no-op for backward compatibility; implementations may override.
+  }
 }
