@@ -36,6 +36,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -402,6 +403,9 @@ class BundleJobOutboxIntegrationTest {
     assertThat(column(first.externalId(), "selector_parameters")).contains("\"1\"");
     assertThatThrownBy(() -> service.submitCoalesced("k".repeat(256), Map.of(), CONTEXT))
         .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("255");
+    // The limit is characters, as in the varchar(255) column: 255 emoji (510 UTF-16 units) fit.
+    String emojiKey = "\uD83D\uDCC4".repeat(255);
+    assertThat(service.submitCoalesced(emojiKey, Map.of(), CONTEXT).coalesceKey()).contains(emojiKey);
 
     CountDownLatch renderStarted = new CountDownLatch(1);
     CountDownLatch releaseRender = new CountDownLatch(1);
@@ -451,6 +455,20 @@ class BundleJobOutboxIntegrationTest {
     assertThat(job(first.externalId()).claimedAt()).isEqualTo(handled.claimedAt());
     assertThat(jdbc.queryForObject("select count(*) from bundling.bundle_job "
         + "where coalesce_key = 'case-1:hearing'", Map.of(), Integer.class)).isEqualTo(2);
+  }
+
+  @Test
+  void joiningAWaitingJobMovesItsLastUpdateForwardEvenFromAnOlderTransaction() {
+    // This transaction starts, so its now() is fixed, before the waiting job exists.
+    BundleJob joined = tx.execute(status -> {
+      jdbc.queryForObject("select now()", Map.of(), Object.class);
+      UUID waiting = tx2().execute(inner ->
+          service.submitCoalesced("case-7:hearing", Map.of(), CONTEXT).externalId());
+      BundleJob result = service.submitCoalesced("case-7:hearing", Map.of(), CONTEXT);
+      assertThat(result.externalId()).isEqualTo(waiting);
+      return result;
+    });
+    assertThat(joined.lastUpdatedAt()).isAfterOrEqualTo(joined.submittedAt());
   }
 
   @Test
@@ -627,6 +645,13 @@ class BundleJobOutboxIntegrationTest {
 
   private static BundleJobWorker directWorker(FakeRenderer renderer) {
     return directWorker(renderer, quickRetries(3), List.of());
+  }
+
+  // A separate transaction that commits independently of any outer one.
+  private static TransactionTemplate tx2() {
+    TransactionTemplate template = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
+    template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    return template;
   }
 
   // Waits until some other session is blocked waiting for a row or index lock.
