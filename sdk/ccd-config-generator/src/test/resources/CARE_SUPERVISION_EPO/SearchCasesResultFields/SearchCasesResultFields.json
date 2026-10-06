@@ -29,7 +29,7 @@
   {
     "CaseFieldID": "dateSubmitted",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "DisplayContextParameter": null,
+    "DisplayContextParameter": "#DATETIMEDISPLAY(d  MMMM yyyy)",
     "DisplayOrder": 2,
     "Label": "Date submitted",
     "LiveFrom": "03/02/2021",
@@ -39,19 +39,19 @@
   {
     "CaseFieldID": "documentList",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "DisplayContextParameter": "documentList.value",
+    "DisplayContextParameter": "#COLLECTION_VIEW",
     "DisplayOrder": 3,
     "Label": "Document selection",
     "ListElementCode": "documentList.value",
     "LiveFrom": "03/02/2021",
-    "ResultsOrdering": "documentList.value",
+    "ResultsOrdering": "Ascending",
     "UseCase": "orgcases",
     "UserRole": ""
   },
   {
     "CaseFieldID": "organisationPolicy",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "DisplayContextParameter": "organisationPolicy.organisation.OrganisationID",
+    "DisplayContextParameter": "#ACCESS_PROFILE",
     "DisplayOrder": 4,
     "Label": "Organisation policy",
     "ListElementCode": "organisationPolicy.organisation.OrganisationID",

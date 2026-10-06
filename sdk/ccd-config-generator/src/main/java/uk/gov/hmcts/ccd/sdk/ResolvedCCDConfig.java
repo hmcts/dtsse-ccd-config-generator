@@ -72,7 +72,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   List<Search<T, R>> workBasketInputFields;
   List<Search<T, R>> searchResultFields;
   List<Search<T, R>> searchInputFields;
-  List<SearchCases<T, R>> searchCaseResultFields;
+  List<SearchCases> searchCaseResultFields;
   List<CaseRoleToAccessProfile> caseRoleToAccessProfiles;
   List<CaseCategory> categories;
   List<AccessType> accessTypes;
