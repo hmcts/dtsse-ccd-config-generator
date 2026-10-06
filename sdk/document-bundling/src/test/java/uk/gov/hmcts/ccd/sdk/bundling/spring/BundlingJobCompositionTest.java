@@ -28,7 +28,7 @@ class BundlingJobCompositionTest {
       .withBean(NamedParameterJdbcTemplate.class, () -> new NamedParameterJdbcTemplate(
           new DriverManagerDataSource("jdbc:postgresql://localhost/unused")));
 
-  private static final BundleJobCompletionHandler HANDLER = (job, request, result) -> null;
+  private static final BundleJobCompletionHandler HANDLER = (job, jobContext, request, result) -> null;
 
   private ApplicationContextRunner withRenderer(ApplicationContextRunner base) {
     return base.withBean("caseDocuments", DocumentResolver.class, () -> new DocumentResolver() {

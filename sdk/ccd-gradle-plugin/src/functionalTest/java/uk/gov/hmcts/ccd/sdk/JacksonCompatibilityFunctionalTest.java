@@ -205,6 +205,16 @@ public class JacksonCompatibilityFunctionalTest {
 
   @Test
   public void classpathGuardIgnoresCurrentProjectTestFixturesArtifact() throws IOException {
+    assertCurrentProjectTestFixturesIgnored(runner("jackson2ClasspathGuard"));
+  }
+
+  // The current-project check used BuildIdentifier.isCurrentBuild(), which Gradle 9 removed.
+  @Test
+  public void classpathGuardIgnoresCurrentProjectTestFixturesArtifactOnGradle9() throws IOException {
+    assertCurrentProjectTestFixturesIgnored(runner("jackson2ClasspathGuard").withGradleVersion("9.7.1"));
+  }
+
+  private void assertCurrentProjectTestFixturesIgnored(GradleRunner runner) throws IOException {
     write("build.gradle", """
         plugins {
           id 'hmcts.ccd.sdk'
@@ -216,7 +226,7 @@ public class JacksonCompatibilityFunctionalTest {
     write("src/testFixtures/java/Fixture.java", "public class Fixture {}\n");
     write("src/test/java/FixtureTest.java", "class FixtureTest { Fixture fixture; }\n");
 
-    BuildResult result = runner("jackson2ClasspathGuard").build();
+    BuildResult result = runner.build();
 
     assertEquals(TaskOutcome.SUCCESS, result.task(":jackson2ClasspathGuard").getOutcome());
     assertFalse(result.getOutput().contains("Missing component metadata"));
@@ -265,6 +275,27 @@ public class JacksonCompatibilityFunctionalTest {
     assertTrue(report.contains("tools.jackson.databind.annotation.JsonNaming"));
     assertTrue(report.contains("JACKSON3_API_REFERENCE"));
     assertTrue(report.contains("tools.jackson.databind.JsonNode"));
+  }
+
+  @Test
+  public void classpathGuardSkipsIgnoredSourceSetsWithoutResolvingTheirClasspath() throws IOException {
+    String build = """
+        plugins { id 'hmcts.ccd.sdk' }
+        repositories { mavenLocal(); mavenCentral() }
+        sourceSets { localOnly }
+        // Resolvable only where this source set's tests run, not where check does.
+        dependencies { localOnlyImplementation 'org.example.unpublished:not-on-any-repository:1.0' }
+        %s
+        """;
+    write("build.gradle", build.formatted(""));
+    assertTrue(runner("jackson2ClasspathGuard").buildAndFail().getOutput()
+        .contains("not-on-any-repository"));
+
+    write("build.gradle", build.formatted(
+        "ccdSdk { jackson2ClasspathGuard { ignoredSourceSets = ['localOnly'] } }"));
+    BuildResult result = runner("jackson2ClasspathGuard").build();
+
+    assertEquals(TaskOutcome.SUCCESS, result.task(":jackson2ClasspathGuard").getOutcome());
   }
 
   @Test
