@@ -100,6 +100,16 @@ public class OutboxBundleJobService {
     return repository.findLatest(Objects.requireNonNull(coalesceKey, "coalesceKey"));
   }
 
+  /**
+   * What a completed job rendered: its documents and where they landed, those replaced by
+   * placeholder pages and why, and the finished PDF's details. Empty until the job completes,
+   * and for jobs completed before reports were recorded.
+   */
+  public Optional<BundleJobReport> findReport(UUID externalId) {
+    return repository.findReport(Objects.requireNonNull(externalId, "externalId must not be null"))
+        .map(report -> json.read(report, BundleJobReport.class, "bundle job report"));
+  }
+
   private BundleJob enqueue(UUID externalId, String requestJson, Map<String, String> parameters,
       BundleExecutionContext context) {
     Objects.requireNonNull(externalId, "externalId must not be null");

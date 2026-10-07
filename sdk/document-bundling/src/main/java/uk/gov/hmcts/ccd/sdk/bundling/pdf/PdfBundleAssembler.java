@@ -193,6 +193,11 @@ public final class PdfBundleAssembler {
         GeneratedPages.addMediaLinkPage(document, drawnTitle, item.date(), media, fonts);
         currentPage++;
         finishGeneratedItem(item, drawnTitle, parentOutline, coverIndex, pageIndex);
+      } else if (item.content() instanceof MissingDocumentPage missing) {
+        final int pageIndex = currentPage;
+        GeneratedPages.addMissingDocumentPage(document, drawnTitle, item.date(), missing, fonts);
+        currentPage++;
+        finishGeneratedItem(item, drawnTitle, parentOutline, coverIndex, pageIndex);
       } else {
         final int pageIndex = currentPage;
         GeneratedPages.addEmptySectionPage(document, drawnTitle, fonts);

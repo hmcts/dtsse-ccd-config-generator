@@ -22,6 +22,8 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRenderer;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleResult;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentFailure;
+import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocumentReason;
+import uk.gov.hmcts.ccd.sdk.bundling.api.RenderAttempt;
 
 /**
  * The scheduled worker: each poll fails stale jobs that exhausted their attempts, claims a batch
@@ -36,6 +38,8 @@ public class BundleJobWorker implements AutoCloseable {
 
   private static final String LOG_ONLY =
       ". The exception detail is in the service logs, not this record.";
+  // How many times a coalesced bundle has been re-run for temporarily unavailable documents.
+  static final String REQUEUES_ATTRIBUTE = "bundling.unavailableRequeues";
 
   private final BundleJobRepository repository;
   private final BundleRenderer renderer;
@@ -171,7 +175,11 @@ public class BundleJobWorker implements AutoCloseable {
 
     int total = request.allDocuments().size();
     emit(id, BundleJobState.IN_PROGRESS, 0, total);
-    try (BundleResult result = renderer.render(request, context)) {
+    // A source that is only temporarily unavailable fails the render while retries remain, and
+    // becomes a placeholder on the last attempt.
+    RenderAttempt attempt = retryPolicy.nextAttemptAt(job.attempts(), Instant.now()).isPresent()
+        ? RenderAttempt.RETRYABLE : RenderAttempt.FINAL;
+    try (BundleResult result = renderer.render(request, context, attempt)) {
       String summary;
       try {
         Object value = completionHandler.onCompleted(job, jobContext, request, result);
@@ -185,8 +193,12 @@ public class BundleJobWorker implements AutoCloseable {
       BundleJobState terminal = result.outcome() == BundleOutcome.COMPLETED_WITH_WARNINGS
           ? BundleJobState.COMPLETED_WITH_WARNINGS : BundleJobState.COMPLETED;
       log.info("Bundle job {} completed as {} after {} attempt(s)", id, terminal, job.attempts());
-      record(repository.markCompleted(id, terminal, summary, workerId), id, terminal, total, total,
-          "completion");
+      boolean completed = repository.markCompleted(id, terminal, summary,
+          json.write(BundleJobReport.of(request, result)), workerId);
+      record(completed, id, terminal, total, total, "completion");
+      if (completed) {
+        requeueIfUnavailable(claimed, context, result);
+      }
     } catch (BundleGenerationException e) {
       handleGenerationFailure(claimed, e, total);
     } catch (RuntimeException e) {
@@ -194,6 +206,52 @@ public class BundleJobWorker implements AutoCloseable {
       failTerminally(id, BundleErrorCode.ASSEMBLY_FAILED,
           "Unexpected renderer failure of type " + e.getClass().getName() + LOG_ONLY,
           List.of(), total);
+    }
+  }
+
+  /**
+   * Queues a delayed re-run of a coalesced bundle that has placeholders for documents that were
+   * only temporarily unavailable, so it fills in once they can be fetched. A change to the
+   * bundle's inputs before then joins the re-run and makes it immediate.
+   */
+  private void requeueIfUnavailable(ClaimedBundleJob claimed, BundleExecutionContext context,
+      BundleResult result) {
+    Optional<String> coalesceKey = claimed.job().coalesceKey();
+    boolean unavailable = result.missingDocuments().stream()
+        .anyMatch(missing -> missing.reason() == MissingDocumentReason.UNAVAILABLE);
+    if (coalesceKey.isEmpty() || !unavailable) {
+      return;
+    }
+    UUID id = claimed.job().externalId();
+    int requeues = requeuesSoFar(context);
+    Optional<Instant> runAt = retryPolicy.requeueAt(requeues, Instant.now());
+    if (runAt.isEmpty()) {
+      log.warn("Bundle job {} has placeholders for temporarily unavailable documents and has "
+          + "been re-run {} time(s); not re-running it again", id, requeues);
+      return;
+    }
+    BundleExecutionContext.Builder next = BundleExecutionContext.builder();
+    context.caseReference().ifPresent(next::caseReference);
+    context.initiator().ifPresent(next::initiator);
+    context.attributes().forEach(next::attribute);
+    next.attribute(REQUEUES_ATTRIBUTE, String.valueOf(requeues + 1));
+    try {
+      BundleJobRepository.CoalescedInsert landed = repository.insertOrJoin(UUID.randomUUID(),
+          coalesceKey.get(), claimed.selectorParametersJson(), json.write(next.build()),
+          runAt.get());
+      log.info("Bundle job {} has placeholders for temporarily unavailable documents; job {} "
+          + "re-runs it from {}", id, landed.externalId(), runAt.get());
+    } catch (RuntimeException e) {
+      log.error("Bundle job {} could not queue a re-run for its temporarily unavailable "
+          + "documents; they are included when the bundle is next submitted", id, e);
+    }
+  }
+
+  private static int requeuesSoFar(BundleExecutionContext context) {
+    try {
+      return Integer.parseInt(context.attributes().getOrDefault(REQUEUES_ATTRIBUTE, "0"));
+    } catch (NumberFormatException e) {
+      return 0;
     }
   }
 
