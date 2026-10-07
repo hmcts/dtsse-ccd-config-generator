@@ -12,6 +12,7 @@ public class BundleJobProperties {
 
   private Worker worker = new Worker();
   private Retry retry = new Retry();
+  private Requeue requeue = new Requeue();
 
   /** The scheduled worker that claims and executes outbox rows. */
   @Data
@@ -26,6 +27,19 @@ public class BundleJobProperties {
     private int maxConcurrentRenders = 2;
 
     private Duration leaseDuration = Duration.ofMinutes(5);
+  }
+
+  /**
+   * Re-running a coalesced job whose bundle has placeholders for documents that were only
+   * temporarily unavailable, so the bundle fills in once they can be fetched.
+   */
+  @Data
+  public static class Requeue {
+    private boolean enabled = true;
+
+    private Duration delay = Duration.ofMinutes(15);
+
+    private int maxAttempts = 3;
   }
 
   /** Bounded backoff for transient resolution and conversion failures. */

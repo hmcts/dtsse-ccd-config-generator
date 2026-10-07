@@ -72,9 +72,22 @@ it in the service's own case model.
 If a document cannot be fetched or converted, the render fails with a `BundleGenerationException`
 carrying a stable `code()`, the `stage()`, one `DocumentFailure` per document at fault, and a hint
 on what to do. The message on its own says what failed, on which document, at which stage.
-Nothing is left on disk. A later change will add an opt-in policy that renders a placeholder page
-for a document that could not be fetched and lists it on the result instead of failing, so a
-caseworker can still get a bundle and see what is missing (see the scope document).
+Nothing is left on disk.
+
+To get a bundle anyway, set `.missingDocuments(MissingDocumentPolicy.PLACEHOLDER)` on the request.
+A document that cannot be fetched, converted or opened is then replaced by a one-page placeholder
+in its place, titled "<title> (missing)" in the contents and bookmarks, with a plain-English
+reason printed on it. The result lists it in `missingDocuments()`: the document id, a
+`MissingDocumentReason` (`NOT_FOUND`, `ACCESS_DENIED`, `UNAVAILABLE`, `UNSUPPORTED_FORMAT`,
+`CONVERSION_FAILED`, `UNREADABLE`, `TOO_LARGE`) whose `message()` is safe to show users, the
+technical `code` and `detail`, and the placeholder's start page. The outcome is
+`COMPLETED_WITH_WARNINGS` with a `DOCUMENT_MISSING` warning per document. Request-level problems
+(limits, an unregistered provider, an invalid request) still fail the render.
+
+A source that is only temporarily unavailable (a timeout, a 5xx, a Docmosis outage) should not
+end up as a placeholder if a retry would fetch it. `render(request, context, RenderAttempt.RETRYABLE)`
+fails such a render instead; the durable worker passes `RETRYABLE` while the job has retries left
+and `FINAL` on its last attempt. A plain `render(request, context)` is a final attempt.
 
 ## What you get by default
 
@@ -192,12 +205,27 @@ execution context), so it knows which case the bundle is for. Rows are never del
 module; an always-current bundle adds one per burst of changes, so purge old terminal rows on your
 own schedule if the table grows.
 
+When a job completes, the worker records a `BundleJobReport` with it, from the same render the
+handler stored: the request that was rendered (for a selector-driven job, the documents it
+selected), where each document landed, the missing documents and why, the warnings, and the PDF's
+file name, size, checksum and page count. `findReport(externalId)` returns it, so a service can
+keep just the job id beside the stored PDF and describe the bundle from the job: "pages 40 to 52",
+"two documents are missing", without a table of its own. Rows that back a stored bundle are then
+the bundle's record, so purge only those no stored bundle points at.
+
+A coalesced bundle completed with placeholders for `UNAVAILABLE` documents is re-run later, so it
+fills in once the source is back: the worker queues a job under the same key that is not claimable
+for `requeue.delay`. A change to the case in the meantime joins it and makes it immediate. A bundle
+is re-run at most `requeue.max-attempts` times in a row for unavailable documents (counted in the
+execution context attribute `bundling.unavailableRequeues`).
+
 pcs-api's `CaseBundleTrigger` is a worked example: a Hibernate listener that submits from the
 before-commit hook, so every path that adds, amends or removes a document is covered.
 
 Properties under `ccd.bundling.job.*`: `enabled` (default `false`), `worker.enabled` (`true`), `worker.poll-delay` (`1s`), `worker.batch-size` (`5`),
 `worker.max-concurrent-renders` (`2`), `worker.lease-duration` (`5m`), `retry.max-attempts` (`3`),
-`retry.initial-delay` (`5s`), `retry.multiplier` (`2.0`), `retry.max-delay` (`5m`).
+`retry.initial-delay` (`5s`), `retry.multiplier` (`2.0`), `retry.max-delay` (`5m`),
+`requeue.enabled` (`true`), `requeue.delay` (`15m`), `requeue.max-attempts` (`3`).
 
 ## Extending it
 
