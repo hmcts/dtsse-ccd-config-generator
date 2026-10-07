@@ -60,21 +60,36 @@ public class BundleJobRepository {
    */
   CoalescedInsert insertOrJoin(UUID externalId, String coalesceKey,
       String selectorParametersJson, String executionContextJson) {
+    return insertOrJoin(externalId, coalesceKey, selectorParametersJson, executionContextJson,
+        null);
+  }
+
+  /**
+   * As {@link #insertOrJoin(UUID, String, String, String)}, but a newly inserted job is not
+   * claimable before notBefore (null for immediately). The job runs as soon as any submission
+   * wants it: joining a delayed job with an immediate submission makes it immediate.
+   */
+  CoalescedInsert insertOrJoin(UUID externalId, String coalesceKey,
+      String selectorParametersJson, String executionContextJson, Instant notBefore) {
     return jdbc.queryForObject("""
         insert into bundling.bundle_job
           (external_id, coalesce_key, state, request_version, request, selector_parameters,
-           execution_context)
+           execution_context, next_attempt_at)
         values (:externalId, :coalesceKey, 'QUEUED', :requestVersion, null, :parameters::jsonb,
-          :context::jsonb)
+          :context::jsonb, :notBefore)
         on conflict (coalesce_key)
           where coalesce_key is not null and state = 'QUEUED' and attempts = 0
         do update set coalesced_submissions = bundle_job.coalesced_submissions + 1,
-          last_coalesced_at = clock_timestamp(), updated_at = clock_timestamp()
+          last_coalesced_at = clock_timestamp(), updated_at = clock_timestamp(),
+          next_attempt_at = case
+            when bundle_job.next_attempt_at is null or excluded.next_attempt_at is null then null
+            else least(bundle_job.next_attempt_at, excluded.next_attempt_at) end
         returning external_id, selector_parameters::text as selector_parameters
         """,
         params("externalId", externalId, "coalesceKey", coalesceKey,
             "requestVersion", BundleJobJson.REQUEST_VERSION, "parameters", selectorParametersJson,
-            "context", executionContextJson),
+            "context", executionContextJson,
+            "notBefore", notBefore == null ? null : OffsetDateTime.ofInstant(notBefore, ZoneOffset.UTC)),
         (rs, n) -> new CoalescedInsert(rs.getObject("external_id", UUID.class),
             rs.getString("selector_parameters")));
   }
@@ -86,6 +101,13 @@ public class BundleJobRepository {
   public Optional<BundleJob> find(UUID externalId) {
     return jdbc.query(JOB_COLUMNS + " where external_id = :externalId",
         params("externalId", externalId), (rs, n) -> map(rs)).stream().findFirst();
+  }
+
+  /** The stored report of a completed job, as JSON. */
+  Optional<String> findReport(UUID externalId) {
+    return jdbc.query("select report::text as report from bundling.bundle_job "
+            + "where external_id = :externalId and report is not null",
+        params("externalId", externalId), (rs, n) -> rs.getString("report")).stream().findFirst();
   }
 
   /**
@@ -159,16 +181,17 @@ public class BundleJobRepository {
   }
 
   boolean markCompleted(UUID externalId, BundleJobState state, String resultJson,
-      String leaseOwner) {
+      String reportJson, String leaseOwner) {
     return jdbc.update("""
         update bundling.bundle_job
-        set state = :state, result = :result::jsonb, failure_code = null, failure_message = null,
+        set state = :state, result = :result::jsonb, report = :report::jsonb,
+            failure_code = null, failure_message = null,
             failure_documents = null, lease_owner = null, lease_expires_at = null,
             next_attempt_at = null, updated_at = now()
         where external_id = :externalId and lease_owner = :leaseOwner and state = :inProgress
         """,
         params("externalId", externalId, "state", state.name(), "result", resultJson,
-            "leaseOwner", leaseOwner, "inProgress", IN_PROGRESS)) == 1;
+            "report", reportJson, "leaseOwner", leaseOwner, "inProgress", IN_PROGRESS)) == 1;
   }
 
   boolean markFailed(UUID externalId, BundleErrorCode code, String message,

@@ -10,12 +10,13 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleSection;
 import uk.gov.hmcts.ccd.sdk.bundling.api.EmptySectionPolicy;
 import uk.gov.hmcts.ccd.sdk.bundling.api.WatermarkPreset;
+import uk.gov.hmcts.ccd.sdk.bundling.pdf.AssemblyContent;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.AssemblyFolder;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.AssemblyItem;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.AssemblyNode;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.AssemblyRequest;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.EmptySectionPage;
-import uk.gov.hmcts.ccd.sdk.bundling.pdf.PdfSource;
+import uk.gov.hmcts.ccd.sdk.bundling.pdf.MissingDocumentPage;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.Watermark;
 
 final class AssemblyMapping {
@@ -28,7 +29,7 @@ final class AssemblyMapping {
   private AssemblyMapping() {
   }
 
-  static Mapped map(BundleRequest request, Map<String, PdfSource> handledPdfs,
+  static Mapped map(BundleRequest request, Map<String, AssemblyContent> handledPdfs,
       Optional<Path> coverPage, Map<String, Path> watermarkImages) {
     List<Origin> origins = new ArrayList<>();
     List<AssemblyNode> items = mapChildren(request.root(), handledPdfs, origins);
@@ -62,14 +63,15 @@ final class AssemblyMapping {
   }
 
   private static List<AssemblyNode> mapChildren(
-      BundleSection section, Map<String, PdfSource> handledPdfs, List<Origin> origins) {
+      BundleSection section, Map<String, AssemblyContent> handledPdfs, List<Origin> origins) {
     List<AssemblyNode> nodes = new ArrayList<>();
     for (BundleDocument document : section.documents()) {
+      AssemblyContent content = handledPdfs.get(document.id());
       nodes.add(new AssemblyItem(
-          document.title(),
+          content instanceof MissingDocumentPage ? document.title() + " (missing)" : document.title(),
           document.date(),
           document.confidential(),
-          handledPdfs.get(document.id())));
+          content));
       origins.add(new Origin(document));
     }
     for (BundleSection child : section.sections()) {
@@ -79,7 +81,7 @@ final class AssemblyMapping {
   }
 
   private static Optional<AssemblyNode> mapSection(
-      BundleSection section, Map<String, PdfSource> handledPdfs, List<Origin> origins) {
+      BundleSection section, Map<String, AssemblyContent> handledPdfs, List<Origin> origins) {
     List<Origin> childOrigins = new ArrayList<>();
     List<AssemblyNode> children = mapChildren(section, handledPdfs, childOrigins);
     if (!children.isEmpty()) {
