@@ -2,12 +2,9 @@ package uk.gov.hmcts.ccd.sdk.bundling.job;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.EnumSet;
 import java.util.Optional;
-import java.util.Set;
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundleErrorCode;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleGenerationException;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderException;
+import uk.gov.hmcts.ccd.sdk.bundling.render.TransientFailures;
 
 /**
  * Bounded retry with exponential backoff, applied only to transient resolution, conversion and
@@ -16,17 +13,25 @@ import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderException;
 public class BundleJobRetryPolicy {
 
   private static final long UNCAPPED_DELAY_CEILING_MILLIS = Duration.ofDays(1).toMillis();
-  private static final Set<BundleErrorCode> TRANSIENT_CODES = EnumSet.of(
-      BundleErrorCode.DOCUMENT_RESOLUTION_FAILED, BundleErrorCode.DOCUMENT_CONVERSION_FAILED,
-      BundleErrorCode.COVER_PAGE_FAILED);
 
   private final int maxAttempts;
   private final long initialDelayMillis;
   private final double multiplier;
   private final long maxDelayMillis;
+  private final Duration requeueDelay;
+  private final int maxRequeues;
 
   public BundleJobRetryPolicy(int maxAttempts, Duration initialDelay, double multiplier,
       Duration maxDelay) {
+    this(maxAttempts, initialDelay, multiplier, maxDelay, Duration.ZERO, 0);
+  }
+
+  /**
+   * A policy that also re-runs a coalesced job up to maxRequeues times, requeueDelay apart, while
+   * its bundle has placeholders for documents that were only temporarily unavailable.
+   */
+  public BundleJobRetryPolicy(int maxAttempts, Duration initialDelay, double multiplier,
+      Duration maxDelay, Duration requeueDelay, int maxRequeues) {
     if (maxAttempts < 1) {
       throw new IllegalArgumentException("maxAttempts must be at least 1");
     }
@@ -34,6 +39,11 @@ public class BundleJobRetryPolicy {
     this.initialDelayMillis = initialDelay.toMillis();
     this.multiplier = multiplier;
     this.maxDelayMillis = maxDelay.toMillis();
+    if (maxRequeues < 0 || requeueDelay.isNegative()) {
+      throw new IllegalArgumentException("maxRequeues and requeueDelay must not be negative");
+    }
+    this.requeueDelay = requeueDelay;
+    this.maxRequeues = maxRequeues;
   }
 
   /**
@@ -41,22 +51,19 @@ public class BundleJobRetryPolicy {
    * cause chain says the server answered permanently (4xx, non-PDF body, bad payload).
    */
   public boolean isTransient(BundleGenerationException failure) {
-    if (!TRANSIENT_CODES.contains(failure.code())) {
-      return false;
-    }
-    for (Throwable cause = failure.getCause(); cause != null; cause = cause.getCause()) {
-      if (cause instanceof DocmosisRenderException docmosis) {
-        return docmosis.isTransientFailure();
-      }
-      if (cause.getCause() == cause) {
-        break;
-      }
-    }
-    return true;
+    return TransientFailures.isTransient(failure.code(), failure.getCause());
   }
 
   public int maxAttempts() {
     return maxAttempts;
+  }
+
+  /**
+   * When to re-run a bundle that has placeholders for temporarily unavailable documents, after
+   * it has already been re-run requeues times; empty once the bound is reached.
+   */
+  public Optional<Instant> requeueAt(int requeues, Instant now) {
+    return requeues < maxRequeues ? Optional.of(now.plus(requeueDelay)) : Optional.empty();
   }
 
   /** When the next attempt should run, or empty when the attempt bound is exhausted. */
