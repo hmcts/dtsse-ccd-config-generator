@@ -131,6 +131,10 @@ create it manually. The Java task does not create one because the mapping contai
 credentials. Leave it blank to skip the extra grant. As an environment variable, use
 `CCD_DATA_MIGRATION_FDW_ADDITIONAL_SELECT_GRANTEE`.
 
+The example above is ET's prod role. `DTS JIT Access <product> DB Reader SC` roles only exist in
+prod; non-prod servers use `DTS CFT DB Access Reader` instead. See
+[Phase 1 of the FDW guide](fdw-data-migration.md#phase-1-set-up-fdw-objects) for details.
+
 For cutover, run the same task with:
 
 ```yaml
