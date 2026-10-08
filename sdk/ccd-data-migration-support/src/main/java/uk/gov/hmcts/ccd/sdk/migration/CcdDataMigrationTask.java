@@ -17,6 +17,7 @@ import java.util.function.Supplier;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.env.Environment;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -214,6 +215,7 @@ public class CcdDataMigrationTask implements Runnable {
           totals.stoppedByTimeLimit()
       );
     }
+    analyzeTargetTablesForCutover();
     SignificantItemCopyTotals significantItemTotals = copySignificantItemBatches(cutoverEventHwm, stopAt);
     if (!significantItemTotals.caughtUp()) {
       log.info(
@@ -258,6 +260,31 @@ public class CcdDataMigrationTask implements Runnable {
         !totals.stoppedByTimeLimit(),
         totals.stoppedByTimeLimit()
     );
+  }
+
+  /**
+   * Cutover joins and updates every migrated case and event. If cutover starts soon after a bulk
+   * preload, autovacuum may not have analyzed the target tables yet and the planner can pick a plan
+   * that exceeds the statement timeout. Analyze only the join and filter columns so the large jsonb
+   * columns are not sampled.
+   */
+  private void analyzeTargetTablesForCutover() {
+    for (String analyze : List.of(
+        "analyze ccd.case_data (id, jurisdiction, case_type_id)",
+        "analyze ccd.case_event (id, case_data_id, case_type_id)"
+    )) {
+      try {
+        db.getJdbcTemplate().execute(analyze);
+      } catch (DataAccessException ex) {
+        log.warn(
+            "Could not run {} before CCD data migration cutover taskName={}; cutover queries may be planned "
+                + "without statistics. Cause: {}",
+            analyze,
+            options.taskName(),
+            ex.getMostSpecificCause().getMessage()
+        );
+      }
+    }
   }
 
   private CcdDataMigrationRunResult validateOnly() {
@@ -322,11 +349,19 @@ public class CcdDataMigrationTask implements Runnable {
             and ce.id >= :batchStartEventId
             and ce.id <= :batchEndEventHwm
         ),
+        missing_case_ids as materialized (
+          select distinct ce.case_data_id
+          from events_to_insert ce
+          where not exists (
+            select 1
+            from ccd.case_data target
+            where target.id = ce.case_data_id
+          )
+        ),
         source_cases as materialized (
-          select distinct on (cd.id) cd.*
+          select cd.*
           from fdw_stage.case_data cd
-          join events_to_insert ce on ce.case_data_id = cd.id
-          order by cd.id
+          join missing_case_ids ids on ids.case_data_id = cd.id
         ),
         inserted_cases as (
           insert into ccd.case_data (
@@ -1047,7 +1082,68 @@ public class CcdDataMigrationTask implements Runnable {
       );
     }
 
+    ensureFdwRemoteEstimate();
     grantAdditionalFdwSelectAccess();
+  }
+
+  /**
+   * Without use_remote_estimate the planner has no statistics for the foreign tables and assumes
+   * case_data is tiny, so it fetches the whole source case_data table for every event window.
+   * Servers created by older versions of the setup script lack the option; add it when absent and
+   * leave any explicitly configured value alone.
+   */
+  private void ensureFdwRemoteEstimate() {
+    String fdwServer = fdwServerName();
+    Boolean configured = db.queryForObject(
+        """
+        select exists (
+          select 1
+          from pg_foreign_server s, unnest(coalesce(s.srvoptions, '{}')) option
+          where s.srvname = :fdwServer
+            and split_part(option, '=', 1) = 'use_remote_estimate'
+        )
+        """,
+        Map.of("fdwServer", fdwServer),
+        Boolean.class
+    );
+    if (Boolean.TRUE.equals(configured)) {
+      return;
+    }
+
+    String alterServer = "alter server " + quoteSqlIdentifier(fdwServer)
+        + " options (add use_remote_estimate 'true')";
+    try {
+      db.getJdbcTemplate().execute(alterServer);
+      log.info("Enabled use_remote_estimate on CCD data migration FDW server {}", fdwServer);
+    } catch (DataAccessException ex) {
+      log.warn(
+          "Could not enable use_remote_estimate on CCD data migration FDW server {}; event windows may fetch "
+              + "the whole source case_data table and time out. Ask the server owner to run: {}. Cause: {}",
+          fdwServer,
+          alterServer,
+          ex.getMostSpecificCause().getMessage()
+      );
+    }
+  }
+
+  private String fdwServerName() {
+    List<String> fdwServers = db.queryForList("""
+        select s.srvname
+        from pg_foreign_table ft
+        join pg_class c on c.oid = ft.ftrelid
+        join pg_namespace n on n.oid = c.relnamespace
+        join pg_foreign_server s on s.oid = ft.ftserver
+        where n.nspname = 'fdw_stage'
+          and c.relname in ('case_data', 'case_event', 'case_event_significant_items')
+        limit 1
+        """,
+        Map.of(),
+        String.class
+    );
+    if (fdwServers.isEmpty()) {
+      throw new CcdDataMigrationException("No FDW server found for fdw_stage tables");
+    }
+    return fdwServers.getFirst();
   }
 
   private void ensureFdwTables() {
@@ -1180,25 +1276,8 @@ public class CcdDataMigrationTask implements Runnable {
     }
 
     log.info("Granting CCD data migration FDW select access to {}", grantee);
-    List<String> fdwServers = db.queryForList("""
-        select s.srvname
-        from pg_foreign_table ft
-        join pg_class c on c.oid = ft.ftrelid
-        join pg_namespace n on n.oid = c.relnamespace
-        join pg_foreign_server s on s.oid = ft.ftserver
-        where n.nspname = 'fdw_stage'
-          and c.relname in ('case_data', 'case_event', 'case_event_significant_items')
-        limit 1
-        """,
-        Map.of(),
-        String.class
-    );
-    if (fdwServers.isEmpty()) {
-      throw new CcdDataMigrationException("No FDW server found for fdw_stage tables");
-    }
-
     String granteeIdentifier = quoteSqlIdentifier(grantee);
-    String fdwServerIdentifier = quoteSqlIdentifier(fdwServers.getFirst());
+    String fdwServerIdentifier = quoteSqlIdentifier(fdwServerName());
     db.getJdbcTemplate().execute("grant usage on schema fdw_stage to " + granteeIdentifier);
     db.getJdbcTemplate().execute(
         "grant usage on foreign server " + fdwServerIdentifier + " to " + granteeIdentifier
