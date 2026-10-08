@@ -63,7 +63,7 @@ jobs:
             gradleTestClasses: ia:testClasses
             gradleIntegration: ia:integration
             definitionsDir: test-projects/ia-case-api/build/definitions
-            runIntegration: false
+            runIntegration: true
             runSemanticDiff: true
             changePath: test-projects/ia-case-api
 
