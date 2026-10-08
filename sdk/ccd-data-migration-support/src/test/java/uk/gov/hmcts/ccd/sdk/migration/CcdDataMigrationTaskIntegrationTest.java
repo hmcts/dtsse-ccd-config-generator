@@ -132,6 +132,8 @@ class CcdDataMigrationTaskIntegrationTest {
     assertElasticsearchQueueEmpty();
     assertThat(caseDataTriggerEnabled("trigger_enqueue_case_revision")).isTrue();
     assertTargetProtectionsPresent();
+    assertThat(plannerRowEstimate("case_data")).isEqualTo(1);
+    assertThat(plannerRowEstimate("case_event")).isEqualTo(2);
   }
 
   @Test
@@ -1496,6 +1498,14 @@ class CcdDataMigrationTaskIntegrationTest {
       jdbc.getJdbcTemplate().execute("create role " + quoteIdentifier(roleName));
     }
     jdbc.getJdbcTemplate().execute("grant " + quoteIdentifier(roleName) + " to current_user");
+  }
+
+  private long plannerRowEstimate(String tableName) {
+    return jdbc.queryForObject(
+        "select reltuples::bigint from pg_class where oid = to_regclass('ccd.' || :tableName)",
+        Map.of("tableName", tableName),
+        Long.class
+    );
   }
 
   private String fdwServerOption(String optionName) {

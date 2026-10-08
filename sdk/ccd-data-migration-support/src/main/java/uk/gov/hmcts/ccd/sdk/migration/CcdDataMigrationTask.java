@@ -215,6 +215,7 @@ public class CcdDataMigrationTask implements Runnable {
           totals.stoppedByTimeLimit()
       );
     }
+    analyzeTargetTablesForCutover();
     SignificantItemCopyTotals significantItemTotals = copySignificantItemBatches(cutoverEventHwm, stopAt);
     if (!significantItemTotals.caughtUp()) {
       log.info(
@@ -259,6 +260,31 @@ public class CcdDataMigrationTask implements Runnable {
         !totals.stoppedByTimeLimit(),
         totals.stoppedByTimeLimit()
     );
+  }
+
+  /**
+   * Cutover joins and updates every migrated case and event. If cutover starts soon after a bulk
+   * preload, autovacuum may not have analyzed the target tables yet and the planner can pick a plan
+   * that exceeds the statement timeout. Analyze only the join and filter columns so the large jsonb
+   * columns are not sampled.
+   */
+  private void analyzeTargetTablesForCutover() {
+    for (String analyze : List.of(
+        "analyze ccd.case_data (id, jurisdiction, case_type_id)",
+        "analyze ccd.case_event (id, case_data_id, case_type_id)"
+    )) {
+      try {
+        db.getJdbcTemplate().execute(analyze);
+      } catch (DataAccessException ex) {
+        log.warn(
+            "Could not run {} before CCD data migration cutover taskName={}; cutover queries may be planned "
+                + "without statistics. Cause: {}",
+            analyze,
+            options.taskName(),
+            ex.getMostSpecificCause().getMessage()
+        );
+      }
+    }
   }
 
   private CcdDataMigrationRunResult validateOnly() {

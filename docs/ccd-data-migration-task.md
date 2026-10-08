@@ -34,9 +34,12 @@ The task has one implementation with explicit modes:
   mark, subject to a transaction margin, and inserts provisional parent `case_data` rows so the
   target FK remains valid.
 * `CUTOVER`: explicit operator action during downtime. Captures the cutover event high-water mark,
-  copies the final event delta, copies linked `case_event_significant_items` in a single set-based
-  query, refreshes target `case_data` from source, sets final case revisions, resets sequences,
-  validates, and marks the migration complete.
+  copies the final event delta, analyzes the join and filter columns of `ccd.case_data` and
+  `ccd.case_event` so cutover queries are not planned without statistics, copies linked
+  `case_event_significant_items` in a single set-based query, refreshes target `case_data` from
+  source, sets final case revisions, resets sequences, validates, and marks the migration complete.
+  `ANALYZE` needs table ownership; for any other user Postgres skips the table with a warning and
+  cutover continues, relying on autovacuum statistics.
 * `VALIDATE_ONLY`: runs final source-vs-target validation without copying data.
 
 Do not switch to `CUTOVER` automatically from a scheduler. The operator must first freeze source
