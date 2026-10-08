@@ -318,6 +318,33 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void enablesRemoteEstimateOnFdwServerCreatedWithoutIt() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    assertThat(fdwServerOption("use_remote_estimate")).isNull();
+
+    CcdDataMigrationRunResult result = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(countRows("ccd.case_event")).isEqualTo(1);
+    assertThat(fdwServerOption("use_remote_estimate")).isEqualTo("true");
+  }
+
+  @Test
+  void leavesExplicitRemoteEstimateSettingUnchanged() {
+    jdbc.getJdbcTemplate().execute(
+        "alter server ccd_migration_test_server options (add use_remote_estimate 'false')"
+    );
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+
+    CcdDataMigrationRunResult result = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(fdwServerOption("use_remote_estimate")).isEqualTo("false");
+  }
+
+  @Test
   void grantsFdwSelectToConfiguredAdditionalGrantee() {
     createRole(FDW_READER_ROLE);
     createFdwUserMapping(FDW_READER_ROLE);
@@ -1443,6 +1470,20 @@ class CcdDataMigrationTaskIntegrationTest {
       jdbc.getJdbcTemplate().execute("create role " + quoteIdentifier(roleName));
     }
     jdbc.getJdbcTemplate().execute("grant " + quoteIdentifier(roleName) + " to current_user");
+  }
+
+  private String fdwServerOption(String optionName) {
+    List<String> values = jdbc.queryForList(
+        """
+        select split_part(option, '=', 2)
+        from pg_foreign_server s, unnest(coalesce(s.srvoptions, '{}')) option
+        where s.srvname = 'ccd_migration_test_server'
+          and split_part(option, '=', 1) = :optionName
+        """,
+        Map.of("optionName", optionName),
+        String.class
+    );
+    return values.isEmpty() ? null : values.getFirst();
   }
 
   private void createFdwUserMapping(String roleName) {

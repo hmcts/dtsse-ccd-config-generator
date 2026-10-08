@@ -17,7 +17,12 @@ Use this task after the FDW setup in [`fdw-data-migration.md`](fdw-data-migratio
 the FDW server, user mapping, and at least one of the CCD source foreign tables. The task creates
 any missing `fdw_stage.case_data`, `fdw_stage.case_event`, or
 `fdw_stage.case_event_significant_items` foreign tables from the same existing FDW table options so
-environments that were set up before a table was added can self-heal. The task is designed for
+environments that were set up before a table was added can self-heal. It also adds
+`use_remote_estimate 'true'` to the FDW server when that option is absent, because without it each
+event window fetches the whole source `case_data` table and times out (see
+[`fdw-data-migration.md`](fdw-data-migration.md#phase-1-set-up-fdw-objects)). An explicitly
+configured value is left unchanged. Altering the server needs ownership; if the migration user is not
+the owner the task logs a warning with the statement to run and carries on. The task is designed for
 repeated event preloads before downtime, followed by an explicit operator-run cutover after source
 writes for the selected case types have been frozen.
 
