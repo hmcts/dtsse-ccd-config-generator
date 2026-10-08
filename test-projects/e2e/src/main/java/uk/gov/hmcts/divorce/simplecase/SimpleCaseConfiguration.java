@@ -164,7 +164,7 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
         configBuilder
             .event(OPTIONS_CREATE_EVENT)
             .forStateTransition(EnumSet.noneOf(SimpleCaseState.class), SimpleCaseState.CREATED)
-            .name("Create simple case with options")
+            .name("Create case with options")
             .description("Create a simple case through an event using per-field options")
             .canSaveDraft()
             .significant()
