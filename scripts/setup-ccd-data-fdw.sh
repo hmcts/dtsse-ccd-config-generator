@@ -180,7 +180,8 @@ options (
   host :'src_host',
   port :'src_port',
   dbname :'src_db',
-  sslmode :'src_sslmode'
+  sslmode :'src_sslmode',
+  use_remote_estimate 'true'
 );
 
 create user mapping for :local_user_sql
