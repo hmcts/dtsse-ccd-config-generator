@@ -68,7 +68,10 @@ You need:
 * a target application database connection string with permission to create extensions, schemas,
   FDW servers, user mappings and foreign tables for setup
 * a source CCD database user with read access to `case_data`, `case_event`, and
-  `case_event_significant_items`
+  `case_event_significant_items`. Use a dedicated read-only user rather than the CCD data store
+  admin or application user: `postgres_fdw` foreign tables are writable, so the role that owns
+  them (and any role granted write on them) can `INSERT`, `UPDATE`, `DELETE` and `TRUNCATE` the
+  source CCD tables with whatever rights the source user has
 * a target application database user with write access to `ccd.case_data`, `ccd.case_event`, and
   `ccd.case_event_significant_items`
 * permission for the migration user to run `SET LOCAL session_replication_role = replica`
@@ -183,8 +186,29 @@ export DST_SCHEMA='ccd'                    # defaults to ccd
 export FDW_SCHEMA='fdw_stage'              # defaults to fdw_stage
 export FDW_SERVER='src_ccd_server'         # defaults to src_ccd_server
 export LOCAL_USER_SQL='current_user'       # role that will run the migration
-export FDW_ADDITIONAL_GRANTEE='DTS JIT Access et DB Reader SC'
+export FDW_ADDITIONAL_GRANTEE='DTS CFT DB Access Reader'
 ```
+
+`FDW_ADDITIONAL_GRANTEE` must name a role that already exists on the target server; setup fails
+part-way through if it does not. For servers built with
+[`terraform-module-postgresql-flexible`](https://github.com/hmcts/terraform-module-postgresql-flexible),
+the reader role the module creates depends on the environment:
+
+| Environment | Reader role |
+| --- | --- |
+| Non-prod (AAT, demo, ITHC, perftest) | `DTS <BUSINESS_AREA> DB Access Reader`, for example `DTS CFT DB Access Reader` |
+| Prod | `DTS JIT Access <product> DB Reader SC`, for example `DTS JIT Access et DB Reader SC` |
+
+`<product>` is the `product` passed to the module for the target server, which may differ from the
+service name (for example a service writing to another product's shared server). Check before
+running setup:
+
+```sql
+select rolname from pg_roles where rolname like 'DTS %';
+```
+
+The non-prod reader role is typically shared by everyone with CFT non-prod database read access, so
+granting it FDW access lets that whole group read the source CCD tables through `fdw_stage`.
 
 Validate the setup configuration without creating anything:
 
@@ -202,7 +226,7 @@ The setup script creates:
 
 * the `postgres_fdw` and `pgcrypto` extensions
 * the FDW staging schema, default `fdw_stage`
-* an FDW server pointing at the source CCD database
+* an FDW server pointing at the source CCD database, with `use_remote_estimate 'true'`
 * a user mapping for `LOCAL_USER_SQL` using `SRC_USER` and `SRC_PASSWORD`
 * when `FDW_ADDITIONAL_GRANTEE` is set, another user mapping for that role using the same
   source credentials
@@ -210,12 +234,24 @@ The setup script creates:
   * `fdw_stage.case_data`
   * `fdw_stage.case_event`
   * `fdw_stage.case_event_significant_items`
+* grants for `LOCAL_USER_SQL`
+* when `FDW_ADDITIONAL_GRANTEE` is set, grants for that additional role
 
 The foreign tables are created with `fetch_size '10000'` so large reads do not use the
 `postgres_fdw` default of 100 rows per cursor fetch. If the FDW objects were created before this
 option existed, recreate them with `setup-ccd-data-fdw.sh --apply` before running a large migration.
-* grants for `LOCAL_USER_SQL`
-* when `FDW_ADDITIONAL_GRANTEE` is set, grants for that additional role
+
+The server is created with `use_remote_estimate 'true'` so the planner asks the source database for
+row estimates. Without it the foreign tables have no statistics, the planner assumes `case_data` is
+tiny, and each Java task event window fetches the entire source `case_data` table (every
+jurisdiction) to join locally instead of looking cases up by `id`. On a large CCD database every
+window then exceeds the statement timeout and the preload never advances. The Java task adds the
+option when it is missing, provided the migration user owns the FDW server; otherwise it logs a
+warning with the statement to run. To add it by hand without recreating the server:
+
+```sql
+alter server src_ccd_server options (add use_remote_estimate 'true');
+```
 
 `SRC_PASSWORD_REQUIRED` defaults to `true`, matching `postgres_fdw`'s default safety check for
 non-superusers. Only set it to `false` for local/test FDW servers that use trust authentication and
@@ -231,7 +267,8 @@ tables from the same server, source schema, and fetch size options.
 
 For services using the Java task, set `ccd.data-migration.fdw-additional-select-grantee` or
 `CCD_DATA_MIGRATION_FDW_ADDITIONAL_SELECT_GRANTEE` to grant an additional team-specific reader role
-enough access to query the FDW tables, for example `DTS JIT Access et DB Reader SC`. The task grants
+enough access to query the FDW tables, for example `DTS JIT Access et DB Reader SC` in prod (see
+[Phase 1](#phase-1-set-up-fdw-objects) for the per-environment role names). The task grants
 schema usage, foreign server usage, and table select. The role must already have a user mapping for
 the FDW server; create it during setup with `FDW_ADDITIONAL_GRANTEE` or have Platform Operations
 create it manually. The Java task does not create user mappings because they contain source database

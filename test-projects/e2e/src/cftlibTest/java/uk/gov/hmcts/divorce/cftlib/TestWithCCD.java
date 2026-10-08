@@ -3169,6 +3169,7 @@ public class TestWithCCD extends CftlibTest {
     @Order(19)
     @Test
     public void aboutToSubmitCallbackCanOverrideEventMetadata() throws Exception {
+        var dataBefore = storedCaseData(caseRef);
         var start = ccdApi.startEvent(
             getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
             getServiceAuth(),
@@ -3196,6 +3197,11 @@ public class TestWithCCD extends CftlibTest {
             CaseworkerOverrideEventMetadata.METADATA_OVERRIDE_PREFIX + " summary",
             CaseworkerOverrideEventMetadata.METADATA_OVERRIDE_PREFIX + " description"
         );
+        // The callback returns metadata and no data, so the stored case data is kept.
+        var dataAfter = storedCaseData(caseRef);
+        assertThat(dataBefore.path("applicationType").isTextual(), is(true));
+        assertThat(dataAfter.path("applicationType"), equalTo(dataBefore.path("applicationType")));
+        assertThat(dataAfter.path("applicant1FirstName"), equalTo(dataBefore.path("applicant1FirstName")));
     }
 
     @Order(20)
@@ -3231,6 +3237,51 @@ public class TestWithCCD extends CftlibTest {
 
         Integer after = db.queryForObject(sqlCountByCase, Map.of("ref", caseRef), Integer.class);
         assertThat(after, equalTo(before));
+        assertThat(auditCountForCase(caseRef), equalTo(auditsBefore));
+    }
+
+    @Order(20)
+    @Test
+    public void legacyErrorMessageOverrideRollsBackSubmission() throws Exception {
+        Map<String, Object> params = Map.of("reference", caseRef);
+        String caseBefore = db.queryForObject(
+            "select data::text || case_revision from ccd.case_data where reference = :reference", params, String.class);
+        Integer notesBefore = db.queryForObject(
+            "select count(*) from case_notes where reference = :reference", params, Integer.class);
+        Integer outboxBefore = db.queryForObject(
+            "select count(*) from ccd.message_queue_candidates where reference = :reference", params, Integer.class);
+        Integer auditsBefore = auditCountForCase(caseRef);
+
+        var start = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            PublishedEvent.class.getSimpleName()
+        );
+        var request = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            PublishedEvent.class.getSimpleName(),
+            Map.of("note", PublishedEvent.ERROR_MESSAGE_OVERRIDE_NOTE),
+            start.getToken()
+        );
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(422));
+
+        var payload = mapper.readValue(EntityUtils.toString(response.getEntity()), Map.class);
+        @SuppressWarnings("unchecked")
+        List<String> callbackErrors = (List<String>) payload.get("callbackErrors");
+        assertThat(callbackErrors, contains(PublishedEvent.ERROR_MESSAGE_OVERRIDE));
+
+        assertThat(db.queryForObject(
+            "select data::text || case_revision from ccd.case_data where reference = :reference", params, String.class),
+            equalTo(caseBefore));
+        assertThat(db.queryForObject(
+            "select count(*) from case_notes where reference = :reference", params, Integer.class),
+            equalTo(notesBefore));
+        assertThat(db.queryForObject(
+            "select count(*) from ccd.message_queue_candidates where reference = :reference", params, Integer.class),
+            equalTo(outboxBefore));
         assertThat(auditCountForCase(caseRef), equalTo(auditsBefore));
     }
 
@@ -3556,6 +3607,73 @@ public class TestWithCCD extends CftlibTest {
         assertThat(updatedCase.getState(), equalTo(SimpleCaseState.FOLLOW_UP.name()));
         assertThat(updatedData.getFollowUpMarker(), equalTo(SimpleCaseConfiguration.FOLLOW_UP_CALLBACK_MARKER));
         assertThat(updatedData.getFollowUpNote(), containsString("Follow up detail"));
+    }
+
+    @SneakyThrows
+    @Order(28)
+    @Test
+    void simpleCaseCallbackReturningOnlyAStateKeepsCaseData() {
+        var request = prepareEventRequestForCase(
+            simpleCaseRef,
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            SimpleCaseConfiguration.STATE_ONLY_EVENT,
+            Map.of()
+        );
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+
+        var storedData = storedCaseData(simpleCaseRef);
+        assertThat(storedData.path("subject").asText(), equalTo("Simple case subject"));
+        assertThat(storedData.path("description").asText(), equalTo("Initial simple case description"));
+        assertThat(storedData.path("followUpMarker").asText(),
+            equalTo(SimpleCaseConfiguration.FOLLOW_UP_CALLBACK_MARKER));
+        assertThat(db.queryForObject(
+            "select state from ccd.case_data where reference = :reference",
+            Map.of("reference", simpleCaseRef),
+            String.class
+        ), equalTo(SimpleCaseState.FOLLOW_UP.name()));
+        var auditData = mapper.readTree(db.queryForObject(
+            """
+            SELECT ce.data::text
+              FROM ccd.case_event ce
+              JOIN ccd.case_data cd ON cd.id = ce.case_data_id
+             WHERE cd.reference = :reference
+               AND ce.event_id = :eventId
+            """,
+            Map.of("reference", simpleCaseRef, "eventId", SimpleCaseConfiguration.STATE_ONLY_EVENT),
+            String.class
+        ));
+        assertThat(auditData.path("subject").asText(), equalTo("Simple case subject"));
+    }
+
+    @SneakyThrows
+    @Order(33)
+    @Test
+    void simpleCaseCallbackReturningEmptyDataReplacesCaseData() {
+        var request = prepareEventRequestForCase(
+            simpleCaseRef,
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            SimpleCaseConfiguration.EMPTY_DATA_EVENT,
+            Map.of()
+        );
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+
+        // As in CCD, data the callback returns replaces the case data even when it is empty.
+        var storedData = storedCaseData(simpleCaseRef);
+        assertThat(storedData.has("subject"), is(false));
+        assertThat(storedData.has("description"), is(false));
+        assertThat(storedData.has("followUpMarker"), is(false));
+    }
+
+    private JsonNode storedCaseData(long reference) throws IOException {
+        return mapper.readTree(db.queryForObject(
+            "select data::text from ccd.case_data where reference = :reference",
+            Map.of("reference", reference),
+            String.class
+        ));
     }
 
     @SuppressWarnings("unchecked")
@@ -4000,28 +4118,31 @@ public class TestWithCCD extends CftlibTest {
     @Order(210)
     @Test
     void dispatchesJsonDefinitionCallbacksToSpringController() {
+        // An empty error_message_override is not a rejection.
         for (String caseType : jsonLegacyCaseTypes()) {
-            BaseJsonLegacyController.reset();
+            for (String note : List.of("json-legacy-normal", "json-legacy-empty-override")) {
+                BaseJsonLegacyController.reset();
 
-            var response = submitJsonLegacyEventForCaseType(caseType, Map.of("note", "json-legacy-normal"), 201);
+                var response = submitJsonLegacyEventForCaseType(caseType, Map.of("note", note), 201);
 
-            @SuppressWarnings("unchecked")
-            Map<String, Object> data = (Map<String, Object>) response.get("data");
-            assertThat(data.get("setInAboutToSubmit"), equalTo(BaseJsonLegacyController.MARKER));
+                @SuppressWarnings("unchecked")
+                Map<String, Object> data = (Map<String, Object>) response.get("data");
+                assertThat(data.get("setInAboutToSubmit"), equalTo(BaseJsonLegacyController.MARKER));
 
-            @SuppressWarnings("unchecked")
-            Map<String, Object> afterSubmit =
-                (Map<String, Object>) response.get("after_submit_callback_response");
-            assertThat(afterSubmit.get("confirmation_header"),
-                equalTo(BaseJsonLegacyController.CONFIRMATION_HEADER));
-            assertThat(afterSubmit.get("confirmation_body"),
-                equalTo(BaseJsonLegacyController.CONFIRMATION_BODY));
+                @SuppressWarnings("unchecked")
+                Map<String, Object> afterSubmit =
+                    (Map<String, Object>) response.get("after_submit_callback_response");
+                assertThat(afterSubmit.get("confirmation_header"),
+                    equalTo(BaseJsonLegacyController.CONFIRMATION_HEADER));
+                assertThat(afterSubmit.get("confirmation_body"),
+                    equalTo(BaseJsonLegacyController.CONFIRMATION_BODY));
 
-            assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(1));
-            assertThat(BaseJsonLegacyController.aboutToSubmitSawAuthorisation, is(true));
-            assertThat(BaseJsonLegacyController.aboutToSubmitSawServiceAuthorisation, is(true));
-            assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(1));
-            assertThat(BaseJsonLegacyController.submittedSawCommittedData, is(true));
+                assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(1));
+                assertThat(BaseJsonLegacyController.aboutToSubmitSawAuthorisation, is(true));
+                assertThat(BaseJsonLegacyController.aboutToSubmitSawServiceAuthorisation, is(true));
+                assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(1));
+                assertThat(BaseJsonLegacyController.submittedSawCommittedData, is(true));
+            }
         }
     }
 
@@ -4029,18 +4150,26 @@ public class TestWithCCD extends CftlibTest {
     @Order(211)
     @Test
     void aboutToSubmitErrorsRollbackJsonLegacySubmission() {
+        String override = BaseJsonLegacyController.ERROR_MESSAGE_OVERRIDE;
+        Map<String, List<String>> expectedErrors = Map.of(
+            "json-legacy-error", List.of("JSON legacy validation error"),
+            "json-legacy-error-override", List.of(override),
+            "json-legacy-errors-and-override", List.of(override, "JSON legacy validation error")
+        );
         for (String caseType : jsonLegacyCaseTypes()) {
-            BaseJsonLegacyController.reset();
-            String before = storedData(caseType);
+            for (var expected : expectedErrors.entrySet()) {
+                BaseJsonLegacyController.reset();
+                String before = storedData(caseType);
 
-            var response = submitJsonLegacyEventForCaseType(caseType, Map.of("note", "json-legacy-error"), 422);
+                var response = submitJsonLegacyEventForCaseType(caseType, Map.of("note", expected.getKey()), 422);
 
-            @SuppressWarnings("unchecked")
-            List<String> callbackErrors = (List<String>) response.get("callbackErrors");
-            assertThat(callbackErrors, equalTo(List.of("JSON legacy validation error")));
-            assertThat(storedData(caseType), equalTo(before));
-            assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(1));
-            assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(0));
+                @SuppressWarnings("unchecked")
+                List<String> callbackErrors = (List<String>) response.get("callbackErrors");
+                assertThat(callbackErrors, equalTo(expected.getValue()));
+                assertThat(storedData(caseType), equalTo(before));
+                assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(1));
+                assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(0));
+            }
         }
     }
 

@@ -71,7 +71,7 @@ Example:
   export SRC_PASSWORD_REQUIRED='true'
   export SRC_SSLMODE='require'
   export LOCAL_USER_SQL='current_user'
-  export FDW_ADDITIONAL_GRANTEE='DTS JIT Access et DB Reader SC'
+  export FDW_ADDITIONAL_GRANTEE='DTS CFT DB Access Reader'   # prod: 'DTS JIT Access <product> DB Reader SC'
 
   ./scripts/setup-ccd-data-fdw.sh
   ./scripts/setup-ccd-data-fdw.sh --apply
@@ -130,10 +130,15 @@ validate_connection() {
   psql_dst --quiet -c "select 1;" >/dev/null
 }
 
+redact_dsn() {
+  # Hide the password in URI (scheme://user:pass@host) and key/value (password=...) DSN forms.
+  printf '%s' "$1" | sed -E 's#^([A-Za-z][A-Za-z0-9+.-]*://[^:/@]*):.*@#\1:***@#; s#(password=)[^ &]*#\1***#g'
+}
+
 print_configuration() {
   cat <<EOF
 FDW setup configuration:
-  Destination DSN: ${DST_DSN}
+  Destination DSN: $(redact_dsn "$DST_DSN")
   Target schema:   ${DST_SCHEMA}
   FDW schema:      ${FDW_SCHEMA}
   FDW server:      ${FDW_SERVER}
@@ -175,7 +180,8 @@ options (
   host :'src_host',
   port :'src_port',
   dbname :'src_db',
-  sslmode :'src_sslmode'
+  sslmode :'src_sslmode',
+  use_remote_estimate 'true'
 );
 
 create user mapping for :local_user_sql

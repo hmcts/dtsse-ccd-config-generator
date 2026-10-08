@@ -132,6 +132,8 @@ class CcdDataMigrationTaskIntegrationTest {
     assertElasticsearchQueueEmpty();
     assertThat(caseDataTriggerEnabled("trigger_enqueue_case_revision")).isTrue();
     assertTargetProtectionsPresent();
+    assertThat(plannerRowEstimate("case_data")).isEqualTo(1);
+    assertThat(plannerRowEstimate("case_event")).isEqualTo(2);
   }
 
   @Test
@@ -318,6 +320,33 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void enablesRemoteEstimateOnFdwServerCreatedWithoutIt() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    assertThat(fdwServerOption("use_remote_estimate")).isNull();
+
+    CcdDataMigrationRunResult result = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(countRows("ccd.case_event")).isEqualTo(1);
+    assertThat(fdwServerOption("use_remote_estimate")).isEqualTo("true");
+  }
+
+  @Test
+  void leavesExplicitRemoteEstimateSettingUnchanged() {
+    jdbc.getJdbcTemplate().execute(
+        "alter server ccd_migration_test_server options (add use_remote_estimate 'false')"
+    );
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+
+    CcdDataMigrationRunResult result = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(fdwServerOption("use_remote_estimate")).isEqualTo("false");
+  }
+
+  @Test
   void grantsFdwSelectToConfiguredAdditionalGrantee() {
     createRole(FDW_READER_ROLE);
     createFdwUserMapping(FDW_READER_ROLE);
@@ -423,6 +452,32 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(countRows("ccd.case_event")).isEqualTo(1);
     assertThat(localEventHwm()).isEqualTo(101);
     assertThat(sourceEventHwm()).isEqualTo(1000);
+  }
+
+  @Test
+  void preloadInsertsEachProvisionalCaseOnceAcrossWindows() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCase(20, 1000000000000020L, 1, "Submitted", "{\"field\":\"other\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", minutesAgo(60));
+    insertSourceCaseEvent(103, 20, "create", "Submitted", "{\"field\":\"other\"}", minutesAgo(60));
+
+    task(PRELOAD_EVENTS, 100, 2).runMigration();
+    assertThat(countRows("ccd.case_data")).isEqualTo(2);
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"one\"}");
+
+    updateSourceCase(10, 2, "Closed", "{\"field\":\"three\"}");
+    insertSourceCaseEvent(201, 10, "close", "Closed", "{\"field\":\"three\"}", minutesAgo(60));
+    CcdDataMigrationRunResult result = task(PRELOAD_EVENTS, 100, 10).runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(countRows("ccd.case_event")).isEqualTo(4);
+    assertThat(countRows("ccd.case_data")).isEqualTo(2);
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"one\"}");
+    assertThat(caseEventRevision(101)).isEqualTo(1);
+    assertThat(caseEventRevision(102)).isEqualTo(2);
+    assertThat(caseEventRevision(201)).isEqualTo(3);
+    assertThat(caseEventRevision(103)).isEqualTo(1);
   }
 
   @Test
@@ -1443,6 +1498,28 @@ class CcdDataMigrationTaskIntegrationTest {
       jdbc.getJdbcTemplate().execute("create role " + quoteIdentifier(roleName));
     }
     jdbc.getJdbcTemplate().execute("grant " + quoteIdentifier(roleName) + " to current_user");
+  }
+
+  private long plannerRowEstimate(String tableName) {
+    return jdbc.queryForObject(
+        "select reltuples::bigint from pg_class where oid = to_regclass('ccd.' || :tableName)",
+        Map.of("tableName", tableName),
+        Long.class
+    );
+  }
+
+  private String fdwServerOption(String optionName) {
+    List<String> values = jdbc.queryForList(
+        """
+        select split_part(option, '=', 2)
+        from pg_foreign_server s, unnest(coalesce(s.srvoptions, '{}')) option
+        where s.srvname = 'ccd_migration_test_server'
+          and split_part(option, '=', 1) = :optionName
+        """,
+        Map.of("optionName", optionName),
+        String.class
+    );
+    return values.isEmpty() ? null : values.getFirst();
   }
 
   private void createFdwUserMapping(String roleName) {

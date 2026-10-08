@@ -138,6 +138,7 @@ public class BundleJobWorker implements AutoCloseable {
     UUID id = job.externalId();
     BundleRequest request;
     BundleExecutionContext context;
+    BundleJobContext jobContext;
     try {
       if (claimed.requestVersion() > BundleJobJson.REQUEST_VERSION) {
         throw new BundleJobJson.Unreadable("the job was stored with request version "
@@ -148,8 +149,9 @@ public class BundleJobWorker implements AutoCloseable {
           : Optional.of(json.read(claimed.requestJson(), BundleRequest.class, "bundle request"));
       context = json.read(claimed.executionContextJson(), BundleExecutionContext.class,
           "execution context");
-      request = selector.select(new BundleJobContext(id, submitted,
-          json.readParameters(claimed.selectorParametersJson()), context));
+      jobContext = new BundleJobContext(id, submitted,
+          json.readParameters(claimed.selectorParametersJson()), context);
+      request = selector.select(jobContext);
     } catch (BundleJobJson.Unreadable e) {
       log.error("Bundle job {} is unreadable by this worker: {}", id, e.getMessage(), e);
       failTerminally(id, BundleErrorCode.JOB_REQUEST_UNREADABLE, "Bundle job " + id
@@ -172,7 +174,7 @@ public class BundleJobWorker implements AutoCloseable {
     try (BundleResult result = renderer.render(request, context)) {
       String summary;
       try {
-        Object value = completionHandler.onCompleted(job, request, result);
+        Object value = completionHandler.onCompleted(job, jobContext, request, result);
         summary = value == null ? null : json.write(value);
       } catch (Exception e) {
         log.error("Bundle job {} rendered but its completion handler failed", id, e);
