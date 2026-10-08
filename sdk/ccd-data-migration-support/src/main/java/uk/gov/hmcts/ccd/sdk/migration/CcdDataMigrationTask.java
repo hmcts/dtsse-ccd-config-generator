@@ -323,11 +323,19 @@ public class CcdDataMigrationTask implements Runnable {
             and ce.id >= :batchStartEventId
             and ce.id <= :batchEndEventHwm
         ),
+        missing_case_ids as materialized (
+          select distinct ce.case_data_id
+          from events_to_insert ce
+          where not exists (
+            select 1
+            from ccd.case_data target
+            where target.id = ce.case_data_id
+          )
+        ),
         source_cases as materialized (
-          select distinct on (cd.id) cd.*
+          select cd.*
           from fdw_stage.case_data cd
-          join events_to_insert ce on ce.case_data_id = cd.id
-          order by cd.id
+          join missing_case_ids ids on ids.case_data_id = cd.id
         ),
         inserted_cases as (
           insert into ccd.case_data (

@@ -453,6 +453,32 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void preloadInsertsEachProvisionalCaseOnceAcrossWindows() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCase(20, 1000000000000020L, 1, "Submitted", "{\"field\":\"other\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", minutesAgo(60));
+    insertSourceCaseEvent(103, 20, "create", "Submitted", "{\"field\":\"other\"}", minutesAgo(60));
+
+    task(PRELOAD_EVENTS, 100, 2).runMigration();
+    assertThat(countRows("ccd.case_data")).isEqualTo(2);
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"one\"}");
+
+    updateSourceCase(10, 2, "Closed", "{\"field\":\"three\"}");
+    insertSourceCaseEvent(201, 10, "close", "Closed", "{\"field\":\"three\"}", minutesAgo(60));
+    CcdDataMigrationRunResult result = task(PRELOAD_EVENTS, 100, 10).runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(countRows("ccd.case_event")).isEqualTo(4);
+    assertThat(countRows("ccd.case_data")).isEqualTo(2);
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"one\"}");
+    assertThat(caseEventRevision(101)).isEqualTo(1);
+    assertThat(caseEventRevision(102)).isEqualTo(2);
+    assertThat(caseEventRevision(201)).isEqualTo(3);
+    assertThat(caseEventRevision(103)).isEqualTo(1);
+  }
+
+  @Test
   void preloadAdvancesAcrossEmptySourceEventIdWindows() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
