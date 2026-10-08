@@ -7,7 +7,7 @@
 [submodule "test-projects/nfdiv-case-api"]
 	path = test-projects/nfdiv-case-api
 	url = git@github.com:hmcts/nfdiv-case-api.git
-	branch = path-fix
+	branch = sb4-from-latest-master
 [submodule "test-projects/sptribs-case-api"]
 	path = test-projects/sptribs-case-api
 	url = git@github.com:hmcts/sptribs-case-api.git
@@ -15,7 +15,7 @@
 [submodule "test-projects/adoption-cos-api"]
 	path = test-projects/adoption-cos-api
 	url = git@github.com:hmcts/adoption-cos-api.git
-	branch = cftlib-integration
+	branch = spring-boot-4-sdk-fixture
 [submodule "test-projects/et-ccd-callbacks"]
 	path = test-projects/et-ccd-callbacks
 	url = git@github.com:hmcts/et-ccd-callbacks.git
