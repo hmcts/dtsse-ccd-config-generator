@@ -15,6 +15,7 @@ jobs:
           - checkName: Semantic Diff - Adoption
             module: adoption
             gradleGenerate: adoption:generateCCDConfig
+            gradleTestClasses: adoption:testClasses
             gradleIntegration: adoption:integration
             definitionsDir: test-projects/adoption-cos-api/build/definitions
             runIntegration: false
@@ -23,6 +24,7 @@ jobs:
           - checkName: Semantic Diff - NFDiv
             module: nfdiv
             gradleGenerate: nfdiv:generateCCDConfig
+            gradleTestClasses: nfdiv:testClasses
             gradleIntegration: nfdiv:integration
             definitionsDir: test-projects/nfdiv-case-api/build/definitions
             runIntegration: true
@@ -31,6 +33,7 @@ jobs:
           - checkName: Semantic Diff - PCS
             module: pcs
             gradleGenerate: pcs:generateCCDConfig
+            gradleTestClasses: pcs:testClasses
             gradleIntegration: pcs:integration
             definitionsDir: test-projects/pcs-api/build/definitions
             runIntegration: true
@@ -39,6 +42,7 @@ jobs:
           - checkName: Semantic Diff - SPTribs
             module: sptribs
             gradleGenerate: sptribs:generateCCDConfig
+            gradleTestClasses: sptribs:testClasses
             gradleIntegration: sptribs:integration
             definitionsDir: test-projects/sptribs-case-api/build/definitions
             runIntegration: true
@@ -47,11 +51,21 @@ jobs:
           - checkName: ET Integration
             module: et
             gradleGenerate: et:generateCCDConfig
+            gradleTestClasses: et:testClasses
             gradleIntegration: et:integration
             definitionsDir: test-projects/et-ccd-callbacks/build/definitions
             runIntegration: true
             runSemanticDiff: false
             changePath: test-projects/et-ccd-callbacks
+          - checkName: Semantic Diff - IA
+            module: ia
+            gradleGenerate: ia:generateCCDConfig
+            gradleTestClasses: ia:testClasses
+            gradleIntegration: ia:integration
+            definitionsDir: test-projects/ia-case-api/build/definitions
+            runIntegration: false
+            runSemanticDiff: true
+            changePath: test-projects/ia-case-api
 
     steps:
       - name: Checkout repository
@@ -100,6 +114,10 @@ jobs:
       - name: Set up Gradle
         if: steps.changes.outputs.docs_only != 'true'
         uses: gradle/actions/setup-gradle@v6
+
+      - name: Compile ${{ matrix.module }} test classes
+        if: steps.changes.outputs.docs_only != 'true'
+        run: ./gradlew ${{ matrix.gradleTestClasses }} -i --stacktrace
 
       - name: Run ${{ matrix.module }}:integration
         if: ${{ matrix.runIntegration && steps.changes.outputs.docs_only != 'true' }}

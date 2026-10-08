@@ -113,6 +113,7 @@ import uk.gov.hmcts.divorce.divorcecase.model.State;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
 import uk.gov.hmcts.divorce.simplecase.SimpleCaseConfiguration;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseData;
+import uk.gov.hmcts.divorce.simplecase.model.SimpleCasePriority;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseState;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerOverrideEventMetadata;
@@ -244,6 +245,12 @@ public class TestWithCCD extends CftlibTest {
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-event-view.v2+json;charset=UTF-8";
     private static final String ACCEPT_UI_START_EVENT =
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-start-event-trigger.v2+json;charset=UTF-8";
+    private static final String ACCEPT_UI_START_CASE_TRIGGER =
+        "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-start-case-trigger.v2+json;charset=UTF-8";
+    private static final String ACCEPT_UI_BANNERS =
+        "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-banners.v2+json;charset=UTF-8";
+    private static final String ACCEPT_UI_JURISDICTION_CONFIGS =
+        "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-jurisdiction-configs.v2+json;charset=UTF-8";
     private static final String API_FIRST_TASK_EVENT_ID = ApiFirstTaskEvent.EVENT_ID;
     private static final String API_FIRST_TASK_COMPLETE_EVENT_ID = ApiFirstTaskCompleteEvent.EVENT_ID;
     private static final String API_FIRST_TASK_CANCEL_EVENT_ID = ApiFirstTaskCancelEvent.EVENT_ID;
@@ -3667,6 +3674,85 @@ public class TestWithCCD extends CftlibTest {
             Map.of("reference", reference),
             String.class
         ));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Order(28)
+    @Test
+    void simpleCaseOptionsEventExposesFieldLevelDefinitionColumns() {
+        var trigger = getAsCaseworker(
+            BASE_URL + "/internal/case-types/" + SimpleCaseConfiguration.CASE_TYPE
+                + "/event-triggers/" + SimpleCaseConfiguration.OPTIONS_CREATE_EVENT,
+            ACCEPT_UI_START_CASE_TRIGGER
+        );
+        assertThat(trigger.get("can_save_draft"), equalTo(true));
+
+        Map<String, Map<String, Object>> fields = new LinkedHashMap<>();
+        ((List<Map<String, Object>>) trigger.get("case_fields"))
+            .forEach(field -> fields.put((String) field.get("id"), field));
+
+        var subject = fields.get("subject");
+        assertThat(subject.get("label"), equalTo(SimpleCaseConfiguration.OPTIONS_SUBJECT_LABEL));
+        assertThat(subject.get("hint_text"), equalTo(SimpleCaseConfiguration.OPTIONS_SUBJECT_HINT));
+        assertThat(subject.get("publish"), equalTo(true));
+        assertThat(subject.get("publish_as"), equalTo(SimpleCaseConfiguration.OPTIONS_SUBJECT_PUBLISH_AS));
+
+        var description = fields.get("description");
+        assertThat(description.get("show_condition"),
+            equalTo(SimpleCaseConfiguration.OPTIONS_DESCRIPTION_SHOW_CONDITION));
+        assertThat(description.get("retain_hidden_value"), equalTo(true));
+        assertThat(description.get("show_summary_content_option"), equalTo(1));
+
+        assertThat(fields.get("reviewDate").get("display_context_parameter"),
+            equalTo(SimpleCaseConfiguration.REVIEW_DATE_FORMAT));
+        assertThat(fields.get("followUpNote").get("publish"), equalTo(false));
+        assertThat(fields.get("priority").get("value"), equalTo(SimpleCasePriority.URGENT.name()));
+        assertThat(fields.get("allocatedJudge").get("value"),
+            equalTo(Map.of("personalCode", SimpleCaseConfiguration.DEFAULT_JUDGE_PERSONAL_CODE)));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Order(28)
+    @Test
+    void simpleCaseTypeAndJurisdictionLevelDefinitionColumnsReachTheDataStore() {
+        assertThat("Simple case must be created before case view assertions", simpleCaseRef, greaterThan(0L));
+
+        var caseView = getAsCaseworker(BASE_URL + "/internal/cases/" + simpleCaseRef, ACCEPT_UI_CASE_VIEW);
+        var caseType = (Map<String, Object>) caseView.get("case_type");
+        assertThat(caseType.get("printEnabled"), equalTo(true));
+        var state = (Map<String, Object>) caseView.get("state");
+        assertThat(state.get("id"), equalTo(SimpleCaseState.FOLLOW_UP.name()));
+        assertThat(state.get("description"), equalTo("Follow-up details recorded"));
+        var tabIds = ((List<Map<String, Object>>) caseView.get("tabs")).stream()
+            .map(tab -> tab.get("id"))
+            .toList();
+        assertThat(tabIds, contains(SimpleCaseConfiguration.HISTORY_TAB));
+
+        var banners = getAsCaseworker(
+            BASE_URL + "/internal/banners?ids=" + SimpleCaseConfiguration.JURISDICTION, ACCEPT_UI_BANNERS);
+        var banner = ((List<Map<String, Object>>) banners.get("banners")).get(0);
+        assertThat(banner.get("bannerEnabled"), equalTo(true));
+        assertThat(banner.get("bannerDescription"), equalTo(SimpleCaseConfiguration.BANNER_DESCRIPTION));
+        assertThat(banner.get("bannerUrl"), equalTo(SimpleCaseConfiguration.BANNER_URL));
+        assertThat(banner.get("bannerUrlText"), equalTo(SimpleCaseConfiguration.BANNER_URL_TEXT));
+
+        var uiConfigs = getAsCaseworker(
+            BASE_URL + "/internal/jurisdiction-ui-configs?ids=" + SimpleCaseConfiguration.JURISDICTION,
+            ACCEPT_UI_JURISDICTION_CONFIGS
+        );
+        var uiConfig = ((List<Map<String, Object>>) uiConfigs.get("configs")).get(0);
+        assertThat(uiConfig.get("shuttered"), equalTo(true));
+    }
+
+    @SneakyThrows
+    private Map<String, Object> getAsCaseworker(String url, String accept) {
+        var get = buildRequest("TEST_CASE_WORKER_USER@mailinator.com", url, HttpGet::new);
+        withCcdAccept(get, accept);
+        try (var response = HttpClientBuilder.create().build().execute(get)) {
+            var body = EntityUtils.toString(response.getEntity());
+            assertThat(url + " returned " + body, response.getStatusLine().getStatusCode(), equalTo(200));
+            return mapper.readValue(body, new TypeReference<>() {});
+        }
     }
 
     @Order(34)
