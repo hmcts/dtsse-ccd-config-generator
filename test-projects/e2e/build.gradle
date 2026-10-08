@@ -85,7 +85,7 @@ dependencies {
   implementation 'org.springframework.retry:spring-retry:2.0.13'
 
   implementation 'org.flywaydb:flyway-database-postgresql'
-  implementation 'org.postgresql:postgresql:42.7.13'
+  implementation 'org.postgresql:postgresql:42.7.14'
 
 
   implementation 'com.github.hmcts:ccd-case-document-am-client:1.60.1'
