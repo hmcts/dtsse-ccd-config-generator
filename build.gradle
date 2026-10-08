@@ -24,7 +24,8 @@ gradle.afterProject { project, _ ->
         project.tasks.matching { it.name == taskName }.configureEach { task ->
             if ((project.path == ':nfdiv' && taskName == 'cftlibTest')
                 || (project.path == ':sptribs' && taskName == 'cftlibTest')
-                || project.path == ':ccd-data-store-api') {
+                || project.path == ':ccd-data-store-api'
+                || project.path == ':ia') {
                 return
             }
             aggregate.configure { dependsOn(task) }
@@ -108,4 +109,11 @@ if (project.findProject(':ccd-data-store-api')) {
             }
         }
     }
+}
+
+// ia-case-api is here to generate its definition and compile its tests. Its own checks (checkstyle
+// against a config path relative to its repo, integration tests needing its Spring Boot 3 runtime)
+// cannot run in this build, so its check does nothing.
+findProject(':ia')?.afterEvaluate { ia ->
+    ia.tasks.named('check').configure { setDependsOn([]) }
 }
