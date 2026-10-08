@@ -226,7 +226,7 @@ The setup script creates:
 
 * the `postgres_fdw` and `pgcrypto` extensions
 * the FDW staging schema, default `fdw_stage`
-* an FDW server pointing at the source CCD database
+* an FDW server pointing at the source CCD database, with `use_remote_estimate 'true'`
 * a user mapping for `LOCAL_USER_SQL` using `SRC_USER` and `SRC_PASSWORD`
 * when `FDW_ADDITIONAL_GRANTEE` is set, another user mapping for that role using the same
   source credentials
@@ -234,12 +234,24 @@ The setup script creates:
   * `fdw_stage.case_data`
   * `fdw_stage.case_event`
   * `fdw_stage.case_event_significant_items`
+* grants for `LOCAL_USER_SQL`
+* when `FDW_ADDITIONAL_GRANTEE` is set, grants for that additional role
 
 The foreign tables are created with `fetch_size '10000'` so large reads do not use the
 `postgres_fdw` default of 100 rows per cursor fetch. If the FDW objects were created before this
 option existed, recreate them with `setup-ccd-data-fdw.sh --apply` before running a large migration.
-* grants for `LOCAL_USER_SQL`
-* when `FDW_ADDITIONAL_GRANTEE` is set, grants for that additional role
+
+The server is created with `use_remote_estimate 'true'` so the planner asks the source database for
+row estimates. Without it the foreign tables have no statistics, the planner assumes `case_data` is
+tiny, and each Java task event window fetches the entire source `case_data` table (every
+jurisdiction) to join locally instead of looking cases up by `id`. On a large CCD database every
+window then exceeds the statement timeout and the preload never advances. The Java task adds the
+option when it is missing, provided the migration user owns the FDW server; otherwise it logs a
+warning with the statement to run. To add it by hand without recreating the server:
+
+```sql
+alter server src_ccd_server options (add use_remote_estimate 'true');
+```
 
 `SRC_PASSWORD_REQUIRED` defaults to `true`, matching `postgres_fdw`'s default safety check for
 non-superusers. Only set it to `false` for local/test FDW servers that use trust authentication and
