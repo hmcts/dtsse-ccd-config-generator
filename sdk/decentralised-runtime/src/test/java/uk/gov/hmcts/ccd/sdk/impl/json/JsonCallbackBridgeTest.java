@@ -9,20 +9,26 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.InetSocketAddress;
 import java.net.http.HttpTimeoutException;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.support.StaticApplicationContext;
+import org.springframework.http.HttpHeaders;
 import org.springframework.mock.env.MockEnvironment;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
+import uk.gov.hmcts.ccd.sdk.json.JsonCallbackHandler;
+import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 
 class JsonCallbackBridgeTest {
 
@@ -113,6 +119,67 @@ class JsonCallbackBridgeTest {
   }
 
   @Test
+  void serviceCallbackHandlerRunsTemplatedLocalCallbackWithSubmissionHeaders() {
+    MockHttpServletRequest submission = new MockHttpServletRequest();
+    submission.addHeader("Authorization", "Bearer user-token");
+    submission.addHeader("ServiceAuthorization", "s2s-token");
+    RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(submission));
+    RecordingCallbackHandler handler = new RecordingCallbackHandler("/cases/callbacks/");
+    JsonCallbackBridge bridge = bridgeWith(
+        new MockEnvironment().withProperty("decentralisation.local-callback-placeholder", "CIVIL_URL"),
+        handler
+    );
+    CaseDetails<Object, Object> caseDetails = CaseDetails.builder()
+        .id(1234L)
+        .caseTypeId("CIVIL")
+        .data(Map.of("claimant", "Alice"))
+        .build();
+
+    bridge.validate("${CIVIL_URL}/cases/callbacks/version/V_1/about-to-submit");
+    AboutToStartOrSubmitResponse response = bridge.aboutToSubmit(
+        "${CIVIL_URL}/cases/callbacks/version/V_1/about-to-submit",
+        "CREATE_CLAIM"
+    ).handle(caseDetails, null);
+
+    assertThat(handler.path).isEqualTo("/cases/callbacks/version/V_1/about-to-submit");
+    assertThat(handler.request.getEventId()).isEqualTo("CREATE_CLAIM");
+    assertThat(handler.request.getCaseDetails().getId()).isEqualTo(1234L);
+    assertThat(handler.request.getCaseDetails().getCaseTypeId()).isEqualTo("CIVIL");
+    assertThat(handler.request.getCaseDetails().getData()).containsEntry("claimant", "Alice");
+    assertThat(handler.headers.getFirst("Authorization")).isEqualTo("Bearer user-token");
+    assertThat(handler.headers.getFirst("ServiceAuthorization")).isEqualTo("s2s-token");
+    assertThat(response.getState()).isEqualTo("AWAITING_RESPONDENT_ACKNOWLEDGEMENT");
+    assertThat(response.getErrors()).containsExactly("handled by the service");
+  }
+
+  @Test
+  void serviceCallbackHandlerTakesPrecedenceOverControllerMappedToTheSamePath() {
+    RecordingCallbackHandler handler = new RecordingCallbackHandler("/callbacks/about-to-submit");
+    JsonCallbackBridge bridge = bridgeWith(
+        new MockEnvironment().withProperty("decentralisation.local-callback-placeholder", "ET_COS_URL"),
+        new LocalCallbackController(),
+        handler
+    );
+
+    bridge.invoke("${ET_COS_URL}/callbacks/about-to-submit", Map.of("event_id", "local"));
+
+    assertThat(handler.path).isEqualTo("/callbacks/about-to-submit");
+  }
+
+  @Test
+  void failsWhenMoreThanOneServiceCallbackHandlerHandlesACallback() {
+    JsonCallbackBridge bridge = bridgeWith(
+        new MockEnvironment().withProperty("decentralisation.local-callback-placeholder", "CIVIL_URL"),
+        new RecordingCallbackHandler("/cases/callbacks/"),
+        new RecordingCallbackHandler("/cases/")
+    );
+
+    assertThatThrownBy(() -> bridge.validate("${CIVIL_URL}/cases/callbacks/submitted"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("Multiple JsonCallbackHandlers handle JSON callback ${CIVIL_URL}/cases/callbacks/submitted");
+  }
+
+  @Test
   void failsFastWhenCallbackIsNeitherLocalNorAbsoluteExternalUrl() {
     JsonCallbackBridge bridge = bridgeWith(new MockEnvironment());
 
@@ -199,6 +266,35 @@ class JsonCallbackBridgeTest {
               "description", "Generated document",
               "url", "http://dm-store/documents/123"
           )
+      );
+    }
+  }
+
+  private static class RecordingCallbackHandler implements JsonCallbackHandler {
+
+    private final String pathPrefix;
+    private String path;
+    private CallbackRequest request;
+    private HttpHeaders headers;
+
+    private RecordingCallbackHandler(String pathPrefix) {
+      this.pathPrefix = pathPrefix;
+    }
+
+    @Override
+    public boolean handles(String callbackPath) {
+      return callbackPath.startsWith(pathPrefix);
+    }
+
+    @Override
+    public Object handle(String callbackPath, CallbackRequest request, HttpHeaders headers) {
+      this.path = callbackPath;
+      this.request = request;
+      this.headers = headers;
+      return Map.of(
+          "data", Map.of(),
+          "state", "AWAITING_RESPONDENT_ACKNOWLEDGEMENT",
+          "errors", List.of("handled by the service")
       );
     }
   }

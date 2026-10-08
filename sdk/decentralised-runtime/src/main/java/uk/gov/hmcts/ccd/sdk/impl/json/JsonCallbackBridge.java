@@ -47,6 +47,8 @@ import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
 import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
+import uk.gov.hmcts.ccd.sdk.json.JsonCallbackHandler;
+import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.SignificantItem;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
@@ -96,7 +98,9 @@ public class JsonCallbackBridge {
 
   public void validate(String callbackUrl) {
     if (shouldInvokeLocally(callbackUrl)) {
-      localHandler(callbackUrl);
+      if (serviceHandler(callbackUrl).isEmpty()) {
+        localHandler(callbackUrl);
+      }
     } else {
       externalUri(callbackUrl);
     }
@@ -172,18 +176,19 @@ public class JsonCallbackBridge {
       return invokeExternal(callbackUrl, payload);
     }
 
+    HttpHeaders headers = callbackHeaders();
+    Optional<JsonCallbackHandler> serviceHandler = serviceHandler(callbackUrl);
+    if (serviceHandler.isPresent()) {
+      CallbackRequest request = requestMapper.convertValue(payload, CallbackRequest.class);
+      return body(callbackUrl, serviceHandler.get().handle(normalise(callbackUrl), request, headers));
+    }
+
     HandlerMethod handler = localHandler(callbackUrl);
     Object bean = resolveBean(handler);
     Method method = handler.getMethod();
-    HttpHeaders headers = callbackHeaders();
     Object[] args = resolveArguments(method, payload, headers);
     try {
-      Object result = method.invoke(bean, args);
-      if (result instanceof ResponseEntity<?> response) {
-        assertSuccessfulResponse(callbackUrl, response.getStatusCode());
-        return response.getBody();
-      }
-      return result;
+      return body(callbackUrl, method.invoke(bean, args));
     } catch (IllegalAccessException e) {
       throw new IllegalStateException("Unable to invoke JSON callback " + callbackUrl, e);
     } catch (InvocationTargetException e) {
@@ -227,6 +232,30 @@ public class JsonCallbackBridge {
     HandlerMethod handler = handlers.getFirst();
     validateSupported(handler);
     return handler;
+  }
+
+  /**
+   * A service's own handler takes precedence over resolving the callback to a controller method by its path.
+   * Looked up per call because the handlers are application beans, created after this bridge.
+   */
+  private Optional<JsonCallbackHandler> serviceHandler(String callbackUrl) {
+    String path = normalise(callbackUrl);
+    List<JsonCallbackHandler> handlers = applicationContext.getBeanProvider(JsonCallbackHandler.class)
+        .orderedStream()
+        .filter(handler -> handler.handles(path))
+        .toList();
+    if (handlers.size() > 1) {
+      throw new IllegalStateException("Multiple JsonCallbackHandlers handle JSON callback " + callbackUrl);
+    }
+    return handlers.stream().findFirst();
+  }
+
+  private Object body(String callbackUrl, Object result) {
+    if (result instanceof ResponseEntity<?> response) {
+      assertSuccessfulResponse(callbackUrl, response.getStatusCode());
+      return response.getBody();
+    }
+    return result;
   }
 
   private void validateSupported(HandlerMethod handler) {
