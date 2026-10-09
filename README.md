@@ -182,6 +182,15 @@ For decentralised services using their own database for data persistence,
 `hmctsServiceId("ABA1")` sets supplementary data key `HMCTSServiceId` to 'ABA1' and indexes it into Elasticsearch
 for global search.
 
+`builder.enableForDeletion()` sets the CaseType sheet's `EnableForDeletion=Y`, and
+`builder.jurisdictionShuttered()` sets the Jurisdiction sheet's `Shuttered=Y`. Neither is consumed
+by CCD at runtime today; both are definition-time flags carried for tooling/migration parity. This
+is unrelated to [shuttering](#Shuttering), which is the mechanism that actually restricts access.
+
+`builder.printableDocumentsUrl(url)` sets the CaseType sheet's `PrintableDocumentsUrl` column, the
+webhook the definition store calls to obtain a printable representation of a case. Omitted (the
+default) leaves the column unset, matching output produced before this option existed.
+
 The implementation of `CCDConfig` should reference three classes: one for the model, one for the states and one for the user roles. These are typically named: CaseData, State and UserRole.
 
 ### Setting up the model
@@ -210,6 +219,14 @@ There are number of predefined types in CCD that are included in the library, su
 ```
 
 See [in-built types](https://github.com/hmcts/ccd-config-generator/tree/master/ccd-config-generator/src/main/java/uk/gov/hmcts/ccd/sdk/type) for a complete list.
+
+`FieldType` also covers base types the definition-store importer accepts but that only appear via
+`typeOverride`, such as `WaysToPay`, `CaseHistoryViewer`, `AddressUK`/`AddressGlobal`/`AddressGlobalUK`,
+`DateTime`, `Number`, `Fee`, `Organisation`, `OrganisationPolicy` and `ChangeOrganisationRequest`.
+`JudicialUser` and `CaseQueriesCollection` are predefined complex types (like `CaseLink` or
+`Document`) — reference `uk.gov.hmcts.ccd.sdk.type.JudicialUser` or
+`uk.gov.hmcts.ccd.sdk.type.CaseQueriesCollection` as a field's Java type directly rather than
+using `typeOverride`.
 
 It is also possible to override the Java type for a CCD specific one. For example, a `String` that should be an `Email` type in CCD:
 
@@ -284,6 +301,16 @@ public enum State {
 }
 ```
 
+By default the state's `Description` column is the same as its `Name` (i.e. `label`). Set
+`@CCD(description = ...)` on the constant to give it a distinct `Description`:
+
+```java
+public enum State {
+  @CCD(label = "Holding", description = "Case is on hold pending payment")
+  Holding;
+}
+```
+
 ### Setting up user roles
 
 The `UserRole` class should implement `HasRole` and define all the user roles that are relevant to the case type (both user and case roles).
@@ -346,6 +373,99 @@ When you need to bind a collection of CCD `ListValue<T>` within an event page, u
 
 Callbacks are references to methods. The CCD Config Generator runtime library will handle the routing and execution of event callbacks.
 
+An event can be marked significant on the CaseEvent sheet with `.significant()`:
+
+```java
+  builder.event("submit")
+    .forStateTransition(State.Holding, State.Submitted)
+    .significant()
+    ...
+```
+
+This sets `SignificantEvent=Y`. It isn't consumed by CCD at runtime; it's a definition-time marker some services use in their own tooling.
+
+An event can allow the caseworker to save a partial submission and resume it later with `.canSaveDraft()`:
+
+```java
+  builder.event("create")
+    .initialState(State.Open)
+    .canSaveDraft()
+    ...
+```
+
+This sets `CanSaveDraft=Y`. The definition-store importer only allows this on create events (those with no pre-state); setting it on an event with a pre-state fails validation on import.
+
+A field placed on an event can set `ShowSummaryContentOption` — its display order within the event's check-your-answers summary — with `.showSummaryContentOption(n)`, and `NullifyByDefault` — clear the field on submit unless a value is provided — with `.nullifyByDefault()`:
+
+```java
+  builder.event("create")
+    ...
+    .fields()
+      .optional(CaseData::getInternalNote)
+      .showSummaryContentOption(1)
+      .optional(CaseData::getStaleFlag)
+      .nullifyByDefault()
+    ;
+```
+
+The definition-store importer rejects `NullifyByDefault=Y` together with a `DefaultValue` on the same field.
+
+#### Overriding complex-type members on an event
+
+`.complex(getter)` opens a complex field for a specific event and lets you override its members with `.mandatory`/`.optional`/`.readonly`. Each override becomes an `EventToComplexTypes` row keyed by the member's `ListElementCode` (dotted for nested members, e.g. `address.postcode`), letting you re-label, re-hint and conditionally show a member within that event only.
+
+Members carry their per-event label and hint fluently with `.eventLabel(...)` and `.eventHint(...)` — the `EventElementLabel` and `EventHintText` columns — and a show condition via the existing positional argument:
+
+```java
+  builder.event("create")
+    ...
+    .fields()
+      .complex(CaseData::getContact)
+        .mandatory(Contact::getName)
+          .eventLabel("Your full name")
+        .optional(Contact::getEmail, "contactName=\"*\"")
+          .eventLabel("Your email")
+          .eventHint("We only use this to contact you")
+        .complex(Contact::getAddress)
+          .optional(Address::getPostcode)
+            .eventLabel("Postcode")
+            .pageId("2")
+          .done()
+        .done()
+    ;
+```
+
+`.eventLabel`/`.eventHint` are the fluent equivalents of the trailing label/hint arguments on the positional `.optional`/`.mandatory` overloads, reachable without also threading a show condition or default value — and, unlike those overloads, available on `.readonly` too. `RetainHiddenValue` is carried through from the member's `retainHiddenValue` flag.
+
+`.pageId(...)` sets the member row's `PageID`. The definition-store `EventToComplexTypes` parser does not read `PageID`, so this value does not change how CCD renders the member — it exists purely so a hand-authored definition carrying `PageID` on member rows round-trips through the SDK byte-for-byte. Rarely used columns not read by that parser (`SecurityClassification`, `Publish`, `ShowSummaryChangeOption` — each under ~1.5% of observed member rows) are intentionally left as raw passthrough rather than given SDK setters.
+
+#### Per-field defaults and hidden-value retention
+
+A field placed on an event can set its `CaseEventToFields.DefaultValue` to a raw string with
+`.defaultValue(String)`, and can set `RetainHiddenValue=Y` — a value entered while the field is
+visible survives it later being hidden by its show condition — with `.retainHiddenValue()`. Both
+compose with every other fluent call, including `readonly`/`*NoSummary` field placements and any
+`.publish(...)`/`.showSummaryContentOption(...)` calls on the same field:
+
+```java
+  builder.event("create")
+    ...
+    .fields()
+      .optional(CaseData::getInternalNote, "otherField=\"*\"")
+      .defaultValue("a literal default")
+      .retainHiddenValue()
+      .readonlyNoSummary(CaseData::getComputedNote)
+      .caseEventFieldLabel("Computed note")
+      .fieldShowCondition("internalNote=\"*\"")
+    ;
+```
+
+`caseEventFieldLabel(String)`, `caseEventFieldHint(String)`, `fieldShowCondition(String)` and
+`displayContextParameter(String)` are the same fluent, `lastField()`-style calls that set
+`CaseEventFieldLabel`/`CaseEventFieldHint`/`FieldShowCondition`/`DisplayContextParameter` on the
+field just placed — usable after any field-placement call, including `readonly`/`*NoSummary`
+variants that return the `FieldCollectionBuilder` rather than the field itself.
+
 ### Configuring the work basket and search fields
 
 There are five methods on the `ConfigBuilder` that allow the configuration of work basket input, work basket results, search input, search results and search cases fields. They all follow the same API:
@@ -367,6 +487,42 @@ On the work basket and search results fields a sort order can be specified using
     .field(CaseData::getAgreedToReceiveEmails, "Agreed to emails", SECOND.ASCENDING)
     .caseReferenceField();
 ```
+
+For the less common columns — searching *within* a complex field (`ListElementCode`), a `FieldShowCondition`, an explicit `ResultsOrdering`, or scoping a single row to a role — pass a configurer lambda as the third argument:
+
+```java
+  builder.searchInputFields()
+    // one row per searched leaf of a complex field
+    .field(CaseData::getApplicant, "Applicant surname",
+        f -> f.listElementCode("surname").showCondition("caseName=\"x\""))
+    .field(CaseData::getApplicant, "Applicant surname (admin)",
+        f -> f.listElementCode("surname").role(HMCTS_ADMIN));
+
+  builder.searchResultFields()
+    .field(CaseData::getApplicant, "Applicant surname",
+        f -> f.listElementCode("surname").resultsOrdering(FIRST.DESCENDING));
+```
+
+`FieldShowCondition` is valid only on the input sheets and `ResultsOrdering` only on the result sheets (the definition-store importer rejects the wrong one for a given sheet); `ListElementCode` is valid on all four. Calling the lambda once per element code emits one row each, so a complex field can expose several of its leaves.
+
+The `searchCasesFields()` (`SearchCasesResultFields` sheet) builder takes the same lambda overload for its two extra columns — an `AccessProfile`/`UserRole` scope and the `UseCase`. Both default to an empty `UserRole` and `UseCase = orgcases` when unset; scope a field to several roles or use cases by calling it once per combination (both columns are part of the row's identity, so the rows stay distinct):
+
+```java
+  builder.searchCasesFields()
+    .field(CaseData::getCaseName, "Case name")                               // orgcases, no role
+    .field(CaseData::getCaseName, "Case name",
+        f -> f.role(CASEWORKER).useCase("WORKBASKET"));
+```
+
+`DisplayContextParameter` and `ResultsOrdering` can be set either positionally — `field(id, label, displayContext, listElementCode, resultsOrdering)` — or through the lambda:
+
+```java
+  builder.searchCasesFields()
+    .field("[CASE_REFERENCE]", "Case Number",
+        f -> f.displayContextParameter("#DATETIMEDISPLAY(d MMMM yyyy)").resultsOrdering("1:ASC"));
+```
+
+Similarly, the `searchParty()` builder can declare several parties that share a `SearchPartyName` as long as they point at different collections (`SearchPartyCollectionFieldName`) — each is emitted as its own `SearchParty` row.
 
 ### Adding tabs
 
@@ -490,6 +646,47 @@ Roles can be excluded from a shutter with `shutterServiceExclude`, so they keep 
 ```
 
 This is typically used to keep `caseworker-wa-task-configuration` out of a shutter, as dropping that role to DELETE can cause issues for Work Allocation / Task Management.
+
+### Service notice banner
+
+CCD allows one jurisdiction-wide service notice banner, shown by XUI. Configure it with:
+
+```java
+  configBuilder.banner(true, "Your system might be running slowly.",
+      "https://status.example.com", "Check service status");
+```
+
+The `url`/`urlText` arguments are optional — pass `null` or `""` if the banner carries no link. Calling `banner(...)` more than once for the same case type overwrites the previous value, matching the importer's one-banner-per-jurisdiction rule. If `banner(...)` is never called, no `Banner.json` is generated.
+
+### Role to access profile mappings
+
+`caseRoleToAccessProfile` maps a case-type role (a `UserRole` / `HasRole` constant) to one or more
+access profiles:
+
+```java
+  configBuilder.caseRoleToAccessProfile(UserRole.SOLICITOR)
+    .accessProfiles("caseworker-solicitor");
+```
+
+Many definitions also map **organisational / IDAM roles that are not case-type roles** (e.g.
+`caseworker-ia-system`). Adding these to the `UserRole` enum just to map them would register them and
+emit an `AuthorisationCaseType` row. Use `roleToAccessProfile(String)` to map a role by name without
+registering it — it emits only the `RoleToAccessProfiles` row and carries the same fluent options:
+
+```java
+  configBuilder.roleToAccessProfile("caseworker-ia-system")
+    .accessProfiles("caseworker-ia-system", "caseworker-ia-caseofficer");
+```
+
+### Case role jurisdiction
+
+Generated `CaseRoles` rows omit the `JurisdictionID` column by default. Call
+`emitCaseRoleJurisdiction()` to stamp it (taken from `jurisdiction(...)`) on every case role:
+
+```java
+  configBuilder.emitCaseRoleJurisdiction();
+```
+
 
 ## Unwrapped types
 

@@ -1,0 +1,24 @@
+[
+  {
+    "CaseTypeID": "SearchPartyDuplicate",
+    "LiveFrom": "01/01/2017",
+    "SearchPartyAddressLine1": null,
+    "SearchPartyCollectionFieldName": "applicants",
+    "SearchPartyDOB": null,
+    "SearchPartyDOD": null,
+    "SearchPartyEmailAddress": null,
+    "SearchPartyName": "party.firstName,party.lastName",
+    "SearchPartyPostCode": null
+  },
+  {
+    "CaseTypeID": "SearchPartyDuplicate",
+    "LiveFrom": "01/01/2017",
+    "SearchPartyAddressLine1": null,
+    "SearchPartyCollectionFieldName": "respondents",
+    "SearchPartyDOB": null,
+    "SearchPartyDOD": null,
+    "SearchPartyEmailAddress": null,
+    "SearchPartyName": "party.firstName,party.lastName",
+    "SearchPartyPostCode": null
+  }
+]

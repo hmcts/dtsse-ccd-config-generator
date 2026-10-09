@@ -54,6 +54,10 @@ public class FieldCollection {
     private Parent parent;
     private PropertyUtils propertyUtils;
     private EventBuilder event;
+    // The size of {@link FieldCollection#fields} when a member scope that registers no field of its
+    // own was last opened from this builder, or -1: a fluent setter reaching lastField() with no
+    // field placed since would otherwise apply to whichever field happened to precede the scope.
+    private int scopeOpenedAt = -1;
 
     public static <Type, StateType, Parent> FieldCollectionBuilder<Type, StateType, Parent> builder(EventBuilder event,
         Parent parent, Class<Type> dataClass,
@@ -375,6 +379,232 @@ public class FieldCollection {
       return this;
     }
 
+    /**
+     * Explicitly sets the most-recently-added field's {@code CaseEventToFields.Publish} column,
+     * overriding the event-level {@code publishToCamunda()} cascade for that field only:
+     * {@code false} opts the field out of a publishing event, {@code true} publishes it on a
+     * non-publishing event.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> publish(boolean publish) {
+      lastField().publish(publish);
+      return this;
+    }
+
+    /**
+     * Sets the most-recently-added field's {@code CaseEventToFields.PublishAs} alias. Implies
+     * {@code publish(true)} per the definition-store parser, which treats {@code PublishAs} as
+     * meaningless without {@code Publish}.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> publishAs(String publishAs) {
+      lastField().publishAs(publishAs);
+      return this;
+    }
+
+    /**
+     * Sets the most-recently-added field's {@code CaseEventToFields.ShowSummaryContentOption},
+     * the display order of that field's content within the event's check-your-answers summary.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> showSummaryContentOption(int order) {
+      lastField().showSummaryContentOption(order);
+      return this;
+    }
+
+    /**
+     * Sets the most-recently-added field's {@code CaseEventToFields.NullifyByDefault} flag: on
+     * submit the field is cleared unless a value was provided.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> nullifyByDefault() {
+      lastField().nullifyByDefault();
+      return this;
+    }
+
+    /**
+     * Sets the event-level label of the most-recently-added field or complex-type member. Emitted
+     * as {@code CaseEventToFields.CaseEventFieldLabel} for a top-level field, and as
+     * {@code CaseEventToComplexTypes.EventElementLabel} for a member placed inside a
+     * {@code .complex(...)} scope.
+     *
+     * <p>Fluent equivalent of the trailing {@code caseEventFieldLabel} parameter on the positional
+     * {@code optional}/{@code mandatory} overloads, usable after any placement that has no such
+     * overload ({@code readonly}, {@code *NoSummary}, etc.). Default {@code null} omits the column.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> eventLabel(String label) {
+      lastField().caseEventFieldLabel(label);
+      return this;
+    }
+
+    /**
+     * Overrides the most-recently-added complex-type member's {@code CaseEventToComplexTypes.HintText}
+     * with the given value, emitted verbatim on the member's event row instead of the member's
+     * declared {@code @CCD(hint)}, which {@code CaseEventToComplexTypesGenerator} otherwise cascades
+     * onto every event row placing the member. Usable after a member placement inside a
+     * {@code .complex(...)} scope ({@code optional}/{@code mandatory}/{@code readonly}).
+     *
+     * <p>DISTINCT from {@link #eventHint(String)}: that writes the {@code EventHintText} column (the
+     * per-event hint override), whereas this writes {@code HintText} (the field-level hint the
+     * generator derives from {@code @CCD(hint)}). Leaving it unset keeps the cascade. Passing
+     * {@code null} is equivalent to {@link #noHintText()}.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> hintText(String hintText) {
+      lastField().hintText(hintText);
+      return this;
+    }
+
+    /**
+     * Suppresses the most-recently-added complex-type member's {@code CaseEventToComplexTypes.HintText}
+     * entirely, overriding the {@code @CCD(hint)} the generator would otherwise cascade onto the
+     * member's event row. Usable after a member placement inside a {@code .complex(...)} scope. See
+     * {@link #hintText(String)}.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> noHintText() {
+      lastField().noHintText();
+      return this;
+    }
+
+    /**
+     * Sets the most-recently-added field's {@code CaseEventToFields.DefaultValue} to a raw string,
+     * verbatim — usable after any context-selecting call ({@code readonly}, {@code *NoSummary},
+     * etc.) that returns this builder rather than the field, matching the sheet column, which is
+     * untyped.
+     *
+     * <p>Writes {@code CaseEventToFields.DefaultValue} for a top-level field and
+     * {@code CaseEventToComplexTypes.DefaultValue} for a member placed inside a {@code .complex(...)}
+     * scope, following the sheet the placement itself lands on. Both sheets carry the column, and the
+     * raw form is the only one that reaches a member default the definition expresses as a case-role
+     * literal rather than as a {@code HasRole} constant — finrem's {@code manageInterveners} places
+     * {@code intervener1.intervenerOrganisation.OrgPolicyCaseAssignedRole} with
+     * {@code DefaultValue=[INTVRSOLICITOR1]}, a role its {@code UserRole} enum does not declare.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> defaultValue(String defaultValue) {
+      lastField().defaultValue(defaultValue);
+      return this;
+    }
+
+    /**
+     * Sets the most-recently-added field's {@code CaseEventToFields.RetainHiddenValue} flag: a
+     * value entered while the field is visible survives it later being hidden by its
+     * {@code showCondition} — usable after any context-selecting call ({@code readonly},
+     * {@code *NoSummary}, etc.) that returns this builder rather than the field.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> retainHiddenValue() {
+      lastField().retainHiddenValue();
+      return this;
+    }
+
+    /**
+     * Alias of {@link #eventLabel(String)}.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> caseEventFieldLabel(String label) {
+      return eventLabel(label);
+    }
+
+    /**
+     * Sets the event-level hint text of the most-recently-added field or complex-type member.
+     * Emitted as {@code CaseEventToFields.CaseEventFieldHint} for a top-level field, and as
+     * {@code CaseEventToComplexTypes.EventHintText} for a member placed inside a
+     * {@code .complex(...)} scope.
+     *
+     * <p>Fluent equivalent of the trailing {@code caseEventFieldHint} parameter on the positional
+     * {@code optional}/{@code mandatory} overloads, usable after any placement that has no such
+     * overload ({@code readonly}, {@code *NoSummary}, etc.). Default {@code null} omits the column.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> eventHint(String hint) {
+      lastField().caseEventFieldHint(hint);
+      return this;
+    }
+
+    /**
+     * Alias of {@link #eventHint(String)}.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> caseEventFieldHint(String hint) {
+      return eventHint(hint);
+    }
+
+    /**
+     * Sets the most-recently-added complex-type member's {@code CaseEventToComplexTypes.PageID}, the
+     * wizard page the member is shown on within the event. Unlike {@link #page(String)} — which
+     * switches the page context for a top-level event field and drives {@code CaseEventToFields} —
+     * this tags a single member row emitted by {@link #complex} expansion, which otherwise carries
+     * no page. Default {@code null} omits the column.
+     *
+     * <p>Note: the definition-store importer parses complex-type rows without a page column, so this
+     * value is carried purely for round-trip fidelity with hand-authored definitions; it does not
+     * change how CCD renders the member.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> pageId(String pageId) {
+      lastField().eventComplexPageId(pageId);
+      return this;
+    }
+
+    /**
+     * Sets the most-recently-added field's {@code CaseEventToFields.FieldShowCondition} — usable
+     * after any context-selecting call ({@code readonly}, {@code *NoSummary}, etc.) that returns
+     * this builder rather than the field. Named to avoid colliding with {@link #showCondition}
+     * above, which sets the enclosing page's show condition, not the field's.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> fieldShowCondition(String showCondition) {
+      lastField().showCondition(showCondition);
+      return this;
+    }
+
+    /**
+     * Sets the most-recently-added field's {@code CaseEventToFields.DisplayContextParameter} —
+     * usable after any context-selecting call ({@code readonly}, {@code *NoSummary}, etc.) that
+     * returns this builder rather than the field.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> displayContextParameter(String displayContextParameter) {
+      lastField().displayContextParameter(displayContextParameter);
+      return this;
+    }
+
+    private FieldBuilder<?, StateType, Type, Parent> lastField() {
+      if (fields.isEmpty() || fields.size() == scopeOpenedAt) {
+        throw new IllegalStateException("No field to apply this setter to: place a field first. A"
+            + " setter chained after .done() of a member scope that registered no field of its own"
+            + " has no field to act on.");
+      }
+      return fields.get(fields.size() - 1);
+    }
+
+    /**
+     * Opens a member scope on the element type of a {@code Collection} field <em>without</em>
+     * registering the collection field itself, so per-member {@code CaseEventToComplexTypes}
+     * overrides can be attached to the elements of a {@code List<ListValue<U>>} field the author has
+     * already placed separately (via {@code .optional(getter)} / {@code .readonly(getter)} etc.).
+     *
+     * <p>This is the collection analogue of {@link #complex(TypedPropertyGetter)}: that overload
+     * registers a scalar complex field as a root {@code field(...)} and opens a scope on it, whereas
+     * a collection field's getter is typed {@code List<ListValue<U>>}, so a scope must be typed on the
+     * <em>element</em> {@code U} rather than the list. Because the field is placed elsewhere, this
+     * method registers no root field at all — mirroring how the {@code @JsonUnwrapped}-prefix branch
+     * of {@link #complex(TypedPropertyGetter, boolean, String, String, String, boolean)} skips its own
+     * {@code field(...)} call — so opening the scope has no effect on the collection field's own
+     * {@code CaseEventToFields} row (no extra field registration, and none of the {@code showSummary}/
+     * {@code mutableList} side effects {@link #list(TypedPropertyGetter)} applies). The
+     * {@code CaseEventToComplexTypesGenerator} walks the opened scope and composes dotted
+     * {@code ListElementCode}s from the member getters; collection elements need no index, so the rows
+     * come out in exactly the input shape.
+     *
+     * <p>The {@code elementClass} argument alone determines the element type {@code U}: it both
+     * types the returned member-scope builder and documents the element type at the call site. The
+     * getter is deliberately typed to accept any {@code List} — services annotated in place carry
+     * collections in their own wrapper idioms ({@code List<ListValue<U>>}, sscs's
+     * {@code List<CcdValue<U>>}, civil/prl's {@code List<Element<U>>}, or a bare {@code List<U>}),
+     * and the scope only needs the field's name plus the element class, never the wrapper. Nested
+     * collection members inside the opened scope get the same treatment by calling this overload
+     * again on the nested builder.
+     *
+     * @param getter the collection field's getter
+     * @param elementClass the collection's element type {@code U}
+     * @param <U> the collection element type the member scope is opened on
+     * @return the member-scope builder for the element type
+     */
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
+        TypedPropertyGetter<Type, ? extends List<?>> getter, Class<U> elementClass) {
+      String fieldName = propertyUtils.getPropertyName(dataClass, getter);
+      return complex(fieldName, elementClass);
+    }
+
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
         TypedPropertyGetter<Type, U> getter, String showCondition, String eventFieldLabel, String eventFieldHint) {
       return complex(getter, true, showCondition, eventFieldLabel, eventFieldHint, false);
@@ -426,6 +656,10 @@ public class FieldCollection {
 
       FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> builder =
           complex(fieldName, c);
+      if (null == this.rootFieldname && isUnwrapped.isEmpty()) {
+        // The root field registered above is what a setter chained after .done() applies to.
+        scopeOpenedAt = -1;
+      }
 
       if (isUnwrapped.isPresent()) {
         String prefix = isUnwrapped.get().prefix();
@@ -455,6 +689,7 @@ public class FieldCollection {
       FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> result =
           FieldCollectionBuilder.builder(event, this, c, propertyUtils);
       complexFields.add(result);
+      scopeOpenedAt = fields.size();
       result.rootFieldname = !isNullOrEmpty(unwrappedParentPrefix)
           ? unwrappedParentPrefix.concat(capitalize(fieldName))
           : fieldName;

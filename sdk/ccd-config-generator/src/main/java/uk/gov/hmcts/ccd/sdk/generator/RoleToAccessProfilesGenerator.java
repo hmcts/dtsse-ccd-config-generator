@@ -34,10 +34,11 @@ public class RoleToAccessProfilesGenerator<T, S, R extends HasRole> implements C
   private static Map<String, Object> toJson(String caseType, CaseRoleToAccessProfile caseRoleToAccessProfile) {
     Map<String, Object> field = JsonUtils.caseRow(caseType);
 
+    String roleName = caseRoleToAccessProfile.getRoleName();
     if (caseRoleToAccessProfile.isLegacyIdamRole()) {
-      field.put("RoleName", "idam:" + caseRoleToAccessProfile.getRole().getRole());
+      field.put("RoleName", "idam:" + roleName);
     } else {
-      field.put("RoleName", caseRoleToAccessProfile.getRole().getRole());
+      field.put("RoleName", roleName);
     }
     field.put("CaseAccessCategories", join(caseRoleToAccessProfile.getCaseAccessCategories(), ","));
     field.put("Authorisation", join(caseRoleToAccessProfile.getAuthorisation(), ","));

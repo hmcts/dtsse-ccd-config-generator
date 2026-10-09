@@ -31,23 +31,26 @@ class SearchCasesResultFieldsGenerator<T, S, R extends HasRole> implements
       Path tabDir = Paths.get(root.getPath(), "SearchCasesResultFields");
       tabDir.toFile().mkdirs();
       Path output = tabDir.resolve("SearchCasesResultFields.json");
-      JsonUtils.mergeInto(output, jsonFields, new AddMissing(), "CaseFieldID");
+      // The same CaseFieldID can appear once per (UseCase, AccessProfile) it is exposed under, and
+      // once per member of a complex field via ListElementCode, so all of these identify a row.
+      JsonUtils.mergeInto(output, jsonFields, new AddMissing(), "CaseFieldID", "UseCase", "UserRole",
+          "ListElementCode");
     }
   }
 
   private static Map<String, Object> buildField(String caseType, SearchCasesResultField field, int order) {
     Map<String, Object> object = JsonUtils.caseRow(caseType, "03/02/2021");
-    object.put("UserRole", "");
+    object.put("UserRole", field.getUserRole() == null ? "" : field.getUserRole().getRole());
     object.put("CaseFieldID", field.getId());
     object.put("Label", field.getLabel());
     object.put("DisplayOrder", order);
-    object.put("UseCase", "orgcases");
+    object.put("UseCase", field.getUseCase() == null ? "orgcases" : field.getUseCase());
 
     if (null != field.getListElementCode()) {
       object.put("ListElementCode", field.getListElementCode());
     }
     if (null != field.getDisplayContextParameter()) {
-      object.put("DisplayContextParameter", field.getListElementCode());
+      object.put("DisplayContextParameter", field.getDisplayContextParameter());
     }
     if (null != field.getResultsOrdering()) {
       object.put("ResultsOrdering", field.getResultsOrdering());

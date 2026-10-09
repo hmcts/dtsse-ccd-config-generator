@@ -193,8 +193,13 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       type = resolveSimpleType(field, target, type, annotation);
     }
 
+    // For a complex-typed field, @ComplexType(name) overrides the FieldType with the CCD type ID.
+    // A generated enum (generate = true) may also carry @ComplexType(name) to preserve a renamed
+    // FixedList's list ID; there the name is the FieldTypeParameter of the FixedRadioList
+    // resolveSimpleType chose, NOT the FieldType. An enum that is not generated keeps the override.
     ComplexType complexType = field.getType().getAnnotation(ComplexType.class);
-    if (complexType != null && !Strings.isNullOrEmpty(complexType.name())) {
+    if (complexType != null && !Strings.isNullOrEmpty(complexType.name())
+        && !(field.getType().isEnum() && complexType.generate())) {
       type = complexType.name();
     }
 
@@ -205,12 +210,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       Class<?> dataClass, Field field, Map<String, Object> target) {
     String type = "Collection";
     Class<?> elementClass = resolveCollectionElementType(dataClass, field);
-    ComplexType complexType = elementClass.getAnnotation(ComplexType.class);
-    if (complexType != null && !Strings.isNullOrEmpty(complexType.name())) {
-      target.put("FieldTypeParameter", complexType.name());
-    } else {
-      target.put("FieldTypeParameter", elementClass.getSimpleName());
-    }
+    target.put("FieldTypeParameter", GeneratorUtils.typeId(elementClass));
 
     if (Set.class.isAssignableFrom(field.getType()) && elementClass.isEnum()) {
       type = "MultiSelectList";
@@ -225,7 +225,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       CCD annotation) {
     ComplexType complexType = field.getType().getAnnotation(ComplexType.class);
     if (field.getType().isEnum() && (complexType == null || complexType.generate())) {
-      target.putIfAbsent("FieldTypeParameter", field.getType().getSimpleName());
+      target.putIfAbsent("FieldTypeParameter", GeneratorUtils.typeId(field.getType()));
       return "FixedRadioList";
     }
     return switch (inferredType) {

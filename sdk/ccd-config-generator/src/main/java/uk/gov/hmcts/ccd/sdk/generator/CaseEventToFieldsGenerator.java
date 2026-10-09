@@ -54,7 +54,7 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
       Map<String, Object> row = JsonUtils.caseRow(config.getCaseType());
       entries.add(row);
       populateCoreColumns(row, event, field);
-      applyPublishFlag(row, event);
+      applyPublishFlag(row, event, field);
 
       Object pageId = resolvePageId(field.getPage());
       row.put("PageID", pageId);
@@ -66,6 +66,9 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
       applySummaryFlag(row, field);
       applyPageLabel(row, collection, field);
       applyDisplayContextParameter(row, field);
+      applyShowSummaryContentOption(row, field);
+      applyNullifyByDefault(row, field);
+      applyDefaultValue(row, field);
     }
 
     return entries;
@@ -84,13 +87,28 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
         .orElse("COMPLEX");
   }
 
-  private void applyPublishFlag(Map<String, Object> row, Event<T, R, S> event) {
-    if (!event.isPublishToCamunda()) {
+  /**
+   * Resolves {@code Publish}/{@code PublishAs} for a single field. An explicit
+   * {@code field.publish(boolean)} overrides the event-level {@code publishToCamunda()} cascade:
+   * {@code publish(false)} opts the field out of a publishing event, while {@code publish(true)}
+   * (or {@code publishAs}, which implies it) publishes the field even on a non-publishing event.
+   * With no explicit value the cascade applies. The definition store rejects a
+   * {@code Publish} column on {@code COMPLEX} fields, so neither the cascade nor an explicit
+   * override is written there.
+   */
+  private void applyPublishFlag(Map<String, Object> row, Event<T, R, S> event, Field field) {
+    String context = row.get("DisplayContext").toString();
+    if (context.equals(DisplayContext.Complex.toString().toUpperCase())) {
       return;
     }
-    String context = row.get("DisplayContext").toString();
-    if (!context.equals(DisplayContext.Complex.toString().toUpperCase())) {
-      row.put("Publish", "Y");
+    Boolean explicit = field.getPublish();
+    boolean publish = explicit != null ? explicit : event.isPublishToCamunda();
+    if (!publish) {
+      return;
+    }
+    row.put("Publish", "Y");
+    if (field.getPublishAs() != null) {
+      row.put("PublishAs", field.getPublishAs());
     }
   }
 
@@ -172,6 +190,28 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
     if (field.getDisplayContextParameter() != null) {
       row.put("DisplayContextParameter", field.getDisplayContextParameter());
     }
+  }
+
+  private void applyShowSummaryContentOption(Map<String, Object> row, Field field) {
+    if (field.getShowSummaryContentOption() != null) {
+      row.put("ShowSummaryContentOption", field.getShowSummaryContentOption());
+    }
+  }
+
+  private void applyNullifyByDefault(Map<String, Object> row, Field field) {
+    if (field.isNullifyByDefault()) {
+      row.put("NullifyByDefault", "Y");
+    }
+  }
+
+  private void applyDefaultValue(Map<String, Object> row, Field field) {
+    // Only the fluent defaultValue(String) setter populates caseEventDefaultValue; the positional
+    // optional/mandatory defaultValue argument sets Field.defaultValue, which feeds
+    // CaseEventToComplexTypes alone.
+    if (field.getCaseEventDefaultValue() == null) {
+      return;
+    }
+    row.put("DefaultValue", field.getCaseEventDefaultValue());
   }
 
 }

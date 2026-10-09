@@ -28,3 +28,7 @@
 	path = test-projects/pcs-frontend
 	url = https://github.com/hmcts/pcs-frontend.git
 	branch = master
+[submodule "test-projects/ia-case-api"]
+	path = test-projects/ia-case-api
+	url = git@github.com:hmcts/ia-case-api.git
+	branch = ccd-config-generator-generated
