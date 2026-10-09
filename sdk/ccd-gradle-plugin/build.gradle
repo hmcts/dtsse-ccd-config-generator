@@ -81,8 +81,10 @@ functionalTest.dependsOn(
 functionalTest.inputs.dir file('test-projects')
 
 check {
-    // Run the functional tests as part of `check`
-    dependsOn(tasks.functionalTest)
+    // Run the functional tests as part of `check`, unless CI is running them in a job of their own.
+    if (!providers.gradleProperty('skipFunctionalTest').isPresent()) {
+        dependsOn(tasks.functionalTest)
+    }
 }
 
 functionalTest.mustRunAfter test

@@ -16,7 +16,19 @@ concurrency:
 
 jobs:
   build:
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # e2e:test runs here rather than in the e2e job, which would otherwise run it after cftlibTest.
+          - name: build
+            tasks: :sdk:check :e2e:test -PskipFunctionalTest
+          # ccd-gradle-plugin's functional tests wait for the SDK modules' tests before they can publish
+          # to Maven local, so they finish last; on a runner of their own they start straight away.
+          - name: sdk-functional-test
+            tasks: :sdk:ccd-gradle-plugin:functionalTest
     environment:
       name: cftlib-acr-pull
       deployment: false
@@ -72,15 +84,21 @@ jobs:
     - name: ACR Login
       if: steps.changes.outputs.docs_only != 'true'
       run: az acr login --name hmctsprod
-    - name: Run SDK checks
+    - name: Run ${{ matrix.name }}
       if: steps.changes.outputs.docs_only != 'true'
-      run: ./gradlew :sdk:check -i --stacktrace
-    - name: Upload SDK coverage data
+      run: ./gradlew ${{ matrix.tasks }} -i --stacktrace
+    - name: Stage coverage data
+      if: steps.changes.outputs.docs_only != 'true'
+      run: |
+        # Keep each exec file's path in the repository, so the coverage job can put them all back in place.
+        mkdir -p coverage-data
+        find sdk test-projects/e2e -path '*/build/jacoco/*.exec' -exec cp --parents {} coverage-data/ \;
+    - name: Upload coverage data
       if: steps.changes.outputs.docs_only != 'true'
       uses: actions/upload-artifact@v7
       with:
-        name: sdk-coverage-data
-        path: sdk/*/build/jacoco/*.exec
+        name: ${{ matrix.name }}-coverage-data
+        path: coverage-data/
 
   e2e:
     runs-on: ubuntu-latest
@@ -151,13 +169,19 @@ jobs:
         done
     - name: Run e2e checks
       if: steps.changes.outputs.docs_only != 'true'
-      run: ./gradlew :e2e:check -i --stacktrace
-    - name: Upload e2e coverage data
+      run: ./gradlew :e2e:check -x :e2e:test -i --stacktrace
+    - name: Stage coverage data
+      if: steps.changes.outputs.docs_only != 'true'
+      run: |
+        # Keep each exec file's path in the repository, so the coverage job can put them all back in place.
+        mkdir -p coverage-data
+        find sdk test-projects/e2e -path '*/build/jacoco/*.exec' -exec cp --parents {} coverage-data/ \;
+    - name: Upload coverage data
       if: steps.changes.outputs.docs_only != 'true'
       uses: actions/upload-artifact@v7
       with:
         name: e2e-coverage-data
-        path: test-projects/e2e/build/jacoco/*.exec
+        path: coverage-data/
 
   coverage:
     needs: [build, e2e]
@@ -177,18 +201,13 @@ jobs:
         java-version: 21
     - name: Set up Gradle
       uses: gradle/actions/setup-gradle@v6
-    - name: Download SDK coverage data
+    - name: Download coverage data
       uses: actions/download-artifact@v8
       with:
-        name: sdk-coverage-data
-        path: sdk
-    - name: Download e2e coverage data
-      uses: actions/download-artifact@v8
-      with:
-        name: e2e-coverage-data
-        path: test-projects/e2e/build/jacoco
+        pattern: '*-coverage-data'
+        merge-multiple: true
     - name: Generate aggregate coverage report
-      # The build and e2e jobs ran the tests; report on their coverage data without running them again.
+      # The other jobs ran the tests; report on their coverage data without running them again.
       run: ./gradlew :sdk:jacocoAggregateReport -PcoverageFromExecData
     - name: Publish coverage summary
       env:
