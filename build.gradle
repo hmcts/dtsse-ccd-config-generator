@@ -16,6 +16,16 @@ project(':adoption') {
     }
 }
 
+project(':pcs') {
+    // Each pcs-api integration test JVM starts its own Postgres container, so the tests can run across forks.
+    // pcs-api pins its Test tasks to one fork, so this has to apply after its build script.
+    afterEvaluate {
+        tasks.named('integration') {
+            maxParallelForks = 3
+        }
+    }
+}
+
 tasks.register('allTests')
 
 gradle.afterProject { project, _ ->
