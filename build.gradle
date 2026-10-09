@@ -20,8 +20,34 @@ project(':pcs') {
     // Each pcs-api integration test JVM starts its own Postgres container, so the tests can run across forks.
     // pcs-api pins its Test tasks to one fork, so this has to apply after its build script.
     afterEvaluate {
-        tasks.named('integration') {
+        tasks.named('integration') { task ->
             maxParallelForks = 2
+
+            // CI splits the integration tests across jobs with -PintegrationShard=<index>/<count>, dealing the
+            // top-level *IT and *Test classes out in name order so each job gets the same number. Other classes,
+            // such as base classes and test configuration, aren't tests themselves, so every job keeps them.
+            def shard = providers.gradleProperty('integrationShard')
+            if (shard.isPresent()) {
+                def (index, count) = shard.get().tokenize('/')*.toInteger()
+                def topLevelClass = { String path -> path.replaceAll(/(\$.*)?\.class$/, '') }
+                def isTestClass = { String name -> name ==~ /.*(IT|Test)$/ }
+                def shardOf = null
+                task.exclude { element ->
+                    if (element.directory || !element.name.endsWith('.class')) {
+                        return false
+                    }
+                    if (shardOf == null) {
+                        def classes = task.testClassesDirs.files.collectMany { dir ->
+                            fileTree(dir).matching { include '**/*.class' }.files.collect {
+                                topLevelClass(dir.toPath().relativize(it.toPath()).toString().replace(File.separator, '/'))
+                            }
+                        }.unique().findAll(isTestClass).sort()
+                        shardOf = classes.withIndex().collectEntries { name, i -> [name, i % count + 1] }
+                    }
+                    def name = topLevelClass(element.relativePath.pathString)
+                    shardOf.containsKey(name) && shardOf[name] != index
+                }
+            }
         }
     }
 }

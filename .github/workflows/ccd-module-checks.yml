@@ -23,6 +23,7 @@ jobs:
             gradleIntegration: adoption:integration
             definitionsDir: test-projects/adoption-cos-api/build/definitions
             runIntegration: false
+            compileTests: true
             runSemanticDiff: true
             changePath: test-projects/adoption-cos-api
           - checkName: Semantic Diff - NFDiv
@@ -31,8 +32,19 @@ jobs:
             gradleTestClasses: nfdiv:testClasses
             gradleIntegration: nfdiv:integration
             definitionsDir: test-projects/nfdiv-case-api/build/definitions
-            runIntegration: true
+            runIntegration: false
+            compileTests: false
             runSemanticDiff: true
+            changePath: test-projects/nfdiv-case-api
+          - checkName: NFDiv Integration
+            module: nfdiv
+            gradleGenerate: nfdiv:generateCCDConfig
+            gradleTestClasses: nfdiv:testClasses
+            gradleIntegration: nfdiv:integration
+            definitionsDir: test-projects/nfdiv-case-api/build/definitions
+            runIntegration: true
+            compileTests: true
+            runSemanticDiff: false
             changePath: test-projects/nfdiv-case-api
           - checkName: Semantic Diff - PCS
             module: pcs
@@ -40,8 +52,29 @@ jobs:
             gradleTestClasses: pcs:testClasses
             gradleIntegration: pcs:integration
             definitionsDir: test-projects/pcs-api/build/definitions
-            runIntegration: true
+            runIntegration: false
+            compileTests: false
             runSemanticDiff: true
+            changePath: test-projects/pcs-api
+          - checkName: PCS Integration 1
+            module: pcs
+            gradleGenerate: pcs:generateCCDConfig
+            gradleTestClasses: pcs:testClasses
+            gradleIntegration: pcs:integration -PintegrationShard=1/2
+            definitionsDir: test-projects/pcs-api/build/definitions
+            runIntegration: true
+            compileTests: true
+            runSemanticDiff: false
+            changePath: test-projects/pcs-api
+          - checkName: PCS Integration 2
+            module: pcs
+            gradleGenerate: pcs:generateCCDConfig
+            gradleTestClasses: pcs:testClasses
+            gradleIntegration: pcs:integration -PintegrationShard=2/2
+            definitionsDir: test-projects/pcs-api/build/definitions
+            runIntegration: true
+            compileTests: true
+            runSemanticDiff: false
             changePath: test-projects/pcs-api
           - checkName: Semantic Diff - SPTribs
             module: sptribs
@@ -49,8 +82,19 @@ jobs:
             gradleTestClasses: sptribs:testClasses
             gradleIntegration: sptribs:integration
             definitionsDir: test-projects/sptribs-case-api/build/definitions
-            runIntegration: true
+            runIntegration: false
+            compileTests: false
             runSemanticDiff: true
+            changePath: test-projects/sptribs-case-api
+          - checkName: SPTribs Integration
+            module: sptribs
+            gradleGenerate: sptribs:generateCCDConfig
+            gradleTestClasses: sptribs:testClasses
+            gradleIntegration: sptribs:integration
+            definitionsDir: test-projects/sptribs-case-api/build/definitions
+            runIntegration: true
+            compileTests: true
+            runSemanticDiff: false
             changePath: test-projects/sptribs-case-api
           - checkName: ET Integration
             module: et
@@ -59,6 +103,7 @@ jobs:
             gradleIntegration: et:integration
             definitionsDir: test-projects/et-ccd-callbacks/build/definitions
             runIntegration: true
+            compileTests: true
             runSemanticDiff: false
             changePath: test-projects/et-ccd-callbacks
           - checkName: Semantic Diff - IA
@@ -68,9 +113,9 @@ jobs:
             gradleIntegration: ia:integration
             definitionsDir: test-projects/ia-case-api/build/definitions
             runIntegration: false
+            compileTests: true
             runSemanticDiff: true
             changePath: test-projects/ia-case-api
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -120,7 +165,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Compile ${{ matrix.module }} test classes
-        if: steps.changes.outputs.docs_only != 'true'
+        if: matrix.compileTests && steps.changes.outputs.docs_only != 'true'
         run: ./gradlew ${{ matrix.gradleTestClasses }} -i --stacktrace
 
       - name: Run ${{ matrix.module }}:integration
