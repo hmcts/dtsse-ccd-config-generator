@@ -220,7 +220,9 @@ The common transaction ordering lives in [`CaseEventTransactionCoordinator`](../
 
 ### After the commit
 
-A submit handler can register work to run once the event has committed, before the response is returned, with `afterCommit(Runnable)` on its `EventPayload`, `ExternalSubmitRequest` or `SystemEventExecutionContext`. It is intended for synchronous post-commit work the user expects to see done when their page reloads, such as sending a request the event has also queued in an outbox. The outbox copy stays the durable one: nothing runs if the event does not commit, and work that fails is logged and not retried, since the event has committed and its response is still returned.
+A submit handler can register work to run once the event has committed, before the response is returned, with `afterCommit(Runnable)`.
+
+It is intended for synchronous post-commit work the user expects to see done when their page reloads, such as sending a request the event has also queued in an outbox. Nothing runs if the event does not commit.
 
 ```java
 submit.afterCommit(() -> camunda.send(cancel));
