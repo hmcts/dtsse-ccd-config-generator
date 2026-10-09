@@ -137,6 +137,8 @@ try {
         type DocWeaveClause,
         type DocWeaveDocument,
         type DocWeaveSnapshot,
+        renderHtml,
+        type RenderHtmlOptions,
       } from "@hmcts-cft/docweave";
 
       declare const mount: HTMLElement;
@@ -160,6 +162,11 @@ try {
       controller.getDocument() satisfies DocWeaveDocument | undefined;
       const saved: DocWeaveSnapshot = controller.getSnapshot();
       saved satisfies DocWeaveSnapshot;
+      renderHtml(saved) satisfies string;
+      const htmlOptions: RenderHtmlOptions = { changes: true };
+      renderHtml(saved, htmlOptions) satisfies string;
+      // @ts-expect-error Rendering no longer accepts a DOM document.
+      renderHtml(saved, { document: mount.ownerDocument });
       createDocEditor().render(target);
 
       // @ts-expect-error Docweave owns its toolbar markup and behaviour.

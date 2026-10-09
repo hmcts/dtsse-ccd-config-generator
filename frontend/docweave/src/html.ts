@@ -13,8 +13,6 @@ import { listStarts } from "./list-numbering.js";
 import { outputSchema, toOutputDocument } from "./output-schema.js";
 
 export interface RenderHtmlOptions {
-  /** @deprecated Rendering no longer needs a DOM. Accepted for existing callers. */
-  document?: Document;
   /** Marks inserted and modified clauses with the editor's classes and accessible descriptions. */
   changes?: boolean;
 }
