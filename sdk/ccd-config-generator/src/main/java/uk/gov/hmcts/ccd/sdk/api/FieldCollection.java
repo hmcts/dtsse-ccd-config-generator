@@ -38,6 +38,9 @@ public class FieldCollection {
 
   private Map<String, MidEvent> pagesToMidEvent;
 
+  // Mid-event callbacks served at the service's own endpoints rather than by an SDK handler.
+  private Map<String, CallbackUrl> pagesToMidEventUrl;
+
   private String rootFieldname;
 
   private String unwrappedParentPrefix;
@@ -72,6 +75,7 @@ public class FieldCollection {
       result.explicitFields = new ArrayList<>();
       result.pageShowConditions = new Hashtable<>();
       result.pagesToMidEvent = new HashMap<>();
+      result.pagesToMidEventUrl = new HashMap<>();
       result.pageLabels = new Hashtable<>();
       result.propertyUtils = propertyUtils;
       return result;
@@ -728,12 +732,31 @@ public class FieldCollection {
     }
 
     public FieldCollectionBuilder<Type, StateType, Parent> page(String id, MidEvent<Type, StateType> callback) {
+      if (callback != null && pagesToMidEventUrl.containsKey(id)) {
+        throw bothMidEventHandlerAndUrl(id);
+      }
       this.pagesToMidEvent.put(id, callback);
+      return this.page(id);
+    }
+
+    /**
+     * Starts a page whose mid-event callback is an endpoint the service already serves. The URL is
+     * written verbatim, so definition placeholders such as {@code ${CCD_DEF_URL}} are kept.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> page(String id, String midEventUrl, int... retries) {
+      if (pagesToMidEvent.get(id) != null) {
+        throw bothMidEventHandlerAndUrl(id);
+      }
+      this.pagesToMidEventUrl.put(id, CallbackUrl.of(midEventUrl, retries));
       return this.page(id);
     }
 
     public FieldCollectionBuilder<Type, StateType, Parent> page(String id) {
       return this.pageObj(id);
+    }
+
+    private IllegalStateException bothMidEventHandlerAndUrl(String pageId) {
+      return EventBuilder.bothHandlerAndUrl(event.eventId(), "MidEvent on page '" + pageId + "'");
     }
 
     private FieldCollectionBuilder<Type, StateType, Parent> pageObj(String id) {

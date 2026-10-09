@@ -56,6 +56,9 @@ public class Event<T, R extends HasRole, S> {
   private AboutToStart<T, S> aboutToStartCallback;
   private AboutToSubmit<T, S> aboutToSubmitCallback;
   private Submitted<T, S> submittedCallback;
+  // Callbacks served at the service's own endpoints rather than by an SDK handler.
+  @Setter(AccessLevel.NONE)
+  private Map<Webhook, CallbackUrl> callbackUrls;
   // One handler per phase. A decentralised event's handlers are adapted into these; an external
   // event also has a payload type, so the runtime has a single path and branches only on that.
   @Getter(AccessLevel.NONE)
@@ -168,6 +171,7 @@ public class Event<T, R extends HasRole, S> {
       result.fieldsBuilder = FieldCollection.FieldCollectionBuilder
           .builder(result, result, dataClass, propertyUtils);
       result.retries = new HashMap<>();
+      result.callbackUrls = new HashMap<>();
 
       return result;
     }
@@ -185,6 +189,8 @@ public class Event<T, R extends HasRole, S> {
      */
     @SuppressWarnings("unchecked")
     public <I> EventBuilder<T, R, S> external(ExternalEventId<?, I> id, ExternalSubmitHandler<S, I> submit) {
+      rejectCallbackUrl(Webhook.AboutToSubmit, true);
+      rejectCallbackUrl(Webhook.Submitted, true);
       // Immutable, so the event's roles keep create and read on it even under explicitGrants().
       fieldsBuilder.field(DecentralisedConfigBuilder.PAYLOAD_FIELD).type("TextArea").optional().immutable();
       this.submitType = id.submitType();
@@ -198,6 +204,7 @@ public class Event<T, R extends HasRole, S> {
 
     /** Sets an external event's start handler. Called by the SDK's external event builder. */
     public EventBuilder<T, R, S> externalStartHandler(ExternalStartHandler<?> start) {
+      rejectCallbackUrl(Webhook.AboutToStart, true);
       this.onStart = (event, user, clientContext) -> rejectingOnThrow(() ->
           start.start(new ExternalStartRequest(event.caseReference(), user, clientContext)));
       return this;
@@ -349,23 +356,77 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
+    public EventBuilder<T, R, S> aboutToStartCallback(AboutToStart<T, S> aboutToStartCallback) {
+      rejectCallbackUrl(Webhook.AboutToStart, aboutToStartCallback != null);
+      this.aboutToStartCallback = aboutToStartCallback;
+      return this;
+    }
+
+    /**
+     * Points the about-to-start callback at an endpoint the service already serves. The URL is
+     * written verbatim, so definition placeholders such as {@code ${CCD_DEF_URL}} are kept.
+     */
+    public EventBuilder<T, R, S> aboutToStartCallback(String url, int... retries) {
+      return callbackUrl(Webhook.AboutToStart, aboutToStartCallback != null || onStart != null, url, retries);
+    }
+
     public EventBuilder<T, R, S> submittedCallback(Submitted<T, S> submittedCallback) {
       // TODO: split out decentralised event building to remove these fields for decentralised events.
       if (this.onSubmit != null) {
         throw new IllegalStateException("Cannot set both submitHandler and submittedCallback");
       }
+      rejectCallbackUrl(Webhook.Submitted, submittedCallback != null);
       this.submittedCallback = submittedCallback;
       return this;
     }
 
+    /**
+     * Points the submitted callback at an endpoint the service already serves. The URL is written
+     * verbatim, so definition placeholders such as {@code ${CCD_DEF_URL}} are kept.
+     */
+    public EventBuilder<T, R, S> submittedCallback(String url, int... retries) {
+      return callbackUrl(Webhook.Submitted, submittedCallback != null || onSubmit != null, url, retries);
+    }
 
     public EventBuilder<T, R, S> aboutToSubmitCallback(AboutToSubmit<T, S> aboutToSubmitCallback) {
       // TODO: split out decentralised event building to remove these fields for decentralised events.
       if (this.onSubmit != null) {
         throw new IllegalStateException("Cannot set both submitHandler and aboutToSubmitCallback");
       }
+      rejectCallbackUrl(Webhook.AboutToSubmit, aboutToSubmitCallback != null);
       this.aboutToSubmitCallback = aboutToSubmitCallback;
       return this;
+    }
+
+    /**
+     * Points the about-to-submit callback at an endpoint the service already serves. The URL is
+     * written verbatim, so definition placeholders such as {@code ${CCD_DEF_URL}} are kept.
+     */
+    public EventBuilder<T, R, S> aboutToSubmitCallback(String url, int... retries) {
+      return callbackUrl(Webhook.AboutToSubmit, aboutToSubmitCallback != null || onSubmit != null, url, retries);
+    }
+
+    private EventBuilder<T, R, S> callbackUrl(Webhook hook, boolean hasHandler, String url, int... retries) {
+      if (hasHandler) {
+        throw bothHandlerAndUrl(id, hook.toString());
+      }
+      this.callbackUrls.put(hook, CallbackUrl.of(url, retries));
+      return this;
+    }
+
+    private void rejectCallbackUrl(Webhook hook, boolean settingHandler) {
+      if (settingHandler && callbackUrls.containsKey(hook)) {
+        throw bothHandlerAndUrl(id, hook.toString());
+      }
+    }
+
+    static IllegalStateException bothHandlerAndUrl(String eventId, String hook) {
+      return new IllegalStateException(
+          "Event '%s' has both a handler and a callback URL for %s".formatted(eventId, hook));
+    }
+
+    String eventId() {
+      return id;
     }
 
     // Hide lombok's generated builder methods for these fields to stop them polluting the public API.
@@ -386,14 +447,21 @@ public class Event<T, R extends HasRole, S> {
       this.onStart = value;
     }
 
+    private void callbackUrls(Map<Webhook, CallbackUrl> value) {
+      this.callbackUrls = value;
+    }
+
     /** Sets a decentralised event's submit handler. */
     public EventBuilder<T, R, S> submitHandler(Submit<T, S> handler) {
+      rejectCallbackUrl(Webhook.AboutToSubmit, handler != null);
+      rejectCallbackUrl(Webhook.Submitted, handler != null);
       this.onSubmit = handler == null ? null : (event, payload, user) -> handler.submit(event);
       return this;
     }
 
     /** Sets a decentralised event's start handler, which returns the case. */
     public EventBuilder<T, R, S> startHandler(Start<T, S> handler) {
+      rejectCallbackUrl(Webhook.AboutToStart, handler != null);
       this.onStart = handler == null ? null : (event, user, clientContext) -> handler.start(event);
       return this;
     }
