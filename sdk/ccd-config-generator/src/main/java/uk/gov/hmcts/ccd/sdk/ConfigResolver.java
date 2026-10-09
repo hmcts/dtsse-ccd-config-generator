@@ -18,6 +18,8 @@ import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
 class ConfigResolver<T, S, R extends HasRole> {
+  private static final String CI_TIMING_PROBE = "probe";
+
 
   private static final String basePackage = "uk.gov.hmcts";
 
