@@ -20,12 +20,14 @@ import java.util.regex.Pattern;
 /**
  * Answers the platform identity calls an application makes while handling an event, from the
  * actors test support registers, and passes every other request to the application's own client:
- * IDAM user info for the caller's token, an S2S lease, and role assignments (none).
+ * IDAM user info for the caller's token, an S2S lease, role assignments (none) and the caller's
+ * case roles from CCD (none).
  */
 final class TestIdentityClient implements Client {
 
   private static final ObjectMapper JSON = new ObjectMapper();
   private static final Pattern ROLE_ASSIGNMENTS = Pattern.compile(".*/am/role-assignments/actors/[^/]+");
+  private static final Pattern CASE_USERS = Pattern.compile(".*/case-users");
 
   private final Client delegate;
   private final TestActors actors;
@@ -47,6 +49,9 @@ final class TestIdentityClient implements Client {
     }
     if (get && ROLE_ASSIGNMENTS.matcher(path).matches()) {
       return respond(request, 200, "application/json", "{\"roleAssignmentResponse\":[]}");
+    }
+    if (get && CASE_USERS.matcher(path).matches()) {
+      return respond(request, 200, "application/json", "{\"case_users\":[]}");
     }
     return delegate.execute(request, options);
   }
