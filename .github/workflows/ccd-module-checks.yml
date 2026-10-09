@@ -1,6 +1,11 @@
 name: Semantic Diff Checks
 
 on:
+  # Pushes to master build and test each module without a semantic diff, saving the Gradle cache that pull requests and
+  # the merge queue restore, so their jobs skip compiles and tests whose inputs haven't changed.
+  push:
+    branches:
+      - master
   pull_request:
   merge_group:
 
@@ -128,6 +133,11 @@ jobs:
           BASE_SHA: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.merge_group.head_sha || github.event.pull_request.head.sha }}
         run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "module_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           git fetch --no-tags --prune origin "$BASE_SHA" "$HEAD_SHA"
           files=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
           if [ -z "$files" ]; then
