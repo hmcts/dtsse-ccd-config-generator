@@ -22,8 +22,9 @@ jobs:
       deployment: false
     permissions:
       contents: read
-      pull-requests: write
       id-token: write
+    outputs:
+      docs_only: ${{ steps.changes.outputs.docs_only }}
     steps:
     - uses: actions/checkout@v7
       with:
@@ -71,9 +72,74 @@ jobs:
     - name: ACR Login
       if: steps.changes.outputs.docs_only != 'true'
       run: az acr login --name hmctsprod
+    - name: Run SDK checks
+      if: steps.changes.outputs.docs_only != 'true'
+      run: ./gradlew :sdk:check -i --stacktrace
+    - name: Upload SDK coverage data
+      if: steps.changes.outputs.docs_only != 'true'
+      uses: actions/upload-artifact@v7
+      with:
+        name: sdk-coverage-data
+        path: sdk/*/build/jacoco/*.exec
+
+  e2e:
+    runs-on: ubuntu-latest
+    environment:
+      name: cftlib-acr-pull
+      deployment: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+        submodules: recursive
+    - name: Determine whether change is docs-only
+      id: changes
+      run: |
+        if [ "${{ github.event_name }}" != "pull_request" ]; then
+          echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        base="${{ github.event.pull_request.base.sha }}"
+        head="${{ github.event.pull_request.head.sha }}"
+        git fetch --no-tags --prune origin "$base" "$head"
+        files=$(git diff --name-only "$base" "$head")
+        if [ -z "$files" ]; then
+          echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        if echo "$files" | grep -vE '\.md$' >/dev/null; then
+          echo "docs_only=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "docs_only=true" >> "$GITHUB_OUTPUT"
+        fi
+    - name: Docs-only change detected
+      if: steps.changes.outputs.docs_only == 'true'
+      run: echo "Docs-only change; skipping e2e checks."
+    - name: Set up JDK
+      if: steps.changes.outputs.docs_only != 'true'
+      uses: actions/setup-java@v6
+      with:
+        distribution: 'zulu'
+        java-version: 21
+    - name: Set up Gradle
+      if: steps.changes.outputs.docs_only != 'true'
+      uses: gradle/actions/setup-gradle@v6
+    - name: Az CLI login
+      if: steps.changes.outputs.docs_only != 'true'
+      uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43
+      with:
+        client-id: 7dbe3da2-315b-4937-bac6-3ab22a9c7b91
+        tenant-id: 531ff96d-0ae9-462a-8d2d-bec7c0b42082
+        allow-no-subscriptions: true
+    - name: ACR Login
+      if: steps.changes.outputs.docs_only != 'true'
+      run: az acr login --name hmctsprod
     - name: Pull cftlib images in the background
       if: steps.changes.outputs.docs_only != 'true'
-      # The images in rse-cft-lib's docker-compose.yml, pulled while Gradle builds and runs the SDK tests.
+      # The images in rse-cft-lib's docker-compose.yml, pulled while Gradle builds.
       run: |
         for image in \
           postgres:15 \
@@ -83,14 +149,48 @@ jobs:
           hmctsprod.azurecr.io/hmcts/rse/rse-idam-simulator:latest; do
           nohup docker pull --quiet "$image" > /dev/null 2>&1 &
         done
-    - name: Run SDK checks and e2e test
+    - name: Run e2e checks
       if: steps.changes.outputs.docs_only != 'true'
-      run: ./gradlew :sdk:check :e2e:check -i --stacktrace
+      run: ./gradlew :e2e:check -i --stacktrace
+    - name: Upload e2e coverage data
+      if: steps.changes.outputs.docs_only != 'true'
+      uses: actions/upload-artifact@v7
+      with:
+        name: e2e-coverage-data
+        path: test-projects/e2e/build/jacoco/*.exec
+
+  coverage:
+    needs: [build, e2e]
+    if: needs.build.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        submodules: recursive
+    - name: Set up JDK
+      uses: actions/setup-java@v6
+      with:
+        distribution: 'zulu'
+        java-version: 21
+    - name: Set up Gradle
+      uses: gradle/actions/setup-gradle@v6
+    - name: Download SDK coverage data
+      uses: actions/download-artifact@v8
+      with:
+        name: sdk-coverage-data
+        path: sdk
+    - name: Download e2e coverage data
+      uses: actions/download-artifact@v8
+      with:
+        name: e2e-coverage-data
+        path: test-projects/e2e/build/jacoco
     - name: Generate aggregate coverage report
-      if: steps.changes.outputs.docs_only != 'true'
-      run: ./gradlew :sdk:jacocoAggregateReport
+      # The build and e2e jobs ran the tests; report on their coverage data without running them again.
+      run: ./gradlew :sdk:jacocoAggregateReport -PcoverageFromExecData
     - name: Publish coverage summary
-      if: steps.changes.outputs.docs_only != 'true'
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -134,7 +234,7 @@ jobs:
             f.write(body)
         "
     - name: Comment coverage on PR
-      if: github.event_name == 'pull_request' && steps.changes.outputs.docs_only != 'true'
+      if: github.event_name == 'pull_request'
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -150,7 +250,6 @@ jobs:
           gh pr comment "$PR_NUMBER" --body-file coverage-body.md
         fi
     - name: Upload coverage report
-      if: steps.changes.outputs.docs_only != 'true'
       uses: actions/upload-artifact@v7
       with:
         name: sdk-coverage-report
