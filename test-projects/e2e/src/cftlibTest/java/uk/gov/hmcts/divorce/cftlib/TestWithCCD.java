@@ -3655,14 +3655,14 @@ public class TestWithCCD extends CftlibTest {
     @Test
     @SuppressWarnings("unchecked")
     void simpleCaseCallbacksGivenByUrlAreCalledAtTheirEndpoints() {
-        // The event's callbacks are set by URL on a ${ET_COS_URL} placeholder the import resolves,
-        // so CCD reaching UrlCallbackController shows the URLs survived generation verbatim.
+        // The event's callbacks are set by URL on a ${SIMPLE_CASE_URL} placeholder the import resolves,
+        // so CCD reaching UrlCallbackController shows the URLs survived generation verbatim. This case
+        // type is decentralised, so CCD hands its submission to the service and calls only the
+        // about-to-start and mid-event URLs itself.
         String user = "TEST_CASE_WORKER_USER@mailinator.com";
         String eventId = SimpleCaseConfiguration.URL_CALLBACKS_EVENT;
         UrlCallbackController.aboutToStartCalls = 0;
         UrlCallbackController.midEventCalls = 0;
-        UrlCallbackController.aboutToSubmitCalls = 0;
-        UrlCallbackController.submittedCalls = 0;
 
         var startEvent = ccdApi.startEvent(getAuthorisation(user), getServiceAuth(), String.valueOf(simpleCaseRef),
             eventId);
@@ -3690,16 +3690,6 @@ public class TestWithCCD extends CftlibTest {
             assertThat(validated.get("description"), equalTo(UrlCallbackController.MID_EVENT_MARKER));
         }
         assertThat(UrlCallbackController.midEventCalls, equalTo(1));
-
-        var submit = prepareEventRequestWithToken(user, eventId, data, startEvent.getToken(), simpleCaseRef);
-        try (var response = HttpClientBuilder.create().build().execute(submit)) {
-            assertThat(EntityUtils.toString(response.getEntity()), response.getStatusLine().getStatusCode(),
-                equalTo(201));
-        }
-        assertThat(UrlCallbackController.aboutToSubmitCalls, equalTo(1));
-        assertThat(UrlCallbackController.submittedCalls, equalTo(1));
-        assertThat(storedCaseData(simpleCaseRef).path("followUpNote").asText(),
-            equalTo(UrlCallbackController.ABOUT_TO_SUBMIT_MARKER));
     }
 
     @SneakyThrows

@@ -294,7 +294,7 @@ public class CftLibConfig implements CFTLibConfigurer {
 
         lib.importJsonDefinition(new File("build/definitions/" + NoFaultDivorce.getCaseType()));
         lib.importJsonDefinition(new File("build/definitions/" + SimpleCaseConfiguration.CASE_TYPE), null,
-            jsonDefinitionSubstitutions);
+            Map.of("SIMPLE_CASE_URL", "http://localhost:4013"));
         lib.importJsonDefinition(JsonLegacyCcdConfig.caseTypeADefinitionDirectory(), null, jsonDefinitionSubstitutions);
         lib.importJsonDefinition(JsonLegacyCcdConfig.caseTypeBDefinitionDirectory(), null, jsonDefinitionSubstitutions);
         lib.createProfile("TEST_CASE_WORKER_USER@mailinator.com", "DIVORCE", JsonLegacyCcdConfig.CASE_TYPE_A, "Submitted");
