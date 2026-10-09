@@ -55,6 +55,9 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleWarning;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentFailure;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResult;
+import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
+import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocumentReason;
+import uk.gov.hmcts.ccd.sdk.bundling.api.RenderAttempt;
 import uk.gov.hmcts.ccd.sdk.config.DecentralisedFlywayAutoConfiguration;
 
 @Testcontainers
@@ -239,13 +242,13 @@ class BundleJobOutboxIntegrationTest {
     assertThat(column(id, "lease_owner")).isEqualTo("worker-b");
 
     // The stale worker's completion, failure and requeue are all rejected; B's outcome stands.
-    assertThat(repository.markCompleted(id, BundleJobState.COMPLETED, "{}", "worker-a")).isFalse();
+    assertThat(repository.markCompleted(id, BundleJobState.COMPLETED, "{}", null, "worker-a")).isFalse();
     assertThat(repository.markFailed(id, BundleErrorCode.ASSEMBLY_FAILED, "late", "[]", null,
         "worker-a")).isFalse();
     assertThat(repository.requeueForRetry(id, java.time.Instant.now(), "[]", "worker-a"))
         .isFalse();
     assertThat(job(id).state()).isEqualTo(BundleJobState.IN_PROGRESS);
-    assertThat(repository.markCompleted(id, BundleJobState.COMPLETED, "{\"by\":\"b\"}", "worker-b"))
+    assertThat(repository.markCompleted(id, BundleJobState.COMPLETED, "{\"by\":\"b\"}", null, "worker-b"))
         .isTrue();
     assertThat(job(id).result()).contains("{\"by\": \"b\"}");
   }
@@ -387,6 +390,105 @@ class BundleJobOutboxIntegrationTest {
         .containsExactly("Compiled at execution");
     assertThat(job(id).state()).isEqualTo(BundleJobState.COMPLETED);
     assertThat(job(id).result().orElseThrow()).contains("Compiled at execution");
+  }
+
+  @Test
+  void aCompletedJobRecordsWhatItRenderedFromTheRequestTheSelectorCompiled() {
+    BundleJob submitted = service.submitCoalesced("case-1:bundle", Map.of(), CONTEXT);
+    assertThat(service.findReport(submitted.externalId())).isEmpty();
+    FakeRenderer renderer = new FakeRenderer(tempDir).onNextRender(request ->
+        renderer(tempDir).success(request, List.of(), List.of("doc-gone")));
+
+    new BundleJobWorker(repository, renderer, twoDocumentSelector(), summaryHandler(), quickRetries(3),
+        List.of(), Runnable::run, 5, 5, Duration.ofMinutes(5)).poll();
+
+    BundleJobReport report = service.findReport(submitted.externalId()).orElseThrow();
+    assertThat(report.request().title()).isEqualTo("Selected at execution");
+    assertThat(report.request().allDocuments()).extracting(BundleDocument::id)
+        .containsExactly("doc-kept", "doc-gone");
+    assertThat(report.outcome()).isEqualTo(uk.gov.hmcts.ccd.sdk.bundling.api.BundleOutcome.COMPLETED_WITH_WARNINGS);
+    assertThat(report.fileName()).isEqualTo("selected.pdf");
+    assertThat(report.sha256()).isEqualTo("sha-bundle");
+    assertThat(report.pageCount()).isEqualTo(1);
+    assertThat(report.documents()).extracting(DocumentResult::documentId).containsExactly("doc-kept");
+    assertThat(report.missingDocuments()).singleElement().satisfies(missing -> {
+      assertThat(missing.documentId()).isEqualTo("doc-gone");
+      assertThat(missing.reason()).isEqualTo(MissingDocumentReason.NOT_FOUND);
+      assertThat(missing.startPage()).isEqualTo(2);
+    });
+    // Only an unavailable document is worth re-running for.
+    assertThat(service.findLatest("case-1:bundle").orElseThrow().externalId())
+        .isEqualTo(submitted.externalId());
+  }
+
+  @Test
+  void aBundleMissingTemporarilyUnavailableDocumentsIsReRunLaterUntilTheBound() {
+    BundleJob submitted = service.submitCoalesced("case-1:bundle", Map.of("caseId", "1"), CONTEXT);
+    FakeRenderer renderer = new FakeRenderer(tempDir);
+    for (int i = 0; i < 3; i++) {
+      renderer.onNextRender(request -> renderer(tempDir).success(request, List.of(), List.of(),
+          List.of("doc-gone")));
+    }
+    BundleJobWorker worker = new BundleJobWorker(repository, renderer, twoDocumentSelector(), summaryHandler(),
+        new BundleJobRetryPolicy(3, Duration.ofMillis(1), 2.0, Duration.ofMillis(2), Duration.ofMinutes(15), 2),
+        List.of(), Runnable::run, 5, 5, Duration.ofMinutes(5));
+
+    worker.poll();
+
+    BundleJob reRun = service.findLatest("case-1:bundle").orElseThrow();
+    assertThat(reRun.externalId()).isNotEqualTo(submitted.externalId());
+    assertThat(reRun.state()).isEqualTo(BundleJobState.QUEUED);
+    assertThat(column(reRun.externalId(), "selector_parameters")).contains("caseId");
+    assertThat(column(reRun.externalId(), "execution_context"))
+        .contains("\"bundling.unavailableRequeues\": \"1\"").contains("hearingId");
+    assertThat(jdbc.queryForObject("select next_attempt_at > now() + interval '14 minutes' "
+        + "from bundling.bundle_job where external_id = :id", Map.of("id", reRun.externalId()), Boolean.class))
+        .isTrue();
+    worker.poll();
+    assertThat(renderer.renders).as("the re-run waits for its delay").hasSize(1);
+
+    // A change to the case wants a bundle now: joining the delayed re-run makes it immediate.
+    assertThat(service.submitCoalesced("case-1:bundle", Map.of("caseId", "1"), CONTEXT).externalId())
+        .isEqualTo(reRun.externalId());
+    assertThat(column(reRun.externalId(), "next_attempt_at")).isNull();
+    worker.poll();
+    assertThat(renderer.renders).hasSize(2);
+    BundleJob secondReRun = service.findLatest("case-1:bundle").orElseThrow();
+    assertThat(column(secondReRun.externalId(), "execution_context"))
+        .contains("\"bundling.unavailableRequeues\": \"2\"");
+
+    jdbc.update("update bundling.bundle_job set next_attempt_at = null", Map.of());
+    worker.poll();
+    assertThat(renderer.renders).hasSize(3);
+    assertThat(service.findLatest("case-1:bundle").orElseThrow().externalId())
+        .as("the bound of two re-runs is reached").isEqualTo(secondReRun.externalId());
+  }
+
+  @Test
+  void aRenderMayRetryWhileAttemptsRemainAndIsFinalOnTheLastAttempt() {
+    UUID id = UUID.randomUUID();
+    service.submit(simpleRequest(id), CONTEXT);
+    FakeRenderer renderer = new FakeRenderer(tempDir).onNextRender(FakeRenderer.failure(
+        new BundleGenerationException(BundleErrorCode.DOCUMENT_RESOLUTION_FAILED, BundleStage.RESOLVE,
+            "CDAM timed out", "Retry", List.of())));
+    BundleJobWorker worker = directWorker(renderer, quickRetries(2), List.of());
+
+    worker.poll();
+    await().atMost(Duration.ofSeconds(5)).until(() -> {
+      worker.poll();
+      return job(id).state().terminal();
+    });
+
+    assertThat(renderer.attempts).containsExactly(RenderAttempt.RETRYABLE, RenderAttempt.FINAL);
+    assertThat(job(id).state()).isEqualTo(BundleJobState.COMPLETED);
+  }
+
+  private static BundleDocumentSelector twoDocumentSelector() {
+    return context -> BundleRequest.builder().externalId(context.externalId())
+        .title("Selected at execution").fileName("selected.pdf")
+        .root(BundleSection.builder("Case file").document(document("doc-kept"))
+            .document(document("doc-gone")).build())
+        .build();
   }
 
   @Test
@@ -728,6 +830,7 @@ class BundleJobOutboxIntegrationTest {
     private final Queue<Function<BundleRequest, BundleResult>> behaviours =
         new ConcurrentLinkedQueue<>();
     final List<BundleRequest> renders = new CopyOnWriteArrayList<>();
+    final List<RenderAttempt> attempts = new CopyOnWriteArrayList<>();
 
     FakeRenderer(Path base) {
       this.base = base;
@@ -745,15 +848,36 @@ class BundleJobOutboxIntegrationTest {
     }
 
     BundleResult success(BundleRequest request, List<BundleWarning> warnings) {
+      return success(request, warnings, List.of(), List.of());
+    }
+
+    BundleResult success(BundleRequest request, List<BundleWarning> warnings, List<String> notFound) {
+      return success(request, warnings, notFound, List.of());
+    }
+
+    // The named documents come back as placeholders: notFound ones permanently, unavailable ones
+    // temporarily.
+    BundleResult success(BundleRequest request, List<BundleWarning> warnings, List<String> notFound,
+        List<String> unavailable) {
       try {
         Path jobDir = Files.createTempDirectory(base, "job-");
         Path pdf = Files.write(jobDir.resolve(request.fileName()), "%PDF-1.4 fake".getBytes());
         List<DocumentResult> documents = new ArrayList<>();
+        List<MissingDocument> missing = new ArrayList<>();
         for (BundleDocument document : request.allDocuments()) {
-          documents.add(new DocumentResult(document.id(), document.reference(), "application/pdf",
-              "sha-" + document.id(), 1, documents.size() + 1));
+          int page = documents.size() + missing.size() + 1;
+          if (notFound.contains(document.id()) || unavailable.contains(document.id())) {
+            boolean temporary = unavailable.contains(document.id());
+            missing.add(new MissingDocument(document.id(), document.reference(),
+                temporary ? MissingDocumentReason.UNAVAILABLE : MissingDocumentReason.NOT_FOUND,
+                temporary ? BundleErrorCode.DOCUMENT_RESOLUTION_FAILED : BundleErrorCode.DOCUMENT_NOT_FOUND,
+                "test", page));
+          } else {
+            documents.add(new DocumentResult(document.id(), document.reference(), "application/pdf",
+                "sha-" + document.id(), 1, page));
+          }
         }
-        return new BundleResult(new FileArtifact(pdf, documents.size()), warnings, documents, Map.of(),
+        return new BundleResult(new FileArtifact(pdf, documents.size()), warnings, documents, missing, Map.of(),
             () -> {
               try {
                 Files.deleteIfExists(pdf);
@@ -765,6 +889,13 @@ class BundleJobOutboxIntegrationTest {
       } catch (java.io.IOException e) {
         throw new java.io.UncheckedIOException(e);
       }
+    }
+
+    @Override
+    public BundleResult render(BundleRequest request, BundleExecutionContext context,
+        RenderAttempt attempt) {
+      attempts.add(attempt);
+      return render(request, context);
     }
 
     @Override
