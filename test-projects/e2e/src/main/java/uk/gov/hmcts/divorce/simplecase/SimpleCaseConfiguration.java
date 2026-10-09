@@ -115,8 +115,6 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
             .name("Simple case URL callbacks")
             .description("Callbacks served at the service's own endpoints")
             .aboutToStartCallback(URL_CALLBACKS_BASE + "/about-to-start", 0)
-            .aboutToSubmitCallback(URL_CALLBACKS_BASE + "/about-to-submit", 5, 5)
-            .submittedCallback(URL_CALLBACKS_BASE + "/submitted")
             .grant(CREATE_READ_UPDATE, UserRole.CASE_WORKER)
             .grantHistoryOnly(UserRole.SUPER_USER)
             .fields()

@@ -3656,13 +3656,12 @@ public class TestWithCCD extends CftlibTest {
     @SuppressWarnings("unchecked")
     void simpleCaseCallbacksGivenByUrlAreCalledAtTheirEndpoints() {
         // The event's callbacks are set by URL on a ${SIMPLE_CASE_URL} placeholder the import resolves,
-        // so CCD reaching UrlCallbackController shows the URLs survived generation verbatim.
+        // so CCD reaching UrlCallbackController shows the URLs survived generation verbatim. The case type is
+        // decentralised, so CCD calls only the about-to-start and mid-event URLs; the service runs the submission.
         String user = "TEST_CASE_WORKER_USER@mailinator.com";
         String eventId = SimpleCaseConfiguration.URL_CALLBACKS_EVENT;
         UrlCallbackController.aboutToStartCalls = 0;
         UrlCallbackController.midEventCalls = 0;
-        UrlCallbackController.aboutToSubmitCalls = 0;
-        UrlCallbackController.submittedCalls = 0;
 
         var startEvent = ccdApi.startEvent(getAuthorisation(user), getServiceAuth(), String.valueOf(simpleCaseRef),
             eventId);
@@ -3671,13 +3670,15 @@ public class TestWithCCD extends CftlibTest {
             mapper.convertValue(startEvent.getCaseDetails().getData(), new TypeReference<Map<String, Object>>() {}));
         data.put("followUpNote", "entered by the caseworker");
 
+        // CCD identifies a wizard page by its event ID followed by its PageID, as XUI sends it.
         var validate = buildRequest(user, BASE_URL + "/case-types/" + SimpleCaseConfiguration.CASE_TYPE
-            + "/validate?pageId=" + SimpleCaseConfiguration.URL_CALLBACKS_PAGE, HttpPost::new);
+            + "/validate?pageId=" + eventId + SimpleCaseConfiguration.URL_CALLBACKS_PAGE, HttpPost::new);
         withCcdAccept(validate, ACCEPT_CASE_DATA_VALIDATE);
         validate.setEntity(new StringEntity(mapper.writeValueAsString(Map.of(
             "data", data,
             "event", Map.of("id", eventId),
             "event_token", startEvent.getToken(),
+            "case_reference", String.valueOf(simpleCaseRef),
             "ignore_warning", false
         )), ContentType.APPLICATION_JSON));
         try (var response = HttpClientBuilder.create().build().execute(validate)) {
@@ -3687,16 +3688,6 @@ public class TestWithCCD extends CftlibTest {
             assertThat(validated.get("description"), equalTo(UrlCallbackController.MID_EVENT_MARKER));
         }
         assertThat(UrlCallbackController.midEventCalls, equalTo(1));
-
-        var submit = prepareEventRequestWithToken(user, eventId, data, startEvent.getToken(), simpleCaseRef);
-        try (var response = HttpClientBuilder.create().build().execute(submit)) {
-            assertThat(EntityUtils.toString(response.getEntity()), response.getStatusLine().getStatusCode(),
-                equalTo(201));
-        }
-        assertThat(UrlCallbackController.aboutToSubmitCalls, equalTo(1));
-        assertThat(UrlCallbackController.submittedCalls, equalTo(1));
-        assertThat(storedCaseData(simpleCaseRef).path("followUpNote").asText(),
-            equalTo(UrlCallbackController.ABOUT_TO_SUBMIT_MARKER));
     }
 
     @SneakyThrows
