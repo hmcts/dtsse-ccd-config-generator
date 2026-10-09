@@ -18,7 +18,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
-import uk.gov.hmcts.ccd.sdk.api.CallbackUrl;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
@@ -122,19 +121,14 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
                                        Event<T, R, S> event,
                                        boolean enabled,
                                        CallbackMetadata metadata) {
-    CallbackUrl callbackUrl = event.getCallbackUrls().get(metadata.webhook());
-    if (callbackUrl != null) {
-      target.put(metadata.callbackField(), callbackUrl.url());
-      if (callbackUrl.retries() != null) {
-        target.put(metadata.retriesField(), callbackUrl.retries());
+    String url = event.getCallbackUrls().get(metadata.webhook());
+    if (url == null) {
+      if (!enabled) {
+        return;
       }
-      return;
+      url = metadata.buildUrl(callbackHost, event.getId());
     }
-    if (!enabled) {
-      return;
-    }
-    target.put(metadata.callbackField(),
-        metadata.buildUrl(callbackHost, event.getId()));
+    target.put(metadata.callbackField(), url);
     String retry = event.getRetries().get(metadata.webhook());
     if (retry != null) {
       target.put(metadata.retriesField(), retry);

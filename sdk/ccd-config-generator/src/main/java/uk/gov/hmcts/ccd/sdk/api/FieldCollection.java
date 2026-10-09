@@ -39,7 +39,9 @@ public class FieldCollection {
   private Map<String, MidEvent> pagesToMidEvent;
 
   // Mid-event callbacks served at the service's own endpoints rather than by an SDK handler.
-  private Map<String, CallbackUrl> pagesToMidEventUrl;
+  private Map<String, String> pagesToMidEventUrl;
+
+  private Map<String, String> pagesToMidEventRetries;
 
   private String rootFieldname;
 
@@ -76,6 +78,7 @@ public class FieldCollection {
       result.pageShowConditions = new Hashtable<>();
       result.pagesToMidEvent = new HashMap<>();
       result.pagesToMidEventUrl = new HashMap<>();
+      result.pagesToMidEventRetries = new HashMap<>();
       result.pageLabels = new Hashtable<>();
       result.propertyUtils = propertyUtils;
       return result;
@@ -739,6 +742,14 @@ public class FieldCollection {
       return this.page(id);
     }
 
+    /** Starts a page with a mid-event handler and its retry timeouts. */
+    public FieldCollectionBuilder<Type, StateType, Parent> page(
+        String id, MidEvent<Type, StateType> callback, int... retries) {
+      page(id, callback);
+      midEventRetries(id, retries);
+      return this;
+    }
+
     /**
      * Starts a page whose mid-event callback is an endpoint the service already serves. The URL is
      * written verbatim, so definition placeholders such as {@code ${CCD_DEF_URL}} are kept.
@@ -747,12 +758,19 @@ public class FieldCollection {
       if (pagesToMidEvent.get(id) != null) {
         throw bothMidEventHandlerAndUrl(id);
       }
-      this.pagesToMidEventUrl.put(id, CallbackUrl.of(midEventUrl, retries));
+      this.pagesToMidEventUrl.put(id, midEventUrl);
+      midEventRetries(id, retries);
       return this.page(id);
     }
 
     public FieldCollectionBuilder<Type, StateType, Parent> page(String id) {
       return this.pageObj(id);
+    }
+
+    private void midEventRetries(String pageId, int... retries) {
+      if (retries.length > 0) {
+        pagesToMidEventRetries.put(pageId, EventBuilder.joinRetries(retries));
+      }
     }
 
     private IllegalStateException bothMidEventHandlerAndUrl(String pageId) {

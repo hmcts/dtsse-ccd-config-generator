@@ -16,7 +16,6 @@ import java.util.Map;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
-import uk.gov.hmcts.ccd.sdk.api.CallbackUrl;
 import uk.gov.hmcts.ccd.sdk.api.DisplayContext;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field;
@@ -149,28 +148,25 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
                                      Object pageId,
                                      Multimap<String, String> writtenCallbacks) {
     String pageKey = pageId.toString();
-    CallbackUrl callbackUrl = collection.getPagesToMidEventUrl().get(pageKey);
-    if (!collection.getPagesToMidEvent().containsKey(pageKey) && callbackUrl == null) {
+    String url = collection.getPagesToMidEventUrl().get(pageKey);
+    if (!collection.getPagesToMidEvent().containsKey(pageKey) && url == null) {
       return;
     }
     if (writtenCallbacks.containsEntry(event.getId(), pageKey)) {
       return;
     }
 
-    if (callbackUrl != null) {
-      row.put("CallBackURLMidEvent", callbackUrl.url());
-      if (callbackUrl.retries() != null) {
-        row.put("RetriesTimeoutURLMidEvent", callbackUrl.retries());
-      }
-      writtenCallbacks.put(event.getId(), pageKey);
-      return;
+    if (url == null) {
+      url = config.getCallbackHost() + "/callbacks/mid-event?page="
+          + URLEncoder.encode(pageKey, StandardCharsets.UTF_8)
+          + "&eventId="
+          + event.getId();
     }
-
-    String url = config.getCallbackHost() + "/callbacks/mid-event?page="
-        + URLEncoder.encode(pageKey, StandardCharsets.UTF_8)
-        + "&eventId="
-        + event.getId();
     row.put("CallBackURLMidEvent", url);
+    String retries = collection.getPagesToMidEventRetries().get(pageKey);
+    if (retries != null) {
+      row.put("RetriesTimeoutURLMidEvent", retries);
+    }
     writtenCallbacks.put(event.getId(), pageKey);
   }
 

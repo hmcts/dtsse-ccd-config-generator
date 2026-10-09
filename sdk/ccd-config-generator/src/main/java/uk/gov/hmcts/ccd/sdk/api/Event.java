@@ -58,7 +58,7 @@ public class Event<T, R extends HasRole, S> {
   private Submitted<T, S> submittedCallback;
   // Callbacks served at the service's own endpoints rather than by an SDK handler.
   @Setter(AccessLevel.NONE)
-  private Map<Webhook, CallbackUrl> callbackUrls;
+  private Map<Webhook, String> callbackUrls;
   // One handler per phase. A decentralised event's handlers are adapted into these; an external
   // event also has a payload type, so the runtime has a single path and branches only on that.
   @Getter(AccessLevel.NONE)
@@ -362,6 +362,13 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
+    /** Sets the about-to-start handler with its retry timeouts. */
+    public EventBuilder<T, R, S> aboutToStartCallback(AboutToStart<T, S> aboutToStartCallback, int... retries) {
+      aboutToStartCallback(aboutToStartCallback);
+      setRetries(Webhook.AboutToStart, retries);
+      return this;
+    }
+
     /**
      * Points the about-to-start callback at an endpoint the service already serves. The URL is
      * written verbatim, so definition placeholders such as {@code ${CCD_DEF_URL}} are kept.
@@ -377,6 +384,13 @@ public class Event<T, R extends HasRole, S> {
       }
       rejectCallbackUrl(Webhook.Submitted, submittedCallback != null);
       this.submittedCallback = submittedCallback;
+      return this;
+    }
+
+    /** Sets the submitted handler with its retry timeouts. */
+    public EventBuilder<T, R, S> submittedCallback(Submitted<T, S> submittedCallback, int... retries) {
+      submittedCallback(submittedCallback);
+      setRetries(Webhook.Submitted, retries);
       return this;
     }
 
@@ -398,6 +412,13 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
+    /** Sets the about-to-submit handler with its retry timeouts. */
+    public EventBuilder<T, R, S> aboutToSubmitCallback(AboutToSubmit<T, S> aboutToSubmitCallback, int... retries) {
+      aboutToSubmitCallback(aboutToSubmitCallback);
+      setRetries(Webhook.AboutToSubmit, retries);
+      return this;
+    }
+
     /**
      * Points the about-to-submit callback at an endpoint the service already serves. The URL is
      * written verbatim, so definition placeholders such as {@code ${CCD_DEF_URL}} are kept.
@@ -410,7 +431,8 @@ public class Event<T, R extends HasRole, S> {
       if (hasHandler) {
         throw bothHandlerAndUrl(id, hook.toString());
       }
-      this.callbackUrls.put(hook, CallbackUrl.of(url, retries));
+      this.callbackUrls.put(hook, url);
+      setRetries(hook, retries);
       return this;
     }
 
@@ -447,7 +469,7 @@ public class Event<T, R extends HasRole, S> {
       this.onStart = value;
     }
 
-    private void callbackUrls(Map<Webhook, CallbackUrl> value) {
+    private void callbackUrls(Map<Webhook, String> value) {
       this.callbackUrls = value;
     }
 
@@ -492,10 +514,12 @@ public class Event<T, R extends HasRole, S> {
 
     private void setRetries(Webhook hook, int... retries) {
       if (retries.length > 0) {
-        String val = String.join(",", Arrays.stream(retries).mapToObj(String::valueOf).collect(
-            Collectors.toList()));
-        this.retries.put(hook, val);
+        this.retries.put(hook, joinRetries(retries));
       }
+    }
+
+    static String joinRetries(int... retries) {
+      return Arrays.stream(retries).mapToObj(String::valueOf).collect(Collectors.joining(","));
     }
   }
 }
