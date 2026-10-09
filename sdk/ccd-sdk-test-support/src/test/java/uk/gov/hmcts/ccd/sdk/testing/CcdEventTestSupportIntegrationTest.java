@@ -122,6 +122,20 @@ class CcdEventTestSupportIntegrationTest {
   }
 
   @Test
+  void historyListsEveryEventOnTheCaseOldestFirst() {
+    var cases = events.forCaseType(CASE_TYPE);
+    long reference = cases.seed(TestState.Open, new TestCase("original"));
+    var first = cases.event(reference, "readOnly", new TestCase("one")).submitExpectingSuccess();
+    var second = cases.event(reference, "metadata", new TestCase("two")).submitExpectingSuccess();
+
+    var history = events.history(reference);
+
+    assertThat(history).extracting(CcdEventTestSupport.Audit::id)
+        .endsWith(first.audit().id(), second.audit().id());
+    assertThat(history.getLast().eventId()).isEqualTo("metadata");
+  }
+
+  @Test
   void duplicateSubmissionReplaysExistingAuditEvent() {
     var cases = events.forCaseType(CASE_TYPE);
     long reference = cases.seed(TestState.Open, new TestCase("original"));
