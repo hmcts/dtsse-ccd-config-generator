@@ -15,7 +15,7 @@ public final class AfterCommit {
     actions.add(action);
   }
 
-  /** For the runtime, once the event has committed. */
+  /** For the runtime, once the event has committed; a handler calling it would run the work mid-transaction. */
   public void run() {
     actions.forEach(Runnable::run);
   }

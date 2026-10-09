@@ -193,7 +193,7 @@ public class Event<T, R extends HasRole, S> {
           // The runtime has already read the payload as submitType; a cast through the class would
           // reject a boxed value for a primitive payload type.
           submit.submit(new ExternalSubmitRequest<>(event.caseReference(), (I) payload, user,
-              event.afterCommit()))));
+              event.afterCommitActions()))));
       return this;
     }
 

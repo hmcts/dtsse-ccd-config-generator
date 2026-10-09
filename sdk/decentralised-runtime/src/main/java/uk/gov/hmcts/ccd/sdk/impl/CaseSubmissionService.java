@@ -17,7 +17,6 @@ import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.domain.model.callbacks.AfterSubmitCallbackResponse;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
-import uk.gov.hmcts.ccd.sdk.api.AfterCommit;
 import uk.gov.hmcts.ccd.sdk.api.EventMetadata;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 
@@ -32,7 +31,8 @@ public class CaseSubmissionService {
   private final CaseEventTransactionCoordinator transactionCoordinator;
   private final CaseDataRepository caseDataRepository;
 
-  // Never inside a caller's transaction, so afterCommit runs after the event has committed.
+  // Never inside a caller's transaction, so the response supplier, and the work handlers register
+  // to run after the commit, run once the event has committed.
   @Transactional(propagation = Propagation.NEVER)
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
                                                  String authorisation,
@@ -46,13 +46,12 @@ public class CaseSubmissionService {
         : null;
 
     try {
-      var afterCommit = new AfterCommit();
       var transactionResult =
           transactionCoordinator.execute(
               event.getCaseDetails().getReference(),
               idempotencyKey,
               startRevision,
-              () -> prepareSubmission(event, user, handler, afterCommit)
+              () -> prepareSubmission(event, user, handler)
           );
 
       if (transactionResult.replayed()) {
@@ -61,7 +60,6 @@ public class CaseSubmissionService {
             transactionResult.eventId()
         );
       }
-      afterCommit.run();
 
       var created = transactionResult.created().orElseThrow();
       return buildSuccessResponse(new SubmissionOutcome(created.savedCase(), created.result()));
@@ -77,10 +75,9 @@ public class CaseSubmissionService {
   private CaseEventTransactionCoordinator.CaseEventWrite<Supplier<SubmitResponse<?>>> prepareSubmission(
       DecentralisedCaseEvent event,
       IdamService.User user,
-      CaseSubmissionHandler handler,
-      AfterCommit afterCommit
+      CaseSubmissionHandler handler
   ) {
-    var handlerResult = handler.apply(event, user, afterCommit);
+    var handlerResult = handler.apply(event, user);
     applyHandlerChanges(event, handlerResult);
 
     return new CaseEventTransactionCoordinator.CaseEventWrite<>(

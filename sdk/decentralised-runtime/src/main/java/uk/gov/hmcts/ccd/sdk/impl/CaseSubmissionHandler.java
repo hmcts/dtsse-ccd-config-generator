@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Optional;
 import java.util.function.Supplier;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
-import uk.gov.hmcts.ccd.sdk.api.AfterCommit;
 import uk.gov.hmcts.ccd.sdk.api.EventMetadata;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 import uk.gov.hmcts.reform.ccd.client.model.SignificantItem;
@@ -15,7 +14,7 @@ import uk.gov.hmcts.reform.ccd.client.model.SignificantItem;
  */
 interface CaseSubmissionHandler {
 
-  CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, IdamService.User user, AfterCommit afterCommit);
+  CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, IdamService.User user);
 
   /**
    * Result returned by a submission handler after it has prepared all in-transaction mutations.

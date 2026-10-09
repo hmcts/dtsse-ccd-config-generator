@@ -201,6 +201,9 @@ public class TestWithCCD extends CftlibTest {
     private SystemEventExecutor systemEventExecutor;
 
     @Autowired
+    private ExternalGreetingEvent greetingEvent;
+
+    @Autowired
     @Qualifier("retainAndDisposeTask")
     private Runnable retainAndDisposeTask;
 
@@ -4573,6 +4576,8 @@ public class TestWithCCD extends CftlibTest {
             mapper.writeValueAsString(new ExternalGreetingEvent.Reply("hello back")));
 
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+        assertThat("the handler's after-commit work runs once the event has committed",
+            greetingEvent.lastAfterCommit, equalTo(new ExternalGreetingEvent.AfterCommitSighting(false, "hello back")));
         var history = getLatestAuditEvent(EXTERNAL_EVENT_USER, caseRef, ExternalGreetingEvent.GREETING.id());
         assertThat(history.get("summary"), equalTo("hello back"));
         assertThat("the submit handler is told who submitted", history.get("description"),
@@ -4613,6 +4618,7 @@ public class TestWithCCD extends CftlibTest {
         var audits = auditCountForCase(caseRef);
         var notes = caseNoteCount(caseRef);
         var start = startExternalEvent(caseRef, ExternalGreetingEvent.GREETING.id());
+        greetingEvent.lastAfterCommit = null;
 
         var response = submitExternalEvent(caseRef, ExternalGreetingEvent.GREETING.id(), start.getToken(),
             mapper.writeValueAsString(new ExternalGreetingEvent.Reply(" ")));
@@ -4624,6 +4630,7 @@ public class TestWithCCD extends CftlibTest {
         assertThat(auditCountForCase(caseRef), equalTo(audits));
         assertThat("the note written before the rejection was thrown is rolled back",
             caseNoteCount(caseRef), equalTo(notes));
+        assertThat("nothing registered to run after the commit runs", greetingEvent.lastAfterCommit, nullValue());
     }
 
     private int caseNoteCount(long reference) {

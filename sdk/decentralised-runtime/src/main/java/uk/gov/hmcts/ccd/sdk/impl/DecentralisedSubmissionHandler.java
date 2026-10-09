@@ -31,11 +31,11 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
   private final ObjectMapper mapper;
 
   @Override
-  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, IdamService.User user,
-                                           AfterCommit afterCommit) {
+  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, IdamService.User user) {
     log.info("[submit-handler] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
+    var afterCommit = new AfterCommit();
     var outcome = prepareSubmitHandler(event, user, afterCommit);
 
     if (outcome.getErrors() != null && !outcome.getErrors().isEmpty()) {
@@ -51,7 +51,10 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
         securityClassification,
         Optional.ofNullable(outcome.getEventMetadata()),
         Optional.ofNullable(outcome.getSignificantItem()),
-        () -> outcome);
+        () -> {
+          afterCommit.run();
+          return outcome;
+        });
   }
 
   private SubmitResponse<?> prepareSubmitHandler(DecentralisedCaseEvent event, IdamService.User user,

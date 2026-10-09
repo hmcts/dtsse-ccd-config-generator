@@ -222,6 +222,8 @@ The common transaction ordering lives in [`CaseEventTransactionCoordinator`](../
 
 A submit handler can register work to run once its event has committed, before the response is returned, with `afterCommit(Runnable)`. Nothing runs if the event does not commit.
 
+An action that throws fails the request although the event has committed, as any failure after the commit would. A retry with the same idempotency key replays the event's response without running the actions again.
+
 ```java
 submit.afterCommit(() -> camunda.send(cancel));
 ```

@@ -7,15 +7,15 @@ import org.springframework.util.MultiValueMap;
 public record EventPayload<T, S>(Long caseReference,
                                  T caseData,
                                  MultiValueMap<String, String> urlParams,
-                                 AfterCommit afterCommit) {
+                                 AfterCommit afterCommitActions) {
 
-  /** As a start handler is given: work registered after it never runs. */
+  /** A payload whose registered after-commit work is discarded, as a start handler's is. */
   public EventPayload(Long caseReference, T caseData, MultiValueMap<String, String> urlParams) {
     this(caseReference, caseData, urlParams, new AfterCommit());
   }
 
   /** Runs the action once the event has committed, before its response is returned. */
   public void afterCommit(Runnable action) {
-    afterCommit.add(action);
+    afterCommitActions.add(action);
   }
 }
