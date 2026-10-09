@@ -481,6 +481,61 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void preloadIgnoresHigherIdEventsFromOtherCaseTypes() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(900000, 10, "other", "Submitted", "{\"field\":\"other\"}", "OtherCase", minutesAgo(60));
+
+    CcdDataMigrationRunResult firstRun = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    assertThat(firstRun.caughtUp()).isTrue();
+    assertThat(sourceEventHwm()).isEqualTo(101);
+
+    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", minutesAgo(30));
+    CcdDataMigrationRunResult secondRun = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    assertThat(secondRun.eventsProcessed()).isEqualTo(1);
+    assertThat(countRows("ccd.case_event")).isEqualTo(2);
+    assertThat(sourceEventHwm()).isEqualTo(102);
+  }
+
+  @Test
+  void preloadRewindsProgressThatOvershotMigratedCaseTypeEvents() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+    jdbc.update(
+        "update ccd_data_migration.ccd_data_migration_progress set source_event_hwm = 900000",
+        Map.of()
+    );
+
+    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", minutesAgo(30));
+    CcdDataMigrationRunResult result = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(result.eventsProcessed()).isEqualTo(1);
+    assertThat(countRows("ccd.case_event")).isEqualTo(2);
+    assertThat(caseEventRevision(102)).isEqualTo(2);
+    assertThat(sourceEventHwm()).isEqualTo(102);
+  }
+
+  @Test
+  void cutoverIgnoresHigherIdEventsFromOtherCaseTypes() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(900000, 10, "other", "Submitted", "{\"field\":\"other\"}", "OtherCase", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", LocalDateTime.now());
+    CcdDataMigrationRunResult result = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(cutoverEventHwm()).isEqualTo(102);
+    assertThat(countRows("ccd.case_event")).isEqualTo(2);
+    assertThat(progressStatus()).isEqualTo("COMPLETE");
+  }
+
+  @Test
   void preloadAdvancesAcrossEmptySourceEventIdWindows() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
