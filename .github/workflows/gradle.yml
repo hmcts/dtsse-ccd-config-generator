@@ -13,6 +13,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Pull requests and the merge queue migrate a 10k case dataset; pushes to master keep the full 100k.
+      # Both Gradle steps need the same value, or the coverage report reruns the migration tests.
+      PERF_CASES: ${{ github.event_name == 'push' && '100000' || '10000' }}
     environment:
       name: cftlib-acr-pull
       deployment: false
@@ -69,13 +73,10 @@ jobs:
       run: az acr login --name hmctsprod
     - name: Run SDK checks and e2e test
       if: steps.changes.outputs.docs_only != 'true'
-      env:
-        # Pull requests and the merge queue migrate a 10k case dataset; pushes to master keep the full 100k.
-        PERF_CASES: ${{ github.event_name == 'push' && '100000' || '10000' }}
       run: ./gradlew :sdk:check :e2e:check -i --stacktrace -Dccd.data-migration.perf.cases="$PERF_CASES"
     - name: Generate aggregate coverage report
       if: steps.changes.outputs.docs_only != 'true'
-      run: ./gradlew :sdk:jacocoAggregateReport
+      run: ./gradlew :sdk:jacocoAggregateReport -Dccd.data-migration.perf.cases="$PERF_CASES"
     - name: Publish coverage summary
       if: steps.changes.outputs.docs_only != 'true'
       env:
