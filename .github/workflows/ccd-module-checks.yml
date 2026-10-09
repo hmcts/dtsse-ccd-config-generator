@@ -56,11 +56,21 @@ jobs:
             compileTests: false
             runSemanticDiff: true
             changePath: test-projects/pcs-api
-          - checkName: PCS Integration
+          - checkName: PCS Integration 1
             module: pcs
             gradleGenerate: pcs:generateCCDConfig
             gradleTestClasses: pcs:testClasses
-            gradleIntegration: pcs:integration
+            gradleIntegration: pcs:integration -PintegrationShard=1/2
+            definitionsDir: test-projects/pcs-api/build/definitions
+            runIntegration: true
+            compileTests: true
+            runSemanticDiff: false
+            changePath: test-projects/pcs-api
+          - checkName: PCS Integration 2
+            module: pcs
+            gradleGenerate: pcs:generateCCDConfig
+            gradleTestClasses: pcs:testClasses
+            gradleIntegration: pcs:integration -PintegrationShard=2/2
             definitionsDir: test-projects/pcs-api/build/definitions
             runIntegration: true
             compileTests: true
