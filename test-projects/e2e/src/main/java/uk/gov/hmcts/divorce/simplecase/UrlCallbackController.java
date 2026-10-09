@@ -17,14 +17,10 @@ import org.springframework.web.bind.annotation.RestController;
 public class UrlCallbackController {
 
     public static final String PATH = "/simple-case/url-callbacks";
-    public static final String ABOUT_TO_SUBMIT_MARKER = "set by URL about-to-submit";
     public static final String MID_EVENT_MARKER = "set by URL mid-event";
-    public static final String CONFIRMATION_HEADER = "# URL submitted callback ran";
 
     public static volatile int aboutToStartCalls;
     public static volatile int midEventCalls;
-    public static volatile int aboutToSubmitCalls;
-    public static volatile int submittedCalls;
 
     @PostMapping("/about-to-start")
     public Map<String, Object> aboutToStart(@RequestBody Map<String, Object> request) {
@@ -38,20 +34,6 @@ public class UrlCallbackController {
         Map<String, Object> data = caseData(request);
         data.put("description", MID_EVENT_MARKER);
         return response(data);
-    }
-
-    @PostMapping("/about-to-submit")
-    public Map<String, Object> aboutToSubmit(@RequestBody Map<String, Object> request) {
-        aboutToSubmitCalls++;
-        Map<String, Object> data = caseData(request);
-        data.put("followUpNote", ABOUT_TO_SUBMIT_MARKER);
-        return response(data);
-    }
-
-    @PostMapping("/submitted")
-    public Map<String, Object> submitted(@RequestBody Map<String, Object> request) {
-        submittedCalls++;
-        return Map.of("confirmation_header", CONFIRMATION_HEADER);
     }
 
     @SuppressWarnings("unchecked")
