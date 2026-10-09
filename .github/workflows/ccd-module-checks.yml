@@ -36,8 +36,17 @@ jobs:
             gradleTestClasses: pcs:testClasses
             gradleIntegration: pcs:integration
             definitionsDir: test-projects/pcs-api/build/definitions
-            runIntegration: true
+            runIntegration: false
             runSemanticDiff: true
+            changePath: test-projects/pcs-api
+          - checkName: PCS Integration
+            module: pcs
+            gradleGenerate: pcs:generateCCDConfig
+            gradleTestClasses: pcs:testClasses
+            gradleIntegration: pcs:integration
+            definitionsDir: test-projects/pcs-api/build/definitions
+            runIntegration: true
+            runSemanticDiff: false
             changePath: test-projects/pcs-api
           - checkName: Semantic Diff - SPTribs
             module: sptribs
