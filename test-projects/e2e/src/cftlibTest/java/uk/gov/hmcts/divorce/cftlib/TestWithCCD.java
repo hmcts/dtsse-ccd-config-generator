@@ -3671,13 +3671,16 @@ public class TestWithCCD extends CftlibTest {
             mapper.convertValue(startEvent.getCaseDetails().getData(), new TypeReference<Map<String, Object>>() {}));
         data.put("followUpNote", "entered by the caseworker");
 
+        // CCD identifies a wizard page by its event ID followed by its PageID, as XUI sends it.
         var validate = buildRequest(user, BASE_URL + "/case-types/" + SimpleCaseConfiguration.CASE_TYPE
-            + "/validate?pageId=" + SimpleCaseConfiguration.URL_CALLBACKS_PAGE, HttpPost::new);
+            + "/validate?pageId=" + eventId + SimpleCaseConfiguration.URL_CALLBACKS_PAGE,
+            HttpPost::new);
         withCcdAccept(validate, ACCEPT_CASE_DATA_VALIDATE);
         validate.setEntity(new StringEntity(mapper.writeValueAsString(Map.of(
             "data", data,
             "event", Map.of("id", eventId),
             "event_token", startEvent.getToken(),
+            "case_reference", String.valueOf(simpleCaseRef),
             "ignore_warning", false
         )), ContentType.APPLICATION_JSON));
         try (var response = HttpClientBuilder.create().build().execute(validate)) {
