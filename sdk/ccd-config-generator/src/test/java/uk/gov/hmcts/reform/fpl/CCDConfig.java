@@ -283,10 +283,10 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     builder.searchCasesFields()
       .field(CaseData::getAllocatedJudge, "Allocated Judge")
       .field(CaseData::getDateSubmitted, "Date submitted", "#DATETIMEDISPLAY(d  MMMM yyyy)")
-      .field("documentList", "Document selection", "#COLLECTION_VIEW", "documentList.value", "Ascending")
+      .field("documentList", "Document selection", "#COLLECTION_VIEW", "documentList.value", "1:ASC")
       .field(CaseData::getOrganisationPolicy, "Organisation policy", "#ACCESS_PROFILE",
         "organisationPolicy.organisation.OrganisationID")
-      .caseReferenceField()
+      .field("[CASE_REFERENCE]", "Case Number", null, null, "2:ASC")
       .stateField();
   }
 
