@@ -50,6 +50,7 @@ try {
       import {
         buildDoc,
         createDocEditor,
+        renderHtml,
         TemplateRequestError,
       } from "@hmcts-cft/docweave";
       import { createTemplateProxy } from "@hmcts-cft/docweave/express";
@@ -71,6 +72,9 @@ try {
         const controller = createEditor();
         controller.render(target);
         assert.equal(controller.getDocument(), target);
+        assert.equal(globalThis.document, undefined);
+        assert.equal(renderHtml(controller.getSnapshot()), "<p>IT IS ORDERED THAT:</p>");
+        assert.equal(commonJs.renderHtml(controller.getSnapshot()), "<p>IT IS ORDERED THAT:</p>");
         controller.destroy();
       }
 
