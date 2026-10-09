@@ -1,7 +1,10 @@
 package uk.gov.hmcts.ccd.sdk.testing;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Duration;
+import java.time.Instant;
 import org.springframework.beans.factory.InjectionPoint;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -15,6 +18,10 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Scope;
 import org.springframework.core.ResolvableType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -41,6 +48,28 @@ public class CcdEventTestConfiguration {
     @Bean
     feign.Capability ccdSdkTestIdentity(TestActors actors) {
       return new TestIdentityCapability(actors);
+    }
+  }
+
+  /**
+   * Answers the application's OAuth2 client token requests, such as for the system user it runs
+   * background work as, with the default test user's token, when the application uses Spring
+   * Security's OAuth2 client.
+   */
+  @Configuration(proxyBeanMethods = false)
+  @ConditionalOnClass(name = "org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager")
+  static class OAuth2ClientIdentity {
+
+    @Bean
+    @Primary
+    OAuth2AuthorizedClientManager ccdSdkTestAuthorizedClientManager(
+        ObjectProvider<ClientRegistrationRepository> registrations) {
+      return request -> new OAuth2AuthorizedClient(
+          registrations.getObject().findByRegistrationId(request.getClientRegistrationId()),
+          request.getPrincipal().getName(),
+          new OAuth2AccessToken(OAuth2AccessToken.TokenType.BEARER,
+              TestIdamService.DEFAULT_TOKEN.substring("Bearer ".length()),
+              Instant.now(), Instant.now().plus(Duration.ofHours(8))));
     }
   }
 

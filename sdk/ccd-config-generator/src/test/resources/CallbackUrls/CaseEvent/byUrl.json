@@ -1,0 +1,22 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CallbackUrls",
+    "ID": "byUrl",
+    "Name": "By URL",
+    "Description": "By URL",
+    "DisplayOrder": 1,
+    "EndButtonLabel": "Save and continue",
+    "PreConditionState(s)": "Open",
+    "PostConditionState": "Closed",
+    "SecurityClassification": "Public",
+    "ShowSummary": "N",
+    "ShowEventNotes": "N",
+    "Publish": "N",
+    "CallBackURLAboutToStartEvent": "${CCD_DEF_IA_URL}/asylum/ccdAboutToStart",
+    "RetriesTimeoutAboutToStartEvent": "5,5,5,5",
+    "CallBackURLAboutToSubmitEvent": "${CCD_DEF_IA_URL}/asylum/ccdAboutToSubmit",
+    "RetriesTimeoutURLAboutToSubmitEvent": "5,5,5,5",
+    "CallBackURLSubmittedEvent": "${CCD_DEF_IA_URL}/asylum/ccdSubmitted"
+  }
+]

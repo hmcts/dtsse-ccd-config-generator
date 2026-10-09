@@ -176,6 +176,11 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
     return caseType().view(reference, actor);
   }
 
+  /** The case's history: every event on it, oldest first, including those the application recorded itself. */
+  public List<Audit> history(long reference) {
+    return caseType().history(reference);
+  }
+
   public static final class Actor {
     private final String authorisation;
     private final ActorDetails details;
@@ -444,16 +449,26 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
           supplementary == null ? Map.of() : mapper.convertValue(fromJson(supplementary), OBJECT_MAP));
     }
 
+    private static final String CASE_EVENTS = """
+        select ce.id, ce.event_id, ce.version, ce.case_revision, ce.user_id, ce.summary, ce.description
+        from ccd.case_event ce
+        join ccd.case_data cd on cd.id = ce.case_data_id
+        where cd.reference = ?
+        """;
+
     private Audit audit(long reference, UUID idempotencyKey) {
-      Map<String, Object> row = jdbc.queryForMap("""
-          select ce.id, ce.event_id, ce.version, ce.case_revision, ce.user_id, ce.summary, ce.description
-          from ccd.case_event ce
-          join ccd.case_data cd on cd.id = ce.case_data_id
-          where cd.reference = ? and ce.idempotency_key = ?
-          """, reference, idempotencyKey);
+      return audit(jdbc.queryForMap(CASE_EVENTS + " and ce.idempotency_key = ?", reference, idempotencyKey));
+    }
+
+    private static Audit audit(Map<String, Object> row) {
       return new Audit(((Number) row.get("id")).longValue(), (String) row.get("event_id"),
           ((Number) row.get("version")).intValue(), ((Number) row.get("case_revision")).longValue(),
           (String) row.get("user_id"), (String) row.get("summary"), (String) row.get("description"));
+    }
+
+    /** The case's history: every event on it, oldest first, including those the application recorded itself. */
+    public List<Audit> history(long reference) {
+      return jdbc.queryForList(CASE_EVENTS + " order by ce.id", reference).stream().map(CaseType::audit).toList();
     }
 
     private CaseDetails caseDetails(long reference, Map<String, Object> stored, Map<String, JsonNode> data) {

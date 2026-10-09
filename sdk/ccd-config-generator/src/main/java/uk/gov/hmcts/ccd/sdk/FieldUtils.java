@@ -1,6 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import static org.apache.commons.lang3.StringUtils.capitalize;
+import static org.springframework.util.StringUtils.capitalize;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;

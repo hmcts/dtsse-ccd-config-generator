@@ -33,6 +33,10 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
     public static final String FOLLOW_UP_EVENT = "simple-case-follow-up";
     public static final String STATE_ONLY_EVENT = "simple-case-state-only";
     public static final String EMPTY_DATA_EVENT = "simple-case-empty-data";
+    public static final String URL_CALLBACKS_EVENT = "simple-case-url-callbacks";
+    public static final String URL_CALLBACKS_PAGE = "urlCallbacks";
+    // Resolved on import, as a hand-written definition's callback hosts are.
+    public static final String URL_CALLBACKS_BASE = "${SIMPLE_CASE_URL}" + UrlCallbackController.PATH;
     public static final String OPTIONS_CREATE_EVENT = "create-simple-case-with-options";
     public static final String HISTORY_TAB = "simpleCaseHistory";
     public static final String PRINTABLE_DOCUMENTS_URL = "http://localhost:4013/simple-case/printable-documents";
@@ -104,6 +108,19 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
             .done();
 
         configureOptionsCreateEvent(configBuilder);
+
+        configBuilder
+            .event(URL_CALLBACKS_EVENT)
+            .forState(SimpleCaseState.FOLLOW_UP)
+            .name("Simple case URL callbacks")
+            .description("Callbacks served at the service's own endpoints")
+            .aboutToStartCallback(URL_CALLBACKS_BASE + "/about-to-start", 0)
+            .grant(CREATE_READ_UPDATE, UserRole.CASE_WORKER)
+            .grantHistoryOnly(UserRole.SUPER_USER)
+            .fields()
+            .page(URL_CALLBACKS_PAGE, URL_CALLBACKS_BASE + "/mid-event")
+            .optional(SimpleCaseData::getDescription)
+            .optional(SimpleCaseData::getFollowUpNote);
 
         configBuilder
             .event(STATE_ONLY_EVENT)
