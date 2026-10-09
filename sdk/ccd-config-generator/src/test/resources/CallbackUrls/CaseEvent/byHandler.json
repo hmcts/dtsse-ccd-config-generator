@@ -1,0 +1,19 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CallbackUrls",
+    "ID": "byHandler",
+    "Name": "By handler",
+    "Description": "By handler",
+    "DisplayOrder": 1,
+    "EndButtonLabel": "Save and continue",
+    "PreConditionState(s)": "Open",
+    "PostConditionState": "Closed",
+    "SecurityClassification": "Public",
+    "ShowSummary": "N",
+    "ShowEventNotes": "N",
+    "Publish": "N",
+    "CallBackURLAboutToStartEvent": "/callbacks/about-to-start?eventId=byHandler",
+    "CallBackURLAboutToSubmitEvent": "/callbacks/about-to-submit?eventId=byHandler"
+  }
+]
