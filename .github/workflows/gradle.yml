@@ -84,7 +84,7 @@ jobs:
       env:
         # Pull requests and the merge queue migrate a 10k case dataset; pushes to master keep the full 100k.
         PERF_CASES: ${{ github.event_name == 'push' && '100000' || '10000' }}
-      run: ./gradlew :sdk:check :e2e:check -i --stacktrace -Dccd.data-migration.perf.cases="$PERF_CASES"
+      run: ./gradlew :e2e:check :sdk:check -i --stacktrace -Dccd.data-migration.perf.cases="$PERF_CASES"
     - name: Generate aggregate coverage report
       if: steps.changes.outputs.docs_only != 'true'
       run: ./gradlew :sdk:jacocoAggregateReport
