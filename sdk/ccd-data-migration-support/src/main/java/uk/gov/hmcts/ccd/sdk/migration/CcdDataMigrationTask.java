@@ -689,12 +689,16 @@ public class CcdDataMigrationTask implements Runnable {
     );
   }
 
+  // Source event high-water marks only consider the migrated case types. Other case types can hold
+  // event ids far above the live sequence (for example data loaded with explicit ids), and a target
+  // taken from them would move progress past the ids new migrated events are still being given.
   private long sourceEventHighWaterMark() {
     return withMigrationStatementTimeout(() -> {
       Long hwm = db.queryForObject(
           """
           select coalesce(max(id), 0)
           from fdw_stage.case_event
+          where case_type_id in (:caseTypeIds)
           """,
           baseParams(),
           Long.class
@@ -708,9 +712,10 @@ public class CcdDataMigrationTask implements Runnable {
         """
         select id
         from fdw_stage.case_event
-        where created_date < (
-          select localtimestamp - interval '2 minutes'
-        )
+        where case_type_id in (:caseTypeIds)
+          and created_date < (
+            select localtimestamp - interval '2 minutes'
+          )
         order by id desc
         limit 1
         """,
@@ -816,6 +821,24 @@ public class CcdDataMigrationTask implements Runnable {
 
   private long effectiveSourceEventHighWaterMark(long targetEventHwm) {
     long progressEventHwm = sourceEventProgressHighWaterMark();
+    if (progressEventHwm > targetEventHwm) {
+      // Progress saved by a version that took its target from every case type can sit above the
+      // migrated case types' newest event, so their newer, lower-id events would never be copied.
+      // Everything above the newest copied event is missing from the target, so resume from there.
+      long localEventHwm = localEventHighWaterMark();
+      if (localEventHwm < targetEventHwm) {
+        log.warn(
+            "Rewinding CCD data migration progress taskName={} from sourceEventHwm={} to localEventHwm={} "
+                + "because the migrated case types have uncopied events up to targetEventHwm={}",
+            options.taskName(),
+            progressEventHwm,
+            localEventHwm,
+            targetEventHwm
+        );
+        updateSourceEventProgressHighWaterMark(localEventHwm);
+        return localEventHwm;
+      }
+    }
     if (progressEventHwm > 0) {
       return progressEventHwm;
     }

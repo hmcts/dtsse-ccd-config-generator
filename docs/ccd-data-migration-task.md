@@ -68,6 +68,15 @@ timestamps through the FDW table, so `case_event.created_date` is used as the av
 `CUTOVER` does not apply the margin because source writes must be frozen and in-flight transactions
 drained first.
 
+Both the preload and cutover high-water marks are taken from the migrated case types' events only.
+A source database can hold events for other case types with ids far above the live sequence, for
+example data loaded with explicit ids. If the target were taken from those, progress would move past
+the ids that new events for the migrated case types are still being given, and those events would
+never be copied. Progress saved by an older SDK version that used every case type can be in that
+state. When the saved position is above the migrated case types' newest source event and newer
+source events exist than the newest copied one, the task rewinds the position to the newest copied
+event, logs a warning, and copies the gap.
+
 Preloaded `case_data` is provisional. Its purpose is to satisfy the event FK. Every copied event
 batch inserts missing parent source `case_data` rows for that batch. Significant items are copied
 only during `CUTOVER`, using one `insert into ... select` query that reads source significant items
