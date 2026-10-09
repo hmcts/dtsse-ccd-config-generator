@@ -224,9 +224,27 @@ A submit handler can register work to run once its event has committed, before t
 
 An action that throws fails the request although the event has committed, as any failure after the commit would. A retry with the same idempotency key replays the event's response without running the actions again.
 
+A typical use is closing the Work Allocation task the user came from. The handler queues the cancellation in the event's transaction, so it is only sent if the event commits and is retried if sending fails, then waits for it after the commit, so the task has gone from the user's list when their page reloads:
+
 ```java
-submit.afterCommit(() -> camunda.send(cancel));
+public record ReviewDecision(String taskId, boolean approved) {
+}
+
+private ExternalSubmitResponse<State> submit(ExternalSubmitRequest<ReviewDecision> submit) {
+    ReviewDecision decision = submit.payload();
+    reviews.record(submit.caseReference(), decision.approved());
+
+    // Queued in the event's transaction: it exists only if the event commits.
+    var cancellation = taskCancellations.schedule(decision.taskId());
+
+    // Once the event has committed, before the response: wait for the cancellation to be sent.
+    submit.afterCommit(cancellation::await);
+
+    return ExternalSubmitResponse.accepted("Review recorded", "Recorded a review decision");
+}
 ```
+
+A decentralised event's handler registers work the same way, through `EventPayload.afterCommit(Runnable)`.
 
 ## Supplementary data
 
