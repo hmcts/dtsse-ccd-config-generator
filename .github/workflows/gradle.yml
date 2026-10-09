@@ -67,6 +67,18 @@ jobs:
     - name: ACR Login
       if: steps.changes.outputs.docs_only != 'true'
       run: az acr login --name hmctsprod
+    - name: Pull cftlib images in the background
+      if: steps.changes.outputs.docs_only != 'true'
+      # The images in rse-cft-lib's docker-compose.yml, pulled while Gradle builds and runs the SDK tests.
+      run: |
+        for image in \
+          postgres:15 \
+          docker.elastic.co/elasticsearch/elasticsearch:9.2.4 \
+          hmctsprod.azurecr.io/xui/webapp:latest \
+          hmctsprod.azurecr.io/xui/mo-webapp:latest \
+          hmctsprod.azurecr.io/hmcts/rse/rse-idam-simulator:latest; do
+          nohup docker pull --quiet "$image" > /dev/null 2>&1 &
+        done
     - name: Run SDK checks and e2e test
       if: steps.changes.outputs.docs_only != 'true'
       env:
