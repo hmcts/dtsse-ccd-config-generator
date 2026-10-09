@@ -22,7 +22,7 @@ const snapshot = (content: NodeJSON[], generated = content): DocWeaveSnapshot =>
   current: { type: "doc", content }, generated: { type: "doc", content: generated },
 });
 
-/** Stable inputs shared by golden generation and the DOM-free behavioural tests. */
+/** Stable inputs for exact comparisons between the DOM and DOM-free renderers. */
 export function htmlCases(): HtmlCase[] {
   const cases: HtmlCase[] = [{ name: "generated-order", snapshot: generatedOrder() }];
   cases.push({ name: "escaping", snapshot: snapshot([

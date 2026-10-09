@@ -1,4 +1,4 @@
-/** Reference renderer: ProseMirror plus a dev-only DOM, used to generate HTML goldens. */
+/** Reference renderer: ProseMirror plus a dev-only DOM, used to generate expected HTML in parity tests. */
 import { DOMSerializer, type Node as ProseMirrorNode } from "prosemirror-model";
 
 import {

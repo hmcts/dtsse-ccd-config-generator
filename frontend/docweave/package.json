@@ -40,8 +40,7 @@
     "start": "NODE_ENV=production node dist/demo/server/server.js",
     "test": "npm run build:lib && npm run test:built",
     "test:built": "npm run typecheck && tsx --test test/*.test.ts test/demo/*.test.ts && node test/package-smoke.mjs",
-    "typecheck": "tsc --noEmit",
-    "test:goldens:generate": "tsx test/generate-html-goldens.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "prosemirror-commands": "1.7.2",
