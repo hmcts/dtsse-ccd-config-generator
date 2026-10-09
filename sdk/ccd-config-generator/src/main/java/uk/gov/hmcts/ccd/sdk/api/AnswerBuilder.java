@@ -3,7 +3,7 @@ package uk.gov.hmcts.ccd.sdk.api;
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.google.common.collect.Lists;
 import java.util.List;
-import org.apache.commons.lang3.StringUtils;
+import org.springframework.util.StringUtils;
 
 public class AnswerBuilder<U, T, R extends HasRole> {
 
