@@ -35,8 +35,9 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
     public static final String EMPTY_DATA_EVENT = "simple-case-empty-data";
     public static final String URL_CALLBACKS_EVENT = "simple-case-url-callbacks";
     public static final String URL_CALLBACKS_PAGE = "urlCallbacks";
-    // Resolved on import, as a hand-written definition's callback hosts are.
-    public static final String URL_CALLBACKS_BASE = "${SIMPLE_CASE_URL}" + UrlCallbackController.PATH;
+    // The import resolves the placeholder for CCD, and the SDK's decentralised runtime calls a URL on
+    // its local callback placeholder in-process.
+    public static final String URL_CALLBACKS_BASE = "${ET_COS_URL}" + UrlCallbackController.PATH;
     public static final String OPTIONS_CREATE_EVENT = "create-simple-case-with-options";
     public static final String HISTORY_TAB = "simpleCaseHistory";
     public static final String PRINTABLE_DOCUMENTS_URL = "http://localhost:4013/simple-case/printable-documents";

@@ -3655,7 +3655,7 @@ public class TestWithCCD extends CftlibTest {
     @Test
     @SuppressWarnings("unchecked")
     void simpleCaseCallbacksGivenByUrlAreCalledAtTheirEndpoints() {
-        // The event's callbacks are set by URL on a ${SIMPLE_CASE_URL} placeholder the import resolves,
+        // The event's callbacks are set by URL on a ${ET_COS_URL} placeholder the import resolves,
         // so CCD reaching UrlCallbackController shows the URLs survived generation verbatim.
         String user = "TEST_CASE_WORKER_USER@mailinator.com";
         String eventId = SimpleCaseConfiguration.URL_CALLBACKS_EVENT;
