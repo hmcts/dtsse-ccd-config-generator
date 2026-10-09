@@ -33,6 +33,49 @@ describe("renderHtml", () => {
     assert.doesNotMatch(html, /contenteditable|data-generated-text|id=/);
   });
 
+  it("numbers the lists as the editor shows them, whatever their own numbering says", () => {
+    const controller = createDocEditor();
+    controller.render(buildDoc((doc) => {
+      doc.orderedList("first", (list) => {
+        list.item("one", (content) => content.text("One"));
+        list.item("two", (content) => content.text("Two"));
+      });
+      doc.paragraph("recital", "Further directions:");
+      doc.orderedList("second", (list) => {
+        list.item("three", (content) => content.text("Three"));
+      });
+    }));
+    const current = structuredClone(controller.getSnapshot().current) as {
+      content: Array<{ type: string; attrs?: Record<string, unknown> }>;
+    };
+    current.content[0]!.attrs = { ...current.content[0]!.attrs, order: 5 };
+
+    const html = renderHtml({ ...controller.getSnapshot(), current }, { document });
+
+    assert.equal(
+      html,
+      "<ol><li><p>One</p></li><li><p>Two</p></li></ol>"
+        + "<p>Further directions:</p>"
+        + '<ol start="3"><li><p>Three</p></li></ol>',
+    );
+  });
+
+  it("numbers a list within a clause as the editor shows it", () => {
+    const controller = createDocEditor();
+    controller.render(buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => {
+        list.item("parent", "Parent clause.", (item) => {
+          item.orderedList("children", (children) => children.item("child", "Child clause."));
+        });
+      });
+    }));
+
+    assert.equal(
+      renderHtml(controller.getSnapshot(), { document }),
+      '<ol><li><p>Parent clause.</p><ol type="i"><li><p>Child clause.</p></li></ol></li></ol>',
+    );
+  });
+
   it("keeps the formatting the reader gave a fact", () => {
     const controller = createDocEditor();
     controller.render(buildDoc((doc) => {
@@ -72,7 +115,7 @@ describe("renderHtml", () => {
     );
   });
 
-  it("keeps marks, headings and list numbering from the editor document", () => {
+  it("keeps marks and headings from the editor document, numbered as the editor shows", () => {
     const controller = createDocEditor();
     controller.render(buildDoc((doc) => doc.paragraph("p", "x")));
     const snapshot = controller.getSnapshot();
@@ -100,7 +143,7 @@ describe("renderHtml", () => {
 
     assert.equal(
       html,
-      '<h2>Costs</h2><ol start="3"><li><p><strong>bold</strong></p></li></ol>',
+      "<h2>Costs</h2><ol><li><p><strong>bold</strong></p></li></ol>",
     );
   });
 
@@ -207,7 +250,7 @@ describe("renderHtml with changes", () => {
 
     assert.equal(
       renderHtml(snapshot, { document, changes: true }),
-      "<ol><li><p>Parent clause.</p><ol>" + marked("modified", "Modified clause.", "Reworded child.") +
+      '<ol><li><p>Parent clause.</p><ol type="i">' + marked("modified", "Modified clause.", "Reworded child.") +
         "</li></ol></li></ol>",
     );
   });
