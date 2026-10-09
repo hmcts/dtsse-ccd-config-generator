@@ -140,7 +140,7 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     private static final CallbackMetadata ABOUT_TO_START = new CallbackMetadata(
         Webhook.AboutToStart,
         "CallBackURLAboutToStartEvent",
-        "RetriesTimeoutURLAboutToStartEvent",
+        "RetriesTimeoutAboutToStartEvent",
         eventId -> "/callbacks/about-to-start?eventId=" + eventId
     );
 
