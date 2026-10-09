@@ -1,6 +1,13 @@
 name: PCS CFTLib Test
 
 on:
+  # Pushes to master save the Gradle cache that pull requests and the merge queue restore.
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - '**/*.md'
+      - '*.md'
   pull_request:
   merge_group:
 
