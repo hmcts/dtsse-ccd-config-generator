@@ -32,7 +32,7 @@ public class CaseSubmissionService {
   private final CaseEventTransactionCoordinator transactionCoordinator;
   private final CaseDataRepository caseDataRepository;
 
-  // Never inside a caller's transaction: what the handler registered to run after the commit runs here.
+  // Never inside a caller's transaction, so afterCommit runs after the event has committed.
   @Transactional(propagation = Propagation.NEVER)
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
                                                  String authorisation,
@@ -47,19 +47,20 @@ public class CaseSubmissionService {
 
     try {
       var afterCommit = new AfterCommit();
-      var transactionResult = transactionCoordinator.execute(
-          event.getCaseDetails().getReference(),
-          idempotencyKey,
-          startRevision,
-          () -> prepareSubmission(event, user, handler, afterCommit)
-      );
+      var transactionResult =
+          transactionCoordinator.execute(
+              event.getCaseDetails().getReference(),
+              idempotencyKey,
+              startRevision,
+              () -> prepareSubmission(event, user, handler, afterCommit)
+          );
+
       if (transactionResult.replayed()) {
         return replayIdempotentRequest(
             event.getCaseDetails().getReference(),
             transactionResult.eventId()
         );
       }
-      // The event has committed and its transaction is over, so this runs on a released connection.
       afterCommit.run();
 
       var created = transactionResult.created().orElseThrow();

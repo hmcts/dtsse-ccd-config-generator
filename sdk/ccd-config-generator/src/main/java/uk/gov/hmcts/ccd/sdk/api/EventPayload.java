@@ -9,12 +9,12 @@ public record EventPayload<T, S>(Long caseReference,
                                  MultiValueMap<String, String> urlParams,
                                  AfterCommit afterCommit) {
 
-  /** A payload nothing commits after, as a start handler is given. */
+  /** As a start handler is given: work registered after it never runs. */
   public EventPayload(Long caseReference, T caseData, MultiValueMap<String, String> urlParams) {
-    this(caseReference, caseData, urlParams, AfterCommit.none());
+    this(caseReference, caseData, urlParams, new AfterCommit());
   }
 
-  /** Runs the action once the event has committed, before its response is returned. Submit handlers only. */
+  /** Runs the action once the event has committed, before its response is returned. */
   public void afterCommit(Runnable action) {
     afterCommit.add(action);
   }

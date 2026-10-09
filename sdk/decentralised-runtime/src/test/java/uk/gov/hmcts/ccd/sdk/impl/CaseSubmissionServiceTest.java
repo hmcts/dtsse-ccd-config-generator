@@ -105,12 +105,7 @@ class CaseSubmissionServiceTest {
 
   @Test
   void runsWhatTheHandlerRegisteredOnceTheTransactionHasReturned() {
-    DecentralisedCaseEvent event = event();
-    Event<?, ?, ?> eventConfig = mock(Event.class);
-    doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("TestCase", "submit");
-    when(eventConfig.hasSubmitHandler()).thenReturn(true);
-    when(eventConfig.isConcurrent()).thenReturn(true);
-    when(idam.retrieveUser("raw-token")).thenReturn(user());
+    DecentralisedCaseEvent event = submitHandlerEvent();
     List<String> done = new ArrayList<>();
     when(submitHandler.apply(eq(event), any(), any())).thenAnswer(invocation -> {
       invocation.<AfterCommit>getArgument(2).add(() -> done.add("after"));
@@ -132,12 +127,7 @@ class CaseSubmissionServiceTest {
 
   @Test
   void runsNothingWhenTheHandlerRejectsTheSubmission() {
-    DecentralisedCaseEvent event = event();
-    Event<?, ?, ?> eventConfig = mock(Event.class);
-    doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("TestCase", "submit");
-    when(eventConfig.hasSubmitHandler()).thenReturn(true);
-    when(eventConfig.isConcurrent()).thenReturn(true);
-    when(idam.retrieveUser("raw-token")).thenReturn(user());
+    DecentralisedCaseEvent event = submitHandlerEvent();
     List<String> done = new ArrayList<>();
     when(submitHandler.apply(eq(event), any(), any())).thenAnswer(invocation -> {
       invocation.<AfterCommit>getArgument(2).add(() -> done.add("after"));
@@ -154,11 +144,14 @@ class CaseSubmissionServiceTest {
     assertThat(done).isEmpty();
   }
 
-  private static IdamService.User user() {
-    return new IdamService.User(
-        "Bearer raw-token",
-        new UserInfo("sub", "uid", "name", "given", "family", List.of("caseworker"))
-    );
+  private DecentralisedCaseEvent submitHandlerEvent() {
+    Event<?, ?, ?> eventConfig = mock(Event.class);
+    doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("TestCase", "submit");
+    when(eventConfig.hasSubmitHandler()).thenReturn(true);
+    when(eventConfig.isConcurrent()).thenReturn(true);
+    when(idam.retrieveUser("raw-token")).thenReturn(new IdamService.User(
+        "Bearer raw-token", new UserInfo("sub", "uid", "name", "given", "family", List.of("caseworker"))));
+    return event();
   }
 
   private DecentralisedCaseEvent event() {

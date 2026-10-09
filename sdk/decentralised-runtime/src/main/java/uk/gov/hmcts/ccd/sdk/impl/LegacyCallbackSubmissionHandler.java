@@ -139,7 +139,8 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
       }
       if (callbackResponse.getSecurityClassification() != null) {
         event.getCaseDetails().setSecurityClassification(
-            SecurityClassification.valueOf(callbackResponse.getSecurityClassification()));
+            SecurityClassification.valueOf(callbackResponse.getSecurityClassification())
+        );
       }
 
       response.setErrors(callbackErrors(callbackResponse));
