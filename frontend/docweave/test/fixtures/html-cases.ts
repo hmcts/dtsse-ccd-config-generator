@@ -42,7 +42,12 @@ export function htmlCases(): HtmlCase[] {
   }))) });
   cases.push({ name: "editor-list-starts", snapshot: snapshot([1.5, 1e20].map(order => ({
     type: "ordered_list", attrs: { id: `list-${order}`, order }, content: [
-      { type: "list_item", attrs: { id: `item-${order}` }, content: [paragraph(null, text("Pasted or typed numbering"))] },
+      { type: "list_item", attrs: { id: `item-${order}` }, content: [
+        paragraph(null, text("Pasted or typed numbering")),
+        { type: "ordered_list", attrs: { id: `nested-${order}`, order }, content: [
+          { type: "list_item", attrs: { id: `nested-item-${order}` }, content: [paragraph(null, text("Nested numbering keeps its start"))] },
+        ] },
+      ] },
     ],
   }))) });
   cases.push({ name: "blank-document", snapshot: snapshot([paragraph("blank")]) });

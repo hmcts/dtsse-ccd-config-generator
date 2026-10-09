@@ -84,8 +84,8 @@ the reader's document as the final HTML on the server or in a browser, without
 requiring a DOM. The `document` option has been removed from `RenderHtmlOptions`;
 callers upgrading from the DOM renderer must replace `renderHtml(snapshot, { document })`
 with `renderHtml(snapshot)` and remove any DOM implementation used only for rendering.
-It validates the output document with ProseMirror and uses the
-output schema's serialization rules to write escaped HTML. `describeChanges(snapshot)` counts the
+It validates the output document with ProseMirror, rejecting heading levels outside 1–6,
+and uses the output schema's serialization rules to write escaped HTML. `describeChanges(snapshot)` counts the
 clauses the reader wrote and the generated clauses they changed, in wording or
 formatting, so a service can tell someone reviewing it what changed; it needs
 no DOM, so it runs on a server. `renderHtml(snapshot, { changes: true })` marks
