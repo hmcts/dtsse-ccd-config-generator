@@ -7,6 +7,7 @@ import {
   parseSnapshot,
 } from "./changes.js";
 import { type DocWeaveSnapshot } from "./controller.js";
+import { listStarts } from "./list-numbering.js";
 import { outputSchema, toOutputDocument } from "./output-schema.js";
 
 export interface RenderHtmlOptions {
@@ -33,16 +34,35 @@ export function renderHtml(
     throw new Error("renderHtml needs a DOM document; pass one in options");
   }
   const container = document.createElement("div");
+  const output = toOutputDocument(snapshot.current);
   container.append(
-    DOMSerializer.fromSchema(outputSchema).serializeFragment(
-      toOutputDocument(snapshot.current).content,
-      { document },
-    ),
+    DOMSerializer.fromSchema(outputSchema).serializeFragment(output.content, { document }),
   );
+  numberAsTheEditorShows(output, container);
   if (options.changes) {
     markChanges(snapshot, container);
   }
   return container.innerHTML;
+}
+
+/**
+ * Numbers the lists as the editor shows them, which its document leaves to the
+ * view: the top-level lists count on from one another, and a list within a
+ * clause is numbered i, ii, iii.
+ */
+function numberAsTheEditorShows(output: ProseMirrorNode, container: HTMLElement): void {
+  listStarts(output).forEach((start, index) => {
+    if (start === undefined) return;
+    const list = container.children[index]!;
+    if (start === 1) {
+      list.removeAttribute("start");
+    } else {
+      list.setAttribute("start", String(start));
+    }
+  });
+  for (const nested of container.querySelectorAll("ol ol")) {
+    nested.setAttribute("type", "i");
+  }
 }
 
 /**
