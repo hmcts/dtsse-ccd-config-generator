@@ -343,6 +343,12 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
+    /**
+     * Sets the retry timeouts of every callback hook. They are written to the definition, but CCD's
+     * data store reads them only to see whether they are a single {@code 0}, which turns retries off
+     * for that hook. Any other value leaves its default: three attempts, retried about one and three
+     * seconds after the first fails.
+     */
     public EventBuilder<T, R, S> retries(int... retries) {
       for (Webhook value : Webhook.values()) {
         setRetries(value, retries);
@@ -351,6 +357,9 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
+    /**
+     * Sets one hook's retry timeouts, as a comma-separated list. See {@link #retries(int...)}.
+     */
     public EventBuilder<T, R, S> retries(Webhook hook, String retries) {
       this.retries.put(hook, retries);
       return this;
