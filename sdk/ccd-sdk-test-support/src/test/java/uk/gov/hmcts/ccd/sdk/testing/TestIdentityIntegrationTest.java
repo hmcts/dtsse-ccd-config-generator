@@ -21,6 +21,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import uk.gov.hmcts.reform.authorisation.ServiceAuthorisationApi;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGeneratorFactory;
 
@@ -35,6 +36,8 @@ class TestIdentityIntegrationTest {
   private Idam idam;
   @Autowired
   private RoleAssignment roleAssignment;
+  @Autowired
+  private CaseUsers caseUsers;
   @Autowired
   private ServiceAuthorisationApi serviceAuthorisation;
   @Autowired
@@ -70,6 +73,12 @@ class TestIdentityIntegrationTest {
   }
 
   @Test
+  void ccdHasNoCaseRolesForAnyone() {
+    assertThat(caseUsers.roles(List.of("1234567890123456"), List.of("any-actor")))
+        .containsEntry("case_users", List.of());
+  }
+
+  @Test
   void otherCallsStillGoToTheirService() {
     assertThatThrownBy(() -> elsewhere.anything()).isInstanceOf(RetryableException.class);
   }
@@ -86,6 +95,13 @@ class TestIdentityIntegrationTest {
     Map<String, Object> roles(@PathVariable("id") String actorId);
   }
 
+  @FeignClient(name = "ccd", url = "http://ccd.invalid")
+  interface CaseUsers {
+    @GetMapping("/case-users")
+    Map<String, Object> roles(@RequestParam("case_ids") List<String> caseIds,
+                              @RequestParam("user_ids") List<String> userIds);
+  }
+
   @FeignClient(name = "elsewhere", url = "http://elsewhere.invalid")
   interface Elsewhere {
     @GetMapping("/anything")
@@ -98,7 +114,8 @@ class TestIdentityIntegrationTest {
       HttpMessageConvertersAutoConfiguration.class,
       JacksonAutoConfiguration.class
   })
-  @EnableFeignClients(clients = {Idam.class, RoleAssignment.class, Elsewhere.class, ServiceAuthorisationApi.class})
+  @EnableFeignClients(clients = {Idam.class, RoleAssignment.class, CaseUsers.class, Elsewhere.class,
+      ServiceAuthorisationApi.class})
   @Import(CcdEventTestConfiguration.class)
   static class FeignApplication {
   }
