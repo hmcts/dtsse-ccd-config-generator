@@ -17,6 +17,7 @@ import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
+import uk.gov.hmcts.ccd.sdk.api.AfterCommit;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.EventMetadata;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
@@ -61,7 +62,8 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   }
 
   @Override
-  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, IdamService.User user) {
+  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, IdamService.User user,
+                                           AfterCommit afterCommit) {
     String authorisation = user.authToken();
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
@@ -137,8 +139,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
       }
       if (callbackResponse.getSecurityClassification() != null) {
         event.getCaseDetails().setSecurityClassification(
-            SecurityClassification.valueOf(callbackResponse.getSecurityClassification())
-        );
+            SecurityClassification.valueOf(callbackResponse.getSecurityClassification()));
       }
 
       response.setErrors(callbackErrors(callbackResponse));

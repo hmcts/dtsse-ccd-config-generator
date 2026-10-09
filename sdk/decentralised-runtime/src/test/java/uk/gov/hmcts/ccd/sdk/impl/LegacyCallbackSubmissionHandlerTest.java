@@ -24,6 +24,7 @@ import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedEventDetails;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
+import uk.gov.hmcts.ccd.sdk.api.AfterCommit;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
@@ -58,7 +59,7 @@ class LegacyCallbackSubmissionHandlerTest {
         }
         """, List.of()));
 
-    var result = handler.apply(event, USER);
+    var result = handler.apply(event, USER, new AfterCommit());
 
     assertThat(event.getCaseDetails().getData().get("generatedDocument").get("document_hash").asText())
         .isEqualTo("hash-token");
@@ -80,7 +81,7 @@ class LegacyCallbackSubmissionHandlerTest {
         }
         """, List.of()));
 
-    var result = handler.apply(event, USER);
+    var result = handler.apply(event, USER, new AfterCommit());
 
     assertThat(event.getCaseDetails().getData().get("generatedDocument").get("document_hash").asText())
         .isEqualTo("hash-token");
@@ -112,7 +113,7 @@ class LegacyCallbackSubmissionHandlerTest {
         }
         """, List.of()));
 
-    var result = handler.apply(event, USER);
+    var result = handler.apply(event, USER, new AfterCommit());
 
     assertThat(event.getCaseDetails().getData().get("generatedDocument").has("document_hash")).isFalse();
     assertThat(result.dataUpdate()).isPresent();
@@ -144,7 +145,7 @@ class LegacyCallbackSubmissionHandlerTest {
         }
         """, List.of("callback error")));
 
-    assertThatThrownBy(() -> handler.apply(event, USER))
+    assertThatThrownBy(() -> handler.apply(event, USER, new AfterCommit()))
         .isInstanceOf(CallbackValidationException.class);
 
     verify(cdamAttachService, never()).attachNewDocumentsAndStripHashes(any(), any(), any(), any());

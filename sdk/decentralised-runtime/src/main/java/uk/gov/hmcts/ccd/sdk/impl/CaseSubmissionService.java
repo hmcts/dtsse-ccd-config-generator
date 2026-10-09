@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
@@ -15,6 +17,7 @@ import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.domain.model.callbacks.AfterSubmitCallbackResponse;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
+import uk.gov.hmcts.ccd.sdk.api.AfterCommit;
 import uk.gov.hmcts.ccd.sdk.api.EventMetadata;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 
@@ -29,6 +32,8 @@ public class CaseSubmissionService {
   private final CaseEventTransactionCoordinator transactionCoordinator;
   private final CaseDataRepository caseDataRepository;
 
+  // Never inside a caller's transaction: what the handler registered to run after the commit runs here.
+  @Transactional(propagation = Propagation.NEVER)
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
                                                  String authorisation,
                                                  UUID idempotencyKey) {
@@ -41,20 +46,21 @@ public class CaseSubmissionService {
         : null;
 
     try {
-      var transactionResult =
-          transactionCoordinator.execute(
-              event.getCaseDetails().getReference(),
-              idempotencyKey,
-              startRevision,
-              () -> prepareSubmission(event, user, handler)
-          );
-
+      var afterCommit = new AfterCommit();
+      var transactionResult = transactionCoordinator.execute(
+          event.getCaseDetails().getReference(),
+          idempotencyKey,
+          startRevision,
+          () -> prepareSubmission(event, user, handler, afterCommit)
+      );
       if (transactionResult.replayed()) {
         return replayIdempotentRequest(
             event.getCaseDetails().getReference(),
             transactionResult.eventId()
         );
       }
+      // The event has committed and its transaction is over, so this runs on a released connection.
+      afterCommit.run();
 
       var created = transactionResult.created().orElseThrow();
       return buildSuccessResponse(new SubmissionOutcome(created.savedCase(), created.result()));
@@ -70,9 +76,10 @@ public class CaseSubmissionService {
   private CaseEventTransactionCoordinator.CaseEventWrite<Supplier<SubmitResponse<?>>> prepareSubmission(
       DecentralisedCaseEvent event,
       IdamService.User user,
-      CaseSubmissionHandler handler
+      CaseSubmissionHandler handler,
+      AfterCommit afterCommit
   ) {
-    var handlerResult = handler.apply(event, user);
+    var handlerResult = handler.apply(event, user, afterCommit);
     applyHandlerChanges(event, handlerResult);
 
     return new CaseEventTransactionCoordinator.CaseEventWrite<>(

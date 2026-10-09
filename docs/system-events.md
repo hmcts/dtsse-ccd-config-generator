@@ -136,3 +136,5 @@ notifications or task-management systems participate in that database transactio
 Work involving side effects should therefore be idempotent or moved outside the short local event transaction. Where
 the remote action must follow a committed case change, it should be driven by an outbox or another
 post-commit mechanism.
+
+For post-commit work the caller waits for, the context offers `afterCommit(Runnable)`; see [After the commit](./decentralised-runtime.md#after-the-commit).

@@ -218,6 +218,14 @@ The SDK wraps every case event inside a database transaction covering:
 
 The common transaction ordering lives in [`CaseEventTransactionCoordinator`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/CaseEventTransactionCoordinator.java) and is used by both CCD submissions and [local system events](./system-events.md). If a concurrent update to `ccd.case_data` is detected, a `409 CONFLICT` is returned and the transaction rolls back, aligning behaviour with CCD.
 
+### After the commit
+
+A submit handler can register work to run once the event has committed, before the response is returned, with `afterCommit(Runnable)` on its `EventPayload`, `ExternalSubmitRequest` or `SystemEventExecutionContext`. It is intended for synchronous post-commit work the user expects to see done when their page reloads, such as sending a request the event has also queued in an outbox. The outbox copy stays the durable one: nothing runs if the event does not commit, and work that fails is logged and not retried, since the event has committed and its response is still returned.
+
+```java
+submit.afterCommit(() -> camunda.send(cancel));
+```
+
 ## Supplementary data
 
 Supplementary data operations are implemented and persisted in the `ccd.case_data` table via [`SupplementaryDataService`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/SupplementaryDataService.java), using PostgreSQL’s JSON functions to apply `$set`/`$inc` style updates atomically.

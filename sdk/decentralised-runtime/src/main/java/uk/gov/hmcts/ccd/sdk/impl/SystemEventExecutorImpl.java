@@ -17,6 +17,7 @@ import uk.gov.hmcts.ccd.sdk.SystemEventExecutionContext;
 import uk.gov.hmcts.ccd.sdk.SystemEventExecutionResult;
 import uk.gov.hmcts.ccd.sdk.SystemEventExecutor;
 import uk.gov.hmcts.ccd.sdk.SystemEventResult;
+import uk.gov.hmcts.ccd.sdk.api.AfterCommit;
 import uk.gov.hmcts.reform.idam.client.models.UserInfo;
 
 @Service
@@ -85,12 +86,14 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
       SystemEventAction action
   ) {
     validateRequest(actor, idempotencyKey, action);
+    var afterCommit = new AfterCommit();
     var transactionResult = transactionCoordinator.execute(
         caseReference,
         idempotencyKey,
         null,
-        () -> prepareSystemEvent(caseReference, actor, idempotencyKey, action)
+        () -> prepareSystemEvent(caseReference, actor, idempotencyKey, action, afterCommit)
     );
+    afterCommit.run();
     return new SystemEventExecutionResult(
         transactionResult.eventId(),
         transactionResult.replayed()
@@ -103,7 +106,8 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
       long caseReference,
       Optional<ActorAttribution> actor,
       UUID idempotencyKey,
-      SystemEventAction action
+      SystemEventAction action,
+      AfterCommit afterCommit
   ) {
     CaseDetails currentCase = caseDataRepository.getCase(caseReference).getCaseDetails();
     final String previousState = currentCase.getState();
@@ -112,7 +116,8 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
         caseReference,
         idempotencyKey,
         currentCase.getCaseTypeId(),
-        previousState
+        previousState,
+        afterCommit
     );
     SystemEventResult result = action.execute(context);
     if (result == null) {

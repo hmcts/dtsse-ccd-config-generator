@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -9,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -21,6 +23,7 @@ import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedEventDetails;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
+import uk.gov.hmcts.ccd.sdk.api.AfterCommit;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 import uk.gov.hmcts.reform.idam.client.models.UserInfo;
@@ -58,7 +61,7 @@ class CaseSubmissionServiceTest {
         new UserInfo("sub", "uid", "name", "given", "family", List.of("caseworker"))
     );
     when(idam.retrieveUser("raw-token")).thenReturn(user);
-    when(legacyHandler.apply(eq(event), eq(user))).thenReturn(handlerResult());
+    when(legacyHandler.apply(eq(event), eq(user), any())).thenReturn(handlerResult());
     when(transactionCoordinator.execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any(), any()))
         .thenAnswer(invocation -> {
           var work = invocation
@@ -73,7 +76,7 @@ class CaseSubmissionServiceTest {
 
     service.submit(event, "raw-token", IDEMPOTENCY_KEY);
 
-    verify(legacyHandler).apply(event, user);
+    verify(legacyHandler).apply(eq(event), eq(user), any());
     verify(transactionCoordinator).execute(
         eq(123456789L),
         eq(IDEMPOTENCY_KEY),
@@ -98,6 +101,64 @@ class CaseSubmissionServiceTest {
     service.submit(event, "raw-token", IDEMPOTENCY_KEY);
 
     verifyNoInteractions(legacyHandler);
+  }
+
+  @Test
+  void runsWhatTheHandlerRegisteredOnceTheTransactionHasReturned() {
+    DecentralisedCaseEvent event = event();
+    Event<?, ?, ?> eventConfig = mock(Event.class);
+    doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("TestCase", "submit");
+    when(eventConfig.hasSubmitHandler()).thenReturn(true);
+    when(eventConfig.isConcurrent()).thenReturn(true);
+    when(idam.retrieveUser("raw-token")).thenReturn(user());
+    List<String> done = new ArrayList<>();
+    when(submitHandler.apply(eq(event), any(), any())).thenAnswer(invocation -> {
+      invocation.<AfterCommit>getArgument(2).add(() -> done.add("after"));
+      return handlerResult();
+    });
+    when(transactionCoordinator.execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any(), any()))
+        .thenAnswer(invocation -> {
+          var write = invocation
+              .<Supplier<CaseEventTransactionCoordinator.CaseEventWrite<Supplier<SubmitResponse<?>>>>>getArgument(3)
+              .get();
+          done.add("committed");
+          return CaseEventTransactionCoordinator.TransactionResult.created(42L, savedCaseDetails(), write.result());
+        });
+
+    service.submit(event, "raw-token", IDEMPOTENCY_KEY);
+
+    assertThat(done).containsExactly("committed", "after");
+  }
+
+  @Test
+  void runsNothingWhenTheHandlerRejectsTheSubmission() {
+    DecentralisedCaseEvent event = event();
+    Event<?, ?, ?> eventConfig = mock(Event.class);
+    doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("TestCase", "submit");
+    when(eventConfig.hasSubmitHandler()).thenReturn(true);
+    when(eventConfig.isConcurrent()).thenReturn(true);
+    when(idam.retrieveUser("raw-token")).thenReturn(user());
+    List<String> done = new ArrayList<>();
+    when(submitHandler.apply(eq(event), any(), any())).thenAnswer(invocation -> {
+      invocation.<AfterCommit>getArgument(2).add(() -> done.add("after"));
+      throw new CallbackValidationException(List.of("no"), List.of());
+    });
+    when(transactionCoordinator.execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any(), any()))
+        .thenAnswer(invocation -> invocation
+            .<Supplier<CaseEventTransactionCoordinator.CaseEventWrite<Supplier<SubmitResponse<?>>>>>getArgument(3)
+            .get());
+
+    var response = service.submit(event, "raw-token", IDEMPOTENCY_KEY);
+
+    assertThat(response.getErrors()).containsExactly("no");
+    assertThat(done).isEmpty();
+  }
+
+  private static IdamService.User user() {
+    return new IdamService.User(
+        "Bearer raw-token",
+        new UserInfo("sub", "uid", "name", "given", "family", List.of("caseworker"))
+    );
   }
 
   private DecentralisedCaseEvent event() {

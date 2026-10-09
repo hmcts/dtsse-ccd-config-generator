@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
+import uk.gov.hmcts.ccd.sdk.api.AfterCommit;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.EventPayload;
@@ -30,11 +31,12 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
   private final ObjectMapper mapper;
 
   @Override
-  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, IdamService.User user) {
+  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, IdamService.User user,
+                                           AfterCommit afterCommit) {
     log.info("[submit-handler] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
-    var outcome = prepareSubmitHandler(event, user);
+    var outcome = prepareSubmitHandler(event, user, afterCommit);
 
     if (outcome.getErrors() != null && !outcome.getErrors().isEmpty()) {
       throw new CallbackValidationException(outcome.getErrors(), outcome.getWarnings());
@@ -52,7 +54,8 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
         () -> outcome);
   }
 
-  private SubmitResponse<?> prepareSubmitHandler(DecentralisedCaseEvent event, IdamService.User user) {
+  private SubmitResponse<?> prepareSubmitHandler(DecentralisedCaseEvent event, IdamService.User user,
+                                                 AfterCommit afterCommit) {
     String caseType = event.getEventDetails().getCaseType();
     String eventId = event.getEventDetails().getEventId();
     Event<?, ?, ?> eventConfig = registry.getRequiredEvent(caseType, eventId);
@@ -71,11 +74,12 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
     if (eventConfig.isExternal()) {
       JsonNode payloadField = data == null ? null : data.get(DecentralisedConfigBuilder.PAYLOAD_FIELD);
       Object submitted = readPayload(eventId, payloadField, eventConfig.getSubmitType());
-      return eventConfig.submit(new EventPayload(caseRef, null, urlParams), submitted, user.toExternalUser());
+      return eventConfig.submit(new EventPayload(caseRef, null, urlParams, afterCommit), submitted,
+          user.toExternalUser());
     }
 
     Object domainCaseData = mapper.convertValue(data, registry.getRequired(caseType).getCaseClass());
-    return eventConfig.submit(new EventPayload(caseRef, domainCaseData, urlParams), null, null);
+    return eventConfig.submit(new EventPayload(caseRef, domainCaseData, urlParams, afterCommit), null, null);
   }
 
   /**
