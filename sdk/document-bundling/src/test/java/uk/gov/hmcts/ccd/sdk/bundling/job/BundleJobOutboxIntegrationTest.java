@@ -435,9 +435,10 @@ class BundleJobOutboxIntegrationTest {
 
     worker.poll();
 
-    BundleJob reRun = service.findLatest("case-1:bundle").orElseThrow();
+    BundleJob reRun = queued("case-1:bundle");
     assertThat(reRun.externalId()).isNotEqualTo(submitted.externalId());
-    assertThat(reRun.state()).isEqualTo(BundleJobState.QUEUED);
+    assertThat(service.findLatest("case-1:bundle").orElseThrow().externalId())
+        .as("a delayed re-run is not shown as regenerating the bundle").isEqualTo(submitted.externalId());
     assertThat(column(reRun.externalId(), "selector_parameters")).contains("caseId");
     assertThat(column(reRun.externalId(), "execution_context"))
         .contains("\"bundling.unavailableRequeues\": \"1\"").contains("hearingId");
@@ -451,9 +452,10 @@ class BundleJobOutboxIntegrationTest {
     assertThat(service.submitCoalesced("case-1:bundle", Map.of("caseId", "1"), CONTEXT).externalId())
         .isEqualTo(reRun.externalId());
     assertThat(column(reRun.externalId(), "next_attempt_at")).isNull();
+    assertThat(service.findLatest("case-1:bundle").orElseThrow().externalId()).isEqualTo(reRun.externalId());
     worker.poll();
     assertThat(renderer.renders).hasSize(2);
-    BundleJob secondReRun = service.findLatest("case-1:bundle").orElseThrow();
+    BundleJob secondReRun = queued("case-1:bundle");
     assertThat(column(secondReRun.externalId(), "execution_context"))
         .contains("\"bundling.unavailableRequeues\": \"2\"");
 
@@ -481,6 +483,12 @@ class BundleJobOutboxIntegrationTest {
 
     assertThat(renderer.attempts).containsExactly(RenderAttempt.RETRYABLE, RenderAttempt.FINAL);
     assertThat(job(id).state()).isEqualTo(BundleJobState.COMPLETED);
+  }
+
+  private BundleJob queued(String coalesceKey) {
+    UUID id = jdbc.queryForObject("select external_id from bundling.bundle_job "
+        + "where coalesce_key = :key and state = 'QUEUED'", Map.of("key", coalesceKey), UUID.class);
+    return job(id);
   }
 
   private static BundleDocumentSelector twoDocumentSelector() {

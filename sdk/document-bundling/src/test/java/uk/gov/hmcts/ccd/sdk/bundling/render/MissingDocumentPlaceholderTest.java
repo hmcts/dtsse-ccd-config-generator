@@ -31,6 +31,8 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocumentPolicy;
 import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocumentReason;
 import uk.gov.hmcts.ccd.sdk.bundling.api.RenderAttempt;
+import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderException;
+import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderService;
 
 class MissingDocumentPlaceholderTest {
 
@@ -49,6 +51,7 @@ class MissingDocumentPlaceholderTest {
             "broken.pdf"))
         .source("msg", RenderTestSupport.Source.of(
             "hello".getBytes(StandardCharsets.US_ASCII), "application/vnd.ms-outlook", "mail.msg"))
+        .source("word", RenderTestSupport.Source.of(fixture("wordDocument.doc"), "application/msword", "w.doc"))
         .failure("deleted", NOT_FOUND, "No such document")
         .failure("denied", ACCESS_DENIED, "Not permitted")
         .failure("flaky", TRANSIENT_FAILURE, "Timed out");
@@ -150,6 +153,40 @@ class MissingDocumentPlaceholderTest {
   }
 
   @Test
+  void aDocumentDocmosisCouldNotConvertBecauseItWasDownIsUnavailableNotUnconvertible() {
+    BundleRequest request = placeholderRequest(doc("d1", "Claim form", "good"), doc("d2", "Witness statement", "word"));
+
+    try (BundleResult result = withDocmosis(new DocmosisRenderException("Docmosis returned HTTP 503", true))
+        .render(request, BundleExecutionContext.empty(), RenderAttempt.FINAL)) {
+      assertThat(result.missingDocuments()).singleElement().satisfies(missing -> {
+        assertThat(missing.reason()).isEqualTo(MissingDocumentReason.UNAVAILABLE);
+        assertThat(missing.code()).isEqualTo(BundleErrorCode.DOCUMENT_CONVERSION_FAILED);
+      });
+    }
+  }
+
+  @Test
+  void aDocumentDocmosisRejectedCouldNotBeConverted() {
+    BundleRequest request = placeholderRequest(doc("d1", "Witness statement", "word"));
+
+    try (BundleResult result = withDocmosis(new DocmosisRenderException("Docmosis returned HTTP 400", false))
+        .render(request, BundleExecutionContext.empty(), RenderAttempt.RETRYABLE)) {
+      assertThat(result.missingDocuments()).extracting(MissingDocument::reason)
+          .containsExactly(MissingDocumentReason.CONVERSION_FAILED);
+    }
+  }
+
+  @Test
+  void anOfficeDocumentWithoutDocmosisConfiguredStillFailsTheBundle() {
+    BundleRequest request = placeholderRequest(doc("d1", "Claim form", "good"), doc("d2", "Witness statement", "word"));
+
+    BundleGenerationException failure = catchThrowableOfType(BundleGenerationException.class,
+        () -> renderer.render(request, BundleExecutionContext.empty(), RenderAttempt.FINAL));
+
+    assertThat(failure.code()).isEqualTo(BundleErrorCode.DOCMOSIS_NOT_CONFIGURED);
+  }
+
+  @Test
   void aBundleOfOnlyMissingDocumentsStillRenders() {
     BundleRequest request = placeholderRequest(doc("d1", "Gone", "deleted"));
 
@@ -169,6 +206,13 @@ class MissingDocumentPlaceholderTest {
 
     assertThat(request.missingDocuments()).isEqualTo(MissingDocumentPolicy.FAIL);
     assertThat(failure.code()).isEqualTo(BundleErrorCode.DOCUMENT_NOT_FOUND);
+  }
+
+  private BundleRenderer withDocmosis(DocmosisRenderException failure) {
+    DocmosisRenderService docmosis = (source, fileName, mediaType) -> {
+      throw failure;
+    };
+    return BundleRenderer.builder().resolver(resolver).tempDirectory(work).docmosis(docmosis).build();
   }
 
   private static BundleRequest placeholderRequest(BundleDocument... documents) {

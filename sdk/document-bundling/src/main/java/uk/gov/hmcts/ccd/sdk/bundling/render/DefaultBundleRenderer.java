@@ -155,7 +155,8 @@ public final class DefaultBundleRenderer implements BundleRenderer {
   private record Conversion(Map<String, Converted> documents, Optional<Path> coverPage) {
   }
 
-  private record Missing(BundleDocument document, BundleErrorCode code, String detail) {
+  private record Missing(
+      BundleDocument document, MissingDocumentReason reason, BundleErrorCode code, String detail) {
   }
 
   private final class Render {
@@ -226,31 +227,38 @@ public final class DefaultBundleRenderer implements BundleRenderer {
         Resolution.Failure failure =
             document.media().isPresent() ? null : failures.get(document.reference());
         if (failure != null) {
-          markMissing(document, failure.code(), failure.detail());
+          markMissing(document, failure.code(), failure.detail(), null);
         }
       }
     }
 
     /**
      * Whether a failure confined to one document is replaced by a placeholder: under the
-     * placeholder policy, unless it is transient and the caller will retry the render.
+     * placeholder policy, unless it is transient and the caller will retry the render. A missing
+     * Docmosis configuration is the service's problem, not the document's, so it always fails.
      */
     private boolean substitutes(BundleGenerationException failure) {
       return request.missingDocuments() == MissingDocumentPolicy.PLACEHOLDER
           && !failure.documentFailures().isEmpty()
+          && failure.code() != BundleErrorCode.DOCMOSIS_NOT_CONFIGURED
           && (attempt == RenderAttempt.FINAL
               || !TransientFailures.isTransient(failure.code(), failure.getCause()));
     }
 
-    private void markMissing(BundleDocument document, BundleErrorCode code, String detail) {
-      missing.put(document.id(), new Missing(document, code, detail));
+    private void markMissing(
+        BundleDocument document, BundleErrorCode code, String detail, Throwable cause) {
+      // A conversion that failed because Docmosis is down is a temporary problem, not a
+      // problem with the document, so it is re-run like an unavailable source.
+      MissingDocumentReason reason = TransientFailures.isDocmosisOutage(cause)
+          ? MissingDocumentReason.UNAVAILABLE : MissingDocumentReason.of(code);
+      missing.put(document.id(), new Missing(document, reason, code, detail));
       // The detail stays in the logs and on the MissingDocument; the warning has the
       // user-facing reason only.
       log.warn("Document '{}' is replaced by a placeholder page: {} - {}", document.id(), code,
           detail);
       addWarning(BundleWarning.forDocument(WARNING_DOCUMENT_MISSING,
           "Document '" + document.id() + "' could not be included and was replaced by a "
-              + "placeholder page. " + MissingDocumentReason.of(code).message(),
+              + "placeholder page. " + reason.message(),
           document.id()));
     }
 
@@ -372,7 +380,7 @@ public final class DefaultBundleRenderer implements BundleRenderer {
               throw failure;
             }
             converted.remove(documentId);
-            markMissing(document.document(), failure.code(), e.getMessage());
+            markMissing(document.document(), failure.code(), e.getMessage(), e);
             continue;
           }
           if (!facts.hasExtractableText()) {
@@ -415,7 +423,7 @@ public final class DefaultBundleRenderer implements BundleRenderer {
           if (!substitutes(e)) {
             throw e;
           }
-          markMissing(document, e.code(), e.documentFailures().getFirst().detail());
+          markMissing(document, e.code(), e.documentFailures().getFirst().detail(), e.getCause());
         } finally {
           MDC.remove(MDC_DOCUMENT_ID);
         }
@@ -574,7 +582,7 @@ public final class DefaultBundleRenderer implements BundleRenderer {
       converted.forEach((id, document) ->
           handledPdfs.put(id, new PdfSource(document.pdf(), document.generated())));
       missing.forEach((id, document) -> handledPdfs.put(id,
-          new MissingDocumentPage(MissingDocumentReason.of(document.code()).message())));
+          new MissingDocumentPage(document.reason().message())));
       AssemblyMapping.Mapped mapped =
           AssemblyMapping.map(request, handledPdfs, coverPage, watermarkImages);
       AssemblyResult result;
@@ -631,7 +639,7 @@ public final class DefaultBundleRenderer implements BundleRenderer {
         Missing missingDocument = missing.get(origin.id());
         if (missingDocument != null) {
           missingDocuments.add(new MissingDocument(origin.id(), origin.reference(),
-              MissingDocumentReason.of(missingDocument.code()), missingDocument.code(),
+              missingDocument.reason(), missingDocument.code(),
               missingDocument.detail(), result.items().get(i).startPage()));
           continue;
         }
