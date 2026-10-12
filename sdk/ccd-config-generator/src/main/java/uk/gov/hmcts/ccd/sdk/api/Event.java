@@ -8,8 +8,10 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Data;
+import lombok.Setter;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
 import uk.gov.hmcts.ccd.sdk.api.callback.Start;
@@ -44,6 +46,9 @@ public class Event<T, R extends HasRole, S> {
   private AboutToStart<T, S> aboutToStartCallback;
   private AboutToSubmit<T, S> aboutToSubmitCallback;
   private Submitted<T, S> submittedCallback;
+  // Callbacks served at the service's own endpoints rather than by an SDK handler.
+  @Setter(AccessLevel.NONE)
+  private Map<Webhook, String> callbackUrls;
   private Submit<T, S> submitHandler;
   private Start<T, S> startHandler;
   private FieldCollection fields;
@@ -89,6 +94,7 @@ public class Event<T, R extends HasRole, S> {
       result.fieldsBuilder = FieldCollection.FieldCollectionBuilder
           .builder(result, result, dataClass, propertyUtils);
       result.retries = new HashMap<>();
+      result.callbackUrls = new HashMap<>();
 
       return result;
     }
@@ -225,6 +231,12 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
+    /**
+     * Sets the retry timeouts of every callback hook. They are written to the definition, but CCD's
+     * data store reads them only to see whether they are a single {@code 0}, which turns retries off
+     * for that hook. Any other value leaves its default: three attempts, retried about one and three
+     * seconds after the first fails.
+     */
     public EventBuilder<T, R, S> retries(int... retries) {
       for (Webhook value : Webhook.values()) {
         setRetries(value, retries);
@@ -233,9 +245,33 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
+    /**
+     * Sets one hook's retry timeouts, as a comma-separated list. See {@link #retries(int...)}.
+     */
     public EventBuilder<T, R, S> retries(Webhook hook, String retries) {
       this.retries.put(hook, retries);
       return this;
+    }
+
+    public EventBuilder<T, R, S> aboutToStartCallback(AboutToStart<T, S> aboutToStartCallback) {
+      rejectCallbackUrl(Webhook.AboutToStart, aboutToStartCallback != null);
+      this.aboutToStartCallback = aboutToStartCallback;
+      return this;
+    }
+
+    /** Sets the about-to-start handler with its retry timeouts. */
+    public EventBuilder<T, R, S> aboutToStartCallback(AboutToStart<T, S> aboutToStartCallback, int... retries) {
+      aboutToStartCallback(aboutToStartCallback);
+      setRetries(Webhook.AboutToStart, retries);
+      return this;
+    }
+
+    /**
+     * Points the about-to-start callback at an endpoint the service already serves. The URL is
+     * written verbatim, so definition placeholders such as {@code ${CCD_DEF_URL}} are kept.
+     */
+    public EventBuilder<T, R, S> aboutToStartCallback(String url, int... retries) {
+      return callbackUrl(Webhook.AboutToStart, aboutToStartCallback != null || startHandler != null, url, retries);
     }
 
     public EventBuilder<T, R, S> submittedCallback(Submitted<T, S> submittedCallback) {
@@ -243,18 +279,88 @@ public class Event<T, R extends HasRole, S> {
       if (this.submitHandler != null) {
         throw new IllegalStateException("Cannot set both submitHandler and submittedCallback");
       }
+      rejectCallbackUrl(Webhook.Submitted, submittedCallback != null);
       this.submittedCallback = submittedCallback;
       return this;
     }
 
+    /** Sets the submitted handler with its retry timeouts. */
+    public EventBuilder<T, R, S> submittedCallback(Submitted<T, S> submittedCallback, int... retries) {
+      submittedCallback(submittedCallback);
+      setRetries(Webhook.Submitted, retries);
+      return this;
+    }
+
+    /**
+     * Points the submitted callback at an endpoint the service already serves. The URL is written
+     * verbatim, so definition placeholders such as {@code ${CCD_DEF_URL}} are kept.
+     */
+    public EventBuilder<T, R, S> submittedCallback(String url, int... retries) {
+      return callbackUrl(Webhook.Submitted, submittedCallback != null || submitHandler != null, url, retries);
+    }
 
     public EventBuilder<T, R, S> aboutToSubmitCallback(AboutToSubmit<T, S> aboutToSubmitCallback) {
       // TODO: split out decentralised event building to remove these fields for decentralised events.
       if (this.submitHandler != null) {
         throw new IllegalStateException("Cannot set both submitHandler and aboutToSubmitCallback");
       }
+      rejectCallbackUrl(Webhook.AboutToSubmit, aboutToSubmitCallback != null);
       this.aboutToSubmitCallback = aboutToSubmitCallback;
       return this;
+    }
+
+    /** Sets the about-to-submit handler with its retry timeouts. */
+    public EventBuilder<T, R, S> aboutToSubmitCallback(AboutToSubmit<T, S> aboutToSubmitCallback, int... retries) {
+      aboutToSubmitCallback(aboutToSubmitCallback);
+      setRetries(Webhook.AboutToSubmit, retries);
+      return this;
+    }
+
+    /**
+     * Points the about-to-submit callback at an endpoint the service already serves. The URL is
+     * written verbatim, so definition placeholders such as {@code ${CCD_DEF_URL}} are kept.
+     */
+    public EventBuilder<T, R, S> aboutToSubmitCallback(String url, int... retries) {
+      return callbackUrl(Webhook.AboutToSubmit, aboutToSubmitCallback != null || submitHandler != null, url, retries);
+    }
+
+    /** Sets a decentralised event's submit handler. */
+    public EventBuilder<T, R, S> submitHandler(Submit<T, S> submitHandler) {
+      rejectCallbackUrl(Webhook.AboutToSubmit, submitHandler != null);
+      rejectCallbackUrl(Webhook.Submitted, submitHandler != null);
+      this.submitHandler = submitHandler;
+      return this;
+    }
+
+    /** Sets a decentralised event's start handler, which returns the case. */
+    public EventBuilder<T, R, S> startHandler(Start<T, S> startHandler) {
+      rejectCallbackUrl(Webhook.AboutToStart, startHandler != null);
+      this.startHandler = startHandler;
+      return this;
+    }
+
+    private EventBuilder<T, R, S> callbackUrl(Webhook hook, boolean hasHandler, String url, int... retries) {
+      if (hasHandler) {
+        throw bothHandlerAndUrl(id, hook.toString());
+      }
+      this.callbackUrls.put(hook, url);
+      setRetries(hook, retries);
+      return this;
+    }
+
+    private void rejectCallbackUrl(Webhook hook, boolean settingHandler) {
+      if (settingHandler && callbackUrls.containsKey(hook)) {
+        throw bothHandlerAndUrl(id, hook.toString());
+      }
+    }
+
+    static IllegalStateException bothHandlerAndUrl(String eventId, String hook) {
+      return new IllegalStateException(
+          "Event '%s' has both a handler and a callback URL for %s".formatted(eventId, hook));
+    }
+
+    String eventId() {
+      return id;
     }
 
     // Hide lombok's generated builder methods for these fields to stop them polluting the public API.
@@ -282,12 +388,18 @@ public class Event<T, R extends HasRole, S> {
       this.historyOnlyRoles = value;
     }
 
+    private void callbackUrls(Map<Webhook, String> value) {
+      this.callbackUrls = value;
+    }
+
     private void setRetries(Webhook hook, int... retries) {
       if (retries.length > 0) {
-        String val = String.join(",", Arrays.stream(retries).mapToObj(String::valueOf).collect(
-            Collectors.toList()));
-        this.retries.put(hook, val);
+        this.retries.put(hook, joinRetries(retries));
       }
+    }
+
+    static String joinRetries(int... retries) {
+      return Arrays.stream(retries).mapToObj(String::valueOf).collect(Collectors.joining(","));
     }
   }
 }
