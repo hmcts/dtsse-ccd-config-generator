@@ -9,6 +9,8 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -19,8 +21,9 @@ import uk.gov.hmcts.ccd.sdk.type.Document;
 
 /**
  * Answers the application's CDAM calls for a document from the documents a test stored: its
- * metadata, its content, a new time to live and its deletion. Unknown documents are not found, and
- * every other request, such as an upload, goes to the application's own client.
+ * metadata, its content, a new time to live and its deletion. A stored document holds no real
+ * file, so its content is its file name. Unknown documents are not found, and every other request,
+ * such as an upload or attaching documents to a case, goes to the application's own client.
  */
 final class TestCaseDocumentClient implements Client {
 
@@ -51,7 +54,7 @@ final class TestCaseDocumentClient implements Client {
       case GET -> binary
           ? respond(request, 200, "application/pdf", document.get().getFilename())
           : respond(request, 200, "application/json", metadata(document.get()));
-      case PATCH -> respond(request, 200, "application/json", "{}");
+      case PATCH -> respond(request, 200, "application/json", newTtl(request));
       case DELETE -> {
         documents.delete(id);
         yield respond(request, 204, "application/json", "");
@@ -65,7 +68,7 @@ final class TestCaseDocumentClient implements Client {
     String now = Instant.now().toString();
     return JSON.writeValueAsString(Map.of(
         "classification", "PUBLIC",
-        "size", document.getFilename().length(),
+        "size", document.getFilename().getBytes(StandardCharsets.UTF_8).length,
         "mimeType", "application/pdf",
         "originalDocumentName", document.getFilename(),
         "createdOn", now,
@@ -73,6 +76,16 @@ final class TestCaseDocumentClient implements Client {
         "_links", Map.of(
             "self", Map.of("href", document.getUrl()),
             "binary", Map.of("href", document.getBinaryUrl()))));
+  }
+
+  /** The document's new time to live, as CDAM confirms the one the application asked for. */
+  private static String newTtl(Request request) throws IOException {
+    String now = LocalDateTime.now().toString();
+    Map<String, Object> ttl = new LinkedHashMap<>();
+    ttl.put("createdOn", now);
+    ttl.put("modifiedOn", now);
+    ttl.put("ttl", request.body() == null ? null : JSON.readTree(request.body()).path("ttl").asText(null));
+    return JSON.writeValueAsString(ttl);
   }
 
   private static Response respond(Request request, int status, String contentType, String body) {
