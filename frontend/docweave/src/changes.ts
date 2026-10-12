@@ -1,7 +1,6 @@
 import { type Node as ProseMirrorNode } from "prosemirror-model";
 
-import { type DocWeaveSnapshot } from "./controller.js";
-import { editorSchema } from "./schema.js";
+import { type DocWeaveSnapshot, readSnapshot } from "./snapshot.js";
 
 /**
  * A clause is the unit the reader edits and reverts: a block at the top of
@@ -81,31 +80,24 @@ export function clauseChange(
 /**
  * How the reader changed the document generated for them, clause by clause:
  * how many clauses they wrote and how many generated clauses they changed,
- * in wording or formatting. The editor does not let them remove a generated
- * clause.
+ * in wording or formatting. It compares the document as it is now with the
+ * one generated for it, so it is not a history: the editor does not let the
+ * reader remove a generated clause, wording they delete within one counts as
+ * modifying it, and a clause they wrote and then deleted counts as nothing.
  */
 export interface DocumentChanges {
   inserted: number;
   modified: number;
 }
 
-export function parseSnapshot(snapshot: DocWeaveSnapshot): {
-  current: ProseMirrorNode;
-  generated: ProseMirrorNode;
-} {
-  return {
-    current: editorSchema.nodeFromJSON(snapshot.current),
-    generated: editorSchema.nodeFromJSON(snapshot.generated),
-  };
-}
-
 /**
  * Describes how the reader changed the generated document in a snapshot, so
  * a service can tell someone reviewing it without reading the snapshot itself.
- * Needs no DOM, so it runs on a server.
+ * Needs no DOM, so it runs on a server. Throws an InvalidSnapshotError for a
+ * snapshot that is not valid.
  */
 export function describeChanges(snapshot: DocWeaveSnapshot): DocumentChanges {
-  const { current, generated } = parseSnapshot(snapshot);
+  const { current, generated } = readSnapshot(snapshot);
   const generatedClauses = clauseNodesById(generated);
   const changes: DocumentChanges = { inserted: 0, modified: 0 };
   current.descendants((node, _position, parent) => {

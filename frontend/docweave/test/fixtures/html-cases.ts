@@ -27,13 +27,13 @@ export function htmlCases(): HtmlCase[] {
   const cases: HtmlCase[] = [{ name: "generated-order", snapshot: generatedOrder() }];
   cases.push({ name: "escaping", snapshot: snapshot([
     paragraph("escaping", text('<script>alert("x")</script> & < > " \' \u00a0\n\t £ café 漢字 😀')),
-    paragraph("fact", { type: "generated_text", attrs: { id: "fact", text: '<img src=x onerror="bad"> & \u00a0' } }),
+    paragraph("fact-paragraph", { type: "generated_text", attrs: { id: "fact", text: '<img src=x onerror="bad"> & \u00a0' } }),
     paragraph("empty-fact", text("Before"), { type: "generated_text", attrs: { id: "empty", text: "" } }, text("after")),
   ]) });
   const formats = [[], ["em"], ["strong"], ["em", "strong"]];
   cases.push({ name: "mark-transitions", snapshot: snapshot(formats.flatMap((left, i) =>
     formats.map((right, j) => paragraph(`marks-${i}-${j}`,
-      text("left", left), { type: "generated_text", attrs: { id: "fact", text: " fact " }, marks: left.map(type => ({ type })) },
+      text("left", left), { type: "generated_text", attrs: { id: `fact-${i}-${j}`, text: " fact " }, marks: left.map(type => ({ type })) },
       text("right", right), text(" end"),
     )),
   )) });
@@ -53,8 +53,8 @@ export function htmlCases(): HtmlCase[] {
   cases.push({ name: "blank-document", snapshot: snapshot([paragraph("blank")]) });
   cases.push({ name: "empty-clauses", snapshot: snapshot([
     paragraph("changed"), paragraph(null),
-    { type: "ordered_list", attrs: { id: "list", order: 5 }, content: [
-      { type: "list_item", attrs: { id: "item" }, content: [paragraph(null), paragraph(null, text("Second paragraph"))] },
+    { type: "ordered_list", attrs: { id: null, order: 5 }, content: [
+      { type: "list_item", attrs: { id: null }, content: [paragraph(null), paragraph(null, text("Second paragraph"))] },
     ] },
   ], [paragraph("changed", text("Removed wording"))]) });
 
@@ -85,14 +85,23 @@ export function htmlCases(): HtmlCase[] {
     const generated: NodeJSON[] = Array.from({ length: 30 }, () => random(3) === 0
       ? list(0) : paragraph(`paragraph-${id++}`, ...inline()));
     const current = structuredClone(generated);
-    const edit = (nodes: NodeJSON[]): void => {
+    // Edits the reader could make: rewording around facts, and writing clauses of their own.
+    const words = (): NodeJSON[] => inline().filter(node => node.type === "text");
+    const edit = (nodes: NodeJSON[], userNode: () => NodeJSON): void => {
       for (const node of nodes) {
-        if (node.type === "paragraph" && random(3) === 0) node.content = random(4) === 0 ? [] : inline();
-        if ((node.type === "paragraph" || node.type === "list_item") && random(5) === 0) node.attrs = { id: null };
-        if (node.type === "ordered_list" || node.type === "list_item") edit(node.content!);
+        if (node.type === "paragraph" && random(3) === 0) {
+          node.content = node.content!.flatMap(child => child.type === "generated_text"
+            ? [child]
+            : random(4) === 0 ? [] : words());
+        }
+        if (node.type === "ordered_list") {
+          edit(node.content!, () => ({ type: "list_item", attrs: { id: null }, content: [paragraph(null, ...words())] }));
+        }
+        if (node.type === "list_item") edit(node.content!, () => paragraph(null, ...words()));
       }
+      if (random(3) === 0) nodes.splice(random(nodes.length), 0, userNode());
     };
-    edit(current);
+    edit(current, () => paragraph(null, ...words()));
     cases.push({ name: `stress-${String(seed).padStart(2, "0")}`, snapshot: snapshot(current, generated) });
   }
   return cases;

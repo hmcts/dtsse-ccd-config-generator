@@ -271,7 +271,8 @@ function navigateToSource(
 
   event.preventDefault();
   focusTarget?.focus({ preventScroll: true });
-  source.scrollIntoView({
+  // Optional: jsdom, for one, does not implement it.
+  source.scrollIntoView?.({
     behavior: reduceMotion ? "auto" : "smooth",
     block: "center",
   });

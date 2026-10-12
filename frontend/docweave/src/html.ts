@@ -6,22 +6,30 @@ import {
   clauseChange,
   clauseNodesById,
   isClauseNode,
-  parseSnapshot,
 } from "./changes.js";
-import { type DocWeaveSnapshot } from "./controller.js";
+import { type DocWeaveSnapshot, readSnapshot } from "./snapshot.js";
 import { listStarts } from "./list-numbering.js";
 import { outputSchema, toOutputDocument } from "./output-schema.js";
 
 export interface RenderHtmlOptions {
-  /** Marks inserted and modified clauses with the editor's classes and accessible descriptions. */
+  /**
+   * Marks inserted and modified clauses as the editor does, with the
+   * `docweave-clause--inserted` and `--modified` classes and words for a
+   * screen reader, which docweave.css styles wherever the HTML is shown.
+   */
   changes?: boolean;
 }
 
 const serializer = DOMSerializer.fromSchema(outputSchema);
 
-/** Renders the validated document using ProseMirror's output schema, without a browser DOM. */
+/**
+ * Renders the reader's document as HTML using ProseMirror's output schema,
+ * without a browser DOM. Throws an InvalidSnapshotError for a snapshot that is
+ * not valid.
+ */
 export function renderHtml(snapshot: DocWeaveSnapshot, options: RenderHtmlOptions = {}): string {
-  const output = toOutputDocument(snapshot.current);
+  const { snapshot: valid, current, generated } = readSnapshot(snapshot);
+  const output = toOutputDocument(valid.current);
   const starts = listStarts(output);
   const topLevelLists = new Map<ProseMirrorNode, number>();
   output.forEach((node, _offset, index) => {
@@ -30,7 +38,6 @@ export function renderHtml(snapshot: DocWeaveSnapshot, options: RenderHtmlOption
   });
   const changes = new Map<ProseMirrorNode, ClauseChange>();
   if (options.changes) {
-    const { current, generated } = parseSnapshot(snapshot);
     const generatedClauses = clauseNodesById(generated);
     const collect = (node: ProseMirrorNode, original: ProseMirrorNode, parent: ProseMirrorNode | null) => {
       if (isClauseNode(original, parent, current)) {
@@ -49,14 +56,14 @@ export function renderHtml(snapshot: DocWeaveSnapshot, options: RenderHtmlOption
     if (node.isText) return escapeHtml(node.text!);
     const change = changes.get(node);
     const prefix = change
-      ? `<span class="docweave-editor__visually-hidden">${CHANGE_DESCRIPTIONS[change.kind]} </span>`
+      ? `<span class="docweave-visually-hidden">${CHANGE_DESCRIPTIONS[change.kind]} </span>`
       : description;
     const content = node.type.name === "list_item"
       ? node.children.map((child, index) => renderNode(child, index === 0 ? prefix : "")).join("")
       : prefix + renderChildren(node) + (prefix && !node.childCount ? "<br>" : "");
     const spec = serializer.nodes[node.type.name]!(node);
     const { open, close } = htmlWrapper(spec, change
-      ? `docweave-editor__clause docweave-editor__clause--${change.kind}`
+      ? `docweave-clause docweave-clause--${change.kind}`
       : undefined, node.type.name === "ordered_list"
       ? topLevelLists.has(node)
         ? { start: topLevelLists.get(node) === 1 ? null : topLevelLists.get(node) }
@@ -125,4 +132,19 @@ function escapeHtml(text: string, attribute = false): string {
       default: return "&nbsp;";
     }
   });
+}
+
+/**
+ * The reader's document as plain text: one line per paragraph or heading,
+ * wherever it sits in a list, with facts as their values and no numbering.
+ */
+export function renderText(snapshot: DocWeaveSnapshot): string {
+  const output = toOutputDocument(readSnapshot(snapshot).snapshot.current);
+  const lines: string[] = [];
+  output.descendants((node) => {
+    if (!node.isTextblock) return true;
+    lines.push(node.textContent);
+    return false;
+  });
+  return lines.join("\n");
 }

@@ -12,12 +12,15 @@ export {
   createDocEditor,
   type CreateDocEditorOptions,
 } from "./client.js";
+export { type DocEditorController } from "./controller.js";
 export {
   type DocWeaveSnapshot,
-  type DocEditorController,
-} from "./controller.js";
+  InvalidSnapshotError,
+  type InvalidSnapshotCode,
+  parseSnapshot,
+} from "./snapshot.js";
 export { describeChanges, type DocumentChanges } from "./changes.js";
-export { renderHtml, type RenderHtmlOptions } from "./html.js";
+export { renderHtml, type RenderHtmlOptions, renderText } from "./html.js";
 export {
   createHttpTemplateProvider,
   createTemplateFragment,

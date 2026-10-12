@@ -323,7 +323,7 @@ export function createTemplateDialogView(document: Document) {
   }
 
   function scrollToResult(index: number): void {
-    resultAt(index)?.scrollIntoView({ block: "nearest" });
+    resultAt(index)?.scrollIntoView?.({ block: "nearest" });
   }
 
   return {

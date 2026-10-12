@@ -205,7 +205,7 @@
 }
 
 // Read by screen readers, invisible to everyone else.
-.docweave-editor__visually-hidden {
+.docweave-visually-hidden {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -285,32 +285,32 @@
   outline-offset: 0;
 }
 
-.docweave-editor__clause,
-li.docweave-editor__clause > p {
+.docweave-clause,
+li.docweave-clause > p {
   box-sizing: border-box;
 }
 
-p.docweave-editor__clause,
-li.docweave-editor__clause > p {
+p.docweave-clause,
+li.docweave-clause > p {
   width: fit-content;
   max-width: 100%;
 }
 
 // A flagged list item leaves the highlight to its paragraph, so the marker
 // number stays outside the shaded area.
-li.docweave-editor__clause {
+li.docweave-clause {
   border-left: 0;
   background: transparent;
 }
 
-.docweave-editor__clause--inserted,
-li.docweave-editor__clause--inserted > p {
+.docweave-clause--inserted,
+li.docweave-clause--inserted > p {
   border-left: 4px solid #00703c;
   background: #cce2d8;
 }
 
-.docweave-editor__clause--modified,
-li.docweave-editor__clause--modified > p {
+.docweave-clause--modified,
+li.docweave-clause--modified > p {
   border-left: 4px solid #1d70b8;
   background: #d2e2f1;
 }

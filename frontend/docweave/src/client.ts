@@ -55,6 +55,7 @@ import {
 import { createListNumberingPlugin } from "./list-numbering.js";
 import { assertCurrentDocumentMatchesGenerated } from "./invariants.js";
 import { editorSchema } from "./schema.js";
+import { InvalidSnapshotError, parseSnapshot } from "./snapshot.js";
 import {
   createTemplateDialog,
   type TemplateDialog,
@@ -74,6 +75,17 @@ export interface CreateDocEditorOptions {
    */
   label?: string;
   initialSnapshot?: DocWeaveSnapshot;
+  /**
+   * A form field that holds the snapshot as JSON, so it is posted with the
+   * form. The editor starts from the snapshot in it, unless given
+   * initialSnapshot, and writes every change to it before calling onChange.
+   * An empty field holds no document. A field holding something other than a
+   * snapshot is reported to onError and left as it is, unwritten, until the
+   * host empties it.
+   */
+  field?: HTMLTextAreaElement | HTMLInputElement;
+  /** Called when field holds something other than a valid snapshot. */
+  onError?: (error: InvalidSnapshotError) => void;
   /**
    * Called with the new snapshot whenever getSnapshot would return something
    * different: after the reader's edit, a render that changes it, or a load.
@@ -139,14 +151,51 @@ function createHelpButton(ownerDocument: Document): HTMLButtonElement {
   return button;
 }
 
+/**
+ * Reads the field's snapshot, if there is one, and returns the options with
+ * an onChange that writes each new snapshot to the field first.
+ */
+function bindField(options: CreateDocEditorOptions): {
+  initialSnapshot?: DocWeaveSnapshot;
+  onChange?: (snapshot: DocWeaveSnapshot) => void;
+} {
+  const { field } = options;
+  if (!field) return options;
+  // Checked before it is written, so a bad one cannot replace the saved document.
+  let initialSnapshot = options.initialSnapshot && parseSnapshot(options.initialSnapshot);
+  let held = false;
+  if (!initialSnapshot && field.value.trim()) {
+    try {
+      initialSnapshot = parseSnapshot(field.value);
+    } catch (error) {
+      if (!(error instanceof InvalidSnapshotError)) throw error;
+      held = true;
+      options.onError?.(error);
+    }
+  }
+  const write = (snapshot: DocWeaveSnapshot): void => {
+    held &&= field.value.trim() !== "";
+    if (!held) field.value = JSON.stringify(snapshot);
+  };
+  if (initialSnapshot) write(initialSnapshot);
+  return {
+    initialSnapshot,
+    onChange(snapshot) {
+      write(snapshot);
+      options.onChange?.(snapshot);
+    },
+  };
+}
+
 export function createDocEditor(
   options: CreateDocEditorOptions = {},
 ): DocEditorController {
   if (options.templates && options.mount === undefined) {
     throw new Error("Templates require an editor mount");
   }
+  const { initialSnapshot, onChange } = bindField(options);
   if (options.mount === undefined) {
-    return createDocEditorController(options).controller;
+    return createDocEditorController({ initialSnapshot, onChange }).controller;
   }
 
   const ownerDocument = typeof options.mount === "string"
@@ -186,8 +235,8 @@ export function createDocEditor(
   let helpDialog: KeyboardHelpDialog | undefined;
 
   const runtime = createDocEditorController({
-    initialSnapshot: options.initialSnapshot,
-    onChange: options.onChange,
+    initialSnapshot,
+    onChange,
     plugins: [
       createClipboardPlugin(),
       createListNumberingPlugin(),

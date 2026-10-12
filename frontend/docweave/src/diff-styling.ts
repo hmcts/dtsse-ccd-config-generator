@@ -154,7 +154,7 @@ function createClauseMarker(
   container.contentEditable = "false";
 
   const description = ownerDocument.createElement("span");
-  description.className = "docweave-editor__visually-hidden";
+  description.className = "docweave-visually-hidden";
   description.textContent = `${marker.description} `;
 
   const button = ownerDocument.createElement("button");
@@ -186,7 +186,7 @@ function createDiffDecorations(
       decorations.push(
         Decoration.node(position, position + node.nodeSize, {
           class:
-            "docweave-editor__clause docweave-editor__clause--inserted",
+            "docweave-clause docweave-clause--inserted",
         }, {
           diffKind: "inserted",
         }),
@@ -217,7 +217,7 @@ function createDiffDecorations(
       decorations.push(
         Decoration.node(position, position + node.nodeSize, {
           class:
-            "docweave-editor__clause docweave-editor__clause--modified",
+            "docweave-clause docweave-clause--modified",
         }, {
           diffKind: "modified",
         }),
