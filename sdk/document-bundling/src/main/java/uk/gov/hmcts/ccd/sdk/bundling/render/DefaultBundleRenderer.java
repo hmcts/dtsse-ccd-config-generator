@@ -541,12 +541,13 @@ public final class DefaultBundleRenderer implements BundleRenderer {
 
     private BundleGenerationException unsupportedMediaType(
         BundleDocument document, String effectiveType) {
-      if (docmosis == null && BuiltInMediaTypes.OFFICE.contains(effectiveType)) {
+      if ((docmosis == null || !docmosis.convertsFiles())
+          && BuiltInMediaTypes.OFFICE.contains(effectiveType)) {
         return new BundleGenerationException(
             BundleErrorCode.DOCMOSIS_NOT_CONFIGURED, BundleStage.CONVERT,
             "Document '" + document.id() + "' is an office-format source ('" + effectiveType
-                + "') but the Docmosis render service is not configured, so there is no office "
-                + "conversion handler.",
+                + "') but the Docmosis render service is not configured for conversion, so there is "
+                + "no office conversion handler.",
             "Configure Docmosis (ccd.bundling.docmosis.convert-endpoint and "
                 + "ccd.bundling.docmosis.access-key — or call docmosis(...) on the renderer "
                 + "builder), or register a replacement handler for the media type through a "
