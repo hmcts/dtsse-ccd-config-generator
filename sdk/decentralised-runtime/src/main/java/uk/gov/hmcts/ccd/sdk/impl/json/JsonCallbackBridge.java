@@ -47,6 +47,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
 import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
+import uk.gov.hmcts.ccd.sdk.impl.ClientContextPassthrough;
 import uk.gov.hmcts.ccd.sdk.json.JsonCallbackHandler;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.SignificantItem;
@@ -58,6 +59,7 @@ public class JsonCallbackBridge {
 
   private static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() {};
   private static final String SERVICE_AUTHORIZATION = "ServiceAuthorization";
+  private static final String CLIENT_CONTEXT = ClientContextPassthrough.CLIENT_CONTEXT;
   private static final String LOCAL_CALLBACK_PLACEHOLDER = "decentralisation.local-callback-placeholder";
   private static final String EXTERNAL_CALLBACK_BASE_URLS = "decentralisation.external-callback-base-urls";
   private static final String EXTERNAL_CALLBACK_TIMEOUT = "decentralisation.external-callback-timeout";
@@ -253,6 +255,7 @@ public class JsonCallbackBridge {
   private Object body(String callbackUrl, Object result) {
     if (result instanceof ResponseEntity<?> response) {
       assertSuccessfulResponse(callbackUrl, response.getStatusCode());
+      ClientContextPassthrough.returned(response.getHeaders().getFirst(CLIENT_CONTEXT));
       return response.getBody();
     }
     return result;
@@ -335,6 +338,7 @@ public class JsonCallbackBridge {
     HttpHeaders headers = new HttpHeaders();
     headers.set(HttpHeaders.AUTHORIZATION, currentRequestHeader(HttpHeaders.AUTHORIZATION));
     headers.set(SERVICE_AUTHORIZATION, currentRequestHeader(SERVICE_AUTHORIZATION));
+    ClientContextPassthrough.current().ifPresent(clientContext -> headers.set(CLIENT_CONTEXT, clientContext));
     return headers;
   }
 
@@ -355,7 +359,9 @@ public class JsonCallbackBridge {
   }
 
   private boolean isSupportedHeader(String name) {
-    return "authorization".equalsIgnoreCase(name) || "serviceauthorization".equalsIgnoreCase(name);
+    return "authorization".equalsIgnoreCase(name)
+        || "serviceauthorization".equalsIgnoreCase(name)
+        || CLIENT_CONTEXT.equalsIgnoreCase(name);
   }
 
   private String headerName(RequestHeader requestHeader) {
@@ -375,6 +381,7 @@ public class JsonCallbackBridge {
           HttpResponse.BodyHandlers.ofString()
       );
       assertSuccessfulResponse(callbackUrl, HttpStatusCode.valueOf(response.statusCode()));
+      response.headers().firstValue(CLIENT_CONTEXT).ifPresent(ClientContextPassthrough::returned);
       String body = response.body();
       return body == null || body.isBlank() ? null : mapper.readValue(body, Object.class);
     } catch (HttpTimeoutException e) {
@@ -395,6 +402,7 @@ public class JsonCallbackBridge {
         .POST(HttpRequest.BodyPublishers.ofByteArray(requestMapper.writeValueAsBytes(payload)));
     copyHeader(request, headers, HttpHeaders.AUTHORIZATION);
     copyHeader(request, headers, SERVICE_AUTHORIZATION);
+    copyHeader(request, headers, CLIENT_CONTEXT);
     return request.build();
   }
 

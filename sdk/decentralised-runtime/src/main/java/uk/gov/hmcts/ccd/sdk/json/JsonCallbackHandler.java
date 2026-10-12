@@ -27,8 +27,11 @@ public interface JsonCallbackHandler {
    *
    * @param callbackPath the path {@link #handles(String)} accepted
    * @param request      the callback request CCD would have sent
-   * @param headers      the {@code Authorization} and {@code ServiceAuthorization} headers of the submission
-   * @return the callback response body, in the shape the controller would have returned it
+   * @param headers      the {@code Authorization} and {@code ServiceAuthorization} headers of the submission, and its
+   *                     {@code Client-Context} when it has one, as CCD would send them
+   * @return the callback response body, in the shape the controller would have returned it. Return it in a
+   *     {@link org.springframework.http.ResponseEntity} to send a {@code Client-Context} header back, as a
+   *     controller would to CCD.
    */
   Object handle(String callbackPath, CallbackRequest request, HttpHeaders headers);
 }

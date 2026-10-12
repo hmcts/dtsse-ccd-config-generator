@@ -11,10 +11,12 @@ import java.net.InetSocketAddress;
 import java.net.http.HttpTimeoutException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.support.StaticApplicationContext;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,6 +29,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
+import uk.gov.hmcts.ccd.sdk.impl.ClientContextPassthrough;
 import uk.gov.hmcts.ccd.sdk.json.JsonCallbackHandler;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 
@@ -167,6 +170,60 @@ class JsonCallbackBridgeTest {
   }
 
   @Test
+  void carriesTheClientContextThroughServiceCallbacksAsCcdDoes() {
+    MockHttpServletRequest submission = new MockHttpServletRequest();
+    submission.addHeader("Client-Context", "from-the-frontend");
+    RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(submission));
+    RecordingCallbackHandler handler = new RecordingCallbackHandler("/cases/callbacks/");
+    JsonCallbackBridge bridge = bridgeWith(
+        new MockEnvironment().withProperty("decentralisation.local-callback-placeholder", "CIVIL_URL"),
+        handler
+    );
+
+    bridge.invoke("${CIVIL_URL}/cases/callbacks/about-to-submit", Map.of("event_id", "SEND_AND_REPLY"));
+    assertThat(handler.headers.getFirst("Client-Context")).isEqualTo("from-the-frontend");
+    assertThat(ClientContextPassthrough.returned()).isEmpty();
+
+    handler.returnClientContext = "from-the-submitted-callback";
+    bridge.invoke("${CIVIL_URL}/cases/callbacks/submitted", Map.of("event_id", "SEND_AND_REPLY"));
+    assertThat(ClientContextPassthrough.returned()).contains("from-the-submitted-callback");
+
+    handler.returnClientContext = null;
+    bridge.invoke("${CIVIL_URL}/cases/callbacks/submitted", Map.of("event_id", "SEND_AND_REPLY"));
+    assertThat(handler.headers.getFirst("Client-Context")).isEqualTo("from-the-submitted-callback");
+    assertThat(ClientContextPassthrough.returned()).contains("from-the-submitted-callback");
+  }
+
+  @Test
+  void carriesTheClientContextThroughExternalCallbacks() throws Exception {
+    MockHttpServletRequest submission = new MockHttpServletRequest();
+    submission.addHeader("Client-Context", "from-the-frontend");
+    RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(submission));
+    AtomicReference<String> sent = new AtomicReference<>();
+    HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+    server.createContext("/callback", exchange -> {
+      sent.set(exchange.getRequestHeaders().getFirst("Client-Context"));
+      exchange.getResponseHeaders().add("Client-Context", "from-the-external-callback");
+      byte[] body = "{}".getBytes();
+      exchange.sendResponseHeaders(200, body.length);
+      exchange.getResponseBody().write(body);
+      exchange.close();
+    });
+    server.start();
+    try {
+      bridgeWith(new MockEnvironment()).invoke(
+          "http://localhost:%s/callback".formatted(server.getAddress().getPort()),
+          Map.of()
+      );
+    } finally {
+      server.stop(0);
+    }
+
+    assertThat(sent.get()).isEqualTo("from-the-frontend");
+    assertThat(ClientContextPassthrough.returned()).contains("from-the-external-callback");
+  }
+
+  @Test
   void failsWhenMoreThanOneServiceCallbackHandlerHandlesACallback() {
     JsonCallbackBridge bridge = bridgeWith(
         new MockEnvironment().withProperty("decentralisation.local-callback-placeholder", "CIVIL_URL"),
@@ -276,6 +333,7 @@ class JsonCallbackBridgeTest {
     private String path;
     private CallbackRequest request;
     private HttpHeaders headers;
+    private String returnClientContext;
 
     private RecordingCallbackHandler(String pathPrefix) {
       this.pathPrefix = pathPrefix;
@@ -291,11 +349,14 @@ class JsonCallbackBridgeTest {
       this.path = callbackPath;
       this.request = request;
       this.headers = headers;
-      return Map.of(
+      Map<String, Object> body = Map.of(
           "data", Map.of(),
           "state", "AWAITING_RESPONDENT_ACKNOWLEDGEMENT",
           "errors", List.of("handled by the service")
       );
+      return returnClientContext == null
+          ? body
+          : ResponseEntity.ok().header("Client-Context", returnClientContext).body(body);
     }
   }
 
