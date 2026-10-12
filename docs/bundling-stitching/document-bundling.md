@@ -222,8 +222,8 @@ for `requeue.delay`. A change to the case in the meantime joins it and makes it 
 is re-run at most `requeue.max-attempts` times in a row for unavailable documents (counted in the
 execution context attribute `bundling.unavailableRequeues`).
 
-pcs-api's `CaseBundleTrigger` is a worked example: a Hibernate listener that submits from the
-before-commit hook, so every path that adds, amends or removes a document is covered.
+For managed case bundles, applications call `CaseBundles.invalidate` explicitly from
+their document-change hook in the source transaction (see the managed API below).
 
 Properties under `ccd.bundling.job.*`: `enabled` (default `false`), `worker.enabled` (`true`), `worker.poll-delay` (`1s`), `worker.batch-size` (`5`),
 `worker.max-concurrent-renders` (`2`), `worker.lease-duration` (`5m`), `retry.max-attempts` (`3`),
