@@ -86,8 +86,7 @@ Docweave about it rather than reading its JSON. A snapshot from outside, such
 as a posted form field, goes through `parseSnapshot`, which takes the JSON or
 the parsed value and throws an `InvalidSnapshotError` whose `code` says whether
 it is `malformed`, an `unsupported-version` or an `invalid-document`: one whose
-reader's document drops a generated clause or fact, or holds a fact whose value
-differs from the generated one, which the reader cannot type into. Loading,
+reader's document drops a generated clause or fact. Loading,
 `renderHtml`, `renderText` and `describeChanges` all make the same check.
 
 `renderHtml(snapshot)` renders the reader's document as the final HTML on the

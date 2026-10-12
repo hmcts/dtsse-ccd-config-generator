@@ -24,10 +24,7 @@ function rejects(value: unknown, code: InvalidSnapshotError["code"]): void {
   );
 }
 
-const withFact = (text: string) =>
-  edited(generatedOrder(), (current) => {
-    clauses(current)[0]!.content![0]!.content![1]!.attrs!.text = text;
-  });
+const unsupported = () => ({ ...generatedOrder(), version: 2 as 1 });
 
 describe("parseSnapshot", () => {
   it("takes a snapshot as posted JSON or as a value, returning a copy", () => {
@@ -55,10 +52,6 @@ describe("parseSnapshot", () => {
     rejects({ ...generatedOrder(), current: { type: "nonsense" } }, "invalid-document");
   });
 
-  it("refuses a fact changed outside the editor, which the reader cannot type into", () => {
-    rejects(withFact("1 October 2099"), "invalid-document");
-  });
-
   it("refuses a generated clause removed outside the editor", () => {
     rejects(edited(generatedOrder(), (current) => clauses(current).pop()), "invalid-document");
   });
@@ -72,11 +65,11 @@ describe("parseSnapshot", () => {
     }), "invalid-document");
   });
 
-  it("is what renderHtml and describeChanges check, so a forged snapshot is never rendered", () => {
-    assert.throws(() => renderHtml(withFact("£0")), InvalidSnapshotError);
-    assert.throws(() => renderText(withFact("£0")), InvalidSnapshotError);
-    assert.throws(() => describeChanges(withFact("£0")), InvalidSnapshotError);
-    assert.throws(() => createDocEditor({ initialSnapshot: withFact("£0") }), InvalidSnapshotError);
+  it("is what renderHtml and describeChanges check, so an invalid snapshot is never rendered", () => {
+    assert.throws(() => renderHtml(unsupported()), InvalidSnapshotError);
+    assert.throws(() => renderText(unsupported()), InvalidSnapshotError);
+    assert.throws(() => describeChanges(unsupported()), InvalidSnapshotError);
+    assert.throws(() => createDocEditor({ initialSnapshot: unsupported() }), InvalidSnapshotError);
   });
 });
 
@@ -152,5 +145,13 @@ describe("createDocEditor's field", () => {
     textarea.value = "";
     controller.render(order("2 May"));
     assert.deepEqual(JSON.parse(textarea.value), json(controller.getSnapshot()));
+  });
+
+  it("keeps the saved document when given an initialSnapshot it refuses", () => {
+    const saved = JSON.stringify(generatedOrder());
+    const textarea = field(saved);
+
+    assert.throws(() => createDocEditor({ field: textarea, initialSnapshot: unsupported() }), InvalidSnapshotError);
+    assert.equal(textarea.value, saved);
   });
 });

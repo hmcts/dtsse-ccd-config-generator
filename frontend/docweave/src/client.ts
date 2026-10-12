@@ -161,7 +161,8 @@ function bindField(options: CreateDocEditorOptions): {
 } {
   const { field } = options;
   if (!field) return options;
-  let initialSnapshot = options.initialSnapshot;
+  // Checked before it is written, so a bad one cannot replace the saved document.
+  let initialSnapshot = options.initialSnapshot && parseSnapshot(options.initialSnapshot);
   let held = false;
   if (!initialSnapshot && field.value.trim()) {
     try {

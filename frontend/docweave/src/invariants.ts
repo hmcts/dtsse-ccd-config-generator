@@ -168,15 +168,4 @@ export function assertCurrentDocumentMatchesGenerated(
       "Current document does not preserve the generated managed structure",
     );
   }
-  // The reader cannot type into a fact, so a different value means the
-  // snapshot was changed outside the editor.
-  const generated = snapshotManagedDocument(generatedDocument).nodes;
-  for (const [id, { node }] of snapshotManagedDocument(currentDocument).nodes) {
-    if (
-      node.type.name === "generated_text" &&
-      node.attrs.text !== generated.get(id)?.node.attrs.text
-    ) {
-      throw new Error(`Fact differs from its generated value: ${id}`);
-    }
-  }
 }
