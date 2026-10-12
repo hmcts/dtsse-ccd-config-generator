@@ -14,7 +14,14 @@ export const outputSchema = new Schema({
   nodes: {
     doc: basicNodes.doc,
     paragraph: basicNodes.paragraph,
-    heading: basicNodes.heading,
+    heading: {
+      ...basicNodes.heading,
+      attrs: { level: { default: 1, validate(value: unknown) {
+        if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 6) {
+          throw new RangeError("Heading level must be an integer from 1 to 6");
+        }
+      } } },
+    },
     text: basicNodes.text,
     ordered_list: { ...orderedList, content: "list_item+", group: "block" },
     list_item: { ...listItem, content: "paragraph+ ordered_list?" },

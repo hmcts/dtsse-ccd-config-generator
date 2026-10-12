@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.type.CollectionType;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Collections2;
-import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.MapDifference;
 import com.google.common.collect.MapDifference.ValueDifference;
 import com.google.common.collect.Maps;
@@ -21,6 +20,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import org.apache.commons.io.FileUtils;
@@ -231,9 +231,9 @@ public final class CcdConfigComparator {
             throw new RuntimeException("No values!");
         }
         Map<String, Object> match = getClosest(target, values);
-        System.out.println(pretty(ImmutableSortedMap.copyOf(target)));
+        System.out.println(pretty(new TreeMap<>(target)));
         System.out.println("best match:");
-        System.out.println(pretty(ImmutableSortedMap.copyOf(match)));
+        System.out.println(pretty(new TreeMap<>(match)));
         MapDifference<String, Object> diff = Maps.difference(target, match);
         if (!diff.entriesOnlyOnLeft().isEmpty()) {
             System.out.println("Only on left:");

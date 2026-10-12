@@ -22,7 +22,7 @@ dependencies {
     implementation 'com.fasterxml.jackson.core:jackson-databind'
     implementation 'org.springframework.boot:spring-boot-jackson2'
     implementation 'com.github.hmcts:service-auth-provider-java-client:6.1.2'
-    compileOnly 'io.github.openfeign:feign-core:13.16'
+    compileOnly 'io.github.openfeign:feign-core:13.17'
     implementation('com.github.hmcts:idam-java-client:4.0.0') {
         transitive = false
     }

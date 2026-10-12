@@ -1,0 +1,36 @@
+[
+  {
+    "CaseFieldID": "applicant",
+    "CaseTypeID": "SearchExtras",
+    "DisplayOrder": 4,
+    "Label": "Applicant surname (admin)",
+    "ListElementCode": "surname",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-courtadmin"
+  },
+  {
+    "CaseFieldID": "applicant",
+    "CaseTypeID": "SearchExtras",
+    "DisplayOrder": 2,
+    "Label": "Applicant forename",
+    "ListElementCode": "forename",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "CaseFieldID": "applicant",
+    "CaseTypeID": "SearchExtras",
+    "DisplayOrder": 3,
+    "FieldShowCondition": "caseName=\"x\"",
+    "Label": "Applicant surname",
+    "ListElementCode": "surname",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "CaseFieldID": "caseName",
+    "CaseTypeID": "SearchExtras",
+    "DisplayOrder": 1,
+    "FieldShowCondition": "applicant.surname=\"*\"",
+    "Label": "Case name",
+    "LiveFrom": "01/01/2017"
+  }
+]

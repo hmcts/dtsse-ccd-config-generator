@@ -25,9 +25,14 @@ public class CaseRoleGenerator<T, S, R extends HasRole> implements ConfigGenerat
 
     final Path path = Paths.get(rootOutputfolder.getPath(), "CaseRoles.json");
 
+    // JurisdictionID is emitted only when the config opts in. The importer's CaseRoleParser reads
+    // only ID/Name/Description, so the extra column is additive.
+    final String jurisdictionId = config.isEmitCaseRoleJurisdiction() ? config.getJurId() : null;
+
     final List<Map<String, Object>> caseRoles = Arrays.stream(config.getRoleClass().getEnumConstants())
         .filter(x -> x.getRole().matches("^\\[.+\\]$"))
-        .map(o -> enumToJsonMap(config.getCaseType(), config.getRoleClass(), o, o.getRole()))
+        .map(o -> enumToJsonMap(config.getCaseType(), config.getRoleClass(), o, o.getRole(),
+            jurisdictionId))
         .collect(toList());
 
     mergeInto(path, caseRoles, new AddMissing(), "ID");
@@ -36,7 +41,8 @@ public class CaseRoleGenerator<T, S, R extends HasRole> implements ConfigGenerat
 
   @SneakyThrows
   private static Map<String, Object> enumToJsonMap(String caseType, Class<?> enumType,
-                                                   Object enumConstant, String id) {
+                                                   Object enumConstant, String id,
+                                                   String jurisdictionId) {
     Map<String, Object> field = JsonUtils.caseRow(caseType);
     field.put("ID", id);
 
@@ -46,6 +52,9 @@ public class CaseRoleGenerator<T, S, R extends HasRole> implements ConfigGenerat
     String desc = ccd != null ? ccd.hint() : "";
     field.put("Name", name);
     field.put("Description", desc);
+    if (jurisdictionId != null) {
+      field.put("JurisdictionID", jurisdictionId);
+    }
 
     return field;
   }

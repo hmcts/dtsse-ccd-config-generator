@@ -4,6 +4,7 @@ import org.assertj.core.api.Condition;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -26,7 +27,9 @@ public class CaseFieldGeneratorTest {
                 {"floatField", "Number"},
                 {"FloatField", "Number"},
                 {"doubleField", "Number"},
-                {"DoubleField", "Number"}
+                {"DoubleField", "Number"},
+                {"namedEnumField", "RenamedType"},
+                {"generatedEnumField", "FixedRadioList"}
         });
     }
 
@@ -39,7 +42,15 @@ public class CaseFieldGeneratorTest {
         private int FloatField;
         private int DoubleField;
         private int IntegerField;
+        private NamedEnum namedEnumField;
+        private GeneratedEnum generatedEnumField;
     }
+
+    @ComplexType(name = "RenamedType")
+    private enum NamedEnum { A }
+
+    @ComplexType(name = "RENAMED_LIST", generate = true)
+    private enum GeneratedEnum { A }
 
     @Parameterized.Parameter
     public String fieldName;

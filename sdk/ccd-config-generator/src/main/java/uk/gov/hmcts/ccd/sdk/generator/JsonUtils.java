@@ -163,14 +163,28 @@ public class JsonUtils {
     for (Map<String, Object> generatedField : generated) {
       Optional<Map<String, Object>> existingMatch = existing.stream().filter(x -> {
         for (String primaryKey : primaryKeys) {
-          if (!x.containsKey(primaryKey)) {
-            return !generatedField.containsKey(primaryKey);
+          boolean inExisting = x.containsKey(primaryKey);
+          boolean inGenerated = generatedField.containsKey(primaryKey);
+          // Absent on both sides: the rows agree on this key, and the remaining keys decide (e.g. two
+          // unscoped rows that share CaseFieldID/UserRole but differ by ListElementCode). Present on
+          // one side only: different rows.
+          if (!inExisting || !inGenerated) {
+            if (inExisting != inGenerated) {
+              return false;
+            }
+            continue;
           }
-          if (!generatedField.containsKey(primaryKey)) {
-            return !x.containsKey(primaryKey);
+          Object existingValue = x.get(primaryKey);
+          Object generatedValue = generatedField.get(primaryKey);
+          // A key put with a null value (SearchParty's unset SearchPartyCollectionFieldName) matches
+          // only another null.
+          if (existingValue == null || generatedValue == null) {
+            if (existingValue != generatedValue) {
+              return false;
+            }
+            continue;
           }
-
-          if (!x.get(primaryKey).equals(generatedField.get(primaryKey).toString())) {
+          if (!existingValue.equals(generatedValue.toString())) {
             return false;
           }
         }

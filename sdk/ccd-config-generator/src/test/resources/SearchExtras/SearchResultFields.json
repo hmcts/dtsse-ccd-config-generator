@@ -1,0 +1,20 @@
+[
+  {
+    "CaseFieldID": "applicant",
+    "CaseTypeID": "SearchExtras",
+    "DisplayOrder": 2,
+    "Label": "Applicant forename",
+    "ListElementCode": "forename",
+    "LiveFrom": "01/01/2017",
+    "ResultsOrdering": "2:ASC"
+  },
+  {
+    "CaseFieldID": "applicant",
+    "CaseTypeID": "SearchExtras",
+    "DisplayOrder": 1,
+    "Label": "Applicant surname",
+    "ListElementCode": "surname",
+    "LiveFrom": "01/01/2017",
+    "ResultsOrdering": "1:DESC"
+  }
+]

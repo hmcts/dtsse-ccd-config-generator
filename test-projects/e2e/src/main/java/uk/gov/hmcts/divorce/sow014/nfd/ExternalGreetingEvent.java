@@ -9,6 +9,7 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalEventId;
@@ -45,6 +46,12 @@ public class ExternalGreetingEvent implements CCDConfig<CaseData, State, UserRol
     public record Farewell(String reason) {
     }
 
+    /** What the greeting's after-commit work saw: whether it ran in a transaction, and the event's committed summary. */
+    public record AfterCommitSighting(boolean inTransaction, String committedSummary) {
+    }
+
+    public volatile AfterCommitSighting lastAfterCommit;
+
     @Autowired
     private NamedParameterJdbcTemplate db;
 
@@ -79,6 +86,8 @@ public class ExternalGreetingEvent implements CCDConfig<CaseData, State, UserRol
 
     private ExternalSubmitResponse<State> greet(ExternalSubmitRequest<Reply> submit) {
         keepAsNote(submit);
+        submit.afterCommit(() -> lastAfterCommit = new AfterCommitSighting(
+            TransactionSynchronizationManager.isActualTransactionActive(), latestGreetingSummary(submit.caseReference())));
         return ExternalSubmitResponse.accepted(submit.payload().message(), "Greeted by " + submit.user().id());
     }
 
@@ -96,6 +105,13 @@ public class ExternalGreetingEvent implements CCDConfig<CaseData, State, UserRol
     private ExternalSubmitResponse<State> farewell(ExternalSubmitRequest<Farewell> submit) {
         return ExternalSubmitResponse.<State>accepted(submit.payload().reason(), "Said goodbye")
             .movingTo(State.Withdrawn);
+    }
+
+    private String latestGreetingSummary(long caseReference) {
+        return db.queryForObject("""
+            select ce.summary from ccd.case_event ce join ccd.case_data cd on cd.id = ce.case_data_id
+            where cd.reference = :reference and ce.event_id = :event order by ce.id desc limit 1
+            """, Map.of("reference", caseReference, "event", GREETING.id()), String.class);
     }
 
     private String state(long caseReference) {

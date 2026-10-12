@@ -144,8 +144,11 @@ tasks.register('jacocoAggregateReport', JacocoReport) {
     description = 'Generates an aggregate JaCoCo coverage report for all SDK subprojects.'
     group = 'verification'
 
-    subprojects.each { subproject ->
-        dependsOn subproject.tasks.withType(Test).matching { it.name != 'chaosTest' }
+    // CI runs the tests in other jobs and reports on the coverage data they hand over.
+    if (!providers.gradleProperty('coverageFromExecData').isPresent()) {
+        subprojects.each { subproject ->
+            dependsOn subproject.tasks.withType(Test).matching { it.name != 'chaosTest' }
+        }
     }
 
     def execFiles = subprojects.collect {

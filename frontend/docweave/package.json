@@ -67,12 +67,12 @@
   "devDependencies": {
     "@types/express": "5.0.6",
     "@types/jsdom": "28.0.3",
-    "@types/node": "26.6.4",
+    "@types/node": "26.6.5",
     "@types/nunjucks": "3.2.6",
     "@types/supertest": "7.2.1",
     "axe-core": "4.14.0",
     "esbuild": "0.28.2",
-    "express": "5.2.1",
+    "express": "5.3.0",
     "govuk-frontend": "6.5.1",
     "jsdom": "28.1.0",
     "nunjucks": "3.2.4",
@@ -80,6 +80,6 @@
     "supertest": "7.3.1",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
-    "vite": "8.3.3"
+    "vite": "8.3.4"
   }
 }

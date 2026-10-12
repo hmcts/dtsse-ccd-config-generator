@@ -29,6 +29,7 @@ class FixedListGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     for (Class<?> c : config.getTypes().keySet()) {
       ComplexType complexType = c.getAnnotation(ComplexType.class);
       if (c.isEnum() && (complexType == null || complexType.generate())) {
+        String listId = GeneratorUtils.typeId(c);
         List<Map<String, Object>> fields = Lists.newArrayList();
 
         int order = 1;
@@ -51,12 +52,12 @@ class FixedListGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
           fields.add(value);
           value.put("ListElement", label);
           value.put("LiveFrom", JsonUtils.DEFAULT_LIVE_FROM);
-          value.put("ID", c.getSimpleName());
+          value.put("ID", listId);
           value.put("ListElementCode", enumConstant);
           value.put("DisplayOrder", order++);
         }
 
-        Path path = Paths.get(dir.getPath(), c.getSimpleName() + ".json");
+        Path path = Paths.get(dir.getPath(), listId + ".json");
         JsonUtils.mergeInto(path, fields, new AddMissing(), "ListElementCode");
       }
     }

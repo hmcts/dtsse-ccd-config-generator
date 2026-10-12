@@ -11,7 +11,7 @@ pluginManagement {
 includeBuild 'sdk'
 
 gradle.beforeProject { p ->
-    if (p.path in [':wa-task-management-api', ':et']) {
+    if (p.path in [':wa-task-management-api', ':et', ':ia']) {
         // Prevent subproject build.gradle from failing on wrapper { }.
         p.ext.wrapper = { Closure c -> }
     }
@@ -19,6 +19,14 @@ gradle.beforeProject { p ->
         def etProject = gradle.rootProject.findProject(':et')
         p.ext.jacksonVersion = etProject.jacksonVersion
         p.ext.jacksonAnnotationsVersion = etProject.jacksonAnnotationsVersion
+    }
+}
+
+def continueOnFailure = gradle.startParameter.continueOnFailure
+gradle.afterProject { p ->
+    if (p.path == ':ia') {
+        // ia-case-api's build.gradle turns on --continue for the whole build; keep the caller's choice.
+        gradle.startParameter.continueOnFailure = continueOnFailure
     }
 }
 
@@ -43,6 +51,11 @@ include 'et'
 project(':et').projectDir = file('test-projects/et-ccd-callbacks')
 include 'et-shared'
 project(':et-shared').projectDir = file('test-projects/et-ccd-callbacks/et-shared')
+
+if (file('test-projects/ia-case-api/build.gradle').exists()) {
+    include 'ia'
+    project(':ia').projectDir = file('test-projects/ia-case-api')
+}
 
 include 'ui-component-lib'
 project(':ui-component-lib').projectDir = file('frontend/ui-component-lib')

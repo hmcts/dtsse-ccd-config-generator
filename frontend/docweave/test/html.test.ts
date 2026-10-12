@@ -1,14 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { JSDOM } from "jsdom";
-
 import { buildDoc, createDocEditor, renderHtml } from "../src/index.js";
 import { clauses, edited, generatedOrder, userClause } from "./fixtures/order.js";
 
 describe("renderHtml", () => {
-  const dom = new JSDOM("<!doctype html>");
-  const document = dom.window.document;
 
   it("renders the reader's document as plain HTML with facts as text", () => {
     const controller = createDocEditor();
@@ -24,13 +20,56 @@ describe("renderHtml", () => {
       });
     }));
 
-    const html = renderHtml(controller.getSnapshot(), { document });
+    const html = renderHtml(controller.getSnapshot());
 
     assert.equal(
       html,
       "<p>IT IS ORDERED THAT:</p><ol><li><p>Give up possession by 1 October 2026.</p></li></ol>",
     );
     assert.doesNotMatch(html, /contenteditable|data-generated-text|id=/);
+  });
+
+  it("numbers the lists as the editor shows them, whatever their own numbering says", () => {
+    const controller = createDocEditor();
+    controller.render(buildDoc((doc) => {
+      doc.orderedList("first", (list) => {
+        list.item("one", (content) => content.text("One"));
+        list.item("two", (content) => content.text("Two"));
+      });
+      doc.paragraph("recital", "Further directions:");
+      doc.orderedList("second", (list) => {
+        list.item("three", (content) => content.text("Three"));
+      });
+    }));
+    const current = structuredClone(controller.getSnapshot().current) as {
+      content: Array<{ type: string; attrs?: Record<string, unknown> }>;
+    };
+    current.content[0]!.attrs = { ...current.content[0]!.attrs, order: 5 };
+
+    const html = renderHtml({ ...controller.getSnapshot(), current });
+
+    assert.equal(
+      html,
+      "<ol><li><p>One</p></li><li><p>Two</p></li></ol>"
+        + "<p>Further directions:</p>"
+        + '<ol start="3"><li><p>Three</p></li></ol>',
+    );
+  });
+
+  it("numbers a list within a clause as the editor shows it", () => {
+    const controller = createDocEditor();
+    controller.render(buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => {
+        list.item("parent", "Parent clause.", (item) => {
+          item.orderedList("children", (children) => children.item("child", "Child clause."));
+        });
+      });
+    }));
+
+    assert.equal(
+      renderHtml(controller.getSnapshot()),
+      '<ol><li><p>Parent clause.</p><ol type="i"><li><p>Child clause.</p></li></ol></li></ol>',
+    );
   });
 
   it("keeps the formatting the reader gave a fact", () => {
@@ -49,7 +88,6 @@ describe("renderHtml", () => {
 
     const html = renderHtml(
       { ...controller.getSnapshot(), current },
-      { document },
     );
 
     assert.equal(
@@ -67,12 +105,12 @@ describe("renderHtml", () => {
     }));
 
     assert.equal(
-      renderHtml(controller.getSnapshot(), { document }),
+      renderHtml(controller.getSnapshot()),
       "<p>Costs: to be assessed.</p>",
     );
   });
 
-  it("keeps marks, headings and list numbering from the editor document", () => {
+  it("keeps marks and headings from the editor document, numbered as the editor shows", () => {
     const controller = createDocEditor();
     controller.render(buildDoc((doc) => doc.paragraph("p", "x")));
     const snapshot = controller.getSnapshot();
@@ -96,11 +134,11 @@ describe("renderHtml", () => {
       ],
     };
 
-    const html = renderHtml({ ...snapshot, current }, { document });
+    const html = renderHtml({ ...snapshot, current });
 
     assert.equal(
       html,
-      '<h2>Costs</h2><ol start="3"><li><p><strong>bold</strong></p></li></ol>',
+      "<h2>Costs</h2><ol><li><p><strong>bold</strong></p></li></ol>",
     );
   });
 
@@ -115,24 +153,19 @@ describe("renderHtml", () => {
     };
     current.content[0]!.content[0]!.text = "Edited wording.";
 
-    const html = renderHtml({ ...snapshot, current }, { document });
+    const html = renderHtml({ ...snapshot, current });
 
     assert.equal(html, "<p>Edited wording.</p>");
   });
 
-  it("explains itself when there is no DOM", () => {
+  it("renders without a DOM", () => {
     const controller = createDocEditor();
     controller.render(buildDoc((doc) => doc.paragraph("p", "x")));
-    assert.throws(
-      () => renderHtml(controller.getSnapshot()),
-      /needs a DOM document/,
-    );
+    assert.equal(renderHtml(controller.getSnapshot()), "<p>x</p>");
   });
 });
 
 describe("renderHtml with changes", () => {
-  const dom = new JSDOM("<!doctype html>");
-  const document = dom.window.document;
   const marked = (kind: string, description: string, wording: string) =>
     `<li class="docweave-editor__clause docweave-editor__clause--${kind}">` +
     `<p><span class="docweave-editor__visually-hidden">${description} </span>${wording}</p>`;
@@ -141,8 +174,8 @@ describe("renderHtml with changes", () => {
     const snapshot = generatedOrder();
 
     assert.equal(
-      renderHtml(snapshot, { document, changes: true }),
-      renderHtml(snapshot, { document }),
+      renderHtml(snapshot, { changes: true }),
+      renderHtml(snapshot),
     );
   });
 
@@ -155,7 +188,7 @@ describe("renderHtml with changes", () => {
     });
 
     assert.equal(
-      renderHtml(snapshot, { document, changes: true }),
+      renderHtml(snapshot, { changes: true }),
       "<p>IT IS ORDERED THAT:</p><ol>" +
         "<li><p>The defendant must give up possession by 1 October 2026.</p></li>" +
         marked("modified", "Modified clause.", "The defendant must pay the claimant's fixed costs.") + "</li>" +
@@ -170,7 +203,7 @@ describe("renderHtml with changes", () => {
     });
 
     assert.match(
-      renderHtml(snapshot, { document, changes: true }),
+      renderHtml(snapshot, { changes: true }),
       /^<p class="docweave-editor__clause docweave-editor__clause--modified"><span class="docweave-editor__visually-hidden">Modified clause\. <\/span>IT IS ORDERED BY CONSENT THAT:<\/p>/,
     );
   });
@@ -181,7 +214,7 @@ describe("renderHtml with changes", () => {
       current.content!.push({ type: "paragraph", attrs: { id: null } });
     });
 
-    const html = renderHtml(snapshot, { document, changes: true });
+    const html = renderHtml(snapshot, { changes: true });
 
     assert.match(html, new RegExp(`${marked("modified", "Modified clause.", "<br>")}</li></ol>`));
     assert.match(
@@ -206,9 +239,40 @@ describe("renderHtml with changes", () => {
     });
 
     assert.equal(
-      renderHtml(snapshot, { document, changes: true }),
-      "<ol><li><p>Parent clause.</p><ol>" + marked("modified", "Modified clause.", "Reworded child.") +
+      renderHtml(snapshot, { changes: true }),
+      '<ol><li><p>Parent clause.</p><ol type="i">' + marked("modified", "Modified clause.", "Reworded child.") +
         "</li></ol></li></ol>",
     );
+  });
+});
+
+describe("renderHtml rejects invalid document structure and attributes", () => {
+  const invalid = (current: Record<string, unknown>) => ({ ...generatedOrder(), current });
+  it("rejects arbitrary HTML nodes and marks", () => {
+    assert.throws(() => renderHtml(invalid({ type: "doc", content: [{ type: "script" }] })), /Unknown node type/);
+    assert.throws(() => renderHtml(invalid({ type: "doc", content: [{ type: "paragraph", content: [
+      { type: "text", text: "click", marks: [{ type: "link", attrs: { href: "javascript:bad" } }] },
+    ] }] })), /no mark type link/);
+  });
+  it("rejects invalid nesting and missing required content", () => {
+    assert.throws(() => renderHtml(invalid({ type: "doc", content: [{ type: "list_item" }] })), /Invalid content/);
+    assert.throws(() => renderHtml(invalid({ type: "doc", content: [{ type: "ordered_list", content: [] }] })), /Invalid content/);
+    assert.throws(() => renderHtml(invalid({ type: "doc", content: [] })), /Invalid content/);
+  });
+  it("rejects invalid heading levels", () => {
+    for (const level of [0, 7, 1.5, "2", '2 onclick="bad"', null]) {
+      assert.throws(() => renderHtml(invalid({ type: "doc", content: [
+        { type: "heading", attrs: { level }, content: [{ type: "text", text: "heading" }] },
+      ] })), /Heading level/);
+    }
+  });
+  it("rejects nonnumeric list numbering", () => {
+    for (const order of ["3", '3 onclick="bad"', null]) {
+      assert.throws(() => renderHtml(invalid({ type: "doc", content: [
+        { type: "ordered_list", attrs: { order }, content: [
+          { type: "list_item", content: [{ type: "paragraph" }] },
+        ] },
+      ] })), /Expected value of type number/);
+    }
   });
 });

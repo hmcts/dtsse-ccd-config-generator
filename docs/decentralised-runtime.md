@@ -218,6 +218,34 @@ The SDK wraps every case event inside a database transaction covering:
 
 The common transaction ordering lives in [`CaseEventTransactionCoordinator`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/CaseEventTransactionCoordinator.java) and is used by both CCD submissions and [local system events](./system-events.md). If a concurrent update to `ccd.case_data` is detected, a `409 CONFLICT` is returned and the transaction rolls back, aligning behaviour with CCD.
 
+### After the commit
+
+A submit handler can register work to run once its event has committed, before the response is returned, with `afterCommit(Runnable)`. Nothing runs if the event does not commit.
+
+An action that throws fails the request although the event has committed, as any failure after the commit would. A retry with the same idempotency key returns the case as the event left it, without running the actions again.
+
+A typical use is closing the Work Allocation task the user came from. The handler queues the task's completion in the event's transaction, so it is only sent if the event commits and is retried if sending fails, then waits for it after the commit, so the task has gone from the user's list when their page reloads:
+
+```java
+public record ReviewDecision(String taskId, boolean approved) {
+}
+
+private ExternalSubmitResponse<State> submit(ExternalSubmitRequest<ReviewDecision> submit) {
+    ReviewDecision decision = submit.payload();
+    reviews.record(submit.caseReference(), decision.approved());
+
+    // Queued in the event's transaction: it exists only if the event commits.
+    var completion = taskCompletions.schedule(decision.taskId());
+
+    // Once the event has committed, before the response: wait for the completion to be sent.
+    submit.afterCommit(completion::await);
+
+    return ExternalSubmitResponse.accepted("Review recorded", "Recorded a review decision");
+}
+```
+
+A decentralised event's handler registers work the same way, through `EventPayload.afterCommit(Runnable)`.
+
 ## Supplementary data
 
 Supplementary data operations are implemented and persisted in the `ccd.case_data` table via [`SupplementaryDataService`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/SupplementaryDataService.java), using PostgreSQL’s JSON functions to apply `$set`/`$inc` style updates atomically.

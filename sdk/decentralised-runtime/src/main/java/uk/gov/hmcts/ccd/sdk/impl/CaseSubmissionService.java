@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
@@ -29,6 +31,9 @@ public class CaseSubmissionService {
   private final CaseEventTransactionCoordinator transactionCoordinator;
   private final CaseDataRepository caseDataRepository;
 
+  // Never inside a caller's transaction, so the response supplier, and the work handlers register
+  // to run after the commit, run once the event has committed.
+  @Transactional(propagation = Propagation.NEVER)
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
                                                  String authorisation,
                                                  UUID idempotencyKey) {

@@ -20,8 +20,10 @@ import uk.gov.hmcts.ccd.sdk.api.AccessType;
 import uk.gov.hmcts.ccd.sdk.api.AccessType.AccessTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.AccessTypeRole;
 import uk.gov.hmcts.ccd.sdk.api.AccessTypeRole.AccessTypeRoleBuilder;
+import uk.gov.hmcts.ccd.sdk.api.Banner;
 import uk.gov.hmcts.ccd.sdk.api.CCDAccessGroup;
 import uk.gov.hmcts.ccd.sdk.api.CaseCategory.CaseCategoryBuilder;
+import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
 import uk.gov.hmcts.ccd.sdk.api.ComplexTypeAuthorisation;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
@@ -163,6 +165,36 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
+  public void explicitStateGrants() {
+    config.explicitStateGrants = true;
+  }
+
+  @Override
+  public void noCaseHistoryTab() {
+    config.noCaseHistoryTab = true;
+  }
+
+  @Override
+  public void emitCaseRoleJurisdiction() {
+    config.emitCaseRoleJurisdiction = true;
+  }
+
+  @Override
+  public void jurisdictionShuttered() {
+    config.jurisdictionShuttered = true;
+  }
+
+  @Override
+  public void enableForDeletion() {
+    config.enableForDeletion = true;
+  }
+
+  @Override
+  public void printableDocumentsUrl(String url) {
+    config.printableDocumentsUrl = Strings.nullToEmpty(url);
+  }
+
+  @Override
   public void omitHistoryForRoles(R... roles) {
     omitHistoryForRoles.addAll(Set.of(roles));
   }
@@ -232,6 +264,13 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
+  public CaseRoleToAccessProfileBuilder<R> roleToAccessProfile(String roleName) {
+    var builder = CaseRoleToAccessProfileBuilder.<R>builder(roleName);
+    caseRoleToAccessProfiles.add(builder);
+    return builder;
+  }
+
+  @Override
   public CaseCategoryBuilder<R> categories(R caseRole) {
     var builder = CaseCategoryBuilder.builder(caseRole);
     categories.add(builder);
@@ -281,7 +320,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
         .map(ConfigBuilderImpl::accessTypeKey)
         .collect(Collectors.toCollection(HashSet::new));
     Set<String> mappedRoleNames = config.caseRoleToAccessProfiles.stream()
-        .map(profile -> profile.getRole().getRole())
+        .map(CaseRoleToAccessProfile::getRoleName)
         .collect(Collectors.toCollection(HashSet::new));
 
     Map<List<String>, AccessType> derivedAccessTypes = new LinkedHashMap<>();
@@ -359,6 +398,16 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
       noticeOfChangeBuilder = new NoticeOfChangeBuilder<>(config.caseClass, propertyUtils);
     }
     return noticeOfChangeBuilder;
+  }
+
+  @Override
+  public void banner(boolean enabled, String description, String url, String urlText) {
+    config.banner = Banner.builder()
+        .enabled(enabled)
+        .description(description)
+        .url(url)
+        .urlText(urlText)
+        .build();
   }
 
   @Override

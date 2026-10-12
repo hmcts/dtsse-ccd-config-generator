@@ -31,8 +31,7 @@ class ComplexTypeGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
 
     for (Class<?> c : types.keySet()) {
       ComplexType complex = c.getAnnotation(ComplexType.class);
-      String id =
-          null != complex && complex.name().length() > 0 ? complex.name() : c.getSimpleName();
+      String id = GeneratorUtils.typeId(c);
       if (null != complex && !complex.generate()) {
         continue;
       }

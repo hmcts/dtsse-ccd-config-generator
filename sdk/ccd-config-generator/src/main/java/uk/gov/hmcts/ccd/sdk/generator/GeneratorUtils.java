@@ -6,6 +6,7 @@ import java.io.File;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
@@ -39,5 +40,16 @@ public final class GeneratorUtils {
     }
     current.mkdirs();
     return current;
+  }
+
+  /**
+   * The CCD type ID a class is emitted and referenced under: its {@code @ComplexType(name)} when set,
+   * otherwise its simple class name. Used for both ComplexTypes and generated FixedLists, so a class
+   * can carry a Java-conventional name while preserving its original CCD ID.
+   */
+  public static String typeId(Class<?> type) {
+    ComplexType complexType = type.getAnnotation(ComplexType.class);
+    return complexType != null && !complexType.name().isEmpty()
+        ? complexType.name() : type.getSimpleName();
   }
 }

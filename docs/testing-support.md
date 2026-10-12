@@ -97,8 +97,22 @@ When the application uses Spring Cloud OpenFeign, test support also answers the 
 - IDAM `GET /o/userinfo` describes the actor that owns the bearer token, from the `TestActors` bean. An unknown token gets 401.
 - S2S `POST /lease` returns a service token that expires in a day, so `AuthTokenGenerator` works unchanged.
 - Role assignment `GET /am/role-assignments/actors/{id}` returns no assignments.
+- CCD data store `GET /case-users` returns no case roles.
 
-Every other request, including IDAM token requests and role-assignment queries, goes to the application's own Feign client. The [identity integration test](../sdk/ccd-sdk-test-support/src/test/java/uk/gov/hmcts/ccd/sdk/testing/TestIdentityIntegrationTest.java) shows this behaviour.
+Every other request, including IDAM token requests and role-assignment queries, goes to the application's own Feign client, apart from the CDAM calls described under [Documents](#documents). The [identity integration test](../sdk/ccd-sdk-test-support/src/test/java/uk/gov/hmcts/ccd/sdk/testing/TestIdentityIntegrationTest.java) shows this behaviour.
+
+## Documents
+
+`events.documents()` holds the documents CDAM would hold during a test. `store("Order.pdf")` stores one and returns it as a case refers to it, with a dm-store URL that can be returned from a stubbed renderer or put on the case. `stored()` lists the documents still stored, so a test can check what the application deleted.
+
+When the application uses Spring Cloud OpenFeign, its own CDAM client is answered from those documents:
+
+- `GET /cases/documents/{id}` describes the document. A stored document holds no real file, so its content is its file name.
+- `GET /cases/documents/{id}/binary` returns that content.
+- `PATCH /cases/documents/{id}` confirms the time to live the application asked for.
+- `DELETE /cases/documents/{id}` removes the document from `stored()`.
+
+A document the test did not store is not found. Uploads, attaching documents to a case and every other request go to the application's own client. The [documents integration test](../sdk/ccd-sdk-test-support/src/test/java/uk/gov/hmcts/ccd/sdk/testing/TestDocumentsIntegrationTest.java) shows this behaviour.
 
 ## Existing application context
 
