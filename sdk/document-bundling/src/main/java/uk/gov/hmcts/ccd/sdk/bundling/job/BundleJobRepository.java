@@ -112,14 +112,17 @@ public class BundleJobRepository {
 
   /**
    * The key's job reflecting the newest state: the one still waiting if there is one, otherwise
-   * the most recently claimed, otherwise the most recently submitted. created_at is the
-   * submitting transaction's start time, so it alone cannot order jobs from overlapping
+   * the most recently claimed, otherwise the most recently submitted. A delayed re-run is not
+   * waiting until it is due, so the bundle it follows stays the latest until then. created_at
+   * is the submitting transaction's start time, so it alone cannot order jobs from overlapping
    * transactions.
    */
   Optional<BundleJob> findLatest(String coalesceKey) {
     return jdbc.query(JOB_COLUMNS + """
          where coalesce_key = :coalesceKey
-         order by (state = 'QUEUED' and attempts = 0) desc, claimed_at desc nulls last,
+         order by (state = 'QUEUED' and attempts = 0
+                   and (next_attempt_at is null or next_attempt_at <= now())) desc,
+                  claimed_at desc nulls last,
                   created_at desc, external_id
          limit 1
         """, params("coalesceKey", coalesceKey), (rs, n) -> map(rs)).stream().findFirst();

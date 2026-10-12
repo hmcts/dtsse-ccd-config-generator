@@ -82,12 +82,15 @@ reason printed on it. The result lists it in `missingDocuments()`: the document 
 `CONVERSION_FAILED`, `UNREADABLE`, `TOO_LARGE`) whose `message()` is safe to show users, the
 technical `code` and `detail`, and the placeholder's start page. The outcome is
 `COMPLETED_WITH_WARNINGS` with a `DOCUMENT_MISSING` warning per document. Request-level problems
-(limits, an unregistered provider, an invalid request) still fail the render.
+(limits, an unregistered provider, an invalid request, an office document with no Docmosis
+configured) still fail the render.
 
 A source that is only temporarily unavailable (a timeout, a 5xx, a Docmosis outage) should not
 end up as a placeholder if a retry would fetch it. `render(request, context, RenderAttempt.RETRYABLE)`
 fails such a render instead; the durable worker passes `RETRYABLE` while the job has retries left
-and `FINAL` on its last attempt. A plain `render(request, context)` is a final attempt.
+and `FINAL` on its last attempt. A plain `render(request, context)` is a final attempt. A
+document still unavailable on the final attempt, including one Docmosis could not convert because
+it was down, gets the `UNAVAILABLE` reason.
 
 ## What you get by default
 
@@ -200,7 +203,7 @@ a retried job can finish after a newer one. Among completed jobs, the one with t
 every change submitted before it. Break ties by `externalId`, and fall back to `submittedAt` for a
 job claimed before `claimed_at` existed. `findLatest(key)` returns the job that reflects the newest
 state, for a "regenerating..." status: the waiting job if there is one, otherwise the most recently
-claimed. The completion handler receives the job's `BundleJobContext` (selector parameters and
+claimed. A delayed re-run for unavailable documents counts as waiting only once it is due. The completion handler receives the job's `BundleJobContext` (selector parameters and
 execution context), so it knows which case the bundle is for. Rows are never deleted by the
 module; an always-current bundle adds one per burst of changes, so purge old terminal rows on your
 own schedule if the table grows.
