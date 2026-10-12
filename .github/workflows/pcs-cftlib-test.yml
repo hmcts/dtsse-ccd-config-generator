@@ -1,10 +1,10 @@
 name: PCS CFTLib Test
 
 on:
-  # Pushes to master save the Gradle cache that pull requests and the merge queue restore.
+  # Pushes to 7.x save the Gradle cache that pull requests and the merge queue restore.
   push:
     branches:
-      - master
+      - 7.x
     paths-ignore:
       - '**/*.md'
       - '*.md'
@@ -64,6 +64,8 @@ jobs:
       - name: Set up Gradle
         if: steps.changes.outputs.docs_only != 'true'
         uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/7.x' }}
 
       - name: Az CLI login
         if: steps.changes.outputs.docs_only != 'true'

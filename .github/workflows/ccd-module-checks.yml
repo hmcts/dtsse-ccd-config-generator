@@ -1,11 +1,11 @@
 name: Semantic Diff Checks
 
 on:
-  # Pushes to master build and test each module without a semantic diff, saving the Gradle cache that pull requests and
+  # Pushes to 7.x build and test each module without a semantic diff, saving the Gradle cache that pull requests and
   # the merge queue restore, so their jobs skip compiles and tests whose inputs haven't changed.
   push:
     branches:
-      - master
+      - 7.x
   pull_request:
   merge_group:
 
@@ -173,6 +173,8 @@ jobs:
       - name: Set up Gradle
         if: steps.changes.outputs.docs_only != 'true'
         uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/7.x' }}
 
       - name: Compile ${{ matrix.module }} test classes
         if: matrix.compileTests && steps.changes.outputs.docs_only != 'true'
