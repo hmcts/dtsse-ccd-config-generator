@@ -187,6 +187,29 @@ class MissingDocumentPlaceholderTest {
   }
 
   @Test
+  void anOfficeDocumentWithDocmosisConfiguredOnlyForTemplatesStillFailsTheBundle() {
+    DocmosisRenderService templatesOnly = new DocmosisRenderService() {
+      @Override
+      public Path convertToPdf(Path source, String fileName, String mediaType) {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public boolean convertsFiles() {
+        return false;
+      }
+    };
+    BundleRenderer templatesOnlyRenderer =
+        BundleRenderer.builder().resolver(resolver).tempDirectory(work).docmosis(templatesOnly).build();
+    BundleRequest request = placeholderRequest(doc("d1", "Witness statement", "word"));
+
+    BundleGenerationException failure = catchThrowableOfType(BundleGenerationException.class,
+        () -> templatesOnlyRenderer.render(request, BundleExecutionContext.empty(), RenderAttempt.FINAL));
+
+    assertThat(failure.code()).isEqualTo(BundleErrorCode.DOCMOSIS_NOT_CONFIGURED);
+  }
+
+  @Test
   void aBundleOfOnlyMissingDocumentsStillRenders() {
     BundleRequest request = placeholderRequest(doc("d1", "Gone", "deleted"));
 
