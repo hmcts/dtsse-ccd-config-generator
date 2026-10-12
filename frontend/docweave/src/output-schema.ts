@@ -5,6 +5,8 @@ import {
 } from "prosemirror-schema-basic";
 import { listItem, orderedList } from "prosemirror-schema-list";
 
+import { validHeadingLevel } from "./schema.js";
+
 /**
  * What a final document may contain: the editor schema without its editing
  * furniture. There are no managed IDs and no facts; a fact is ordinary text
@@ -16,11 +18,7 @@ export const outputSchema = new Schema({
     paragraph: basicNodes.paragraph,
     heading: {
       ...basicNodes.heading,
-      attrs: { level: { default: 1, validate(value: unknown) {
-        if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 6) {
-          throw new RangeError("Heading level must be an integer from 1 to 6");
-        }
-      } } },
+      attrs: { level: { default: 1, validate: validHeadingLevel } },
     },
     text: basicNodes.text,
     ordered_list: { ...orderedList, content: "list_item+", group: "block" },

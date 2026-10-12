@@ -9,19 +9,12 @@ import {
   type DocWeaveDocument,
   getDocumentNode,
 } from "./builder.js";
-import {
-  assertCurrentDocumentMatchesGenerated,
-  assertValidGeneratedDocument,
-} from "./invariants.js";
+import { assertValidGeneratedDocument } from "./invariants.js";
 import { reconcileDocument } from "./reconciliation.js";
 import { editorSchema } from "./schema.js";
+import { type DocWeaveSnapshot, readSnapshot } from "./snapshot.js";
 
-export interface DocWeaveSnapshot {
-  schema: "docweave-document";
-  version: 1;
-  current: Record<string, unknown>;
-  generated: Record<string, unknown>;
-}
+export type { DocWeaveSnapshot } from "./snapshot.js";
 
 export interface DocEditorController {
   render(document: DocWeaveDocument): void;
@@ -104,21 +97,9 @@ export function createDocEditorController(
   // document into another. Validates before assigning: a bad snapshot leaves the
   // document being edited untouched.
   const load = (snapshot?: DocWeaveSnapshot): void => {
-    if (snapshot &&
-      (snapshot.schema !== "docweave-document" || snapshot.version !== 1)) {
-      throw new Error("Unsupported Docweave snapshot version");
-    }
-
-    const current = snapshot
-      ? editorSchema.nodeFromJSON(snapshot.current)
-      : undefined;
-    const generated = snapshot
-      ? editorSchema.nodeFromJSON(snapshot.generated)
-      : undefined;
-    if (generated && current) {
-      assertValidGeneratedDocument(generated);
-      assertCurrentDocumentMatchesGenerated(current, generated);
-    }
+    const { current, generated } = snapshot
+      ? readSnapshot(snapshot)
+      : { current: undefined, generated: undefined };
 
     let loaded = EditorState.create({
       schema: editorSchema,

@@ -74,25 +74,34 @@ metadata to make a fact navigate to its source control. A composite source
 scrolls into view and its first enabled form control receives focus.
 
 Editor state is persisted separately as a `DocWeaveSnapshot`, obtained with
-`controller.getSnapshot()` and restored with `initialSnapshot`. Snapshot JSON
+`controller.getSnapshot()` and restored with `initialSnapshot`. A host that
+posts it with a form passes the form field as `field`: the editor starts from
+the snapshot in it and writes every change to it, and reports a field it
+cannot read to `onError`, leaving it unwritten until the host empties it. Snapshot JSON
 contains only the current and generated ProseMirror documents, never source
 control IDs.
 
 A snapshot is opaque to services: they store it and hand it back, and ask
-Docweave about it rather than reading its JSON. `renderHtml(snapshot)` renders
-the reader's document as the final HTML on the server or in a browser, without
-requiring a DOM. The `document` option has been removed from `RenderHtmlOptions`;
-callers upgrading from the DOM renderer must replace `renderHtml(snapshot, { document })`
-with `renderHtml(snapshot)` and remove any DOM implementation used only for rendering.
-It validates the output document with ProseMirror, rejecting heading levels outside 1–6,
-and uses the output schema's serialization rules to write escaped HTML. `describeChanges(snapshot)` counts the
-clauses the reader wrote and the generated clauses they changed, in wording or
-formatting, so a service can tell someone reviewing it what changed; it needs
-no DOM, so it runs on a server. `renderHtml(snapshot, { changes: true })` marks
-those clauses as the editor marks them for the reader: each carries the
-editor's `docweave-editor__clause--inserted` or `--modified` class and the
-words the editor says before it for a screen reader, so the editor's
-stylesheet shows someone else, statically, what the reader saw. A clause is
+Docweave about it rather than reading its JSON. A snapshot from outside, such
+as a posted form field, goes through `parseSnapshot`, which takes the JSON or
+the parsed value and throws an `InvalidSnapshotError` whose `code` says whether
+it is `malformed`, an `unsupported-version` or an `invalid-document`: one whose
+reader's document drops a generated clause or fact, or holds a fact whose value
+differs from the generated one, which the reader cannot type into. Loading,
+`renderHtml`, `renderText` and `describeChanges` all make the same check.
+
+`renderHtml(snapshot)` renders the reader's document as the final HTML on the
+server or in a browser, without requiring a DOM, using the output schema's
+serialization rules to write escaped HTML. `renderText(snapshot)` gives it as
+plain text, one line per paragraph or heading. `describeChanges(snapshot)`
+counts the clauses the reader wrote and the generated clauses they changed, in
+wording or formatting, so a service can tell someone reviewing it what
+changed. It compares the document as it is with the generated one, so it is
+not a history. `renderHtml(snapshot, { changes: true })` marks those clauses
+as the editor marks them for the reader: each carries the
+`docweave-clause--inserted` or `--modified` class and the words the editor
+says before it for a screen reader, so the editor's stylesheet shows someone
+else, statically, what the reader saw. A clause is
 the same unit the editor marks and reverts, described under
 [Editing generated clauses](#editing-generated-clauses).
 

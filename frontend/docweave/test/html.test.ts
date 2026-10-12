@@ -120,7 +120,7 @@ describe("renderHtml", () => {
         { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Costs" }] },
         {
           type: "ordered_list",
-          attrs: { id: "ordered-list:user", order: 3 },
+          attrs: { id: null, order: 3 },
           content: [{
             type: "list_item",
             attrs: { id: null },
@@ -131,6 +131,7 @@ describe("renderHtml", () => {
             }],
           }],
         },
+        (snapshot.current.content as unknown[])[0],
       ],
     };
 
@@ -138,7 +139,7 @@ describe("renderHtml", () => {
 
     assert.equal(
       html,
-      "<h2>Costs</h2><ol><li><p><strong>bold</strong></p></li></ol>",
+      "<h2>Costs</h2><ol><li><p><strong>bold</strong></p></li></ol><p>x</p>",
     );
   });
 
@@ -167,8 +168,8 @@ describe("renderHtml", () => {
 
 describe("renderHtml with changes", () => {
   const marked = (kind: string, description: string, wording: string) =>
-    `<li class="docweave-editor__clause docweave-editor__clause--${kind}">` +
-    `<p><span class="docweave-editor__visually-hidden">${description} </span>${wording}</p>`;
+    `<li class="docweave-clause docweave-clause--${kind}">` +
+    `<p><span class="docweave-visually-hidden">${description} </span>${wording}</p>`;
 
   it("renders a document as generated without marks", () => {
     const snapshot = generatedOrder();
@@ -204,7 +205,7 @@ describe("renderHtml with changes", () => {
 
     assert.match(
       renderHtml(snapshot, { changes: true }),
-      /^<p class="docweave-editor__clause docweave-editor__clause--modified"><span class="docweave-editor__visually-hidden">Modified clause\. <\/span>IT IS ORDERED BY CONSENT THAT:<\/p>/,
+      /^<p class="docweave-clause docweave-clause--modified"><span class="docweave-visually-hidden">Modified clause\. <\/span>IT IS ORDERED BY CONSENT THAT:<\/p>/,
     );
   });
 
@@ -219,7 +220,7 @@ describe("renderHtml with changes", () => {
     assert.match(html, new RegExp(`${marked("modified", "Modified clause.", "<br>")}</li></ol>`));
     assert.match(
       html,
-      /<p class="docweave-editor__clause docweave-editor__clause--inserted"><span class="docweave-editor__visually-hidden">Inserted clause\. <\/span><br><\/p>$/,
+      /<p class="docweave-clause docweave-clause--inserted"><span class="docweave-visually-hidden">Inserted clause\. <\/span><br><\/p>$/,
     );
   });
 

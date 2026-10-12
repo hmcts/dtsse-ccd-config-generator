@@ -13,5 +13,4 @@ export function polyfillBrowserApis(window: DOMWindow): void {
     this.removeAttribute("open");
     this.dispatchEvent(new window.Event("close"));
   };
-  window.Element.prototype.scrollIntoView ??= function scrollIntoView(): void {};
 }

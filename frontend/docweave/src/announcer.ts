@@ -14,7 +14,7 @@ const REPEAT_WINDOW_MS = 1000;
 export function createAnnouncer(ownerDocument: Document): Announcer {
   const element = ownerDocument.createElement("div");
   element.className =
-    "docweave-editor__status docweave-editor__visually-hidden";
+    "docweave-editor__status docweave-visually-hidden";
   element.setAttribute("role", "status");
   element.setAttribute("aria-live", "polite");
   element.setAttribute("aria-atomic", "true");

@@ -5,9 +5,8 @@ import {
   CHANGE_DESCRIPTIONS,
   clauseChange,
   clauseNodesById,
-  parseSnapshot,
 } from "../../src/changes.js";
-import { type DocWeaveSnapshot } from "../../src/controller.js";
+import { type DocWeaveSnapshot, readSnapshot as parseSnapshot } from "../../src/snapshot.js";
 import { listStarts } from "../../src/list-numbering.js";
 import { outputSchema, toOutputDocument } from "../../src/output-schema.js";
 
@@ -99,9 +98,9 @@ function markClause(
 ): void {
   const change = clauseChange(clause, generatedClauses);
   if (change) {
-    element.classList.add("docweave-editor__clause", `docweave-editor__clause--${change.kind}`);
+    element.classList.add("docweave-clause", `docweave-clause--${change.kind}`);
     const description = element.ownerDocument.createElement("span");
-    description.className = "docweave-editor__visually-hidden";
+    description.className = "docweave-visually-hidden";
     description.textContent = `${CHANGE_DESCRIPTIONS[change.kind]} `;
     // A list item's wording starts in its first paragraph; any other clause is its own block.
     const wording = clause.type.name === "list_item" ? element.firstElementChild! : element;

@@ -10,3 +10,9 @@ every code block on it runs in your browser.
 ```sh
 npm install @hmcts-cft/docweave
 ```
+
+Docweave is published as ES modules. Jest, which loads CommonJS, has to transform it:
+
+```js
+transformIgnorePatterns: ['node_modules/(?!@hmcts-cft/docweave/)'],
+```
