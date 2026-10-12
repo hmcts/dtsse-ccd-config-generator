@@ -10,13 +10,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
 
@@ -38,6 +42,49 @@ public class ServicePersistenceControllerTest {
             .header(IdempotencyEnforcer.IDEMPOTENCY_KEY_HEADER, UUID.randomUUID()))
         .andExpect(status().isUnauthorized())
         .andExpect(jsonPath("$.errors[0]").value("Authorization header is required"));
+  }
+
+  @AfterEach
+  void resetRequestContext() {
+    RequestContextHolder.resetRequestAttributes();
+  }
+
+  @Test
+  void createEventReturnsTheClientContextACallbackReturned() {
+    RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
+    CaseSubmissionService submissionService = mock(CaseSubmissionService.class);
+    ServicePersistenceController controller = new ServicePersistenceController(
+        submissionService, null, null, null);
+    DecentralisedCaseEvent event = mock(DecentralisedCaseEvent.class);
+    UUID idempotencyKey = UUID.randomUUID();
+    when(submissionService.submit(event, "Bearer token", idempotencyKey)).thenAnswer(invocation -> {
+      ClientContextPassthrough.returned("eyJ1c2VyX3Rhc2siOnt9fQ==");
+      return new DecentralisedSubmitEventResponse();
+    });
+
+    ResponseEntity<DecentralisedSubmitEventResponse> response = controller.createEvent(
+        event, "Bearer token", idempotencyKey);
+
+    assertThat(response.getHeaders().getFirst("Client-Context")).isEqualTo("eyJ1c2VyX3Rhc2siOnt9fQ==");
+  }
+
+  @Test
+  void createEventReturnsNoClientContextWhenNoCallbackReturnedOne() {
+    MockHttpServletRequest submission = new MockHttpServletRequest();
+    submission.addHeader("Client-Context", "eyJ1c2VyX3Rhc2siOnt9fQ==");
+    RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(submission));
+    CaseSubmissionService submissionService = mock(CaseSubmissionService.class);
+    ServicePersistenceController controller = new ServicePersistenceController(
+        submissionService, null, null, null);
+    DecentralisedCaseEvent event = mock(DecentralisedCaseEvent.class);
+    UUID idempotencyKey = UUID.randomUUID();
+    when(submissionService.submit(event, "Bearer token", idempotencyKey))
+        .thenReturn(new DecentralisedSubmitEventResponse());
+
+    ResponseEntity<DecentralisedSubmitEventResponse> response = controller.createEvent(
+        event, "Bearer token", idempotencyKey);
+
+    assertThat(response.getHeaders().containsHeader("Client-Context")).isFalse();
   }
 
   @Test
