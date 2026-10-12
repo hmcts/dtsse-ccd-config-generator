@@ -244,9 +244,13 @@ public final class DefaultBundleRenderer implements BundleRenderer {
 
     private void markMissing(BundleDocument document, BundleErrorCode code, String detail) {
       missing.put(document.id(), new Missing(document, code, detail));
+      // The detail stays in the logs and on the MissingDocument; the warning has the
+      // user-facing reason only.
+      log.warn("Document '{}' is replaced by a placeholder page: {} - {}", document.id(), code,
+          detail);
       addWarning(BundleWarning.forDocument(WARNING_DOCUMENT_MISSING,
           "Document '" + document.id() + "' could not be included and was replaced by a "
-              + "placeholder page: " + code + " - " + detail + ".",
+              + "placeholder page. " + MissingDocumentReason.of(code).message(),
           document.id()));
     }
 

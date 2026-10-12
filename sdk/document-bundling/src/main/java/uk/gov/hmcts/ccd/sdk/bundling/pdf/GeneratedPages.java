@@ -84,12 +84,8 @@ final class GeneratedPages {
       yyOffset = addBodyLine(document, page, "Date: " + DATE_FORMAT.format(date.get()),
           yyOffset, fonts);
     }
-    int reasonLines =
-        PdfUtility.splitString(missing.reason(), BODY_WIDTH, fonts.helvetica(), 12).length;
     PdfUtility.addText(document, page, missing.reason(), BODY_XX_OFFSET, yyOffset,
         fonts.helvetica(), 12, BODY_WIDTH);
-    yyOffset += reasonLines * BODY_LINE_SPACING;
-    addBodyLine(document, page, "The rest of the bundle is complete.", yyOffset, fonts);
   }
 
   private static float addBodyLine(PDDocument document, PDPage page, String text, float yyOffset,

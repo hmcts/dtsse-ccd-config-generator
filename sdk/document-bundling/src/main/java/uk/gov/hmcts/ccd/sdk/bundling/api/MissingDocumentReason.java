@@ -15,7 +15,7 @@ public enum MissingDocumentReason {
 
   /** The document's storage could not be reached, even after retrying. */
   UNAVAILABLE("The document could not be retrieved because of a temporary technical problem. "
-      + "It will be included when the bundle is next updated."),
+      + "It may be included when the bundle is next updated."),
 
   /** The document's file type cannot be included in a bundle. */
   UNSUPPORTED_FORMAT("This type of file cannot be included in a bundle."),
