@@ -112,6 +112,7 @@ import uk.gov.hmcts.divorce.stubs.StubDocumentStore;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
 import uk.gov.hmcts.divorce.simplecase.SimpleCaseConfiguration;
+import uk.gov.hmcts.divorce.simplecase.UrlCallbackController;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseData;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCasePriority;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseState;
@@ -252,6 +253,8 @@ public class TestWithCCD extends CftlibTest {
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-banners.v2+json;charset=UTF-8";
     private static final String ACCEPT_UI_JURISDICTION_CONFIGS =
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-jurisdiction-configs.v2+json;charset=UTF-8";
+    private static final String ACCEPT_CASE_DATA_VALIDATE =
+        "application/vnd.uk.gov.hmcts.ccd-data-store-api.case-data-validate.v2+json;charset=UTF-8";
     private static final String API_FIRST_TASK_EVENT_ID = ApiFirstTaskEvent.EVENT_ID;
     private static final String API_FIRST_TASK_COMPLETE_EVENT_ID = ApiFirstTaskCompleteEvent.EVENT_ID;
     private static final String API_FIRST_TASK_CANCEL_EVENT_ID = ApiFirstTaskCancelEvent.EVENT_ID;
@@ -3600,6 +3603,48 @@ public class TestWithCCD extends CftlibTest {
             String.class
         ));
         assertThat(auditData.path("subject").asText(), equalTo("Simple case subject"));
+    }
+
+    @SneakyThrows
+    @Order(30)
+    @Test
+    @SuppressWarnings("unchecked")
+    void simpleCaseCallbacksGivenByUrlAreCalledAtTheirEndpoints() {
+        // The event's callbacks are set by URL on a ${SIMPLE_CASE_URL} placeholder the import resolves,
+        // so CCD reaching UrlCallbackController shows the URLs survived generation verbatim. This case
+        // type is decentralised, so CCD hands its submission to the service and calls only the
+        // about-to-start and mid-event URLs itself.
+        String user = "TEST_CASE_WORKER_USER@mailinator.com";
+        String eventId = SimpleCaseConfiguration.URL_CALLBACKS_EVENT;
+        UrlCallbackController.aboutToStartCalls = 0;
+        UrlCallbackController.midEventCalls = 0;
+
+        var startEvent = ccdApi.startEvent(getAuthorisation(user), getServiceAuth(), String.valueOf(simpleCaseRef),
+            eventId);
+        assertThat(UrlCallbackController.aboutToStartCalls, equalTo(1));
+        Map<String, Object> data = new LinkedHashMap<>(
+            mapper.convertValue(startEvent.getCaseDetails().getData(), new TypeReference<Map<String, Object>>() {}));
+        data.put("followUpNote", "entered by the caseworker");
+
+        // CCD identifies a wizard page by its event ID followed by its PageID, as XUI sends it.
+        var validate = buildRequest(user, BASE_URL + "/case-types/" + SimpleCaseConfiguration.CASE_TYPE
+            + "/validate?pageId=" + eventId + SimpleCaseConfiguration.URL_CALLBACKS_PAGE,
+            HttpPost::new);
+        withCcdAccept(validate, ACCEPT_CASE_DATA_VALIDATE);
+        validate.setEntity(new StringEntity(mapper.writeValueAsString(Map.of(
+            "data", data,
+            "event", Map.of("id", eventId),
+            "event_token", startEvent.getToken(),
+            "case_reference", String.valueOf(simpleCaseRef),
+            "ignore_warning", false
+        )), ContentType.APPLICATION_JSON));
+        try (var response = HttpClientBuilder.create().build().execute(validate)) {
+            var body = EntityUtils.toString(response.getEntity());
+            assertThat("validate returned " + body, response.getStatusLine().getStatusCode(), equalTo(200));
+            var validated = (Map<String, Object>) mapper.readValue(body, Map.class).get("data");
+            assertThat(validated.get("description"), equalTo(UrlCallbackController.MID_EVENT_MARKER));
+        }
+        assertThat(UrlCallbackController.midEventCalls, equalTo(1));
     }
 
     @SneakyThrows

@@ -1,0 +1,43 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CallbackUrls",
+    "CaseEventID": "byUrl",
+    "CaseFieldID": "first",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "withRetries",
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 1,
+    "PageColumnNumber": 1,
+    "ShowSummaryChangeOption": "Y",
+    "CallBackURLMidEvent": "${CCD_DEF_IA_URL}/asylum/ccdMidEvent?pageId=withRetries",
+    "RetriesTimeoutURLMidEvent": "3,3"
+  }
+  ,
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CallbackUrls",
+    "CaseEventID": "byUrl",
+    "CaseFieldID": "second",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "withRetries",
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 2,
+    "PageColumnNumber": 1,
+    "ShowSummaryChangeOption": "Y"
+  }
+  ,
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CallbackUrls",
+    "CaseEventID": "byUrl",
+    "CaseFieldID": "third",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "withoutRetries",
+    "PageDisplayOrder": 2,
+    "PageFieldDisplayOrder": 1,
+    "PageColumnNumber": 1,
+    "ShowSummaryChangeOption": "Y",
+    "CallBackURLMidEvent": "${CCD_DEF_IA_URL}/asylum/ccdMidEvent?pageId=withoutRetries"
+  }
+]

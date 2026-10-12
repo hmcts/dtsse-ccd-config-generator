@@ -1,0 +1,28 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CallbackUrls",
+    "CaseEventID": "byHandler",
+    "CaseFieldID": "first",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "handled",
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 1,
+    "PageColumnNumber": 1,
+    "ShowSummaryChangeOption": "Y",
+    "CallBackURLMidEvent": "/callbacks/mid-event?page=handled&eventId=byHandler"
+  }
+  ,
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CallbackUrls",
+    "CaseEventID": "byHandler",
+    "CaseFieldID": "second",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "plain",
+    "PageDisplayOrder": 2,
+    "PageFieldDisplayOrder": 1,
+    "PageColumnNumber": 1,
+    "ShowSummaryChangeOption": "Y"
+  }
+]
