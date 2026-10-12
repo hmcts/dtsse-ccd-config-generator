@@ -60,7 +60,10 @@ public final class BundleResult implements AutoCloseable {
     return artifact.pageCount();
   }
 
-  /** Non-fatal presentational notes; never an omitted document. */
+  /**
+   * Non-fatal notes, including one {@code DOCUMENT_MISSING} warning per document replaced by a
+   * placeholder page.
+   */
   public List<BundleWarning> warnings() {
     return warnings;
   }

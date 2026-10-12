@@ -72,15 +72,20 @@ class MissingDocumentPlaceholderTest {
       assertThat(result.missingDocuments()).first().extracting(MissingDocument::detail)
           .isEqualTo("No such document");
       assertThat(result.outcome()).isEqualTo(BundleOutcome.COMPLETED_WITH_WARNINGS);
-      assertThat(result.warnings()).extracting(warning -> warning.code())
-          .contains(DefaultBundleRenderer.WARNING_DOCUMENT_MISSING);
+      assertThat(result.warnings())
+          .filteredOn(warning -> warning.code().equals(DefaultBundleRenderer.WARNING_DOCUMENT_MISSING))
+          .extracting(warning -> warning.message())
+          .hasSize(2)
+          .allSatisfy(message -> assertThat(message).doesNotContain("No such document", "Not permitted"))
+          .first().asString().contains(MissingDocumentReason.NOT_FOUND.message());
 
       try (PDDocument pdf = RenderTestSupport.loadPdf(result)) {
         MissingDocument deleted = result.missingDocuments().getFirst();
         assertThat(pageText(pdf, deleted.startPage()))
             .contains("Witness statement (missing)")
             .contains("This document is missing from the bundle")
-            .contains(MissingDocumentReason.NOT_FOUND.message());
+            .contains(MissingDocumentReason.NOT_FOUND.message())
+            .doesNotContain("No such document");
         assertThat(RenderTestSupport.outlineTitles(pdf))
             .contains("Claim form", "Witness statement (missing)", "Tenancy agreement (missing)");
       }
