@@ -181,6 +181,20 @@ class DatabaseAuditIntegrationTest {
     assertThat(jdbc.queryForObject("select count(*) from ccd.audit_log", Integer.class)).isZero();
   }
 
+  @Test
+  void auditsCaseEventDataChangesForLegacyNonUuidIdamIds() {
+    insertEvent(1, 1);
+
+    transaction.executeWithoutResult(status -> {
+      jdbc.queryForObject("select set_config('ccd.user_idam_id', '12345', true)", String.class);
+      jdbc.update("update ccd.case_event set data = '{\"changed\": true}'::jsonb where id = 1");
+    });
+
+    assertThat(jdbc.queryForObject(
+        "select user_id from ccd.case_event_audit where case_event_id = 1", String.class))
+        .isEqualTo("12345");
+  }
+
   private void insertCase() {
     jdbc.update("""
         insert into ccd.case_data (
