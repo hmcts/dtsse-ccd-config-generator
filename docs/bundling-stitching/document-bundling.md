@@ -367,3 +367,57 @@ your event handlers can fake it.
 the feature matrix and the one-click bundle requirements coverage. Every rendering feature the
 microservice offers is now in the module; built-in CDAM adapters and the items in the scope
 document's section 4 come later.
+
+## Managed case bundles
+
+For a case bundle that should follow document changes, opt into the managed lifecycle:
+
+```yaml
+ccd.bundling.managed.enabled: true
+ccd.bundling.job.enabled: true
+```
+
+Register a `CaseBundleDefinition` bean. Its `name()` identifies the bundle, and
+`select(caseKey, jobId)` returns a `SelectedCaseBundle`: case reference, case type,
+jurisdiction and an ordered `BundleRequest`. The library calls selection inside a
+short repeatable-read transaction. Selection and visibility rules remain application code.
+Multiple definitions can share the managed service.
+
+Call `CaseBundles.invalidate(definition, caseKey)` in the transaction changing the
+sources. Repeated calls for that key in the transaction coalesce; rollback cancels
+both the revision and job. The SDK does not observe entities, install listeners or
+detect changes. Application JPA callbacks may call this method, including for
+cascaded writes. Native SQL changes must call it explicitly too.
+`refresh(definition, caseKey)` starts a transaction and forces fresh selection.
+
+The standard CDAM adapter uses the application's `CaseDocumentClientApi`,
+`AuthTokenGenerator` and a `BundleSystemUser` bean supplying its cached system token.
+The deployed CDAM configuration must grant that service CREATE, ATTACH and DELETE
+for the destination case type. A different store can implement `BundleDocumentStore`.
+
+`CaseBundles.view(definition, caseKey)` returns the current publication and update
+status together. The publication includes the document and rendering report.
+**This is sensitive data, and these Java methods do not authorise readers.** There
+is no SDK HTTP endpoint. Expose the reference and report only through an authorised
+application projection with restrictive CCD field permissions. Do not add the
+bundle to a general document collection: CDAM checks references anywhere in a
+caller's permission-filtered case data when authorising a download.
+
+The library stores its current pointer in `bundling.case_bundle`, outside the
+application's document table. Source revisions order snapshots; live attempt
+checks prevent expired workers from publishing. Uploads are journalled before
+attachment. Transient publication failures resume the uploaded artifact rather
+than render again. Pointer changes, cleanup requests and local CCD history commit
+through `SystemEventExecutor`, using the job ID for idempotency. This requires the
+runtime's configured system identity and the same datasource as the application.
+
+Cleanup retries independently after publication commits. Artifact metadata is kept
+for recovery; retention of job and artifact records is not implemented. Uploads
+cannot be exactly once: a crash before journalling leaves an unattached upload for
+CDAM's TTL to remove. PDF uploads may be buffered by the client's multipart encoder.
+Existing renderer and outbox APIs remain available without the managed layer.
+
+Managed mode owns the outbox worker's selector and completion handler; do not
+register another selector/handler or submit low-level jobs to that worker. The
+renderer remains usable directly. If supplying your own `cdam` resolver, set
+`ccd.bundling.managed.cdam-resolver.enabled=false` to disable the default resolver.

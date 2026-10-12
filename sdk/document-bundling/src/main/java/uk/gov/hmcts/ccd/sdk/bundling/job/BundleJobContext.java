@@ -8,14 +8,23 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleExecutionContext;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
 
 /**
- * What a document selector sees when a claimed job executes: the request as submitted (empty
- * for a selector-parameters submission), the selector parameters, and the execution context.
+ * What a document selector sees when a claimed job executes: the request as submitted (empty for a
+ * selector-parameters submission), the selector parameters, and the execution context.
  */
 public record BundleJobContext(
     UUID externalId,
     Optional<BundleRequest> submittedRequest,
     Map<String, String> parameters,
-    BundleExecutionContext executionContext) {
+    BundleExecutionContext executionContext,
+    int attempt) {
+
+  public BundleJobContext(
+      UUID externalId,
+      Optional<BundleRequest> submittedRequest,
+      Map<String, String> parameters,
+      BundleExecutionContext executionContext) {
+    this(externalId, submittedRequest, parameters, executionContext, 0);
+  }
 
   public BundleJobContext {
     Objects.requireNonNull(externalId, "BundleJobContext.externalId");
