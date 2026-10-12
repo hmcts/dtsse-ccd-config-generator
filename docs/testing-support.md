@@ -107,12 +107,14 @@ Every other request, including IDAM token requests and role-assignment queries, 
 
 When the application uses Spring Cloud OpenFeign, its own CDAM client is answered from those documents:
 
-- `GET /cases/documents/{id}` describes the document. A stored document holds no real file, so its content is its file name.
+- `GET /cases/documents/{id}` describes the document. The filename-only fixture returns its name as content; `store(name, mediaType, bytes)` stores actual file content.
 - `GET /cases/documents/{id}/binary` returns that content.
+- `POST /cases/documents` stores multipart uploads and returns document links and a hash token.
+- `PATCH /cases/documents/attachToCase` records attachment to a case; repeated attachment to that case is accepted, and attachment to another case is rejected.
 - `PATCH /cases/documents/{id}` confirms the time to live the application asked for.
 - `DELETE /cases/documents/{id}` removes the document from `stored()`.
 
-A document the test did not store is not found. Uploads, attaching documents to a case and every other request go to the application's own client. The [documents integration test](../sdk/ccd-sdk-test-support/src/test/java/uk/gov/hmcts/ccd/sdk/testing/TestDocumentsIntegrationTest.java) shows this behaviour.
+A document the test did not store is not found. Other requests go to the application's own client. `content(document)` exposes a defensive copy of its bytes, and `caseReference(document)` reports its attachment. This fixture models document storage, not CCD permissions: use a full-stack test to prove download authorisation. The [documents integration test](../sdk/ccd-sdk-test-support/src/test/java/uk/gov/hmcts/ccd/sdk/testing/TestDocumentsIntegrationTest.java) shows this behaviour.
 
 ## Existing application context
 
