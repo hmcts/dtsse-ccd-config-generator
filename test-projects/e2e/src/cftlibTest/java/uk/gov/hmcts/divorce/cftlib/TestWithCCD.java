@@ -4575,6 +4575,11 @@ public class TestWithCCD extends CftlibTest {
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
         assertThat("the handler's after-commit work runs once the event has committed",
             greetingEvent.lastAfterCommit, equalTo(new ExternalGreetingEvent.AfterCommitSighting(false, "hello back")));
+        assertThat("and can run a system event", db.queryForObject("""
+            select count(*) from ccd.case_event ce join ccd.case_data cd on cd.id = ce.case_data_id
+            where cd.reference = :reference and ce.event_id = :event
+            """, Map.of("reference", caseRef, "event", ExternalGreetingEvent.GREETING_ACKNOWLEDGED), Integer.class),
+            equalTo(1));
         var history = getLatestAuditEvent(EXTERNAL_EVENT_USER, caseRef, ExternalGreetingEvent.GREETING.id());
         assertThat(history.get("summary"), equalTo("hello back"));
         assertThat("the submit handler is told who submitted", history.get("description"),
