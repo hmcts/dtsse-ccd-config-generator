@@ -9,6 +9,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.InetSocketAddress;
 import java.net.http.HttpTimeoutException;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -34,6 +36,8 @@ import uk.gov.hmcts.ccd.sdk.json.JsonCallbackHandler;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 
 class JsonCallbackBridgeTest {
+
+  private static final String FROM_THE_FRONTEND = encoded("{\"selectedPartyId\":\"party-1\"}");
 
   private final ObjectMapper mapper = new CcdCaseDataMapperConfiguration()
       .ccdCaseDataObjectMapper(new ObjectMapper().setSerializationInclusion(JsonInclude.Include.NON_EMPTY));
@@ -170,9 +174,9 @@ class JsonCallbackBridgeTest {
   }
 
   @Test
-  void carriesTheClientContextThroughServiceCallbacksAsCcdDoes() {
+  void carriesAndMergesTheClientContextThroughServiceCallbacksAsCcdDoes() {
     MockHttpServletRequest submission = new MockHttpServletRequest();
-    submission.addHeader("Client-Context", "from-the-frontend");
+    submission.addHeader("Client-Context", FROM_THE_FRONTEND);
     RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(submission));
     RecordingCallbackHandler handler = new RecordingCallbackHandler("/cases/callbacks/");
     JsonCallbackBridge bridge = bridgeWith(
@@ -181,29 +185,48 @@ class JsonCallbackBridgeTest {
     );
 
     bridge.invoke("${CIVIL_URL}/cases/callbacks/about-to-submit", Map.of("event_id", "SEND_AND_REPLY"));
-    assertThat(handler.headers.getFirst("Client-Context")).isEqualTo("from-the-frontend");
+    assertThat(handler.headers.getFirst("Client-Context")).isEqualTo(FROM_THE_FRONTEND);
     assertThat(ClientContextPassthrough.returned()).isEmpty();
 
-    handler.returnClientContext = "from-the-submitted-callback";
+    handler.returnClientContext = "[" + encoded("{\"client_context\":{\"user_task\":{\"complete_task\":true}}}") + "]";
     bridge.invoke("${CIVIL_URL}/cases/callbacks/submitted", Map.of("event_id", "SEND_AND_REPLY"));
-    assertThat(ClientContextPassthrough.returned()).contains("from-the-submitted-callback");
+    String merged = encoded(
+        "{\"selectedPartyId\":\"party-1\",\"client_context\":{\"user_task\":{\"complete_task\":true}}}");
+    assertThat(ClientContextPassthrough.returned()).contains(merged);
 
     handler.returnClientContext = null;
     bridge.invoke("${CIVIL_URL}/cases/callbacks/submitted", Map.of("event_id", "SEND_AND_REPLY"));
-    assertThat(handler.headers.getFirst("Client-Context")).isEqualTo("from-the-submitted-callback");
-    assertThat(ClientContextPassthrough.returned()).contains("from-the-submitted-callback");
+    assertThat(handler.headers.getFirst("Client-Context")).isEqualTo(merged);
+    assertThat(ClientContextPassthrough.returned()).contains(merged);
+  }
+
+  @Test
+  void keepsTheCurrentClientContextWhenACallbackReturnsOneThatIsNotJson() {
+    MockHttpServletRequest submission = new MockHttpServletRequest();
+    submission.addHeader("Client-Context", FROM_THE_FRONTEND);
+    RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(submission));
+    RecordingCallbackHandler handler = new RecordingCallbackHandler("/cases/callbacks/");
+    handler.returnClientContext = "not-a-context";
+
+    bridgeWith(
+        new MockEnvironment().withProperty("decentralisation.local-callback-placeholder", "CIVIL_URL"),
+        handler
+    ).invoke("${CIVIL_URL}/cases/callbacks/submitted", Map.of("event_id", "SEND_AND_REPLY"));
+
+    assertThat(ClientContextPassthrough.returned()).contains(FROM_THE_FRONTEND);
   }
 
   @Test
   void carriesTheClientContextThroughExternalCallbacks() throws Exception {
     MockHttpServletRequest submission = new MockHttpServletRequest();
-    submission.addHeader("Client-Context", "from-the-frontend");
+    submission.addHeader("Client-Context", FROM_THE_FRONTEND);
     RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(submission));
+    String returned = encoded("{\"client_context\":{\"user_task\":{\"complete_task\":true}}}");
     AtomicReference<String> sent = new AtomicReference<>();
     HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
     server.createContext("/callback", exchange -> {
       sent.set(exchange.getRequestHeaders().getFirst("Client-Context"));
-      exchange.getResponseHeaders().add("Client-Context", "from-the-external-callback");
+      exchange.getResponseHeaders().add("Client-Context", returned);
       byte[] body = "{}".getBytes();
       exchange.sendResponseHeaders(200, body.length);
       exchange.getResponseBody().write(body);
@@ -219,8 +242,9 @@ class JsonCallbackBridgeTest {
       server.stop(0);
     }
 
-    assertThat(sent.get()).isEqualTo("from-the-frontend");
-    assertThat(ClientContextPassthrough.returned()).contains("from-the-external-callback");
+    assertThat(sent.get()).isEqualTo(FROM_THE_FRONTEND);
+    assertThat(ClientContextPassthrough.returned()).contains(encoded(
+        "{\"selectedPartyId\":\"party-1\",\"client_context\":{\"user_task\":{\"complete_task\":true}}}"));
   }
 
   @Test
@@ -296,6 +320,10 @@ class JsonCallbackBridgeTest {
     } catch (Exception e) {
       throw new IllegalStateException(e);
     }
+  }
+
+  private static String encoded(String json) {
+    return Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8));
   }
 
   @RestController
