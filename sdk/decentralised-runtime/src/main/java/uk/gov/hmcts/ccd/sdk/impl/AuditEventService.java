@@ -18,6 +18,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -88,7 +89,9 @@ class AuditEventService {
   private final NamedParameterJdbcTemplate ndb;
   private final ObjectMapper defaultMapper;
   private final Optional<MessagePublisher> publisher;
-  private final ResolvedConfigRegistry registry;
+  // Looked up when an event is recorded: the registry is built from every case type's config, and a
+  // config may depend on a service that runs system events, which are recorded here.
+  private final ObjectProvider<ResolvedConfigRegistry> registry;
 
   @Transactional(propagation = Propagation.MANDATORY)
   long reserveCaseEventId() {
@@ -185,7 +188,7 @@ class AuditEventService {
         returning id, created_date
         """;
 
-    var stateName = registry.labelForState(
+    var stateName = registry.getObject().labelForState(
             eventDetails.getCaseType(),
             String.valueOf(currentView.getState())
         )

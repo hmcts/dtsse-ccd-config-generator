@@ -6,10 +6,14 @@ import static uk.gov.hmcts.divorce.divorcecase.model.access.Permissions.CREATE_R
 import static uk.gov.hmcts.divorce.divorcecase.model.access.Permissions.CREATE_READ_UPDATE_DELETE;
 
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import uk.gov.hmcts.ccd.sdk.SystemEventExecutor;
+import uk.gov.hmcts.ccd.sdk.SystemEventResult;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalEventId;
@@ -33,6 +37,9 @@ public class ExternalGreetingEvent implements CCDConfig<CaseData, State, UserRol
     /** Nothing to show before saying goodbye, so this event has no start payload. */
     public static final ExternalEventId<Void, Farewell> FAREWELL = ExternalEventId.of("farewell", Farewell.class);
 
+    /** The system acknowledges each greeting in an event of its own, once the greeting has committed. */
+    public static final String GREETING_ACKNOWLEDGED = "greeting-acknowledged";
+
     public record Greeting(String text) {
     }
 
@@ -54,6 +61,11 @@ public class ExternalGreetingEvent implements CCDConfig<CaseData, State, UserRol
 
     @Autowired
     private NamedParameterJdbcTemplate db;
+
+    // An event that depends on the system event executor, which records audit events for every case type,
+    // this one included. Only an application configured with a system user has one.
+    @Autowired
+    private Optional<SystemEventExecutor> systemEventExecutor;
 
     @Override
     public void configureDecentralised(final DecentralisedConfigBuilder<CaseData, State, UserRole> configBuilder) {
@@ -86,8 +98,13 @@ public class ExternalGreetingEvent implements CCDConfig<CaseData, State, UserRol
 
     private ExternalSubmitResponse<State> greet(ExternalSubmitRequest<Reply> submit) {
         keepAsNote(submit);
-        submit.afterCommit(() -> lastAfterCommit = new AfterCommitSighting(
-            TransactionSynchronizationManager.isActualTransactionActive(), latestGreetingSummary(submit.caseReference())));
+        submit.afterCommit(() -> {
+            lastAfterCommit = new AfterCommitSighting(
+                TransactionSynchronizationManager.isActualTransactionActive(),
+                latestGreetingSummary(submit.caseReference()));
+            systemEventExecutor.ifPresent(executor -> executor.execute(submit.caseReference(), UUID.randomUUID(),
+                context -> SystemEventResult.withoutStateTransition(GREETING_ACKNOWLEDGED, "Greeting acknowledged")));
+        });
         return ExternalSubmitResponse.accepted(submit.payload().message(), "Greeted by " + submit.user().id());
     }
 
