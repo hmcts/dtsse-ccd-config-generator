@@ -90,10 +90,18 @@ the responsibility of the host service.
 
 The header resolves its theme from user roles:
 
-- **Default** — standard caseworker header
-- **Judicial** — red header with judicial crest, triggered by
-  judge/judiciary/panelmember roles
-- **MyHMCTS** — PUI case manager variant
+**Default** — standard caseworker header
+
+![Default header](docs/screenshots/header-default.png)
+
+**Judicial** — red header with judicial crest, triggered by
+judge/judiciary/panelmember roles
+
+![Judicial header](docs/screenshots/header-judicial.png)
+
+**MyHMCTS** — PUI case manager variant
+
+![MyHMCTS header](docs/screenshots/header-myhmcts.png)
 
 ## Footer
 
@@ -105,6 +113,8 @@ XUI base URL when the links should resolve directly to XUI.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `xuiBaseUrl` | `string` | no | Optional XUI root URL used to build absolute footer links |
+
+![Standard footer](docs/screenshots/footer.png)
 
 ## Consumer compatibility
 
