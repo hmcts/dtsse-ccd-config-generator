@@ -13,12 +13,11 @@ import java.util.Map;
  * mid-event one, while {@code CaseEventToFieldsGenerator.applyMidEventCallback} writes it per page.
  * Some hand-written definitions (sscs) additionally carry a {@code CallBackURLMidEvent} column on
  * the CaseEvent sheet; the definition-store importer has no such CaseEvent field, so that copy is
- * vestigial and ignored (the callback is driven by the CaseEventToFields row, which round-trips via
- * {@link PageLabelPropagationRule}). This rule drops {@code CallBackURLMidEvent} and its retry
+ * vestigial and ignored (the callback is driven by the CaseEventToFields row, compared per page by
+ * {@link MidEventPageScopeRule}). This rule drops {@code CallBackURLMidEvent} and its retry
  * policy from the CaseEvent sheet on both sides so the ignored column does not surface as a diff.
  * It touches only the CaseEvent sheet and only those two columns; the real about-to-start/
- * about-to-submit/submitted callback URL columns are compared exactly like any other column (the
- * converter carries them through verbatim, so both sides hold identical raw values).</p>
+ * about-to-submit/submitted callback URL columns are compared exactly like any other column.</p>
  */
 public final class CaseEventMidEventRule implements NormalisationRule {
 

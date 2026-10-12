@@ -27,12 +27,7 @@ public final class PageLabelPropagationRule implements NormalisationRule {
     // Page-scoped attributes the config generator writes on the page's first field only, whereas a
     // hand-written definition may carry them on any field of the page — propagating them per page
     // lets the per-row comparison match either placement. The mid-event callback URL and its retry
-    // policy are NOT in this set: the converter emits no SDK mid-event wiring, so it carries the
-    // input's CallBackURLMidEvent / RetriesTimeoutURLMidEvent through verbatim per field row (the
-    // CaseEventToFields column graft keyed by CaseFieldID). Both sides therefore hold the input's
-    // exact per-row placement and compare equal directly; propagating them would instead pick a
-    // page's "first" mid-event value, which — on the rare page carrying two different mid-event
-    // URLs (a fixture inconsistency; only one fires) — differs by side and spuriously mismatches.
+    // policy are scoped by MidEventPageScopeRule instead, which reads them as the importer does.
     private static final Set<String> PAGE_SCOPED_COLUMNS = Set.of(
         "PageLabel", "PageShowCondition");
 

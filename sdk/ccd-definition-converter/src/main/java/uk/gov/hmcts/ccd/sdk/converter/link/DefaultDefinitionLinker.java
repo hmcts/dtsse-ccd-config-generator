@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
@@ -19,6 +20,7 @@ import uk.gov.hmcts.ccd.sdk.converter.ir.SheetName;
 import uk.gov.hmcts.ccd.sdk.converter.ir.SheetRow;
 import uk.gov.hmcts.ccd.sdk.converter.model.AccessClassModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.BannerModel;
+import uk.gov.hmcts.ccd.sdk.converter.model.CallbackModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.ClusteredFieldRef;
 import uk.gov.hmcts.ccd.sdk.converter.model.ComplexTypeAuthModel;
@@ -165,13 +167,11 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     EventComplexTypeResult eventComplexTypes = buildEventToComplexTypesPassthrough(
         ir, caseTypeId, options, gaps, events, allComplexTypes, clustered.caseFields());
     passthroughSheets.addAll(eventComplexTypes.passthrough());
-    passthroughSheets.addAll(buildEventFieldColumnPassthrough(ir, caseTypeId, events, options, gaps));
     // State Description (@CCD(description)), RoleToAccessProfiles unregistered roles
     // (roleToAccessProfile(String)), the search extras (per-field lambda), the CaseRoles
     // JurisdictionID (emitCaseRoleJurisdiction) and the CaseType/Jurisdiction EnableForDeletion/
     // Shuttered flags are now all emitted via real builder calls, so no passthrough is produced for
     // them here.
-    passthroughSheets.addAll(buildCaseEventColumnPassthrough(ir, caseTypeId, events, options));
     // SearchCasesResultFields role/useCase/ListElementCode/ResultsOrdering/DisplayContextParameter
     // are now all emitted via the SearchCases per-field lambda (see CoreConfigEmitter), so the sheet
     // needs no passthrough and no FieldShowCondition graft — buildSearchFieldPassthrough is retired.
@@ -232,7 +232,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     }
     List<String> ids = caseTypes.stream()
         .map(r -> r.getString(Columns.ID).orElse(null))
-        .filter(java.util.Objects::nonNull)
+        .filter(Objects::nonNull)
         .distinct()
         .toList();
     if (ids.size() == 1) {
@@ -298,103 +298,6 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
           .build());
     }
     return states;
-  }
-
-  /**
-   * The CaseEvent-sheet columns grafted verbatim (additively) onto the generator's per-event
-   * {@code CaseEvent/<id>.json} files, keyed by event ID. {@code SignificantEvent} is now emitted
-   * via {@code EventBuilder.significant()} (see {@code EventsConfigEmitter}), so it is no longer
-   * grafted. Since the converter emits no callback wiring at all (see {@code EventsConfigEmitter}
-   * and {@code CoreConfigEmitter}) the generator writes none of the {@code CallBackURL*}/
-   * {@code RetriesTimeout*} columns either. So each is grafted back and
-   * can never collide with a generated value: the original callback endpoints (env
-   * {@code ${CCD_DEF_*}} placeholders included) are reproduced byte-for-byte and the migrated
-   * service keeps serving them unchanged. Both about-to-start retry spellings are carried (real
-   * definitions use either {@code RetriesTimeoutURLAboutToStartEvent} or the plain
-   * {@code RetriesTimeoutAboutToStartEvent}). The CaseEvent-sheet {@code CallBackURLMidEvent} is
-   * deliberately NOT grafted here: mid-event is a per-page {@code CaseEventToFields} property
-   * (grafted there by {@code buildEventFieldColumnPassthrough}), and the vestigial CaseEvent copy
-   * some definitions (sscs) carry is dropped on both sides by the {@code CASE_EVENT_MID_EVENT}
-   * comparator rule.
-   */
-  private static final List<String> CASE_EVENT_ADDITIVE_GRAFT_COLUMNS = List.of(
-      Columns.CALLBACK_URL_ABOUT_TO_START_EVENT,
-      Columns.CALLBACK_URL_ABOUT_TO_SUBMIT_EVENT,
-      Columns.CALLBACK_URL_SUBMITTED_EVENT,
-      Columns.RETRIES_TIMEOUT_ABOUT_TO_START_EVENT,
-      Columns.RETRIES_TIMEOUT_URL_ABOUT_TO_START_EVENT,
-      Columns.RETRIES_TIMEOUT_URL_ABOUT_TO_SUBMIT_EVENT,
-      Columns.RETRIES_TIMEOUT_URL_SUBMITTED_EVENT);
-
-  /**
-   * Builds the single per-event {@code CaseEvent/<id>.json} column-graft covering every CaseEvent
-   * column the SDK's {@code EventBuilder} does not reproduce. One passthrough sheet per (overlay
-   * suffix, event) — they MUST NOT be split across sheets that target the same file, because the
-   * report writer writes (not merges) each sheet to its relative path, so two sheets on the same
-   * {@code CaseEvent/<id>.json} would clobber one another.
-   *
-   * <p>This is now a purely <b>additive</b> graft: the callback URL / retry columns
-   * ({@link #CASE_EVENT_ADDITIVE_GRAFT_COLUMNS}) are copied raw (JSON type and {@code ${CCD_DEF_*}}
-   * placeholders preserved); the generator emits none of these, so the graft can never shadow a
-   * generated value. A conditional or multi-target {@code PostConditionState} is no longer grafted:
-   * the SDK's {@code EventBuilder} models a single post-state, so the generator emits only the
-   * primary state and the maintainer accepts the collapse as a semantic difference (forgiven by the
-   * {@code CONDITIONAL_POST_STATE} comparator rule — see {@link #parsePostState}).
-   *
-   * @param ir the definition IR
-   * @param caseTypeId the case type being converted
-   * @param events the linked events (only emitted events are reproduced)
-   * @param options the conversion options (for overlay suffix resolution)
-   * @return the CaseEvent column-passthrough sheets, one per (overlay, event), or empty
-   */
-  private List<PassthroughSheet> buildCaseEventColumnPassthrough(
-      DefinitionIr ir, String caseTypeId, List<EventModel> events, ConversionOptions options) {
-    Set<String> emittedEvents = new LinkedHashSet<>();
-    for (EventModel event : events) {
-      emittedEvents.add(event.getId());
-    }
-    Map<SuffixTarget, Map<String, Object>> byTarget = new LinkedHashMap<>();
-    for (SheetRow row : ir.rowsForCaseType(SheetName.CASE_EVENT, caseTypeId)) {
-      String eventId = row.getString(Columns.ID).orElse(null);
-      if (eventId == null || !emittedEvents.contains(eventId)) {
-        continue;
-      }
-      Map<String, Object> out = new LinkedHashMap<>();
-      out.put(Columns.ID, eventId);
-
-      // A conditional/multi-target PostConditionState is no longer grafted back over the SDK's
-      // primary-only value: the maintainer accepts the collapse to the single primary state as a
-      // semantic difference (see parsePostState's gap and the CONDITIONAL_POST_STATE comparator
-      // rule). The generator emits the primary state and the comparator forgives it.
-
-      // Additive columns (SignificantEvent, callback URLs, retries): copy raw, guarding on the
-      // string form only to skip blank/absent cells. Placeholders are preserved verbatim.
-      for (String column : CASE_EVENT_ADDITIVE_GRAFT_COLUMNS) {
-        if (row.getString(column).filter(v -> !v.isBlank()).isPresent()) {
-          out.put(column, row.getColumns().get(column));
-        }
-      }
-
-      // Only the ID survived → the input set none of the grafted columns; nothing to merge.
-      if (out.size() <= 1) {
-        continue;
-      }
-      String suffix = OverlayResolver.suffixFor(row.getOverlayTags(), options);
-      byTarget.put(new SuffixTarget(suffix, eventId), out);
-    }
-    List<PassthroughSheet> sheets = new ArrayList<>();
-    for (Map.Entry<SuffixTarget, Map<String, Object>> entry : byTarget.entrySet()) {
-      String suffix = entry.getKey().suffix();
-      String eventId = entry.getKey().target();
-      sheets.add(PassthroughSheet.builder()
-          .relativePath("CaseEvent/" + eventId + ".json")
-          .primaryKeys(List.of(Columns.ID))
-          .overlaySuffix(suffix)
-          .overlayCondition(OverlayResolver.conditionFor(suffix, options))
-          .rows(List.of(entry.getValue()))
-          .build());
-    }
-    return sheets;
   }
 
   private List<RoleModel> buildRoles(DefinitionIr ir, String caseTypeId, ConversionOptions options, GapCollector gaps) {
@@ -1126,6 +1029,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
             .build());
       }
       String javaName = uniqueEventName(eventId, suffix, usedNames);
+      dropIgnoredAboutToStartRetries(row, eventId, gaps);
       events.add(EventModel.builder()
           .id(eventId)
           .javaName(javaName)
@@ -1156,10 +1060,18 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
           .publish(row.getYesNo(Columns.PUBLISH).orElse(null))
           .publishAs(row.getString(Columns.PUBLISH_AS).orElse(null))
           .ttlIncrement(row.getInteger(Columns.TTL_INCREMENT).orElse(null))
+          .aboutToStart(eventCallback(row, eventId, Columns.CALLBACK_URL_ABOUT_TO_START_EVENT,
+              Columns.RETRIES_TIMEOUT_ABOUT_TO_START_EVENT, gaps))
+          .aboutToSubmit(eventCallback(row, eventId, Columns.CALLBACK_URL_ABOUT_TO_SUBMIT_EVENT,
+              Columns.RETRIES_TIMEOUT_URL_ABOUT_TO_SUBMIT_EVENT, gaps))
+          .submitted(eventCallback(row, eventId, Columns.CALLBACK_URL_SUBMITTED_EVENT,
+              Columns.RETRIES_TIMEOUT_URL_SUBMITTED_EVENT, gaps))
           .grants(grantsByEvent.getOrDefault(eventId, Map.of()))
           .pages(buildPages(
+              eventId,
               fieldRowsByEvent.getOrDefault(eventId, List.of()),
-              complexRowsByEvent.getOrDefault(eventId, List.of())))
+              complexRowsByEvent.getOrDefault(eventId, List.of()),
+              gaps))
           .overlayCondition(condition)
           .overlaySuffix(suffix)
           .build());
@@ -1310,7 +1222,114 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     return primary;
   }
 
-  private List<PageModel> buildPages(List<SheetRow> fieldRows, List<SheetRow> complexRows) {
+  /**
+   * One of an event's CaseEvent-row callbacks, read the way the definition store's
+   * {@code EventParser}/{@code WebhookParser} reads it: the URL verbatim, and the retries column
+   * only when a URL is present. Retries on a hook with no URL are never read, so they are dropped
+   * with an advisory gap.
+   */
+  private CallbackModel eventCallback(SheetRow row, String eventId, String urlColumn,
+                                      String retriesColumn, GapCollector gaps) {
+    String url = verbatimCell(row, urlColumn);
+    String retries = verbatimCell(row, retriesColumn);
+    if (url == null) {
+      if (retries != null) {
+        gaps.add(inertCallbackColumn("CaseEvent", eventId, retriesColumn, retries,
+            "Retries on a hook with no " + urlColumn + " are never read by the definition store;"
+                + " dropped"));
+      }
+      return null;
+    }
+    return new CallbackModel(url, retries);
+  }
+
+  /**
+   * The definition store reads about-to-start retries from {@code RetriesTimeoutAboutToStartEvent}
+   * only; the {@code URL} spelling the other hooks use is not one of its columns for this hook, so a
+   * value there never takes effect and is dropped.
+   */
+  private void dropIgnoredAboutToStartRetries(SheetRow row, String eventId, GapCollector gaps) {
+    String ignored = verbatimCell(row, Columns.RETRIES_TIMEOUT_URL_ABOUT_TO_START_EVENT);
+    if (ignored != null) {
+      gaps.add(inertCallbackColumn("CaseEvent", eventId,
+          Columns.RETRIES_TIMEOUT_URL_ABOUT_TO_START_EVENT, ignored,
+          "The definition store reads about-to-start retries from "
+              + Columns.RETRIES_TIMEOUT_ABOUT_TO_START_EVENT + " and ignores this column; dropped"));
+    }
+  }
+
+  /**
+   * A page's mid-event callback, read the way {@code AbstractDisplayGroupParser} reads it: from the
+   * first row of the page carrying a {@code CallBackURLMidEvent}, URL and retries both from that
+   * row. Other rows of the page are not read, so a URL or retries value on them that differs from
+   * the one that applies is reported, as are retries on a page with no URL at all.
+   */
+  private CallbackModel midEventCallback(String eventId, String pageId, List<SheetRow> rows,
+                                         GapCollector gaps) {
+    SheetRow source = null;
+    for (SheetRow row : rows) {
+      if (verbatimCell(row, Columns.CALLBACK_URL_MID_EVENT) != null) {
+        source = row;
+        break;
+      }
+    }
+    String rowKey = eventId + "/" + pageId;
+    if (source == null) {
+      rows.stream()
+          .map(row -> verbatimCell(row, Columns.RETRIES_TIMEOUT_URL_MID_EVENT))
+          .filter(java.util.Objects::nonNull)
+          .findFirst()
+          .ifPresent(retries -> gaps.add(inertCallbackColumn("CaseEventToFields", rowKey,
+              Columns.RETRIES_TIMEOUT_URL_MID_EVENT, retries,
+              "Mid-event retries on a page with no CallBackURLMidEvent are never read by the"
+                  + " definition store; dropped")));
+      return null;
+    }
+    CallbackModel callback = new CallbackModel(
+        verbatimCell(source, Columns.CALLBACK_URL_MID_EVENT),
+        verbatimCell(source, Columns.RETRIES_TIMEOUT_URL_MID_EVENT));
+    for (SheetRow row : rows) {
+      String url = verbatimCell(row, Columns.CALLBACK_URL_MID_EVENT);
+      String retries = verbatimCell(row, Columns.RETRIES_TIMEOUT_URL_MID_EVENT);
+      boolean differs = (url != null && !url.equals(callback.getUrl()))
+          || (retries != null && !retries.equals(callback.getRetries()));
+      if (differs) {
+        gaps.add(inertCallbackColumn("CaseEventToFields", rowKey + "/"
+                + row.getString(Columns.CASE_FIELD_ID).orElse(""),
+            Columns.CALLBACK_URL_MID_EVENT, url + " / " + retries,
+            "The page's rows disagree on its mid-event callback; the definition store reads only"
+                + " the first row carrying a URL (" + callback.getUrl() + " / " + callback.getRetries()
+                + "), which is the one emitted"));
+      }
+    }
+    return callback;
+  }
+
+  private static GapEntry inertCallbackColumn(String sheet, String rowKey, String column,
+                                              String value, String detail) {
+    return GapEntry.builder()
+        .sheet(sheet)
+        .rowKey(rowKey)
+        .column(column)
+        .value(value)
+        .category(GapCategory.UNSUPPORTED_COLUMN)
+        .action(GapAction.ADVISORY)
+        .detail(detail)
+        .build();
+  }
+
+  /** A cell's value as authored (a JSON number as its string form), or null when absent or blank. */
+  private static String verbatimCell(SheetRow row, String column) {
+    Object value = row.getColumns().get(column);
+    if (value == null) {
+      return null;
+    }
+    String text = String.valueOf(value);
+    return text.isBlank() ? null : text;
+  }
+
+  private List<PageModel> buildPages(String eventId, List<SheetRow> fieldRows,
+                                     List<SheetRow> complexRows, GapCollector gaps) {
     Map<String, List<SheetRow>> byPage = new LinkedHashMap<>();
     for (SheetRow row : fieldRows) {
       String pageId = row.getString(Columns.PAGE_ID).orElse("1");
@@ -1353,6 +1372,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
           .label(firstPresentDisplayText(rows, Columns.PAGE_LABEL))
           .displayOrder(firstPresentInt(rows, Columns.PAGE_DISPLAY_ORDER))
           .showCondition(firstPresent(rows, Columns.PAGE_SHOW_CONDITION))
+          .midEvent(midEventCallback(eventId, entry.getKey(), rows, gaps))
           .fields(fields)
           .build());
     }
@@ -2726,126 +2746,6 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
   }
 
   /**
-   * Grafts the CaseEventToFields columns the SDK has no builder for back onto the generated rows via
-   * column-level passthrough. The SDK writes one file per event ({@code CaseEventToFields/<event>.json})
-   * merged on CaseFieldID. Per-field display metadata (FieldShowCondition, CaseEventFieldLabel/Hint,
-   * DisplayContextParameter, DefaultValue, RetainHiddenValue) is now emitted as real Java by
-   * {@code EventsConfigEmitter.fieldMetadataChain} for placed fields, so only the per-page mid-event
-   * callback columns — which the converter deliberately emits no wiring for — remain grafted here.
-   * Passing the input rows through (AddMissing) grafts those onto the generated rows without
-   * overwriting the values the SDK computes. The sheet is {@code columnsOnly}: a row the SDK did not
-   * emit is skipped, not appended, because these rows carry no columns beyond the merge key and the
-   * mid-event URL.
-   *
-   * @param ir the definition IR
-   * @param caseTypeId the case type being converted
-   * @param events the linked events (used to scope passthrough to emitted events)
-   * @param options the conversion options (supplies overlay predicates)
-   * @param gaps the gap collector
-   * @return the CaseEventToFields column-passthrough sheets, one per (overlay, event)
-   */
-  private List<PassthroughSheet> buildEventFieldColumnPassthrough(
-      DefinitionIr ir, String caseTypeId, List<EventModel> events, ConversionOptions options,
-      GapCollector gaps) {
-    Set<String> knownEvents = new LinkedHashSet<>();
-    for (EventModel event : events) {
-      knownEvents.add(event.getId());
-    }
-    // Only the mid-event callback columns are grafted now. Every per-field display-metadata column
-    // the graft used to carry — FieldShowCondition, CaseEventFieldLabel/Hint, DisplayContextParameter,
-    // DefaultValue and RetainHiddenValue — is emitted as real Java for placed fields by
-    // EventsConfigEmitter.fieldMetadataChain via the all-context fluent FieldCollectionBuilder setters
-    // (.fieldShowCondition/.caseEventFieldLabel/.caseEventFieldHint/.displayContextParameter/
-    // .defaultValue/.retainHiddenValue), so grafting them too would be redundant (AddMissing would
-    // skip the already-populated column anyway).
-    //
-    // The mid-event callback is a per-page CaseEventToFields property with NO builder API (the
-    // converter emits no callback wiring at all), so the SDK writes no CallBackURLMidEvent and
-    // grafting the input's raw value (env ${CCD_DEF_*} placeholders included) can never collide with
-    // a generated one — the original mid-event endpoint round-trips byte-for-byte. Its retry policy
-    // (RetriesTimeoutURLMidEvent / plain RetriesTimeoutMidEvent) is carried alongside. All three are
-    // page-scoped, so PageLabelPropagationRule reconciles which row on the page carries them.
-    Set<String> carried = Set.of(
-        Columns.CALLBACK_URL_MID_EVENT,
-        Columns.RETRIES_TIMEOUT_URL_MID_EVENT, "RetriesTimeoutMidEvent");
-
-    Map<String, List<SheetRow>> byTarget = new LinkedHashMap<>();
-    Map<String, String> suffixByTarget = new LinkedHashMap<>();
-    for (SheetRow row : ir.rowsForCaseType(SheetName.CASE_EVENT_TO_FIELDS, caseTypeId)) {
-      String eventId = row.getString(Columns.CASE_EVENT_ID).orElse("");
-      String fieldId = row.getString(Columns.CASE_FIELD_ID).orElse("");
-      if (!knownEvents.contains(eventId) || fieldId.isEmpty()) {
-        continue;
-      }
-      // Skip CCD metadata placeholders ([STATE], [CASE_REFERENCE], …): the SDK never emits a
-      // CaseEventToFields row for them, so a column graft keyed on CaseFieldID has no generated row
-      // to merge into. The columnsOnly flag on the emitted sheet now catches this class of row
-      // generally, but excluding them here keeps them out of the shipped passthrough resources
-      // entirely rather than writing rows the merger will discard.
-      if (fieldId.startsWith("[") && fieldId.endsWith("]")) {
-        continue;
-      }
-      String suffix = OverlayResolver.suffixFor(row.getOverlayTags(), options);
-      String key = suffix + " " + eventId;
-      byTarget.computeIfAbsent(key, k -> new ArrayList<>()).add(row);
-      suffixByTarget.put(key, suffix);
-    }
-
-    List<PassthroughSheet> sheets = new ArrayList<>();
-    for (Map.Entry<String, List<SheetRow>> entry : byTarget.entrySet()) {
-      String suffix = suffixByTarget.get(entry.getKey());
-      String eventId = entry.getKey().substring(suffix == null ? "null ".length()
-          : suffix.length() + 1);
-      List<Map<String, Object>> raw = new ArrayList<>();
-      for (SheetRow row : entry.getValue()) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        // CaseFieldID is the merge key; keep it plus any carried metadata columns present.
-        out.put(Columns.CASE_FIELD_ID, row.getString(Columns.CASE_FIELD_ID).orElse(""));
-        for (String column : carried) {
-          Object value = row.getColumns().get(column);
-          if (value != null) {
-            out.put(column, value);
-          }
-        }
-        if (out.size() > 1) {
-          raw.add(out);
-        }
-      }
-      if (!raw.isEmpty()) {
-        sheets.add(PassthroughSheet.builder()
-            .relativePath("CaseEventToFields/" + eventId + ".json")
-            .primaryKeys(List.of(Columns.CASE_FIELD_ID))
-            // A column graft, never a row source: these rows carry only CaseFieldID plus the
-            // mid-event columns, so a row the SDK did not emit must be skipped rather than appended
-            // as a CaseEventID-less orphan (see PassthroughSheet.columnsOnly). Fields the SDK omits
-            // from an event's CaseEventToFields — a Label-only page, a field placed on no page —
-            // genuinely cannot carry their page's mid-event URL through passthrough.
-            .columnsOnly(true)
-            .overlaySuffix(suffix)
-            .overlayCondition(OverlayResolver.conditionFor(suffix, options))
-            .rows(raw)
-            .build());
-      }
-    }
-    if (!sheets.isEmpty()) {
-      gaps.add(GapEntry.builder()
-          .sheet("CaseEventToFields")
-          .rowKey(caseTypeId)
-          .column(null)
-          .value(null)
-          .category(GapCategory.UNSUPPORTED_VALUE)
-          .action(GapAction.PASSTHROUGH_COLUMN)
-          .detail("Per-page mid-event callback columns (CallBackURLMidEvent + its retry policy) "
-              + "have no SDK builder equivalent (the converter emits no callback wiring); grafted "
-              + "onto the generated CaseEventToFields rows via column passthrough. Per-field display "
-              + "metadata (FieldShowCondition, CaseEventFieldLabel/Hint, DisplayContextParameter, "
-              + "DefaultValue, RetainHiddenValue) is now emitted as Java and no longer grafted")
-          .build());
-    }
-    return sheets;
-  }
-
-  /**
    * The rows of a sheet the SDK emits unconditionally, with inactive overlay fragments dropped.
    *
    * <p>These sheets have no per-row environment switch in the generated config, so only the fragment
@@ -2879,10 +2779,6 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       List<AccessClassModel> accessClasses,
       Map<String, List<String>> fieldClassNames,
       String summaryNote) {
-  }
-
-  /** Bucket key pairing an overlay suffix (null for base) with a per-file target id. */
-  private record SuffixTarget(String suffix, String target) {
   }
 
   /** The linked AuthorisationComplexType grants plus the residual (unresolvable) passthrough. */

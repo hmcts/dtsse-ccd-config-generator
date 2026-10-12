@@ -13,9 +13,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import javax.lang.model.element.Modifier;
 import uk.gov.hmcts.ccd.sdk.converter.api.EmitContext;
 import uk.gov.hmcts.ccd.sdk.converter.api.SourceEmitter;
+import uk.gov.hmcts.ccd.sdk.converter.model.CallbackModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.ClusteredFieldRef;
 import uk.gov.hmcts.ccd.sdk.converter.model.EventComplexTypeGroup;
@@ -294,6 +296,9 @@ public class EventsConfigEmitter implements SourceEmitter {
       // column is suppressed rather than mis-declared.
       headerBuilder.add("\n    .postStateFromCallback()");
     }
+    appendCallback(headerBuilder, "aboutToStartCallback", "AboutToStart", event.getAboutToStart());
+    appendCallback(headerBuilder, "aboutToSubmitCallback", "AboutToSubmit", event.getAboutToSubmit());
+    appendCallback(headerBuilder, "submittedCallback", "Submitted", event.getSubmitted());
 
     // Explicit grants on every event. A converted config must reproduce the input's
     // AuthorisationCaseField grants EXACTLY, so an event's role grants must NOT cascade onto the
@@ -333,12 +338,6 @@ public class EventsConfigEmitter implements SourceEmitter {
     CodeBlock.Builder cb = CodeBlock.builder();
     List<PageModel> pages = event.getPages();
     boolean hasPages = pages != null && !pages.isEmpty();
-
-    // Callbacks (about-to-start/about-to-submit/submitted, their retry policies and per-page
-    // mid-event URLs) are never emitted as SDK wiring: the converter carries every CallBackURL*
-    // and RetriesTimeout* column through verbatim passthrough (see DefaultDefinitionLinker) so the
-    // original endpoints are reproduced byte-for-byte and the migrated service keeps serving them
-    // unchanged. Adopting the SDK's in-process callbacks is a later, per-event step.
 
     if (!hasPages) {
       // A page-less event may still carry derived CaseEventToComplexTypes member overrides (probate's
@@ -559,7 +558,7 @@ public class EventsConfigEmitter implements SourceEmitter {
       EmitContext context, ClassName caseData, ClassName state, ClassName userRole, String pagePkg,
       String eventClassName, List<TypeSpec> pageClasses, Set<String> usedPageNames) {
 
-    emitPageHeader(cb, page);
+    emitPageHeader(cb, page, event, context);
     if (pageWeight(page, model, event) <= FIELDS_PER_HELPER) {
       emitPageFields(cb, page.getFields(), model, caseData, context, event);
       return;
@@ -617,6 +616,10 @@ public class EventsConfigEmitter implements SourceEmitter {
    */
   private static final int FIELDS_PER_HELPER = 120;
 
+  private static final ClassName WEBHOOK = ClassName.get("uk.gov.hmcts.ccd.sdk.api", "Webhook");
+
+  private static final Pattern RETRIES_LIST = Pattern.compile("(0|[1-9][0-9]*)(,(0|[1-9][0-9]*))*");
+
   /**
    * Builds one page class: a {@code final} class with a private ctor and a
    * {@code static apply(FieldCollectionBuilder)} that emits {@code fields.page(id)}, the optional
@@ -632,7 +635,7 @@ public class EventsConfigEmitter implements SourceEmitter {
 
     ParameterizedTypeName fieldsType = fieldsBuilderType(caseData, state, userRole);
     CodeBlock.Builder apply = CodeBlock.builder();
-    emitPageHeader(apply, page);
+    emitPageHeader(apply, page, event, context);
 
     int weight = pageWeight(page, model, event);
     if (weight <= FIELDS_PER_HELPER) {
@@ -740,16 +743,79 @@ public class EventsConfigEmitter implements SourceEmitter {
   }
 
   /**
+   * Appends an event callback pointed at the service's own endpoint, e.g.
+   * {@code .aboutToStartCallback("${CCD_DEF_IA_URL}/asylum/ccdAboutToStart", 5, 5, 5, 5)}. The
+   * generator writes the URL and retries verbatim. Retries that are not a plain comma-separated int
+   * list go through {@code retries(Webhook, String)} instead, which writes them as given.
+   */
+  private void appendCallback(CodeBlock.Builder header, String method, String webhook,
+                              CallbackModel callback) {
+    if (callback == null) {
+      return;
+    }
+    if (callback.getRetries() == null) {
+      header.add("\n    .$L($S)", method, callback.getUrl());
+    } else if (isRetriesList(callback.getRetries())) {
+      header.add("\n    .$L($S, $L)", method, callback.getUrl(), callback.getRetries().replace(",", ", "));
+    } else {
+      header.add("\n    .$L($S)", method, callback.getUrl());
+      header.add("\n    .retries($T.$L, $S)", WEBHOOK, webhook, callback.getRetries());
+    }
+  }
+
+  /**
+   * Whether a retries value is a list the int-varargs overloads reproduce exactly: the SDK joins the
+   * ints with commas, so only canonical non-negative ints with no spaces or leading zeros qualify.
+   */
+  private static boolean isRetriesList(String retries) {
+    if (!RETRIES_LIST.matcher(retries).matches()) {
+      return false;
+    }
+    for (String part : retries.split(",")) {
+      try {
+        Integer.parseInt(part);
+      } catch (NumberFormatException e) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
    * Emits a page's {@code fields.page(id)} call and its optional page label / show condition.
+   *
+   * <p>A mid-event callback is emitted as {@code fields.page(id, url, retries...)}, which the generator
+   * writes on the page's first {@code CaseEventToFields} row.
    *
    * @param cb the code block being built (a page class's apply method)
    * @param page the page to emit
+   * @param event the event the page belongs to, for gap reporting
+   * @param context the emit context (supplies the gap collector)
    */
-  private void emitPageHeader(CodeBlock.Builder cb, PageModel page) {
-    // Pages always emit page(id) — never page(id, callback). A page's mid-event callback URL is
-    // carried through verbatim on the CaseEventToFields passthrough graft (CallBackURLMidEvent),
-    // not registered as SDK wiring.
-    cb.addStatement("fields.page($S)", page.getPageId());
+  private void emitPageHeader(CodeBlock.Builder cb, PageModel page, EventModel event, EmitContext context) {
+    CallbackModel midEvent = page.getMidEvent();
+    if (midEvent == null) {
+      cb.addStatement("fields.page($S)", page.getPageId());
+    } else if (midEvent.getRetries() == null) {
+      cb.addStatement("fields.page($S, $S)", page.getPageId(), midEvent.getUrl());
+    } else if (isRetriesList(midEvent.getRetries())) {
+      cb.addStatement("fields.page($S, $S, $L)", page.getPageId(), midEvent.getUrl(),
+          midEvent.getRetries().replace(",", ", "));
+    } else {
+      // The page API takes retries only as ints, which it joins with commas, so a value they would
+      // not reproduce exactly (spaces, leading zeros, non-integers) has no page equivalent.
+      context.getGaps().add(GapEntry.builder()
+          .sheet("CaseEventToFields")
+          .rowKey(event.getId() + "/" + page.getPageId())
+          .column("RetriesTimeoutURLMidEvent")
+          .value(midEvent.getRetries())
+          .category(GapCategory.UNSUPPORTED_VALUE)
+          .action(GapAction.OMITTED_FAIL)
+          .detail("Mid-event retries '" + midEvent.getRetries() + "' are not a plain comma-separated"
+              + " list of integers; the page's callback is emitted without them")
+          .build());
+      cb.addStatement("fields.page($S, $S)", page.getPageId(), midEvent.getUrl());
+    }
     if (page.getLabel() != null && !page.getLabel().isEmpty()) {
       cb.addStatement("fields.pageLabel($S)", page.getLabel());
     }
@@ -986,9 +1052,8 @@ public class EventsConfigEmitter implements SourceEmitter {
       // setters, available after EVERY placement call (optional/mandatory/readonly and their
       // *NoSummary variants all return the FieldCollectionBuilder): FieldShowCondition,
       // CaseEventFieldLabel/Hint, DisplayContextParameter, DefaultValue, RetainHiddenValue,
-      // ShowSummaryContentOption and NullifyByDefault. Emitting them here retires the per-field
-      // CaseEventToFields column graft entirely for placed fields (see
-      // DefaultDefinitionLinker.buildEventFieldColumnPassthrough, now callback-only).
+      // ShowSummaryContentOption and NullifyByDefault, so a placed field needs no CaseEventToFields
+      // column graft.
       CodeBlock.Builder stmt = CodeBlock.builder();
       stmt.add("fields.$L($T::$L)", method, caseData, getter);
       stmt.add(fieldMetadataChain(field));

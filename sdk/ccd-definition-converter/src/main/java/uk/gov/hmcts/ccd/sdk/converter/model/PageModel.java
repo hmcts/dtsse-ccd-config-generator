@@ -18,6 +18,11 @@ public class PageModel {
   Integer displayOrder;
   String showCondition;
 
+  /**
+   * The page's mid-event callback, emitted via {@code page(id, url, retries...)}; or null.
+   */
+  CallbackModel midEvent;
+
   List<PageField> fields;
 
   @Value

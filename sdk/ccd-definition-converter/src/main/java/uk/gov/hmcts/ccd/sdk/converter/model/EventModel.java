@@ -68,6 +68,21 @@ public class EventModel {
   String publishAs;
   Integer ttlIncrement;
 
+  /**
+   * The about-to-start callback, emitted via {@code aboutToStartCallback(url, retries...)}; or null.
+   */
+  CallbackModel aboutToStart;
+
+  /**
+   * The about-to-submit callback, emitted via {@code aboutToSubmitCallback(url, retries...)}; or null.
+   */
+  CallbackModel aboutToSubmit;
+
+  /**
+   * The submitted callback, emitted via {@code submittedCallback(url, retries...)}; or null.
+   */
+  CallbackModel submitted;
+
   /** AuthorisationCaseEvent grants: role id to CRUD string. */
   Map<String, String> grants;
 

@@ -1015,14 +1015,19 @@ numbered form); this applies even to an oversized single page, which still gets 
 
 Key behaviours:
 
-- **Callbacks** — the converter emits **no** SDK callback wiring at all. Every callback column
-  (`CallBackURL*` and its `RetriesTimeout*` on the `CaseEvent` sheet, `CallBackURLMidEvent` and its
-  retry on `CaseEventToFields`) is carried through **verbatim** via passthrough, `${CCD_DEF_*}`
-  placeholders and all — so the regenerated definition points at the migrated service's original
-  endpoints unchanged and callbacks are provably unaltered. Adopting the SDK's in-process callbacks
-  is a later, opt-in, per-event step: delete that event's passthrough graft and register a handler
-  (`.aboutToSubmitCallback(...)`, `page(id, ::midEvent)`, …). (There is no `--callback-mode` option
-  or `callback-map.json` any more.)
+- **Callbacks** — each callback is emitted as a URL callback pointing at the endpoint the definition
+  names: `.aboutToStartCallback(url, retries...)`, `.aboutToSubmitCallback(url, retries...)` and
+  `.submittedCallback(url, retries...)` on the event, `fields.page(id, url, retries...)` for a
+  page's mid-event. The generator writes the URL verbatim, `${CCD_DEF_*}` placeholders and all, so
+  the regenerated definition points at the migrated service's original endpoints unchanged. Retries
+  that are not a plain comma-separated int list are emitted through `.retries(Webhook, String)` as
+  authored. A page's mid-event callback is read, as the definition store reads it, from the page's
+  first row carrying a `CallBackURLMidEvent`; rows that disagree are reported. Retry values the
+  definition store never reads — about-to-start retries under `RetriesTimeoutURLAboutToStartEvent`
+  (it reads `RetriesTimeoutAboutToStartEvent`), or retries on a hook with no URL — are dropped with an
+  `ADVISORY` gap. Moving an event to an in-process handler is a per-event step: replace the URL
+  overload with a handler (`.aboutToSubmitCallback(this::aboutToSubmit)`, `page(id, this::midEvent)`,
+  …); the SDK rejects a handler and a URL on the same hook.
 - **Per-environment overlays** — files such as `CaseEvent-prod.json` / `CaseEvent-nonprod.json`
   become environment-guarded Java (an `EnvironmentFlags.flag(...)` check), configured via
   repeatable `--overlay-suffix suffix=[!]ENV_VAR:value` (defaults ship for `prod`/`nonprod`).
@@ -1329,12 +1334,11 @@ while the difference stays visible in the gap report — the largest being that 
 immutable Label/READONLY display fields to any role that holds a grant on the event where the field is
 read-only, regardless of the input's narrower per-field grants (`IMMUTABLE_FIELD_CR`). (The former
 per-field `Publish` cascade is no longer among them: the SDK carries a per-field
-`publish(boolean)`/`publishAs(String)` API and `PUBLISH_CASCADE` is retired.) Callbacks are no longer
-rewritten at all: the converter emits no SDK callback wiring and carries every callback column through
-verbatim via passthrough, so the `CALLBACK_URL` normalisation rule is retired and callback URLs
-(including per-page mid-event URLs, with their `${CCD_DEF_*}` placeholders) now round-trip byte-for-byte
-and are compared exactly. Seven real-service fixture tests (ia/sscs/fpl/ET/civil/prl/probate) convert,
-compile and round-trip end-to-end and are all **enabled**, each gating its residuals against a
+`publish(boolean)`/`publishAs(String)` API and `PUBLISH_CASCADE` is retired.) Callbacks are emitted as
+URL callbacks the generator writes verbatim, so callback URLs (including per-page mid-event URLs, with
+their `${CCD_DEF_*}` placeholders) round-trip byte-for-byte and are compared exactly.
+Seven real-service fixture tests (ia/sscs/fpl/ET/civil/prl/probate) convert, compile and round-trip
+end-to-end and are all **enabled**, each gating its residuals against a
 checked-in baseline under `src/test/resources/roundtrip-baselines/` (ia 4, probate 6, ET 15, fpl 21,
 sscs 32, prl 55, civil 126 — 259 lines total). The baseline file *is* the enumerated list of that
 fixture's open gaps; the test fails on a new diff and on a vanished one, so the ratchet only tightens.

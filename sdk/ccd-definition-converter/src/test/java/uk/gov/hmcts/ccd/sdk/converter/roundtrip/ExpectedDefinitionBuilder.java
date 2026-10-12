@@ -27,11 +27,8 @@ final class ExpectedDefinitionBuilder {
 
   /**
    * Callback URL columns that must NOT be placeholder-substituted on the expected side. The
-   * converter emits no callback wiring and instead carries these columns through verbatim (see
-   * {@code DefaultDefinitionLinker}), so the actual side holds the raw {@code ${CCD_DEF_*}} value.
-   * The expected side must match byte-for-byte, so it keeps the raw value too. (Substituting them
-   * was only ever needed when forward-mode compared the generated URL post-substitution; with no
-   * generated URL to compare against, substitution here would spuriously diverge the two sides.)
+   * converter emits each callback with the URL as authored, which the generator writes verbatim, so
+   * the actual side holds the raw {@code ${CCD_DEF_*}} value and the expected side keeps it too.
    * Every other string column is substituted exactly as {@code json2xlsx} would at build time.
    */
   private static final Set<String> RAW_CALLBACK_COLUMNS = Set.of(

@@ -13,6 +13,7 @@ import uk.gov.hmcts.ccd.sdk.converter.api.ConversionOptions;
 import uk.gov.hmcts.ccd.sdk.converter.ir.DefinitionIr;
 import uk.gov.hmcts.ccd.sdk.converter.ir.SheetName;
 import uk.gov.hmcts.ccd.sdk.converter.model.AccessClassModel;
+import uk.gov.hmcts.ccd.sdk.converter.model.CallbackModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.ComplexTypeModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.EventModel;
@@ -574,14 +575,15 @@ class DefaultDefinitionLinkerTest {
   }
 
   @Test
-  void assemblesEventsWithGrantsPreStatesAndCallbackGraft() {
+  void assemblesEventsWithGrantsPreStatesAndCallbacks() {
     GapCollector gaps = new GapCollector();
     DefinitionIr ir = minimal("Minimal")
         .row(SheetName.CASE_EVENT,
             cols("CaseTypeID", "Minimal", "ID", "createCase", "Name", "Create",
                 "DisplayOrder", 1, "PreConditionState(s)", "", "PostConditionState", "Open",
                 "ShowSummary", "Y",
-                "CallBackURLAboutToSubmitEvent", "${CCD_DEF_BASE_URL}/about-to-submit"))
+                "CallBackURLAboutToSubmitEvent", "${CCD_DEF_BASE_URL}/about-to-submit",
+                "RetriesTimeoutURLAboutToSubmitEvent", "5,5"))
         .row(SheetName.CASE_EVENT,
             cols("CaseTypeID", "Minimal", "ID", "addNotes", "Name", "Add notes",
                 "DisplayOrder", 2, "PreConditionState(s)", "Open;Closed",
@@ -599,14 +601,13 @@ class DefaultDefinitionLinkerTest {
     assertThat(create.getPostState()).isEqualTo("Open");
     assertThat(create.getShowSummary()).isTrue();
     assertThat(create.getGrants()).containsEntry("caseworker-test", "CRUD");
-    // No callback wiring is modelled; the callback URL is carried verbatim (raw placeholder) via a
-    // CaseEvent/<id>.json column-graft passthrough sheet keyed by the event ID.
-    PassthroughSheet createGraft = model.getPassthroughSheets().stream()
-        .filter(s -> s.getRelativePath().equals("CaseEvent/createCase.json"))
-        .findFirst().orElseThrow();
-    assertThat(createGraft.getRows()).anySatisfy(r ->
-        assertThat(r).containsEntry("CallBackURLAboutToSubmitEvent",
-            "${CCD_DEF_BASE_URL}/about-to-submit"));
+    // The callback is modelled with its URL verbatim (placeholder included), not grafted.
+    assertThat(create.getAboutToSubmit())
+        .isEqualTo(new CallbackModel("${CCD_DEF_BASE_URL}/about-to-submit", "5,5"));
+    assertThat(create.getAboutToStart()).isNull();
+    assertThat(create.getSubmitted()).isNull();
+    assertThat(model.getPassthroughSheets())
+        .noneMatch(s -> s.getRelativePath().startsWith("CaseEvent/"));
 
     EventModel notes = model.getEvents().stream()
         .filter(e -> e.getId().equals("addNotes")).findFirst().orElseThrow();
@@ -679,13 +680,69 @@ class DefaultDefinitionLinkerTest {
         .extracting(PageModel.PageField::getDisplayContext).isEqualTo("MANDATORY");
     PageModel page2 = create.getPages().get(1);
     assertThat(page2.getFields().get(0).getComplexTypeOverrides()).containsKey("fullName");
-    // The mid-event callback URL is not modelled on the page; it is carried verbatim (raw
-    // placeholder) via the CaseEventToFields column-graft passthrough for the event.
-    PassthroughSheet midEventGraft = model.getPassthroughSheets().stream()
-        .filter(s -> s.getRelativePath().equals("CaseEventToFields/createCase.json"))
-        .findFirst().orElseThrow();
-    assertThat(midEventGraft.getRows()).anySatisfy(r ->
-        assertThat(r).containsEntry("CallBackURLMidEvent", "${CCD_DEF_BASE_URL}/mid"));
+    assertThat(page1.getMidEvent()).isNull();
+    assertThat(page2.getMidEvent()).isEqualTo(new CallbackModel("${CCD_DEF_BASE_URL}/mid", null));
+    assertThat(model.getPassthroughSheets())
+        .noneMatch(s -> s.getRelativePath().startsWith("CaseEventToFields/"));
+  }
+
+  @Test
+  void readsAboutToStartRetriesFromTheColumnTheImporterReadsAndDropsTheUrlSpelling() {
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "start", "Name", "Start", "PostConditionState", "*",
+                "CallBackURLAboutToStartEvent", "${CCD_DEF_BASE_URL}/start",
+                "RetriesTimeoutAboutToStartEvent", 0,
+                "RetriesTimeoutURLAboutToStartEvent", "5,5,5,5"))
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "noUrl", "Name", "No URL", "PostConditionState", "*",
+                "RetriesTimeoutURLSubmittedEvent", "5,5"))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    EventModel start = model.getEvents().get(0);
+    assertThat(start.getAboutToStart()).isEqualTo(new CallbackModel("${CCD_DEF_BASE_URL}/start", "0"));
+    assertThat(gaps.getEntries()).anyMatch(g -> "start".equals(g.getRowKey())
+        && "RetriesTimeoutURLAboutToStartEvent".equals(g.getColumn())
+        && g.getAction() == GapAction.ADVISORY);
+    // Retries on a hook with no URL are never read, so they are dropped rather than modelled.
+    EventModel noUrl = model.getEvents().get(1);
+    assertThat(noUrl.getSubmitted()).isNull();
+    assertThat(gaps.getEntries()).anyMatch(g -> "noUrl".equals(g.getRowKey())
+        && "RetriesTimeoutURLSubmittedEvent".equals(g.getColumn())
+        && g.getAction() == GapAction.ADVISORY);
+  }
+
+  @Test
+  void readsAPagesMidEventFromItsFirstRowCarryingAUrlAndReportsRowsThatDisagree() {
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "createCase", "Name", "Create",
+                "PostConditionState", "Open"))
+        .row(SheetName.CASE_EVENT_TO_FIELDS,
+            cols("CaseTypeID", "Minimal", "CaseEventID", "createCase", "CaseFieldID", "a",
+                "DisplayContext", "OPTIONAL", "PageID", "1"))
+        .row(SheetName.CASE_EVENT_TO_FIELDS,
+            cols("CaseTypeID", "Minimal", "CaseEventID", "createCase", "CaseFieldID", "b",
+                "DisplayContext", "OPTIONAL", "PageID", "1",
+                "CallBackURLMidEvent", "${CCD_DEF_BASE_URL}/mid", "RetriesTimeoutURLMidEvent", "3,3"))
+        .row(SheetName.CASE_EVENT_TO_FIELDS,
+            cols("CaseTypeID", "Minimal", "CaseEventID", "createCase", "CaseFieldID", "c",
+                "DisplayContext", "OPTIONAL", "PageID", "1",
+                "CallBackURLMidEvent", "${CCD_DEF_BASE_URL}/other"))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    PageModel page = model.getEvents().get(0).getPages().get(0);
+    assertThat(page.getMidEvent()).isEqualTo(new CallbackModel("${CCD_DEF_BASE_URL}/mid", "3,3"));
+    assertThat(gaps.getEntries()).anyMatch(g -> "createCase/1/c".equals(g.getRowKey())
+        && "CallBackURLMidEvent".equals(g.getColumn()) && g.getAction() == GapAction.ADVISORY);
+    assertThat(gaps.getEntries()).noneMatch(g -> g.getRowKey() != null
+        && g.getRowKey().startsWith("createCase/1/b"));
   }
 
   @Test

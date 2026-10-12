@@ -194,9 +194,8 @@ public class CoreConfigEmitter implements SourceEmitter {
     // The jurisdiction-wide XUI service-notice banner (one per jurisdiction), reproduced via the
     // builder rather than a whole-sheet passthrough.
     emitBanner(model, cb);
-    // No setCallbackHost is emitted: the converter emits no SDK callback wiring at all, so the
-    // generator writes no CallBackURL* columns for the callback host to fill; every callback
-    // column is instead carried through verbatim via passthrough (see DefaultDefinitionLinker).
+    // No setCallbackHost is emitted: every callback is emitted with the URL the definition authored
+    // (see EventsConfigEmitter), which the generator writes verbatim, so the host is never used.
     // ConfigBuilderImpl defaults callbackHost to "" and never requires it to be set.
     // A converted config's contract is exact reproduction of the input's AuthorisationCaseState.
     // Without this switch the SDK broadens state permissions by unioning every event's grants

@@ -74,6 +74,7 @@ public final class NormalisingCcdConfigComparator {
         new PostConditionNoChangeRule(),
         new ConditionalPostStateRule(),
         new PreConditionStateOrderRule(),
+        new MidEventPageScopeRule(),
         new PageLabelPropagationRule(),
         new CaseTypeTabRule(),
         new TabReadInjectionRule(),

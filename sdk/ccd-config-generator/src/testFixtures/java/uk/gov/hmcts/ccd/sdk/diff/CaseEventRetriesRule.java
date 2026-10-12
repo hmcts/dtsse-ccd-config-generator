@@ -4,41 +4,41 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * CASE_EVENT_RETRIES — reconciles the {@code RetriesTimeout*} columns on the {@code CaseEvent}
- * sheet with how the config generator emits callback retries.
+ * CASE_EVENT_RETRIES — drops the {@code RetriesTimeout*} values on the {@code CaseEvent} sheet that
+ * the definition store never reads, on both sides.
  *
- * <p>Two purely-structural differences are absorbed, both on the {@code CaseEvent} sheet only:</p>
+ * <p>{@code EventParser} reads each hook's retries through {@code WebhookParser}, from one column per
+ * hook: {@code RetriesTimeoutAboutToStartEvent}, {@code RetriesTimeoutURLAboutToSubmitEvent} and
+ * {@code RetriesTimeoutURLSubmittedEvent}. Two kinds of value are therefore inert:</p>
  * <ul>
- *   <li><b>About-to-start column name</b>: real definitions carry the about-to-start retry under
- *       {@code RetriesTimeoutAboutToStartEvent}, whereas {@code CaseEventGenerator} hard-codes
- *       the {@code URL}-form name {@code RetriesTimeoutURLAboutToStartEvent} (the about-to-submit
- *       and submitted phases already agree on the {@code URL} form). Both name the same phase's
- *       retry, so the non-URL spelling is renamed to the URL form on both sides before matching.
- *       The retry <em>value</em> is left untouched and still compares exactly.</li>
- *   <li><b>Retries without a callback</b>: the generator only writes a {@code RetriesTimeout*}
- *       column when the phase's callback URL is present ({@code CaseEventGenerator} guards the
- *       retry on the callback being enabled), because a retry policy for a callback that is not
- *       configured is inert — the store never invokes a callback, so the retry count never
- *       applies. A retry value on a row that carries no callback URL for that phase is therefore
- *       dropped on both sides.</li>
+ *   <li><b>Other spellings</b>: {@code RetriesTimeoutURLAboutToStartEvent} (the {@code URL} form the
+ *       other hooks use), {@code RetriesTimeoutAboutToSubmitEvent} and
+ *       {@code RetriesTimeoutSubmittedEvent} name no column the importer reads, so a value under them
+ *       never takes effect. Definitions do carry the first; the converter drops it and the generator
+ *       never writes it.</li>
+ *   <li><b>Retries without a callback</b>: {@code WebhookParser} reads a hook's retries only when its
+ *       {@code CallBackURL*} is present, so a retry value on a row with no URL for that hook is never
+ *       read either.</li>
  * </ul>
  *
- * <p>Only these two reconciliations are made. When a callback URL <em>is</em> present for the
- * phase, a differing retry value still fails, so genuine retry-policy differences are caught.</p>
+ * <p>Only these values are dropped. When a callback URL is present, its read retries column still
+ * compares exactly, so genuine retry-policy differences are caught.</p>
  */
 public final class CaseEventRetriesRule implements NormalisationRule {
 
     private static final String SHEET = "CaseEvent";
 
-    /** Per phase: {callbackUrlColumn, canonicalRetriesColumn, aliasRetriesColumn}. */
-    private static final String[][] PHASES = {
-        {"CallBackURLAboutToStartEvent", "RetriesTimeoutURLAboutToStartEvent",
-            "RetriesTimeoutAboutToStartEvent"},
-        {"CallBackURLAboutToSubmitEvent", "RetriesTimeoutURLAboutToSubmitEvent",
-            "RetriesTimeoutAboutToSubmitEvent"},
-        {"CallBackURLSubmittedEvent", "RetriesTimeoutURLSubmittedEvent",
-            "RetriesTimeoutSubmittedEvent"},
+    /** Per hook: {callbackUrlColumn, readRetriesColumn}. */
+    private static final String[][] HOOKS = {
+        {"CallBackURLAboutToStartEvent", "RetriesTimeoutAboutToStartEvent"},
+        {"CallBackURLAboutToSubmitEvent", "RetriesTimeoutURLAboutToSubmitEvent"},
+        {"CallBackURLSubmittedEvent", "RetriesTimeoutURLSubmittedEvent"},
     };
+
+    private static final List<String> UNREAD_COLUMNS = List.of(
+        "RetriesTimeoutURLAboutToStartEvent",
+        "RetriesTimeoutAboutToSubmitEvent",
+        "RetriesTimeoutSubmittedEvent");
 
     @Override
     public String name() {
@@ -58,27 +58,25 @@ public final class CaseEventRetriesRule implements NormalisationRule {
     }
 
     private void reconcile(String side, List<Map<String, Object>> rows, RuleApplications recorder) {
-        int renamed = 0;
-        int dropped = 0;
+        int unread = 0;
+        int callbackless = 0;
         for (Map<String, Object> row : rows) {
-            for (String[] phase : PHASES) {
-                String callbackColumn = phase[0];
-                String canonical = phase[1];
-                String alias = phase[2];
-                if (row.containsKey(alias) && !row.containsKey(canonical)) {
-                    row.put(canonical, row.remove(alias));
-                    renamed++;
+            for (String column : UNREAD_COLUMNS) {
+                if (row.remove(column) != null) {
+                    unread++;
                 }
-                boolean callbackPresent = row.get(callbackColumn) != null
-                    && !(row.get(callbackColumn) instanceof String s && s.isBlank());
-                if (!callbackPresent && row.remove(canonical) != null) {
-                    dropped++;
+            }
+            for (String[] hook : HOOKS) {
+                boolean callbackPresent = row.get(hook[0]) != null
+                    && !(row.get(hook[0]) instanceof String s && s.isBlank());
+                if (!callbackPresent && row.remove(hook[1]) != null) {
+                    callbackless++;
                 }
             }
         }
-        if (renamed > 0 || dropped > 0) {
-            recorder.record(this, "renamed " + renamed + " about-to-start retry column(s) and"
-                + " dropped " + dropped + " callback-less retry value(s) (" + side + ")");
+        if (unread > 0 || callbackless > 0) {
+            recorder.record(this, "dropped " + unread + " retry value(s) under a column the importer"
+                + " does not read and " + callbackless + " callback-less retry value(s) (" + side + ")");
         }
     }
 }

@@ -545,8 +545,8 @@ class CoreConfigEmitterTest {
 
   @Test
   void noSetCallbackHostEmitted() {
-    // The converter emits no SDK callback wiring, so no setCallbackHost is emitted; every callback
-    // column is carried through verbatim by passthrough instead.
+    // Every callback is emitted with the URL the definition authored, so the callback host is never
+    // used and no setCallbackHost is emitted.
     assertThat(allSrc(minimalModel())).doesNotContain("setCallbackHost");
   }
 }

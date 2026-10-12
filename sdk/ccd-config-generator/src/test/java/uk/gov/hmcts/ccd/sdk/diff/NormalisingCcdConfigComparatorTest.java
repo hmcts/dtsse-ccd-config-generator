@@ -606,8 +606,8 @@ public class NormalisingCcdConfigComparatorTest {
 
     @Test
     public void identicalCallbackUrlsMatchExactly() {
-        // The converter carries callback URLs through verbatim, so both sides hold the same raw
-        // value (env ${CCD_DEF_*} placeholders included) and compare like any other column.
+        // The generator writes a URL callback verbatim, so both sides hold the same raw value (env
+        // ${CCD_DEF_*} placeholders included) and compare like any other column.
         Map<String, List<Map<String, Object>>> expected = sheets("CaseEvent",
             rows(row("ID", "addNote", "Name", "Add note",
                 "CallBackURLAboutToSubmitEvent", "${CCD_DEF_BASE_URL}/callbacks/about-to-submit",
@@ -624,9 +624,7 @@ public class NormalisingCcdConfigComparatorTest {
 
     @Test
     public void differingCallbackUrlShapeNowFails() {
-        // With CALLBACK_URL retired, a differing URL shape is a real diff — presence is no longer
-        // enough. (The converter carries the value verbatim, so a divergence here means the graft
-        // failed to reproduce the original.)
+        // A differing URL shape is a real diff: presence alone is not enough.
         Map<String, List<Map<String, Object>>> expected = sheets("CaseEvent",
             rows(row("ID", "addNote", "Name", "Add note",
                 "CallBackURLAboutToSubmitEvent", "http://legacy-host:4013/callbacks/about-to-submit")));
@@ -655,9 +653,26 @@ public class NormalisingCcdConfigComparatorTest {
     // ---- CASE_EVENT_RETRIES ----
 
     @Test
-    public void aboutToStartRetriesColumnNameFormIsReconciled() {
-        // The callback URL is identical on both sides (carried verbatim); only the retry column's
-        // name form (plain vs URL spelling) differs, which is what CASE_EVENT_RETRIES reconciles.
+    public void aboutToStartRetriesUnderTheUrlSpellingAreDropped() {
+        // The definition store reads about-to-start retries from RetriesTimeoutAboutToStartEvent
+        // only, so a value under the URL spelling never takes effect and compares as absent.
+        Map<String, List<Map<String, Object>>> expected = sheets("CaseEvent",
+            rows(row("ID", "addNote", "Name", "Add note",
+                "CallBackURLAboutToStartEvent", "${CASE_API_URL}/callbacks/about-to-start",
+                "RetriesTimeoutURLAboutToStartEvent", "5,5,5,5")));
+        Map<String, List<Map<String, Object>>> actual = sheets("CaseEvent",
+            rows(row("ID", "addNote", "Name", "Add note",
+                "CallBackURLAboutToStartEvent", "${CASE_API_URL}/callbacks/about-to-start")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+        assertThat(result.getAppliedRules())
+            .anySatisfy(rule -> assertThat(rule).startsWith("CASE_EVENT_RETRIES"));
+    }
+
+    @Test
+    public void aboutToStartRetriesTheImporterReadsAreNotSatisfiedByTheUrlSpelling() {
         Map<String, List<Map<String, Object>>> expected = sheets("CaseEvent",
             rows(row("ID", "addNote", "Name", "Add note",
                 "CallBackURLAboutToStartEvent", "${CASE_API_URL}/callbacks/about-to-start",
@@ -667,11 +682,7 @@ public class NormalisingCcdConfigComparatorTest {
                 "CallBackURLAboutToStartEvent", "${CASE_API_URL}/callbacks/about-to-start",
                 "RetriesTimeoutURLAboutToStartEvent", "5,5,5,5")));
 
-        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
-
-        assertThat(result.matches()).as(result.report()).isTrue();
-        assertThat(result.getAppliedRules())
-            .anySatisfy(rule -> assertThat(rule).startsWith("CASE_EVENT_RETRIES"));
+        assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
     }
 
     @Test
@@ -1332,12 +1343,10 @@ public class NormalisingCcdConfigComparatorTest {
     }
 
     @Test
-    public void midEventCallbackRoundTripsPerRowWithoutPropagation() {
-        // The converter emits no SDK mid-event wiring; it carries the input's CallBackURLMidEvent /
-        // RetriesTimeoutURLMidEvent through verbatim per field row (the CaseEventToFields column
-        // graft), so both sides hold the value on the SAME field row and compare directly. It is no
-        // longer propagated across the page (PageLabel/PageShowCondition still are), so the value
-        // stays on its own row rather than being spread to every row of the page.
+    public void midEventCallbackOnADifferentRowOfThePageMatches() {
+        // The importer reads a page's mid-event callback from whichever of its rows first carries a
+        // URL, so the same callback placed on a different row of the page on each side is the same
+        // page callback.
         Map<String, List<Map<String, Object>>> expected = sheets("CaseEventToFields",
             rows(
                 row("CaseEventID", "startAppeal", "CaseFieldID", "a", "PageID", "1"),
@@ -1345,23 +1354,23 @@ public class NormalisingCcdConfigComparatorTest {
                     "CallBackURLMidEvent", "${CASE_API_URL}/mid", "RetriesTimeoutURLMidEvent", "5,5")));
         Map<String, List<Map<String, Object>>> actual = sheets("CaseEventToFields",
             rows(
-                row("CaseEventID", "startAppeal", "CaseFieldID", "a", "PageID", "1"),
-                row("CaseEventID", "startAppeal", "CaseFieldID", "b", "PageID", "1",
-                    "CallBackURLMidEvent", "${CASE_API_URL}/mid", "RetriesTimeoutURLMidEvent", "5,5")));
+                row("CaseEventID", "startAppeal", "CaseFieldID", "a", "PageID", "1",
+                    "CallBackURLMidEvent", "${CASE_API_URL}/mid", "RetriesTimeoutURLMidEvent", "5,5"),
+                row("CaseEventID", "startAppeal", "CaseFieldID", "b", "PageID", "1")));
 
         ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
 
         assertThat(result.matches()).as(result.report()).isTrue();
+        assertThat(result.getAppliedRules())
+            .anySatisfy(rule -> assertThat(rule).startsWith("MID_EVENT_PAGE_SCOPE"));
     }
 
     @Test
-    public void midEventCallbackOnADifferentFieldRowNoLongerReconciles() {
-        // Guards the design change: because mid-event columns are NOT propagated across the page,
-        // the same URL placed on a different field row on each side is a genuine per-row difference
-        // and fails. (Before, PageLabelPropagation would have spread it to every row and matched.)
+    public void midEventCallbackRepeatedOnEveryRowMatchesOneOnTheFirstRow() {
         Map<String, List<Map<String, Object>>> expected = sheets("CaseEventToFields",
             rows(
-                row("CaseEventID", "startAppeal", "CaseFieldID", "a", "PageID", "1"),
+                row("CaseEventID", "startAppeal", "CaseFieldID", "a", "PageID", "1",
+                    "CallBackURLMidEvent", "${CASE_API_URL}/mid"),
                 row("CaseEventID", "startAppeal", "CaseFieldID", "b", "PageID", "1",
                     "CallBackURLMidEvent", "${CASE_API_URL}/mid")));
         Map<String, List<Map<String, Object>>> actual = sheets("CaseEventToFields",
@@ -1369,6 +1378,51 @@ public class NormalisingCcdConfigComparatorTest {
                 row("CaseEventID", "startAppeal", "CaseFieldID", "a", "PageID", "1",
                     "CallBackURLMidEvent", "${CASE_API_URL}/mid"),
                 row("CaseEventID", "startAppeal", "CaseFieldID", "b", "PageID", "1")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+    }
+
+    @Test
+    public void midEventCallbackIsTheOneOnThePagesFirstRowCarryingAUrl() {
+        // Rows of one page disagree; only the first row carrying a URL takes effect, and its
+        // retries come from that row, not from any other.
+        Map<String, List<Map<String, Object>>> expected = sheets("CaseEventToFields",
+            rows(
+                row("CaseEventID", "startAppeal", "CaseFieldID", "a", "PageID", "1",
+                    "RetriesTimeoutURLMidEvent", "9,9"),
+                row("CaseEventID", "startAppeal", "CaseFieldID", "b", "PageID", "1",
+                    "CallBackURLMidEvent", "${CASE_API_URL}/first"),
+                row("CaseEventID", "startAppeal", "CaseFieldID", "c", "PageID", "1",
+                    "CallBackURLMidEvent", "${CASE_API_URL}/second")));
+        Map<String, List<Map<String, Object>>> applied = sheets("CaseEventToFields",
+            rows(
+                row("CaseEventID", "startAppeal", "CaseFieldID", "a", "PageID", "1",
+                    "CallBackURLMidEvent", "${CASE_API_URL}/first"),
+                row("CaseEventID", "startAppeal", "CaseFieldID", "b", "PageID", "1"),
+                row("CaseEventID", "startAppeal", "CaseFieldID", "c", "PageID", "1")));
+        Map<String, List<Map<String, Object>>> ignored = sheets("CaseEventToFields",
+            rows(
+                row("CaseEventID", "startAppeal", "CaseFieldID", "a", "PageID", "1",
+                    "CallBackURLMidEvent", "${CASE_API_URL}/second"),
+                row("CaseEventID", "startAppeal", "CaseFieldID", "b", "PageID", "1"),
+                row("CaseEventID", "startAppeal", "CaseFieldID", "c", "PageID", "1")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, applied);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+        assertThat(NormalisingCcdConfigComparator.compare(expected, ignored).matches()).isFalse();
+    }
+
+    @Test
+    public void differingMidEventRetriesStillFail() {
+        Map<String, List<Map<String, Object>>> expected = sheets("CaseEventToFields",
+            rows(row("CaseEventID", "startAppeal", "CaseFieldID", "a", "PageID", "1",
+                "CallBackURLMidEvent", "${CASE_API_URL}/mid", "RetriesTimeoutURLMidEvent", "5,5")));
+        Map<String, List<Map<String, Object>>> actual = sheets("CaseEventToFields",
+            rows(row("CaseEventID", "startAppeal", "CaseFieldID", "a", "PageID", "1",
+                "CallBackURLMidEvent", "${CASE_API_URL}/mid")));
 
         assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
     }

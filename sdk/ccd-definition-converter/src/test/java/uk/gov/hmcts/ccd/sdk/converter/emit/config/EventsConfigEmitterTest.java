@@ -9,6 +9,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import uk.gov.hmcts.ccd.sdk.converter.api.ConversionOptions;
 import uk.gov.hmcts.ccd.sdk.converter.api.EmitContext;
+import uk.gov.hmcts.ccd.sdk.converter.model.CallbackModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.ClusteredFieldRef;
 import uk.gov.hmcts.ccd.sdk.converter.model.EventComplexTypeGroup;
@@ -301,12 +302,9 @@ class EventsConfigEmitterTest {
   }
 
   @Test
-  void singlePageEventInlinesPageLabelAndShowConditionWithMidEventCallback() {
-    // A single-page event whose one page carries a page label and a show condition must inline both
-    // (fields.pageLabel / fields.showCondition) alongside the field chain. A mid-event callback URL
-    // is never SDK-wired — it is carried through verbatim on the CaseEventToFields column
-    // passthrough — so the inlined page still emits the bare fields.page(id) (no callback arg),
-    // exactly as the page class would have.
+  void singlePageEventInlinesPageLabelShowConditionAndMidEventCallback() {
+    // A single-page event whose one page carries a page label, a show condition and a mid-event
+    // callback must inline all three alongside the field chain, exactly as the page class would.
     PageModel.PageField field = PageModel.PageField.builder()
         .caseFieldId("applicantName")
         .displayContext("MANDATORY")
@@ -315,6 +313,7 @@ class EventsConfigEmitterTest {
         .pageId("selectHearing")
         .label("Select a hearing")
         .showCondition("applicantName=\"Yes\"")
+        .midEvent(new CallbackModel("${CCD_DEF_URL}/mid", "3,3"))
         .fields(List.of(field))
         .build();
     EventModel event = EventModel.builder()
@@ -338,13 +337,38 @@ class EventsConfigEmitterTest {
     assertThat(files.stream().map(f -> f.typeSpec().name()).toList())
         .containsExactly("SelectHearing");
     String eventSrc = classNamed(files, "SelectHearing");
-    assertThat(eventSrc).contains("fields.page(\"selectHearing\")");
+    assertThat(eventSrc).contains("fields.page(\"selectHearing\", \"${CCD_DEF_URL}/mid\", 3, 3)");
     assertThat(eventSrc).contains("fields.pageLabel(\"Select a hearing\")");
     assertThat(eventSrc).contains("fields.showCondition(\"applicantName=\\\"Yes\\\"\")");
     assertThat(eventSrc).contains("fields.mandatory(CaseData::getApplicantName)");
-    // No mid-event callback overload — page(id) only.
-    assertThat(eventSrc).doesNotContain("fields.page(\"selectHearing\",");
     assertThat(eventSrc).doesNotContain(".apply(fields)");
+  }
+
+  @Test
+  void emitsEventCallbacksByUrlWithTheirRetries() {
+    // Each hook's URL is emitted verbatim with its retries as int varargs. A retries value the
+    // varargs would not reproduce exactly goes through retries(Webhook, String) as authored.
+    EventModel event = EventModel.builder()
+        .id("submitAppeal")
+        .javaName("submitAppeal")
+        .name("Submit appeal")
+        .preStates(List.of())
+        .postState("Open")
+        .grants(Map.of())
+        .pages(List.of())
+        .aboutToStart(new CallbackModel("${CCD_DEF_URL}/start", "0"))
+        .aboutToSubmit(new CallbackModel("${CCD_DEF_URL}/submit", "5, 5"))
+        .submitted(new CallbackModel("${CCD_DEF_URL}/submitted", null))
+        .build();
+
+    String eventSrc = classNamed(new EventsConfigEmitter()
+        .emit(modelWithEvents(List.of(event)), contextWith(40)), "SubmitAppeal");
+
+    assertThat(eventSrc).contains(".aboutToStartCallback(\"${CCD_DEF_URL}/start\", 0)");
+    assertThat(eventSrc).containsPattern("\\.aboutToSubmitCallback\\(\"\\$\\{CCD_DEF_URL}/submit\"\\)\\s+"
+        + "\\.retries\\(Webhook\\.AboutToSubmit, \"5, 5\"\\)");
+    assertThat(eventSrc).contains(".submittedCallback(\"${CCD_DEF_URL}/submitted\")");
+    assertThat(eventSrc).contains("import uk.gov.hmcts.ccd.sdk.api.Webhook;");
   }
 
   @Test

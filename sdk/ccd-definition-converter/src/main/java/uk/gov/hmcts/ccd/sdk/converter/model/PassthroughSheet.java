@@ -54,8 +54,7 @@ public class PassthroughSheet {
    * for {@code CaseEventToFields} that means no {@code CaseEventID}, {@code CaseTypeID},
    * {@code DisplayContext} or {@code PageID}, which the definition store rejects. That is strictly
    * worse than dropping the graft: the grafted column is unreproducible either way, but the orphan
-   * row corrupts a sheet that was otherwise correct. So a columns-only sheet skips unmatched rows
-   * and the {@code CaseEventToFields} mid-event graft sets this.
+   * row corrupts a sheet that was otherwise correct. So a columns-only sheet skips unmatched rows.
    */
   @Builder.Default
   boolean columnsOnly = false;

@@ -207,8 +207,8 @@ class PassthroughMergerTest {
   /**
    * A columns-only sheet grafts onto rows the generator emitted and never appends an orphan.
    *
-   * <p>The real shape is the {@code CaseEventToFields} mid-event graft: it carries only
-   * {@code CaseFieldID} plus {@code CallBackURLMidEvent}, so appending an unmatched row writes a row
+   * <p>A {@code CaseEventToFields} column graft carrying only {@code CaseFieldID} plus
+   * {@code CallBackURLMidEvent}, for example: appending an unmatched row writes a row
    * with no {@code CaseEventID}/{@code CaseTypeID}/{@code DisplayContext} — invalid definition JSON,
    * and strictly worse than dropping a graft that was unreproducible either way.
    */

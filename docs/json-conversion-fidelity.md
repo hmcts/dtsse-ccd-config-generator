@@ -37,7 +37,7 @@ conscious decision instead of inheriting invisible JSON — see
 |---|---|---|---|
 | `UserRoles[]`/`AccessControl[]` array shorthands vs flat per-role rows | Not semantic | `ACCESS_CONTROL_EXPANSION` | Both sides expanded to the flat rows the processor produces at build time (incl. `AuthorisationComplexType`) |
 | Vestigial mid-event/retry columns on `CaseEvent` | Not semantic | `CASE_EVENT_MID_EVENT` | Importer has no such `CaseEvent` field; real mid-event lives on `CaseEventToFields` |
-| About-to-start retry column naming | Not semantic | `CASE_EVENT_RETRIES` | Two spellings of the same column |
+| Retries under a column the importer does not read, or on a hook with no URL | Not semantic | `CASE_EVENT_RETRIES` | `EventParser` reads `RetriesTimeoutAboutToStartEvent`, `RetriesTimeoutURLAboutToSubmitEvent` and `RetriesTimeoutURLSubmittedEvent`, and only alongside the hook's URL |
 | Tab metadata spellings (`Channel` default, label/role propagation, role-suffixed `TabID`) | Not semantic | `CASE_TYPE_TAB` | Same tab, two encodings (also strips `TabFieldDisplayOrder` → display-order row below) |
 | `Text` ≡ `String` collection element type | Not semantic | `COLLECTION_ELEMENT_TYPE` | Import identically |
 | Generator-written CCD defaults vs omitted columns; importer-ignored metadata; whitespace-only labels | Not semantic | `DEFAULTS` | Only fires when the other side omits the column (also strips ordering columns → display-order row below) |
@@ -51,6 +51,7 @@ conscious decision instead of inheriting invisible JSON — see
 | Duplicate `ComplexTypes` member with conflicting `ElementLabel` (prl fragments) | Not semantic | `CONFLICTING_ELEMENT_LABELS` | Importer keeps all rows in declaration order (no dedup); SDK emits the first-seen member — both sides collapse to first-seen |
 | `CaseField`-sheet `DisplayContextParameter` | Not semantic | `DEFAULTS` | Importer's `CaseFieldParser` never reads it on the `CaseField` sheet (DCP is a per-page property); importer-ignored metadata |
 | JSON number ≡ same value as string | Not semantic | `NUMERIC_STRINGS` | Importer coerces both |
+| Mid-event callback on one row of a page vs several | Not semantic | `MID_EVENT_PAGE_SCOPE` | The importer reads URL and retries from the page's first row carrying a URL |
 | Page-scoped columns once-per-page vs repeated per row | Not semantic | `PAGE_LABEL_PROPAGATION` | Non-first-field `PageLabel` variation collapses (nothing renders it) |
 | `PostConditionState=*` ≡ the event's single pre-state | Not semantic | `POST_CONDITION_NO_CHANGE` | Same runtime behaviour |
 | Pre-condition state list order | Not semantic | `PRE_CONDITION_STATE_ORDER` | Unordered set |
@@ -72,7 +73,6 @@ conscious decision instead of inheriting invisible JSON — see
 | Orphan-path FixedLists (reachable only via an orphan complex type) | **Semantic, accepted** | `ORPHAN_FIXED_LIST` | The SDK generates no enum; the input rows are dropped (advisory gap) |
 | Predefined ComplexTypes redeclaration (member-by-member re-spelling of `Fee`/`Address`/…) | **Semantic, accepted** | `PREDEFINED_COMPLEX_TYPE_REDECLARATION` | The built-in `@ComplexType(generate=false)` type owns its definition; the redundant input rows are dropped (advisory gap) |
 | Conditional / multi-target `PostConditionState` | **Semantic, accepted** | `CONDITIONAL_POST_STATE` | Runtime honours `state(cond):priority` (JEXL, first-match-wins); `EventBuilder` models one post-state, so the SDK emits only the primary and the alternatives are dropped ([detail](#4-conditional--multi-target-postconditionstate-collapse-conditional_post_state)) |
-| Callback URLs + retries (all phases, incl. mid-event) | Fixed with passthrough | column-graft | Deliberate: no SDK callback wiring emitted; input URLs carried byte-exactly, `${CCD_DEF_*}` included, and compared exactly |
 | Non-derivable `EventToComplexTypes` groups | Fixed with passthrough | row | A `(event, field)` group the member chains cannot express — unresolvable dotted `ListElementCode`, an undeclared field or event, non-O/M/R/C `DisplayContext`, a repeated `ListElementCode`, raw whitespace/case key quirks, or an overlay-suffixed sibling. The root field's placement context is **not** a cause ([detail](#5-eventtocomplextypes-generated-java-vs-fallback)) |
 | `EventToComplexTypes` exotic-tail columns on derived groups | Fixed with passthrough | column-graft | `SecurityClassification`/`Publish`/`RetainHiddenValue`/… on a member-override row; grafted additively over the generated row (a group with no tail leaves no carrier) |
 | FixedList whose ID collides with a ComplexType ID | Fixed with passthrough | row | The complex-type class takes the Java name, so no enum is generated; the list rows are carried verbatim (fpl `*Selector`, civil `Court`) |
@@ -104,8 +104,12 @@ bullet each:
 - **`CASE_EVENT_MID_EVENT`** — drops vestigial `CallBackURLMidEvent`/`RetriesTimeoutURLMidEvent`
   columns from the `CaseEvent` sheet; mid-event is a `CaseEventToFields` property and the importer
   has no such `CaseEvent` field. The callback itself round-trips on `CaseEventToFields`.
-- **`CASE_EVENT_RETRIES`** — reconciles the `RetriesTimeoutAboutToStartEvent` column name with the
-  generator's own naming for the about-to-start retry column.
+- **`CASE_EVENT_RETRIES`** — drops `CaseEvent` retry values the importer never reads, on both sides:
+  those under a spelling `EventParser` has no column for (`RetriesTimeoutURLAboutToStartEvent` — the
+  about-to-start hook is read from `RetriesTimeoutAboutToStartEvent` — and the URL-less
+  `RetriesTimeoutAboutToSubmitEvent`/`RetriesTimeoutSubmittedEvent`), and those on a hook with no
+  `CallBackURL*`, which `WebhookParser` never reads. The converter drops the same values with an
+  `ADVISORY` gap. Retries alongside a URL, under the read column, compare exactly.
 - **`CASE_HISTORY`** — forgives the `caseHistory` field/tab/authorisation rows the generator
   unconditionally injects on every case type. This is a **semantic superset like `IMMUTABLE_FIELD_CR`**,
   not a cosmetic rewrite: on `AuthorisationCaseField` the rule *creates* a `CRU` grant row for any role
@@ -222,12 +226,15 @@ bullet each:
   to every field row of the page before matching (hand-written definitions set them once per page;
   the generator repeats them). Per-field `PageLabel` variation within a page collapses to the first
   field's label (the only one CCD renders); a genuine difference on the page's first field still
-  fails. The mid-event callback columns (`CallBackURLMidEvent`/`RetriesTimeoutURLMidEvent`) are
-  **not** propagated: the converter emits no SDK mid-event wiring and instead carries the input's
-  value through verbatim per field row (the `CaseEventToFields` column graft), so both sides already
-  hold the input's exact per-row placement and compare directly — propagating would pick a page's
-  "first" mid-event value, which on the rare page carrying two different mid-event URLs (a fixture
-  inconsistency; only one fires) differs by side and would spuriously mismatch.
+  fails. The mid-event callback columns are scoped by `MID_EVENT_PAGE_SCOPE` instead.
+- **`MID_EVENT_PAGE_SCOPE`** — compares a page's mid-event callback once per page.
+  `AbstractDisplayGroupParser` reads `CallBackURLMidEvent` and `RetriesTimeoutURLMidEvent` from the
+  first row of the page (`CaseEventID`+`PageID`) that carries a URL; the generator writes them on the
+  page's first row only, while hand-written definitions put them on any row or repeat them. On each
+  side the rule sets every row of a page to the values the importer would read (or removes them when
+  the page has no URL), so the same effective callback matches wherever it sat and a differing URL or
+  retries still fails. The converter reads the page's callback the same way and reports, as an
+  `ADVISORY` gap, any row of the page carrying a URL or retries that differ from the one that applies.
 - **`ORPHAN_COMPLEX_TYPE`** — a **semantic, accepted** concession: drops an expected-side
   `ComplexTypes` declaration whose ID nothing reachable from a `CaseData` field references. The SDK
   generates no class or rows for such an orphan (it is never in `config.getTypes()`), so the converter
@@ -600,7 +607,7 @@ row (source: `DefaultDefinitionLinker`). *Mechanism* is the merge shape:
 
 > **Measured scale (all six service fixtures — Benefit, fpl, civil, ET_EnglandWales, probate, prl).**
 > Total passthrough artifacts: **~79**, breaking down as — `CaseEventToFields` column-grafts **57**
-> (callbacks + skipped-unwrapped-field metadata, mostly sscs's `writeFinalDecision`), `FixedLists`
+> (skipped-unwrapped-field metadata, mostly sscs's `writeFinalDecision`), `FixedLists`
 > ID-collision rows **15**, non-derivable `EventToComplexTypes` groups **5** (one summary row per
 > fixture *with* a residual — ia and sscs have none; the underlying member rows total 810 against
 > the ~12.2k emitted as Java), and
@@ -623,8 +630,6 @@ is a removed construct.)
 |---|---|---|---|
 | EventToComplexTypes — **derived-group tail** | `CaseEventToComplexTypes` (→ `EventToComplexTypes`) | column-graft (per event/field) | For a group emitted as generated `.complex(...)` Java (see [§5](#5-eventtocomplextypes-generated-java-vs-fallback)), only the **exotic tail** the generator cannot compute (`SecurityClassification`/`Publish`/`RetainHiddenValue`/…) is grafted onto the generated rows, additively, keyed on `(CaseEventID, CaseFieldID, ListElementCode)`. The row's `ID` (importer-ignored, `EVENT_COMPLEX_TYPE_ID_IGNORED`) and `FieldDisplayOrder` (SDK per-event counter; relative member order preserved by emission order — display-order disposition) are accepted differences rather than grafted columns; a derived group with no exotic tail leaves **no carrier at all**. |
 | EventToComplexTypes — **non-derivable group** | `CaseEventToComplexTypes` (→ `EventToComplexTypes`) | row (per event/field) | A whole `(event, field)` group the converter cannot express as builder chains stays a verbatim row passthrough (ID-keyed). Causes: an unresolvable dotted `ListElementCode`, a field no `CaseField` row declares, an event no `CaseEvent` row declares (dead rows, or an event belonging to a sibling case type), a `DisplayContext` outside `OPTIONAL`/`MANDATORY`/`READONLY`/`COMPLEX`, a `ListElementCode` repeated within the group, a raw derivable-key value the generator would normalise (whitespace/case), or an overlay-suffixed sibling. (`Collection`-typed roots/intermediates, hint-cascade rows, and every root-placement shape — non-`COMPLEX`, unplaced, page-less — are derived; see [§5](#5-eventtocomplextypes-generated-java-vs-fallback).) |
-| Callback URLs (about-to-start / about-to-submit / submitted) + their `RetriesTimeout*` | `CaseEvent` | column-graft | The converter deliberately emits **no** SDK callback wiring, so the generator writes no `CallBackURL*`/`RetriesTimeout*`; the input values (env `${CCD_DEF_*}` placeholders included) are grafted back verbatim. |
-| Mid-event callback URL + its `RetriesTimeout*MidEvent` | `CaseEventToFields` | column-graft | Same: mid-event is a per-page property, carried verbatim per field row rather than wired (a bracketed metadata `CaseFieldID` such as `[STATE]` is skipped — the generator emits no row for it to graft onto). |
 | Per-field metadata for a placement skipped as un-referenceable (`@JsonUnwrapped` parent whose getter the model suppresses with `@Getter(AccessLevel.NONE)`, or a bracketed metadata `CaseFieldID` like `[STATE]`) | `CaseEventToFields` | column-graft | No compilable typed getter reference exists for the field, so the placement is skipped in Java and the row's per-field display metadata is grafted back (sscs's `writeFinalDecision*` unwrapped members are the bulk of this). |
 | FixedList whose ID collides with a ComplexType ID | `FixedLists` | row | When a definition declares a FixedList and a ComplexType under the same ID (fpl's `*Selector`, civil's `Court`), the complex-type class takes the Java name, so no enum is generated and the list's rows are carried verbatim. |
 | `AuthorisationComplexType` rows with an unresolvable field/role | `AuthorisationComplexType` | row | Most rows emit via `grantComplexType(...)`; a row whose complex field does not resolve to a plain `CaseData` member, or whose role is not a registered `UserRole`, is carried verbatim (≈24 rows, all in prl). |
@@ -1083,15 +1088,17 @@ trusting it:
 - **Overlay-predicate bugs can be masked.** The expected side is built from the same IR with the same
   `OverlayCondition`/env map that drives the converter, so a predicate that filters both sides
   identically would still pass.
-- **Callback URL values ARE proven; callback runtime behaviour is out of converter scope.** The
-  converter emits no SDK callback wiring — every callback column (`CallBackURL*` and its
-  `RetriesTimeout*` on `CaseEvent`, `CallBackURLMidEvent`/`RetriesTimeout*MidEvent` on
-  `CaseEventToFields`) is carried through the passthrough graft verbatim, `${CCD_DEF_*}` placeholders
-  and all, and compared **exactly** like any other column. So the regenerated definition points at the
-  original service's own endpoints, byte-for-byte — the migrated service keeps serving them unchanged
-  and the round-trip proves the URL values are preserved. What the diff still does not (and cannot)
-  assert is that a callback fires correctly over HTTP at runtime; that is a property of the running
-  service, not of the definition, and is unchanged by the conversion.
+- **Callback URL values ARE proven; callback runtime behaviour is out of converter scope.** Every
+  callback is emitted as a URL callback — `aboutToStartCallback`/`aboutToSubmitCallback`/
+  `submittedCallback(url, retries...)` on the event and `page(id, url, retries...)` for mid-event —
+  which the generator writes verbatim, `${CCD_DEF_*}` placeholders and all, and the round-trip
+  compares exactly like any other column (per page for mid-event, see `MID_EVENT_PAGE_SCOPE`). So the
+  regenerated definition points at the original service's own endpoints, byte-for-byte, and the
+  migrated service keeps serving them unchanged. What the diff does not (and cannot) assert is that a
+  callback fires correctly over HTTP at runtime; that is a property of the running service, not of
+  the definition, and is unchanged by the conversion. Retry values are reproduced but have little
+  runtime effect: CCD's data store reads a hook's retries only to see whether they are a single
+  `0`, which disables retries.
 - **Ordering and layout are not proven**: on-screen display order on any sheet (see accepted difference
   3), row order within a sheet, and per-file splits / filenames.
 - **Passthrough constructs are reproduced, not proven equal.** `PassthroughMerger` is additive — it can
@@ -1113,9 +1120,8 @@ A conversion run (via `--report-dir`) writes:
 - **`gap-report.json`** — the same findings as structured data (`entries` plus `summary` counts),
   for tooling.
 
-(There is no `callback-map.json`: the converter does not rewrite callbacks, so there is nothing to
-map. Every original callback URL is carried through verbatim in the passthrough content below and
-reproduced byte-for-byte in the regenerated definition.)
+(There is no `callback-map.json`: every callback is emitted with the URL the definition authored,
+so there is nothing to map, and the regenerated definition carries each URL byte-for-byte.)
 
 Passthrough content lands under `--passthrough-dir` (`base/<relativePath>` for unconditional
 sheets, `<overlay-suffix>/<relativePath>` for environment-gated ones, indexed by `manifest.json`);
