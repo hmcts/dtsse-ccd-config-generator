@@ -166,6 +166,18 @@ public class FieldUtils {
   }
 
   private static void collectGatedOffFieldIds(Class dataClass, String prefix, Set<String> ids) {
+    collectGatedOffFieldIds(dataClass, prefix, ids, false);
+  }
+
+  /**
+   * Collects the gated-off field IDs of {@code dataClass} and its {@code @JsonUnwrapped} members.
+   *
+   * @param gatedOff whether an enclosing {@code @JsonUnwrapped} container is itself gated off, in
+   *     which case every member is dropped with it ({@link #getCaseFields} filters the container
+   *     out) and so is collected regardless of its own gate
+   */
+  private static void collectGatedOffFieldIds(
+      Class dataClass, String prefix, Set<String> ids, boolean gatedOff) {
     List<Field> fields = new ArrayList<>();
     ReflectionUtils.doWithFields(dataClass,
         fields::add, field -> !Modifier.isStatic(field.getModifiers()));
@@ -183,8 +195,8 @@ public class FieldUtils {
         String newPrefix = prefix.isEmpty()
             ? unwrapped.prefix()
             : prefix.concat(capitalize(unwrapped.prefix()));
-        collectGatedOffFieldIds(field.getType(), newPrefix, ids);
-      } else if (isFieldGatedOff(field)) {
+        collectGatedOffFieldIds(field.getType(), newPrefix, ids, gatedOff || isFieldGatedOff(field));
+      } else if (gatedOff || isFieldGatedOff(field)) {
         ids.add(getFieldId(field, prefix));
       }
     }
