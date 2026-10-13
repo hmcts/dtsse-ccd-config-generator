@@ -371,9 +371,10 @@ export function createDocEditor(
     load: runtime.controller.load,
     getDocument: runtime.controller.getDocument,
     getSnapshot: runtime.controller.getSnapshot,
-    insert(paragraphs, options): void {
-      runtime.controller.insert(paragraphs, options);
-      view.focus();
+    insert(paragraphs, options): boolean {
+      const inserted = runtime.controller.insert(paragraphs, options);
+      if (inserted) view.focus();
+      return inserted;
     },
     destroy(): void {
       editor.removeEventListener("input", stopAtMount);

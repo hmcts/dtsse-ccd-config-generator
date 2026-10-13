@@ -18,7 +18,10 @@ import {
 import { reconcileDocument } from "./reconciliation.js";
 import { editorSchema } from "./schema.js";
 import { type DocWeaveSnapshot, readSnapshot } from "./snapshot.js";
-import { insertTemplate } from "./templates/insertion.js";
+import {
+  insertTemplate,
+  type InsertTemplateOptions,
+} from "./templates/insertion.js";
 
 export type { DocWeaveSnapshot } from "./snapshot.js";
 
@@ -37,9 +40,9 @@ export interface DocEditorController {
    * it, and one undo takes it all out again. It goes in where a template would,
    * at the selection or, with at "end", after the document's last clause, as a
    * numbered clause when that is one. Blank paragraphs are left out; nothing
-   * happens when none remain.
+   * happens when none remain. Returns whether anything was inserted.
    */
-  insert(paragraphs: readonly string[], options?: InsertOptions): void;
+  insert(paragraphs: readonly string[], options?: InsertOptions): boolean;
   getDocument(): DocWeaveDocument | undefined;
   getSnapshot(): DocWeaveSnapshot;
   destroy(): void;
@@ -105,7 +108,11 @@ export interface DocEditorRuntime {
    * Inserts a document's content as the reader's own clauses at the selection,
    * as one undo step that follow-up typing does not join.
    */
-  insertDocument(wording: ProseMirrorNode, selection?: Selection): void;
+  insertDocument(
+    wording: ProseMirrorNode,
+    selection?: Selection,
+    options?: InsertTemplateOptions,
+  ): void;
   setStateListener(listener: (state: EditorState) => void): void;
 }
 
@@ -165,8 +172,9 @@ export function createDocEditorController(
   const insertDocument = (
     wording: ProseMirrorNode,
     selection?: Selection,
+    insertOptions?: InsertTemplateOptions,
   ): void => {
-    insertTemplate(wording, selection)(state, (transaction) => {
+    insertTemplate(wording, selection, insertOptions)(state, (transaction) => {
       assertCurrentDocumentMatchesGenerated(
         transaction.doc,
         generatedDocument,
@@ -229,19 +237,24 @@ export function createDocEditorController(
         options.onChange?.(getSnapshot());
       }
     },
-    insert(paragraphs, { at = "selection" }: InsertOptions = {}): void {
+    insert(paragraphs, { at = "selection" }: InsertOptions = {}): boolean {
       const wording = paragraphs.map((text) => text.trim()).filter(Boolean);
-      if (wording.length === 0) return;
-      insertDocument(
-        editorSchema.node(
-          "doc",
-          null,
-          wording.map((text) =>
-            editorSchema.node("paragraph", null, editorSchema.text(text))
-          ),
+      if (wording.length === 0) return false;
+      const document = editorSchema.node(
+        "doc",
+        null,
+        wording.map((text) =>
+          editorSchema.node("paragraph", null, editorSchema.text(text))
         ),
-        at === "end" ? Selection.atEnd(state.doc) : undefined,
       );
+      // The end of the document is also the start of its last clause when
+      // that clause is empty, and the wording still belongs after it.
+      if (at === "end") {
+        insertDocument(document, Selection.atEnd(state.doc), { after: true });
+      } else {
+        insertDocument(document);
+      }
+      return true;
     },
     getDocument(): DocWeaveDocument | undefined {
       return document;

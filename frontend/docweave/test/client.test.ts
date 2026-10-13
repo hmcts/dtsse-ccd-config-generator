@@ -216,6 +216,22 @@ describe("public editor API", () => {
     controller.destroy();
   });
 
+  it("leaves focus where it was when there is nothing to insert", async () => {
+    const { createDocEditor, buildDoc } = await import("../src/index.js");
+    const host = dom.window.document.createElement("input");
+    dom.window.document.body.append(host);
+    const controller = createDocEditor({ mount: "#editor" });
+    controller.render(buildDoc((doc) => doc.paragraph("heading", "IT IS ORDERED THAT:")));
+    host.focus();
+
+    assert.equal(controller.insert(["", "  "], { at: "end" }), false);
+    assert.equal(dom.window.document.activeElement, host);
+
+    assert.equal(controller.insert(["Costs reserved."], { at: "end" }), true);
+    assert.equal(dom.window.document.activeElement?.classList.contains("ProseMirror"), true);
+    controller.destroy();
+  });
+
   it("loads another document into the mounted editor without carrying undo across", async () => {
     const { createDocEditor, buildDoc } = await import("../src/index.js");
     const controller = createDocEditor({ mount: "#editor" });

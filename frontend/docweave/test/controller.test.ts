@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { TextSelection } from "prosemirror-state";
+
 import { getDocumentNode } from "../src/builder.js";
 import { createDocEditorController } from "../src/controller.js";
 import { editorSchema } from "../src/schema.js";
-import { buildDoc, createDocEditor } from "../src/index.js";
+import { buildDoc, createDocEditor, renderText } from "../src/index.js";
 
 describe("headless editor", () => {
   it("runs the controller headlessly and restores snapshots", () => {
@@ -134,10 +136,8 @@ describe("headless editor", () => {
           if (withCosts) list.item("costs", "Costs in the case.");
         });
       });
-    const text = (controller: ReturnType<typeof createDocEditor>) => {
-      const doc = editorSchema.nodeFromJSON(controller.getSnapshot().current);
-      return doc.textBetween(0, doc.content.size, "\n");
-    };
+    const text = (controller: ReturnType<typeof createDocEditor>) =>
+      renderText(controller.getSnapshot());
 
     it("adds paragraphs after the last clause as the reader's own numbered clauses", () => {
       const changes: unknown[] = [];
@@ -145,11 +145,12 @@ describe("headless editor", () => {
       controller.render(order(false));
       const rendered = changes.length;
 
-      controller.insert(
+      const inserted = controller.insert(
         ["The hearing is adjourned.", "  ", "Costs reserved."],
         { at: "end" },
       );
 
+      assert.equal(inserted, true);
       assert.equal(
         text(controller),
         "IT IS ORDERED THAT:\nThe application is granted.\nThe hearing is adjourned.\nCosts reserved.",
@@ -176,14 +177,59 @@ describe("headless editor", () => {
       );
     });
 
+    it("adds after the last clause even when the reader has emptied it", () => {
+      for (const numbered of [false, true]) {
+        const runtime = createDocEditorController({});
+        runtime.controller.render(numbered ? order(false) : buildDoc((doc) => {
+          doc.paragraph("heading", "IT IS ORDERED THAT:");
+          doc.paragraph("decision", "The application is granted.");
+        }));
+        const { doc } = runtime.state;
+        const last = doc.content.size - (numbered ? 3 : 1);
+        runtime.dispatch(runtime.state.tr.delete(
+          last - "The application is granted.".length,
+          last,
+        ));
+        assert.equal(renderText(runtime.controller.getSnapshot()), "IT IS ORDERED THAT:\n");
+
+        runtime.controller.insert(["Costs reserved."], { at: "end" });
+
+        assert.equal(
+          renderText(runtime.controller.getSnapshot()),
+          "IT IS ORDERED THAT:\n\nCosts reserved.",
+          numbered ? "numbered clause" : "paragraph",
+        );
+      }
+    });
+
+    it("inserts at the selection by default, after the clause the caret is in", () => {
+      const runtime = createDocEditorController({});
+      runtime.controller.render(order(true));
+      const { doc } = runtime.state;
+      let decision = -1;
+      doc.descendants((node, pos) => {
+        if (node.attrs.id === "item:decision") decision = pos;
+      });
+      runtime.dispatch(runtime.state.tr.setSelection(
+        TextSelection.create(doc, decision + 2 + "The application".length),
+      ));
+
+      runtime.controller.insert(["The hearing is adjourned."]);
+
+      assert.equal(
+        renderText(runtime.controller.getSnapshot()),
+        "IT IS ORDERED THAT:\nThe application is granted.\nThe hearing is adjourned.\nCosts in the case.",
+      );
+    });
+
     it("inserts nothing when every paragraph is blank", () => {
       const changes: unknown[] = [];
       const controller = createDocEditor({ onChange: (s) => changes.push(s) });
       controller.render(order(false));
       const rendered = changes.length;
 
-      controller.insert(["", "  "]);
-      controller.insert(["", "  "], { at: "end" });
+      assert.equal(controller.insert(["", "  "]), false);
+      assert.equal(controller.insert(["", "  "], { at: "end" }), false);
 
       assert.equal(changes.length, rendered);
       assert.equal(text(controller), "IT IS ORDERED THAT:\nThe application is granted.");
