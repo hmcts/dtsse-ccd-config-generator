@@ -71,8 +71,10 @@ public class CaseDataEmitter implements SourceEmitter {
 
     List<FieldSpec> fields = new ArrayList<>();
     Map<String, String> groupPrefixes = new LinkedHashMap<>();
+    Map<String, FieldModel> containerByType = new LinkedHashMap<>();
     for (FieldModel container : containers) {
       groupPrefixes.put(container.getJavaType(), container.getUnwrapPrefix());
+      containerByType.put(container.getJavaType(), container);
       // Initialised so a getter chain never meets null on a hand-built CaseData; Jackson creates
       // the group itself when it deserialises.
       FieldSpec.Builder spec = helper.buildField(container).toBuilder()
@@ -116,7 +118,7 @@ public class CaseDataEmitter implements SourceEmitter {
                   ? "{@code " + prefix + "*}, unwrapped with {@code prefix = \"" + prefix + "\"}: "
                       + "the CCD field ID is the prefix plus the capitalised member name."
                   : "grouped under {@code @JsonUnwrapped}; each member keeps its CCD field ID.")
-              + "\n");
+              + "\n" + baseAccessNote(containerByType.get(group.getJavaClassName())));
       if (prefixed) {
         // Jackson's @JsonUnwrapped(prefix) concatenates verbatim; the SDK capitalises the member.
         // Upper-camel naming makes Jackson produce the same flat key the SDK derives.
@@ -132,5 +134,18 @@ public class CaseDataEmitter implements SourceEmitter {
           .build());
     }
     return files;
+  }
+
+  /**
+   * Points the reader at the base access on the CaseData container (see GroupBaseAccess), which
+   * every member gets on top of its own. Empty when the container has none.
+   */
+  private static String baseAccessNote(FieldModel container) {
+    if (container == null || container.getAccessClassNames() == null
+        || container.getAccessClassNames().isEmpty()) {
+      return "";
+    }
+    return "\n<p>Members also have the access on {@code CaseData#" + container.getJavaName() + "}: "
+        + String.join(", ", container.getAccessClassNames()) + ".\n";
   }
 }

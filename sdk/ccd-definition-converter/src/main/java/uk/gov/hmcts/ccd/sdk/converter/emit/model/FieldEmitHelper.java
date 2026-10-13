@@ -55,6 +55,12 @@ final class FieldEmitHelper {
         unwrapped.addMember("prefix", "$S", field.getUnwrapPrefix());
       }
       fb.addAnnotation(unwrapped.build());
+      // A grouped container may carry a base access every member also gets (see GroupBaseAccess).
+      if (field.getAccessClassNames() != null && !field.getAccessClassNames().isEmpty()) {
+        fb.addAnnotation(AnnotationSpec.builder(CCD.class)
+            .addMember("access", "{$L}", accessArray(field.getAccessClassNames()))
+            .build());
+      }
       return fb.build();
     }
 
@@ -137,16 +143,19 @@ final class FieldEmitHelper {
       hasAny = true;
     }
     if (field.getAccessClassNames() != null && !field.getAccessClassNames().isEmpty()) {
-      List<CodeBlock> classRefs = new ArrayList<>();
-      for (String cn : field.getAccessClassNames()) {
-        classRefs.add(CodeBlock.of("$T.class", ClassName.get(configPackage, cn)));
-      }
-      CodeBlock arrayBlock = CodeBlock.join(classRefs, ", ");
-      ab.addMember("access", "{$L}", arrayBlock);
+      ab.addMember("access", "{$L}", accessArray(field.getAccessClassNames()));
       hasAny = true;
     }
 
     return hasAny ? ab.build() : null;
+  }
+
+  private CodeBlock accessArray(List<String> classNames) {
+    List<CodeBlock> classRefs = new ArrayList<>();
+    for (String cn : classNames) {
+      classRefs.add(CodeBlock.of("$T.class", ClassName.get(configPackage, cn)));
+    }
+    return CodeBlock.join(classRefs, ", ");
   }
 
   private FieldEmitHelper() {

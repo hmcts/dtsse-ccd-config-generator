@@ -172,6 +172,13 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       refs.putAll(grouped.refs());
       caseDataGroups = grouped.groups();
       clustered = new FieldClusterer.Result(grouped.caseFields(), clustered.synthesizedTypes(), refs);
+      if (!caseDataGroups.isEmpty()) {
+        Rebased rebased = rebaseGroupAccess(access, clustered.caseFields(), caseDataGroups,
+            clustered.synthesizedTypes(), refs, gaps);
+        caseDataGroups = rebased.groups();
+        clustered = new FieldClusterer.Result(rebased.caseFields(), rebased.clusterTypes(), refs);
+        access = rebased.access();
+      }
     }
     List<ComplexTypeModel> allComplexTypes = new ArrayList<>(complexTypes);
     allComplexTypes.addAll(clustered.synthesizedTypes());
@@ -1924,9 +1931,11 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     }
 
     AccessClassComputer computer = new AccessClassComputer(gaps);
-    AccessClassComputer.Result result = computer.compute(fieldIds, desired, injectedStrings);
+    Map<String, Map<String, String>> residuals =
+        computer.residuals(fieldIds, desired, injectedStrings);
+    AccessClassComputer.Result result = computer.compose(residuals);
     return new AccessDerivation(result.accessClasses(), result.fieldClassNames(),
-        result.summaryNote());
+        result.summaryNote(), desired, residuals);
   }
 
   /**
@@ -2893,7 +2902,122 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
   private record AccessDerivation(
       List<AccessClassModel> accessClasses,
       Map<String, List<String>> fieldClassNames,
-      String summaryNote) {
+      String summaryNote,
+      Map<String, Map<String, String>> desired,
+      Map<String, Map<String, String>> residuals) {
+  }
+
+  /**
+   * The case type's model pieces after {@link #rebaseGroupAccess} re-derived the access classes.
+   */
+  private record Rebased(
+      List<FieldModel> caseFields,
+      List<ComplexTypeModel> groups,
+      List<ComplexTypeModel> clusterTypes,
+      AccessDerivation access) {
+  }
+
+  /**
+   * Puts a base access on every grouped CaseData container (see {@link GroupBaseAccess}) and
+   * re-derives the access classes over the members' remaining grants, the containers' bases and
+   * every other field's residual, then re-attaches the class names everywhere they appear: the root
+   * fields, the containers, the group members and the clustered members.
+   */
+  private Rebased rebaseGroupAccess(
+      AccessDerivation access,
+      List<FieldModel> caseFields,
+      List<ComplexTypeModel> groups,
+      List<ComplexTypeModel> clusterTypes,
+      Map<String, ClusteredFieldRef> refs,
+      GapCollector gaps) {
+    // (type, member getter) -> original CCD field ids, in definition order.
+    Map<String, List<String>> idsByMember = new LinkedHashMap<>();
+    for (Map.Entry<String, ClusteredFieldRef> e : refs.entrySet()) {
+      idsByMember.computeIfAbsent(
+          e.getValue().getClusterType() + '#' + e.getValue().getMemberGetter(),
+          k -> new ArrayList<>()).add(e.getKey());
+    }
+
+    Map<String, Map<String, String>> units = new LinkedHashMap<>(access.residuals());
+    Map<String, GroupBaseAccess.Decision> decisions = new LinkedHashMap<>();
+    for (ComplexTypeModel group : groups) {
+      List<String> memberIds = new ArrayList<>();
+      for (FieldModel member : group.getMembers()) {
+        memberIds.add(onlyId(idsByMember, group.getJavaClassName(), member));
+      }
+      GroupBaseAccess.Decision decision =
+          GroupBaseAccess.decide(memberIds, access.desired(), access.residuals());
+      decisions.put(group.getJavaClassName(), decision);
+      units.putAll(decision.memberGrants());
+      if (!decision.base().isEmpty()) {
+        units.put(containerUnit(group.getJavaClassName()), decision.base());
+      }
+    }
+
+    AccessClassComputer.Result result = new AccessClassComputer(gaps).compose(units);
+    Map<String, List<String>> names = result.fieldClassNames();
+
+    List<FieldModel> rootFields = new ArrayList<>();
+    for (FieldModel field : caseFields) {
+      if (field.getUnwrapPrefix() == null) {
+        rootFields.add(field.toBuilder()
+            .accessClassNames(names.getOrDefault(field.getId(), List.of())).build());
+      } else if (decisions.containsKey(field.getJavaType())) {
+        rootFields.add(field.toBuilder().accessClassNames(
+            names.getOrDefault(containerUnit(field.getJavaType()), List.of())).build());
+      } else {
+        rootFields.add(field);
+      }
+    }
+    List<ComplexTypeModel> rebasedGroups = new ArrayList<>();
+    for (ComplexTypeModel group : groups) {
+      List<FieldModel> members = new ArrayList<>();
+      for (FieldModel member : group.getMembers()) {
+        String id = onlyId(idsByMember, group.getJavaClassName(), member);
+        members.add(member.toBuilder()
+            .accessClassNames(names.getOrDefault(id, List.of())).build());
+      }
+      rebasedGroups.add(group.toBuilder().members(members).build());
+    }
+    List<ComplexTypeModel> rebasedClusters = new ArrayList<>();
+    for (ComplexTypeModel type : clusterTypes) {
+      List<FieldModel> members = new ArrayList<>();
+      for (FieldModel member : type.getMembers()) {
+        // Every instance of a clustered member shares one residual, so any instance's names do.
+        List<String> ids = idsByMember.get(type.getId() + "#get" + capitalise(member.getJavaName()));
+        if (ids == null) {
+          throw new IllegalStateException("No cluster ref for " + type.getId() + "."
+              + member.getJavaName());
+        }
+        members.add(member.toBuilder()
+            .accessClassNames(names.getOrDefault(ids.get(0), List.of())).build());
+      }
+      rebasedClusters.add(type.toBuilder().members(members).build());
+    }
+
+    long based = decisions.values().stream().filter(d -> !d.base().isEmpty()).count();
+    String note = result.summaryNote() + String.format(
+        "%nGroup base access: %d of %d group containers carry a base.%n", based, groups.size());
+    return new Rebased(rootFields, rebasedGroups, rebasedClusters, new AccessDerivation(
+        result.accessClasses(), names, note, access.desired(), access.residuals()));
+  }
+
+  private static String containerUnit(String groupType) {
+    return "<group>" + groupType;
+  }
+
+  private static String capitalise(String s) {
+    return s.isEmpty() ? s : Character.toUpperCase(s.charAt(0)) + s.substring(1);
+  }
+
+  private static String onlyId(Map<String, List<String>> idsByMember, String type,
+                               FieldModel member) {
+    List<String> ids = idsByMember.get(type + "#get" + capitalise(member.getJavaName()));
+    if (ids == null || ids.size() != 1) {
+      throw new IllegalStateException("Group member " + type + "." + member.getJavaName()
+          + " does not map to exactly one case field: " + ids);
+    }
+    return ids.get(0);
   }
 
   /** The linked AuthorisationComplexType grants plus the residual (unresolvable) passthrough. */

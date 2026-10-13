@@ -128,7 +128,7 @@ public class GapAndPassthroughWriter implements ReportWriter {
 
   /**
    * The access-emission summary section: the composition scheme's total class count broken into
-   * groups/atoms/dedicated fallbacks, the per-field {@code @CCD(access)} array distribution and the
+   * groups/atoms/combined classes, the per-field {@code @CCD(access)} array distribution and the
    * mined-group table (see {@code AccessClassComputer}). Documents how many access classes each case
    * type needs and how readable its per-field arrays are.
    */

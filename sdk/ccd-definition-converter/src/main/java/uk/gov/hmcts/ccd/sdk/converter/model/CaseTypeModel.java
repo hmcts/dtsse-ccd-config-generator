@@ -115,7 +115,7 @@ public class CaseTypeModel {
 
   /**
    * A human-readable note recording the composition access-emission outcome for the converter's
-   * generate/retrofit reports: the total class count broken into groups/atoms/dedicated fallbacks,
+   * generate/retrofit reports: the total class count broken into groups/atoms/combined classes,
    * the per-field {@code @CCD(access)} array distribution (avg/max), and the mined-group table (see
    * {@code AccessClassComputer}).
    */

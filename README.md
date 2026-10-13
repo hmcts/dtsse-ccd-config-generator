@@ -1109,10 +1109,13 @@ generate and retrofit mode — `AccessClassComputer`):
    across the case type is carved out first, then the pass repeats on what remains. A group must be
    used by **≥ 3 fields**, bundle **≥ 2 atoms** and have a semantic name (see below) to be mined.
 3. **Per-field cover.** Each residual is covered by the groups that carved it plus any leftover
-   atoms. When a field would need more than **8 classes**
-   (`AccessClassComputer.MAX_CLASSES_PER_FIELD`), the whole residual falls back to **one dedicated,
-   content-named class** shared by every field with that exact residual — so per-field arrays stay
-   readable.
+   atoms.
+4. **Combined classes.** A field lists at most **5 classes**
+   (`AccessClassComputer.MAX_CLASSES_PER_FIELD`). Over-cap covers are shortened in two steps. First,
+   classes that several over-cap fields already list in common are folded into one **combined
+   class** they all share (any mix of CRUD levels, mined greedily, most-shared first, and only when
+   the combination has a readable name). Then each field still over the cap keeps its 4 widest
+   classes and folds the rest into one combined class, shared by every field folding the same tail.
 
 Every class is named from its content, collision-suffixed and stable across re-runs. A role ID is
 split into lower-case tokens on every non-alphanumeric character, and the case type's role namespace
@@ -1123,12 +1126,21 @@ after its run (`{judge=CRU, legalrep=CRU}` → `JudgeLegalrepCruAccess`), factor
 tokens (`specific-access-admin`, `specific-access-judge` → `SpecificAccessAdminJudge`) and collapses
 one-letter case-role series (`[CHILDSOLICITORA]`…`[CHILDSOLICITORO]` → `ChildsolicitorAToO`). A name
 over 70 characters is truncated to the first role's token, a role count and a short stable digest;
-groups are never mined under such a name, so only dedicated fallbacks can carry one.
+groups and shared combined classes are never mined under such a name, so only a field's folded tail
+can carry one.
+
+With `--group-case-data N`, each `@JsonUnwrapped` group container carries a **base access**: its
+`@CCD(access = {…})` lists the grants every member's definition has (at the same CRUD) that at least
+two members would otherwise list, and each member lists only the rest of its residual. The SDK gives
+every member the container's classes plus its own, so a member whose residual is all base has no
+`access` of its own; a group whose members share no grant gets no container `access`. The group
+class's Javadoc names the container's classes. The classes are derived over the members' remaining
+grants, the container bases and every other field's residual.
 
 Only classes actually referenced by some field's cover are emitted. The outcome is recorded per case
 type in `CaseTypeModel.accessSummaryNote` (and the gap report's *Access emission* section): the total
-class count broken into groups/atoms/dedicated fallbacks, the per-field array distribution (avg/max),
-and the mined-group table.
+class count broken into groups/atoms/combined classes, the per-field array distribution (avg/max),
+the mined-group and combined-class tables, and how many group containers carry a base.
 
 ### Retrofit mode (`--retrofit --report-only`)
 

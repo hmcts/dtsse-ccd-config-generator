@@ -11,7 +11,7 @@ import lombok.Value;
  * generated; the linker maps fields to the predefined class instead.
  */
 @Value
-@Builder
+@Builder(toBuilder = true)
 public class ComplexTypeModel {
 
   /**

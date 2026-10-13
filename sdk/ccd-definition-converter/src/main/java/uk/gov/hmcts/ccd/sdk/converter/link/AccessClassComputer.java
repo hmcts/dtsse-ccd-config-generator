@@ -53,9 +53,13 @@ import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapEntry;
  *       {@link #MIN_GROUP_ATOMS} atoms and have a semantic name to be mined. Each is named from its
  *       content ({@code JudgeLegalrepCruAccess}).</li>
  *   <li><b>Per-field cover.</b> Each residual is covered by the groups that carved it plus any
- *       leftover atoms. When a field would need more than {@link #MAX_CLASSES_PER_FIELD} classes,
- *       the whole residual falls back to one dedicated, content-named class shared by every field
- *       with that exact residual.</li>
+ *       leftover atoms.</li>
+ *   <li><b>Combined classes.</b> A cover longer than {@link #MAX_CLASSES_PER_FIELD} is shortened in
+ *       two steps. First, classes several over-cap covers list in common are folded into one
+ *       combined class they all share (any mix of CRUD levels, readable names only; see
+ *       {@link #mineCombined}). Then each cover still over the cap keeps its
+ *       {@code MAX_CLASSES_PER_FIELD - 1} widest classes and folds the rest into one combined
+ *       class, shared by every cover folding the same tail.</li>
  * </ol>
  *
  * <p>Only classes actually referenced by some field's cover are emitted (an atom always folded into a
@@ -99,10 +103,9 @@ final class AccessClassComputer {
   static final int MIN_GROUP_ATOMS = 2;
 
   /**
-   * A field's {@code @CCD(access)} array is capped here; beyond it the residual gets one dedicated
-   * class.
+   * The most classes a field's {@code @CCD(access)} array lists (see the combined classes).
    */
-  static final int MAX_CLASSES_PER_FIELD = 8;
+  static final int MAX_CLASSES_PER_FIELD = 5;
 
   /** Safety bound on mined groups so a pathological input cannot loop unbounded. */
   private static final int MAX_GROUPS = 1024;
@@ -156,7 +159,7 @@ final class AccessClassComputer {
 
   /**
    * Computes the per-field residual grants and expresses each as a union of named access classes
-   * (atoms + mined groups, with a dedicated-class fallback for over-wide residuals).
+   * (atoms + mined groups, with combined classes for over-wide residuals).
    *
    * @param fieldIds the case field IDs in declaration order
    * @param desired the AuthorisationCaseField grants: field ID to role to CRUD string
@@ -167,16 +170,43 @@ final class AccessClassComputer {
       List<String> fieldIds,
       Map<String, Map<String, String>> desired,
       Map<String, Map<String, String>> injected) {
+    return compose(residuals(fieldIds, desired, injected));
+  }
 
-    // 1. Residual per field, decomposed into atoms; group identical residuals into distinct patterns.
+  /**
+   * Each field's residual grant map (see {@link #residual}), in {@code fieldIds} order. Records the
+   * advisory over-grant gaps, so call it once per conversion.
+   */
+  Map<String, Map<String, String>> residuals(
+      List<String> fieldIds,
+      Map<String, Map<String, String>> desired,
+      Map<String, Map<String, String>> injected) {
+    Map<String, Map<String, String>> residuals = new LinkedHashMap<>();
+    for (String fieldId : fieldIds) {
+      Map<String, String> want = desired.getOrDefault(fieldId, Map.of());
+      Map<String, String> have = injected.getOrDefault(fieldId, Map.of());
+      residuals.put(fieldId, residual(fieldId, want, have));
+    }
+    return residuals;
+  }
+
+  /**
+   * Expresses each unit's grant map as a union of named access classes. A unit is usually a case
+   * field, but may be anything carrying an {@code @CCD(access)} list — e.g. a group container's
+   * base access.
+   *
+   * @param unitResiduals unit id to the grant map (role to CRUD) its access list must union to
+   * @return the classes and each unit's class-name list
+   */
+  Result compose(Map<String, Map<String, String>> unitResiduals) {
+    // 1. Residual per unit, decomposed into atoms; group identical residuals into distinct patterns.
     Map<String, Pattern> patternsBySignature = new LinkedHashMap<>();
     Map<String, List<String>> fieldToClassNames = new LinkedHashMap<>();
     int fieldsWithResidual = 0;
 
-    for (String fieldId : fieldIds) {
-      Map<String, String> want = desired.getOrDefault(fieldId, Map.of());
-      Map<String, String> have = injected.getOrDefault(fieldId, Map.of());
-      Map<String, String> residual = residual(fieldId, want, have);
+    for (Map.Entry<String, Map<String, String>> unit : unitResiduals.entrySet()) {
+      String fieldId = unit.getKey();
+      Map<String, String> residual = unit.getValue();
       if (residual.isEmpty()) {
         fieldToClassNames.put(fieldId, List.of());
         continue;
@@ -204,30 +234,73 @@ final class AccessClassComputer {
     //    highest-coverage bundle out of every pattern that contains it, then repeat).
     List<Set<Atom>> groups = mineGroups(patterns);
 
-    // 3. Per-field cover: the groups that carved a pattern, then its leftover atoms; a residual that
-    //    would need more than the cap gets one dedicated class instead.
+    // 3. Per-field cover: the groups that carved a pattern, then its leftover atoms; a cover over the
+    //    cap is shortened with combined classes.
     Set<Integer> usedGroups = new LinkedHashSet<>();
     Map<Atom, Integer> atomUsage = new LinkedHashMap<>();
-    // Dedicated fallbacks keyed by residual signature so identical residuals share one class.
-    Map<String, Set<Atom>> dedicated = new LinkedHashMap<>();
-    // Provisional cover per pattern, as a list of tokens (group index, or atom, or dedicated key).
+    // Combined classes keyed by atom signature so equal atom-sets share one class.
+    Map<String, Set<Atom>> combined = new LinkedHashMap<>();
+    // Final cover per pattern, as a list of tokens (group index, or atom, or combined key).
     List<List<CoverRef>> covers = new ArrayList<>();
 
+    List<List<CoverRef>> raw = new ArrayList<>();
+    // How many fields would reference each group/atom before the cap applies: ranks which of an
+    // over-cap field's classes are kept when its tail is folded.
+    Map<Integer, Integer> rawGroupUse = new LinkedHashMap<>();
+    Map<Atom, Integer> rawAtomUse = new LinkedHashMap<>();
     for (Pattern pattern : patterns) {
       List<CoverRef> cover = new ArrayList<>();
       for (int groupIndex : pattern.coverGroups) {
         cover.add(CoverRef.group(groupIndex));
+        rawGroupUse.merge(groupIndex, pattern.weight(), Integer::sum);
       }
       List<Atom> leftover = new ArrayList<>(pattern.uncovered);
       leftover.sort(Comparator.comparing(Atom::signature));
       for (Atom atom : leftover) {
         cover.add(CoverRef.atom(atom));
+        rawAtomUse.merge(atom, pattern.weight(), Integer::sum);
       }
-      if (cover.size() > MAX_CLASSES_PER_FIELD) {
-        // Too wide to read as a union — mint one dedicated class for the whole residual.
-        String key = signatureOf(pattern.atoms);
-        dedicated.putIfAbsent(key, pattern.atoms);
-        cover = List.of(CoverRef.dedicated(key));
+      raw.add(cover);
+    }
+
+    mineCombined(raw, groups, combined, rawGroupUse, rawAtomUse);
+
+    final int cap = MAX_CLASSES_PER_FIELD;
+    for (int p = 0; p < patterns.size(); p++) {
+      Pattern pattern = patterns.get(p);
+      List<CoverRef> cover = raw.get(p);
+      if (cover.size() > cap) {
+        // Keep the cap - 1 classes covering the most roles (ties to the most widely used) and fold
+        // the rest into one combined class, keyed by its atoms so equal tails share it.
+        List<CoverRef> ranked = new ArrayList<>(cover);
+        Comparator<CoverRef> bySize = Comparator.comparingInt(
+            r -> refAtoms(r, groups, combined).size());
+        Comparator<CoverRef> byUse = Comparator.comparingInt(
+            r -> refUse(r, rawGroupUse, rawAtomUse));
+        ranked.sort(bySize.thenComparing(byUse).reversed());
+        List<CoverRef> kept = new ArrayList<>(ranked.subList(0, cap - 1));
+        Set<Atom> tail = new LinkedHashSet<>();
+        for (CoverRef ref : ranked.subList(cap - 1, ranked.size())) {
+          tail.addAll(refAtoms(ref, groups, combined));
+        }
+        String key = signatureOf(tail);
+        combined.putIfAbsent(key, tail);
+        // Restore the original cover order for the kept classes, the merged class last.
+        List<CoverRef> ordered = new ArrayList<>();
+        for (CoverRef ref : cover) {
+          if (kept.contains(ref)) {
+            ordered.add(ref);
+          }
+        }
+        ordered.add(CoverRef.combined(key));
+        for (CoverRef ref : ordered) {
+          if (ref.groupIndex >= 0) {
+            usedGroups.add(ref.groupIndex);
+          } else if (ref.atom != null) {
+            atomUsage.merge(ref.atom, pattern.weight(), Integer::sum);
+          }
+        }
+        cover = ordered;
       } else {
         for (CoverRef ref : cover) {
           if (ref.groupIndex >= 0) {
@@ -239,12 +312,23 @@ final class AccessClassComputer {
       }
       covers.add(cover);
     }
+    // A combined class mined in one round can be folded into a later one; keep only those a final
+    // cover still names.
+    Set<String> referencedCombined = new LinkedHashSet<>();
+    for (List<CoverRef> cover : covers) {
+      for (CoverRef ref : cover) {
+        if (ref.combinedKey != null) {
+          referencedCombined.add(ref.combinedKey);
+        }
+      }
+    }
+    combined.keySet().retainAll(referencedCombined);
 
     // 4. Assign content-derived names. Only referenced classes are emitted.
     Set<String> usedNames = new LinkedHashSet<>();
     Map<Integer, String> groupNames = assignGroupNames(groups, covers, usedGroups, usedNames);
     Map<Atom, String> atomNames = assignAtomNames(atomUsage.keySet(), usedNames);
-    Map<String, String> dedicatedNames = assignDedicatedNames(dedicated, usedNames);
+    Map<String, String> combinedNames = assignCombinedNames(combined, usedNames);
 
     // 5. Resolve each field's cover to concrete class names.
     for (int i = 0; i < patterns.size(); i++) {
@@ -256,7 +340,7 @@ final class AccessClassComputer {
         } else if (ref.atom != null) {
           names.add(atomNames.get(ref.atom));
         } else {
-          names.add(dedicatedNames.get(ref.dedicatedKey));
+          names.add(combinedNames.get(ref.combinedKey));
         }
       }
       List<String> shared = List.copyOf(names);
@@ -265,7 +349,7 @@ final class AccessClassComputer {
       }
     }
 
-    // 6. Emit only referenced classes, ordered: groups (by name), atoms (by name), fallbacks (by name).
+    // 6. Emit only referenced classes, ordered: groups, atoms, combined (each by name).
     List<AccessClassModel> classes = new ArrayList<>();
     List<Map.Entry<String, Set<Atom>>> emittedGroups = new ArrayList<>();
     for (int groupIndex : usedGroups) {
@@ -282,31 +366,189 @@ final class AccessClassComputer {
       classes.add(AccessClassModel.builder()
           .className(atomNames.get(atom)).grants(grantsOf(Set.of(atom))).build());
     }
-    List<Map.Entry<String, Set<Atom>>> fallbacks = new ArrayList<>();
-    for (Map.Entry<String, Set<Atom>> entry : dedicated.entrySet()) {
-      fallbacks.add(Map.entry(dedicatedNames.get(entry.getKey()), entry.getValue()));
+    List<Map.Entry<String, Set<Atom>>> combinedClasses = new ArrayList<>();
+    for (Map.Entry<String, Set<Atom>> entry : combined.entrySet()) {
+      combinedClasses.add(Map.entry(combinedNames.get(entry.getKey()), entry.getValue()));
     }
-    fallbacks.sort(Map.Entry.comparingByKey());
-    for (Map.Entry<String, Set<Atom>> entry : fallbacks) {
+    combinedClasses.sort(Map.Entry.comparingByKey());
+    for (Map.Entry<String, Set<Atom>> entry : combinedClasses) {
       classes.add(AccessClassModel.builder()
           .className(entry.getKey()).grants(grantsOf(entry.getValue())).build());
     }
 
     String note = summaryNote(fieldToClassNames, fieldsWithResidual, emittedGroups, atomList.size(),
-        fallbacks.size(), groupNames, patterns, covers);
+        combinedClasses.size(), groupNames, patterns, covers);
+    if (!combinedClasses.isEmpty()) {
+      Map<String, Integer> combinedUse = new TreeMap<>();
+      for (int i = 0; i < patterns.size(); i++) {
+        for (CoverRef ref : covers.get(i)) {
+          if (ref.combinedKey != null) {
+            combinedUse.merge(combinedNames.get(ref.combinedKey), patterns.get(i).weight(),
+                Integer::sum);
+          }
+        }
+      }
+      StringBuilder fb = new StringBuilder(String.format(
+          "%nCombined classes (name -> roles -> fields using):%n%n| Class | Roles | Fields |%n"
+              + "|---|---|---|%n"));
+      for (Map.Entry<String, Set<Atom>> entry : combinedClasses) {
+        fb.append("| ").append(entry.getKey()).append(" | ").append(entry.getValue().size())
+            .append(" | ").append(combinedUse.getOrDefault(entry.getKey(), 0)).append(" |\n");
+      }
+      note = note + fb;
+    }
     return new Result(classes, fieldToClassNames, note);
   }
 
-  /** One reference within a provisional per-field cover: a group index, a leftover atom, or a fallback. */
+  private static Set<Atom> refAtoms(CoverRef ref, List<Set<Atom>> groups,
+                                    Map<String, Set<Atom>> combined) {
+    if (ref.groupIndex >= 0) {
+      return groups.get(ref.groupIndex);
+    }
+    return ref.atom != null ? Set.of(ref.atom) : combined.get(ref.combinedKey);
+  }
+
+  private static int refUse(CoverRef ref, Map<Integer, Integer> groupUse,
+                            Map<Atom, Integer> atomUse) {
+    if (ref.groupIndex >= 0) {
+      return groupUse.getOrDefault(ref.groupIndex, 0);
+    }
+    return ref.atom != null ? atomUse.getOrDefault(ref.atom, 0) : 0;
+  }
+
+  private static String refKey(CoverRef ref) {
+    if (ref.groupIndex >= 0) {
+      return "g" + ref.groupIndex;
+    }
+    return ref.atom != null ? "a" + ref.atom.signature() : "d" + ref.combinedKey;
+  }
+
+  /**
+   * Greedily mines combined classes shared by over-cap covers: each round takes the pairwise
+   * intersections of the over-cap covers' class sets, trims each to the fewest (smallest) classes
+   * that bring its widest supporter within the cap, and folds the candidate shared by the most
+   * over-cap covers (ties to the smaller, then by key) into one combined class in each of them.
+   * A candidate whose union has no semantic name is skipped. Stops when fewer than two over-cap
+   * covers share any candidate; {@link #compose} then folds the tail of each cover still over.
+   */
+  private void mineCombined(List<List<CoverRef>> raw, List<Set<Atom>> groups,
+                            Map<String, Set<Atom>> combined, Map<Integer, Integer> groupUse,
+                            Map<Atom, Integer> atomUse) {
+    for (int round = 0; round < MAX_GROUPS; round++) {
+      List<Integer> over = new ArrayList<>();
+      List<Map<String, CoverRef>> keyed = new ArrayList<>();
+      for (int p = 0; p < raw.size(); p++) {
+        if (raw.get(p).size() > MAX_CLASSES_PER_FIELD) {
+          over.add(p);
+        }
+      }
+      if (over.size() < 2) {
+        return;
+      }
+      for (int p : over) {
+        Map<String, CoverRef> byKey = new LinkedHashMap<>();
+        for (CoverRef ref : raw.get(p)) {
+          byKey.put(refKey(ref), ref);
+        }
+        keyed.add(byKey);
+      }
+      Comparator<String> small = Comparator.<String>comparingInt(k -> {
+        CoverRef ref = findRef(keyed, k);
+        return refAtoms(ref, groups, combined).size();
+      }).thenComparingInt(k -> refUse(findRef(keyed, k), groupUse, atomUse))
+          .thenComparing(Comparator.naturalOrder());
+      List<String> best = null;
+      int bestSupport = 1;
+      Set<String> seen = new LinkedHashSet<>();
+      for (int i = 0; i < over.size(); i++) {
+        for (int j = i + 1; j < over.size(); j++) {
+          List<String> shared = new ArrayList<>(keyed.get(i).keySet());
+          shared.retainAll(keyed.get(j).keySet());
+          if (shared.size() < 2) {
+            continue;
+          }
+          int needMax = 0;
+          for (int q = 0; q < over.size(); q++) {
+            if (keyed.get(q).keySet().containsAll(shared)) {
+              needMax = Math.max(needMax, keyed.get(q).size() - MAX_CLASSES_PER_FIELD);
+            }
+          }
+          shared.sort(small);
+          List<String> trimmed = List.copyOf(shared.subList(0, Math.min(shared.size(), needMax + 1)));
+          if (trimmed.size() < 2 || !seen.add(String.join("|", trimmed))) {
+            continue;
+          }
+          Set<Atom> union = new LinkedHashSet<>();
+          for (String k : trimmed) {
+            union.addAll(refAtoms(findRef(keyed, k), groups, combined));
+          }
+          if (semanticName(grantsOf(union)) == null) {
+            continue;
+          }
+          int support = 0;
+          for (Map<String, CoverRef> k : keyed) {
+            if (k.keySet().containsAll(trimmed)) {
+              support++;
+            }
+          }
+          if (support > bestSupport || (support == bestSupport && best != null
+              && (trimmed.size() < best.size() || (trimmed.size() == best.size()
+                  && String.join("|", trimmed).compareTo(String.join("|", best)) < 0)))) {
+            best = trimmed;
+            bestSupport = support;
+          }
+        }
+      }
+      if (best == null) {
+        return;
+      }
+      Set<Atom> atoms = new LinkedHashSet<>();
+      for (String k : best) {
+        atoms.addAll(refAtoms(findRef(keyed, k), groups, combined));
+      }
+      String key = signatureOf(atoms);
+      combined.putIfAbsent(key, atoms);
+      for (int idx = 0; idx < over.size(); idx++) {
+        if (!keyed.get(idx).keySet().containsAll(best)) {
+          continue;
+        }
+        List<CoverRef> next = new ArrayList<>();
+        boolean placed = false;
+        for (CoverRef ref : raw.get(over.get(idx))) {
+          if (best.contains(refKey(ref))) {
+            if (!placed) {
+              next.add(CoverRef.combined(key));
+              placed = true;
+            }
+          } else {
+            next.add(ref);
+          }
+        }
+        raw.set(over.get(idx), next);
+      }
+    }
+  }
+
+  private static CoverRef findRef(List<Map<String, CoverRef>> keyed, String key) {
+    for (Map<String, CoverRef> k : keyed) {
+      CoverRef ref = k.get(key);
+      if (ref != null) {
+        return ref;
+      }
+    }
+    throw new IllegalStateException("No cover ref " + key);
+  }
+
+  /** One reference within a per-field cover: a group index, a leftover atom, or a combined class. */
   private static final class CoverRef {
     private final int groupIndex;
     private final Atom atom;
-    private final String dedicatedKey;
+    private final String combinedKey;
 
-    private CoverRef(int groupIndex, Atom atom, String dedicatedKey) {
+    private CoverRef(int groupIndex, Atom atom, String combinedKey) {
       this.groupIndex = groupIndex;
       this.atom = atom;
-      this.dedicatedKey = dedicatedKey;
+      this.combinedKey = combinedKey;
     }
 
     static CoverRef group(int index) {
@@ -317,7 +559,7 @@ final class AccessClassComputer {
       return new CoverRef(-1, atom, null);
     }
 
-    static CoverRef dedicated(String key) {
+    static CoverRef combined(String key) {
       return new CoverRef(-1, null, key);
     }
   }
@@ -328,8 +570,8 @@ final class AccessClassComputer {
    * of those per-level sets, so a group always grants one permission level to each of its roles.
    * Each candidate is scored by the residual it would cover ({@code (|bundle| - 1) * fields-using});
    * the best qualifying bundle is carved out of every pattern that contains it, and the pass repeats.
-   * A bundle too wide for a semantic name is never mined (its roles stay atoms or fall back to a
-   * dedicated class). Deterministic throughout: candidates are keyed and tie-broken by signature.
+   * A bundle too wide for a semantic name is never mined (its roles stay atoms or end up in a
+   * combined class). Deterministic throughout: candidates are keyed and tie-broken by signature.
    *
    * @param patterns the distinct residual patterns (their {@code uncovered}/{@code coverGroups} are mutated)
    * @return the mined groups, in mining order
@@ -457,9 +699,9 @@ final class AccessClassComputer {
     return names;
   }
 
-  private Map<String, String> assignDedicatedNames(
-      Map<String, Set<Atom>> dedicated, Set<String> usedNames) {
-    List<Map.Entry<String, Set<Atom>>> ordered = new ArrayList<>(dedicated.entrySet());
+  private Map<String, String> assignCombinedNames(
+      Map<String, Set<Atom>> combined, Set<String> usedNames) {
+    List<Map.Entry<String, Set<Atom>>> ordered = new ArrayList<>(combined.entrySet());
     ordered.sort(Map.Entry.comparingByKey());
     Map<String, String> names = new LinkedHashMap<>();
     for (Map.Entry<String, Set<Atom>> entry : ordered) {
@@ -831,14 +1073,14 @@ final class AccessClassComputer {
   }
 
   /**
-   * Builds the converter-report note: total class count broken down into groups/atoms/fallbacks, the
+   * Builds the converter-report note: total class count broken down into groups/atoms/combined, the
    * per-field array distribution (avg/max), and the mined-group table (name, roles/CRUD, usage).
    */
   private String summaryNote(
       Map<String, List<String>> fieldToClassNames, int fieldsWithResidual,
-      List<Map.Entry<String, Set<Atom>>> emittedGroups, int atomCount, int fallbackCount,
+      List<Map.Entry<String, Set<Atom>>> emittedGroups, int atomCount, int combinedCount,
       Map<Integer, String> groupNames, List<Pattern> patterns, List<List<CoverRef>> covers) {
-    int total = emittedGroups.size() + atomCount + fallbackCount;
+    int total = emittedGroups.size() + atomCount + combinedCount;
     int sum = 0;
     int max = 0;
     for (List<String> names : fieldToClassNames.values()) {
@@ -863,9 +1105,9 @@ final class AccessClassComputer {
 
     StringBuilder sb = new StringBuilder();
     sb.append(String.format(
-        "composition scheme: %d access classes (%d groups, %d atoms, %d dedicated fallbacks) "
+        "composition scheme: %d access classes (%d groups, %d atoms, %d combined) "
             + "for %d fields with a residual; classes per field avg %.2f, max %d.%n",
-        total, emittedGroups.size(), atomCount, fallbackCount, fieldsWithResidual, avg, max));
+        total, emittedGroups.size(), atomCount, combinedCount, fieldsWithResidual, avg, max));
     if (!emittedGroups.isEmpty()) {
       sb.append(String.format("%nMined groups (name -> roles/CRUD -> fields using):%n%n"));
       sb.append("| Group | Roles/CRUD | Fields |\n|---|---|---|\n");
@@ -885,7 +1127,7 @@ final class AccessClassComputer {
   /**
    * The derived access classes plus the class-name list to attach to each field, and a report note.
    *
-   * @param accessClasses the emitted access classes (groups + atoms + dedicated fallbacks)
+   * @param accessClasses the emitted access classes (groups + atoms + combined classes)
    * @param fieldClassNames field id to the access-class names it references (union = its residual)
    * @param summaryNote the class-count and per-field-array summary for the converter report
    */
