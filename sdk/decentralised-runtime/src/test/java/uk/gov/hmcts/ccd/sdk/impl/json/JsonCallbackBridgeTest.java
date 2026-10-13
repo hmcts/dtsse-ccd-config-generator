@@ -217,6 +217,20 @@ class JsonCallbackBridgeTest {
   }
 
   @Test
+  void returnsNoClientContextWhenACallbackReturnsOneThatIsNotJsonAndTheSubmissionHadNone() {
+    RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
+    RecordingCallbackHandler handler = new RecordingCallbackHandler("/cases/callbacks/");
+    handler.returnClientContext = "not-a-context";
+
+    bridgeWith(
+        new MockEnvironment().withProperty("decentralisation.local-callback-placeholder", "CIVIL_URL"),
+        handler
+    ).invoke("${CIVIL_URL}/cases/callbacks/submitted", Map.of("event_id", "SEND_AND_REPLY"));
+
+    assertThat(ClientContextPassthrough.returned()).isEmpty();
+  }
+
+  @Test
   void carriesTheClientContextThroughExternalCallbacks() throws Exception {
     MockHttpServletRequest submission = new MockHttpServletRequest();
     submission.addHeader("Client-Context", FROM_THE_FRONTEND);
