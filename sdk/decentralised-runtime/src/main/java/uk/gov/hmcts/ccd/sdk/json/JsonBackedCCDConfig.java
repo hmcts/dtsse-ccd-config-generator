@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.json;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -159,33 +160,26 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
         .orElseThrow(() -> new IllegalStateException("No JSON " + folder + " row found for " + id));
   }
 
-  @SneakyThrows
   private List<Map<String, Object>> readFolder(String folder) {
     List<Resource> resources = resources(folder);
     if (resources.isEmpty()) {
       throw new IllegalStateException("No JSON files found in " + jsonRoot + "/" + folder);
     }
-
-    List<Map<String, Object>> values = new ArrayList<>();
-    for (Resource resource : resources) {
-      try (InputStream input = resource.getInputStream()) {
-        values.addAll(support.mapper().readValue(input, ROWS));
-      }
-    }
-    return values;
+    return rows(resources);
   }
 
-  @SneakyThrows
   private List<Map<String, Object>> readOptionalFolder(String folder) {
-    List<Resource> resources = resources(folder);
-    if (resources.isEmpty()) {
-      return List.of();
-    }
+    return rows(resources(folder));
+  }
 
+  /** A file holds an array of rows, or a single row object as ccd-definition-processor also accepts. */
+  @SneakyThrows
+  private List<Map<String, Object>> rows(List<Resource> resources) {
+    var reader = support.mapper().readerFor(ROWS).with(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY);
     List<Map<String, Object>> values = new ArrayList<>();
     for (Resource resource : resources) {
       try (InputStream input = resource.getInputStream()) {
-        values.addAll(support.mapper().readValue(input, ROWS));
+        values.addAll(reader.readValue(input));
       }
     }
     return values;

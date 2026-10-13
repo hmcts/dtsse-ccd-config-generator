@@ -54,7 +54,7 @@ class JsonDefinitionLayoutIntegrationTest {
         [{"ID": "reply", "CaseTypeID": "TEST", "Name": "Reply (nonprod)"}]
         """);
     write("CaseEvent/Camunda/Deep/CaseEvents.json", """
-        [{"ID": "notify", "CaseTypeID": "TEST", "Name": "Notify"}]
+        {"ID": "notify", "CaseTypeID": "TEST", "Name": "Notify"}
         """);
     write("CaseEvent/TestingSupport/CaseEvent-testing-prod.json", """
         [{"ID": "reset", "CaseTypeID": "TEST", "Name": "Reset"}]
