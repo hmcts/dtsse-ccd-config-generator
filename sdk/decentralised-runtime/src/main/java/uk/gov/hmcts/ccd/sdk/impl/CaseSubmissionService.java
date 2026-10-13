@@ -1,15 +1,15 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
@@ -28,28 +28,41 @@ public class CaseSubmissionService {
   private final DecentralisedSubmissionHandler submitHandler;
   private final LegacyCallbackSubmissionHandler legacyHandler;
   private final IdamService idam;
-  private final IdempotencyEnforcer idempotencyEnforcer;
-  private final TransactionTemplate transactionTemplate;
-  private final AuditEventService auditEventService;
+  private final CaseEventTransactionCoordinator transactionCoordinator;
   private final CaseDataRepository caseDataRepository;
-  private final CaseProjectionService caseProjectionService;
 
+  // Never inside a caller's transaction, so the response supplier, and the work handlers register
+  // to run after the commit, run once the event has committed.
+  @Transactional(propagation = Propagation.NEVER)
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
                                                  String authorisation,
                                                  UUID idempotencyKey) {
     var eventConfig = getEventConfig(event);
     var user = idam.retrieveUser(authorisation);
-    var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
+    var handler = eventConfig.hasSubmitHandler() ? submitHandler : legacyHandler;
+    // Creation events have no pre-state or start revision to check.
+    var startRevision = !eventConfig.isConcurrent() && event.getCaseDetailsBefore() != null
+        ? Objects.requireNonNull(event.getStartRevision(), "Non-concurrent event requires a start revision")
+        : null;
 
     try {
-      // The result of the transaction can be either an idempotency hit or a new submission.
-      TransactionResult transactionResult = transactionTemplate.execute(status ->
-          executeSubmissionInTransaction(event, user, handler, idempotencyKey)
-      );
+      var transactionResult =
+          transactionCoordinator.execute(
+              event.getCaseDetails().getReference(),
+              idempotencyKey,
+              startRevision,
+              () -> prepareSubmission(event, user, handler)
+          );
 
-      return transactionResult.existingEventId()
-          .map(eventId -> replayIdempotentRequest(event.getCaseDetails().getReference(), eventId))
-          .orElseGet(() -> buildSuccessResponse(transactionResult.submissionOutcome().orElseThrow()));
+      if (transactionResult.replayed()) {
+        return replayIdempotentRequest(
+            event.getCaseDetails().getReference(),
+            transactionResult.eventId()
+        );
+      }
+
+      var created = transactionResult.created().orElseThrow();
+      return buildSuccessResponse(new SubmissionOutcome(created.savedCase(), created.result()));
 
     } catch (CallbackValidationException e) {
       var response = new DecentralisedSubmitEventResponse();
@@ -59,39 +72,21 @@ public class CaseSubmissionService {
     }
   }
 
-  /**
-   * Encapsulates all database operations that must run within a single transaction.
-   */
-  private TransactionResult executeSubmissionInTransaction(DecentralisedCaseEvent event,
-                                                           IdamService.User user,
-                                                           CaseSubmissionHandler handler,
-                                                           UUID idempotencyKey) {
-    // Idempotency Check inside the transaction to ensure atomicity
-    Optional<Long> existingEventId = idempotencyEnforcer.lockCaseAndGetExistingEvent(
-        idempotencyKey, event.getCaseDetails().getReference()
-    );
-
-    if (existingEventId.isPresent()) {
-      return new TransactionResult(existingEventId, Optional.empty());
-    }
-
-    // Delegate to the specific handler to apply the change
-    var handlerResult = handler.apply(event, user.authToken());
+  private CaseEventTransactionCoordinator.CaseEventWrite<Supplier<SubmitResponse<?>>> prepareSubmission(
+      DecentralisedCaseEvent event,
+      IdamService.User user,
+      CaseSubmissionHandler handler
+  ) {
+    var handlerResult = handler.apply(event, user);
     applyHandlerChanges(event, handlerResult);
 
-    // Bookkeeping: update case_data metadata and optionally the legacy json blob
-    upsertCase(event, handlerResult.dataUpdate());
-    DecentralisedCaseDetails savedCaseDetails = caseProjectionService.load(event.getCaseDetails().getReference());
-    auditEventService.saveAuditRecord(
+    return new CaseEventTransactionCoordinator.CaseEventWrite<>(
         event,
         user,
-        savedCaseDetails.getCaseDetails(),
-        idempotencyKey,
-        handlerResult.significantItem()
+        handlerResult.dataUpdate(),
+        handlerResult.significantItem(),
+        handlerResult.responseSupplier()
     );
-
-    var outcome = new SubmissionOutcome(savedCaseDetails, handlerResult.responseSupplier());
-    return new TransactionResult(Optional.empty(), Optional.of(outcome));
   }
 
   /**
@@ -141,14 +136,6 @@ public class CaseSubmissionService {
     );
   }
 
-  private void upsertCase(DecentralisedCaseEvent event, Optional<JsonNode> dataUpdate) {
-    try {
-      caseDataRepository.upsertCase(event, dataUpdate);
-    } catch (EmptyResultDataAccessException e) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "Case was updated concurrently", e);
-    }
-  }
-
   private uk.gov.hmcts.ccd.sdk.api.Event<?, ?, ?> getEventConfig(DecentralisedCaseEvent event) {
     try {
       return resolvedConfigRegistry.getRequiredEvent(
@@ -158,18 +145,9 @@ public class CaseSubmissionService {
     }
   }
 
-
   private record SubmissionOutcome(
       DecentralisedCaseDetails savedCaseDetails,
       Supplier<SubmitResponse<?>> responseSupplier
   ) {}
 
-  /**
-   * A wrapper that represents the two possible outcomes of the transactional block:
-   * either an idempotency hit (existingEventId is present) or a new submission (submissionOutcome is present).
-   */
-  private record TransactionResult(
-      Optional<Long> existingEventId,
-      Optional<SubmissionOutcome> submissionOutcome
-  ) {}
 }

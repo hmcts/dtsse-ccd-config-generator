@@ -5,7 +5,7 @@ import lombok.Data;
 
 @Data
 @Builder
-public class SearchCasesResultField<R extends HasRole> {
+public class SearchCasesResultField {
   private String id;
   private String label;
   private String listElementCode;
@@ -13,12 +13,11 @@ public class SearchCasesResultField<R extends HasRole> {
   private String resultsOrdering;
   /**
    * Optional {@code AccessProfile}/{@code UserRole} scope for this result row. When unset the row is
-   * emitted with the historic empty {@code UserRole}, so unscoped configurations are unchanged.
+   * emitted with an empty {@code UserRole}.
    */
-  private R userRole;
+  private HasRole userRole;
   /**
-   * Optional {@code UseCase} for this result row. When unset the generator falls back to the historic
-   * {@code orgcases} value, so configurations that do not set it are unchanged.
+   * Optional {@code UseCase} for this result row. When unset the generator emits {@code orgcases}.
    */
   private String useCase;
 }

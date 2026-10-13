@@ -1,0 +1,150 @@
+{{ govukDateInput({
+  id: "order-date",
+  namePrefix: "order-date",
+  values: orderDate,
+  fieldset: {
+    legend: {
+      text: "Possession date",
+      classes: "govuk-fieldset__legend--m"
+    }
+  },
+  hint: {
+    text: "This generated value links back to these inputs. For example, 27 9 2026."
+  }
+}) }}
+
+{{ govukCheckboxes({
+  name: "clause-choice",
+  fieldset: {
+    legend: {
+      text: "Order clauses",
+      classes: "govuk-fieldset__legend--m"
+    }
+  },
+  items: [
+    {
+      value: "order-heading",
+      text: "Include formal order heading",
+      checked: true
+    },
+    {
+      value: "alternative-possession-wording",
+      text: "Use alternative possession wording"
+    },
+    {
+      value: "repairs",
+      text: "Include disrepair inspection clause"
+    },
+    {
+      value: "costs",
+      text: "Include fixed costs clause"
+    }
+  ]
+}) }}
+
+{{ govukInput({
+  id: "fixed-costs-amount",
+  name: "fixed-costs-amount",
+  value: "355",
+  classes: "govuk-input--width-10",
+  label: {
+    text: "Fixed costs amount",
+    classes: "govuk-label--s"
+  },
+  prefix: {
+    text: "£"
+  }
+}) }}
+
+{{ govukCheckboxes({
+  name: "payment-choice",
+  fieldset: {
+    legend: {
+      text: "Suspended possession terms",
+      classes: "govuk-fieldset__legend--m"
+    }
+  },
+  items: [
+    {
+      value: "suspended-possession",
+      text: "Include suspended possession clause",
+      checked: true
+    },
+    {
+      value: "payment-by-date",
+      text: "Include initial payment",
+      checked: true
+    },
+    {
+      value: "monthly-payments",
+      text: "Include monthly payments",
+      checked: true
+    }
+  ]
+}) }}
+
+{{ govukInput({
+  id: "arrears-amount",
+  name: "arrears-amount",
+  value: "2342",
+  classes: "govuk-input--width-10",
+  label: {
+    text: "Arrears amount",
+    classes: "govuk-label--s"
+  },
+  prefix: {
+    text: "£"
+  }
+}) }}
+
+{{ govukInput({
+  id: "initial-payment-amount",
+  name: "initial-payment-amount",
+  value: "213",
+  classes: "govuk-input--width-10",
+  label: {
+    text: "Initial payment amount",
+    classes: "govuk-label--s"
+  },
+  prefix: {
+    text: "£"
+  }
+}) }}
+
+{{ govukDateInput({
+  id: "initial-payment-date",
+  namePrefix: "initial-payment-date",
+  values: initialPaymentDate,
+  fieldset: {
+    legend: {
+      text: "Initial payment date",
+      classes: "govuk-fieldset__legend--s"
+    }
+  }
+}) }}
+
+{{ govukInput({
+  id: "monthly-payment-amount",
+  name: "monthly-payment-amount",
+  value: "655",
+  classes: "govuk-input--width-10",
+  label: {
+    text: "Monthly payment amount",
+    classes: "govuk-label--s"
+  },
+  prefix: {
+    text: "£"
+  }
+}) }}
+
+{{ govukDateInput({
+  id: "first-monthly-payment-date",
+  namePrefix: "first-monthly-payment-date",
+  values: firstMonthlyPaymentDate,
+  fieldset: {
+    legend: {
+      text: "First monthly payment date",
+      classes: "govuk-fieldset__legend--s"
+    }
+  }
+}) }}

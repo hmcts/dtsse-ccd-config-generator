@@ -1,11 +1,12 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.google.common.collect.Lists;
-import com.google.common.collect.Multimap;
-import com.google.common.collect.Multimaps;
 import java.io.File;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -34,20 +35,39 @@ public class CCDDefinitionGenerator {
   }
 
   private static List<ResolvedCCDConfig<?, ?, ?>> loadConfigs(Collection<CCDConfig<?, ?, ?>> configs) {
-    Multimap<ConfigGroup, CCDConfig<?, ?, ?>>
-        configsByGroup = Multimaps
-        .index(configs, CCDDefinitionGenerator::resolveConfigGroup);
+    Map<ConfigGroup, List<CCDConfig<?, ?, ?>>> configsByGroup = new LinkedHashMap<>();
+    for (CCDConfig<?, ?, ?> config : configs) {
+      Class<?> caseDataClass = resolveCaseDataClass(config);
+      for (String caseTypeId : resolveCaseTypeIds(config)) {
+        ConfigGroup group = new ConfigGroup(caseDataClass, caseTypeId);
+        configsByGroup.computeIfAbsent(group, ignored -> Lists.newArrayList()).add(config);
+      }
+    }
 
     List<ResolvedCCDConfig<?, ?, ?>> result = Lists.newArrayList();
-    for (ConfigGroup group : configsByGroup.keySet()) {
-      ConfigResolver generator = new ConfigResolver(configsByGroup.get(group));
-      result.add(generator.resolveCCDConfig());
+    for (Map.Entry<ConfigGroup, List<CCDConfig<?, ?, ?>>> entry : configsByGroup.entrySet()) {
+      ResolvedCCDConfig<?, ?, ?> resolved = new ConfigResolver(entry.getValue()).resolveCCDConfig();
+      String declaredCaseTypeId = entry.getKey().caseTypeId();
+      if (!declaredCaseTypeId.isEmpty()
+          && (resolved.caseType == null || resolved.caseType.isEmpty())) {
+        throw new IllegalStateException(
+            "No case type configuration found for declared case type '%s'".formatted(declaredCaseTypeId)
+        );
+      }
+      if (!declaredCaseTypeId.isEmpty() && !declaredCaseTypeId.equals(resolved.caseType)) {
+        throw new IllegalStateException(
+            "Configuration declared case type '%s' but resolved case type '%s'"
+                .formatted(declaredCaseTypeId, resolved.caseType)
+        );
+      }
+      result.add(resolved);
     }
     return result;
   }
 
-  private static ConfigGroup resolveConfigGroup(CCDConfig<?, ?, ?> config) {
-    return new ConfigGroup(resolveCaseDataClass(config), config.groupingKey());
+  private static Set<String> resolveCaseTypeIds(CCDConfig<?, ?, ?> config) {
+    Set<String> caseTypeIds = config.caseTypeIds();
+    return caseTypeIds.isEmpty() ? Set.of("") : caseTypeIds;
   }
 
   private static Class<?> resolveCaseDataClass(CCDConfig<?, ?, ?> config) {
@@ -60,7 +80,7 @@ public class CCDDefinitionGenerator {
     return caseType;
   }
 
-  private record ConfigGroup(Class<?> caseDataClass, String groupingKey) {
+  private record ConfigGroup(Class<?> caseDataClass, String caseTypeId) {
   }
 
   /**

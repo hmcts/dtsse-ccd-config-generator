@@ -1,7 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
-import static org.apache.commons.lang3.StringUtils.capitalize;
+import static org.springframework.util.StringUtils.capitalize;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.unwrappedFieldOfType;
 
@@ -515,32 +515,17 @@ public class FieldCollection {
     }
 
     /**
-     * Sets the most-recently-added complex-type member's event-level label. Emitted as
-     * {@code CaseEventToComplexTypes.EventElementLabel} for a member reached through
-     * {@link #complex}, and as {@code CaseEventToFields.CaseEventFieldLabel} for a top-level field.
+     * Sets the event-level label of the most-recently-added field or complex-type member. Emitted
+     * as {@code CaseEventToFields.CaseEventFieldLabel} for a top-level field, and as
+     * {@code CaseEventToComplexTypes.EventElementLabel} for a member placed inside a
+     * {@code .complex(...)} scope.
      *
      * <p>Fluent equivalent of the trailing {@code caseEventFieldLabel} parameter on the positional
-     * {@code optional}/{@code mandatory} overloads — provided so that member placements which have
-     * no such overload (notably {@code readonly}) can still carry a label. Default {@code null}
-     * omits the column, leaving output byte-identical to before this option existed.
+     * {@code optional}/{@code mandatory} overloads, usable after any placement that has no such
+     * overload ({@code readonly}, {@code *NoSummary}, etc.). Default {@code null} omits the column.
      */
     public FieldCollectionBuilder<Type, StateType, Parent> eventLabel(String label) {
       lastField().caseEventFieldLabel(label);
-      return this;
-    }
-
-    /**
-     * Sets the most-recently-added complex-type member's event-level hint text. Emitted as
-     * {@code CaseEventToComplexTypes.EventHintText} for a member reached through {@link #complex},
-     * and as {@code CaseEventToFields.CaseEventFieldHint} for a top-level field.
-     *
-     * <p>Fluent equivalent of the trailing {@code caseEventFieldHint} parameter on the positional
-     * {@code optional}/{@code mandatory} overloads — provided so that member placements which have
-     * no such overload (notably {@code readonly}) can still carry a hint. Default {@code null} omits
-     * the column, leaving output byte-identical to before this option existed.
-     */
-    public FieldCollectionBuilder<Type, StateType, Parent> eventHint(String hint) {
-      lastField().caseEventFieldHint(hint);
       return this;
     }
 
@@ -553,8 +538,8 @@ public class FieldCollection {
      *
      * <p>DISTINCT from {@link #eventHint(String)}: that writes the {@code EventHintText} column (the
      * per-event hint override), whereas this writes {@code HintText} (the field-level hint the
-     * generator derives from {@code @CCD(hint)}). Leaving it unset keeps today's cascade, byte-identical
-     * for every existing consumer. Passing {@code null} is equivalent to {@link #noHintText()}.
+     * generator derives from {@code @CCD(hint)}). Leaving it unset keeps the cascade. Passing
+     * {@code null} is equivalent to {@link #noHintText()}.
      */
     public FieldCollectionBuilder<Type, StateType, Parent> hintText(String hintText) {
       lastField().hintText(hintText);
@@ -573,27 +558,18 @@ public class FieldCollection {
     }
 
     /**
-     * Sets the most-recently-added complex-type member's {@code CaseEventToComplexTypes.PageID}, the
-     * wizard page the member is shown on within the event. Unlike {@link #page(String)} — which
-     * switches the page context for a top-level event field and drives {@code CaseEventToFields} —
-     * this tags a single member row emitted by {@link #complex} expansion, which otherwise carries
-     * no page. Default {@code null} omits the column, leaving output byte-identical to before this
-     * option existed.
-     *
-     * <p>Note: the definition-store importer parses complex-type rows without a page column, so this
-     * value is carried purely for round-trip fidelity with hand-authored definitions; it does not
-     * change how CCD renders the member.
-     */
-    public FieldCollectionBuilder<Type, StateType, Parent> pageId(String pageId) {
-      lastField().eventComplexPageId(pageId);
-      return this;
-    }
-
-    /**
      * Sets the most-recently-added field's {@code CaseEventToFields.DefaultValue} to a raw string,
      * verbatim — usable after any context-selecting call ({@code readonly}, {@code *NoSummary},
      * etc.) that returns this builder rather than the field, matching the sheet column, which is
      * untyped.
+     *
+     * <p>Writes {@code CaseEventToFields.DefaultValue} for a top-level field and
+     * {@code CaseEventToComplexTypes.DefaultValue} for a member placed inside a {@code .complex(...)}
+     * scope, following the sheet the placement itself lands on. Both sheets carry the column, and the
+     * raw form is the only one that reaches a member default the definition expresses as a case-role
+     * literal rather than as a {@code HasRole} constant — finrem's {@code manageInterveners} places
+     * {@code intervener1.intervenerOrganisation.OrgPolicyCaseAssignedRole} with
+     * {@code DefaultValue=[INTVRSOLICITOR1]}, a role its {@code UserRole} enum does not declare.
      */
     public FieldCollectionBuilder<Type, StateType, Parent> defaultValue(String defaultValue) {
       lastField().defaultValue(defaultValue);
@@ -612,22 +588,47 @@ public class FieldCollection {
     }
 
     /**
-     * Sets the most-recently-added field's {@code CaseEventToFields.CaseEventFieldLabel} — usable
-     * after any context-selecting call ({@code readonly}, {@code *NoSummary}, etc.) that returns
-     * this builder rather than the field.
+     * Alias of {@link #eventLabel(String)}.
      */
     public FieldCollectionBuilder<Type, StateType, Parent> caseEventFieldLabel(String label) {
-      lastField().caseEventFieldLabel(label);
+      return eventLabel(label);
+    }
+
+    /**
+     * Sets the event-level hint text of the most-recently-added field or complex-type member.
+     * Emitted as {@code CaseEventToFields.CaseEventFieldHint} for a top-level field, and as
+     * {@code CaseEventToComplexTypes.EventHintText} for a member placed inside a
+     * {@code .complex(...)} scope.
+     *
+     * <p>Fluent equivalent of the trailing {@code caseEventFieldHint} parameter on the positional
+     * {@code optional}/{@code mandatory} overloads, usable after any placement that has no such
+     * overload ({@code readonly}, {@code *NoSummary}, etc.). Default {@code null} omits the column.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> eventHint(String hint) {
+      lastField().caseEventFieldHint(hint);
       return this;
     }
 
     /**
-     * Sets the most-recently-added field's {@code CaseEventToFields.CaseEventFieldHint} — usable
-     * after any context-selecting call ({@code readonly}, {@code *NoSummary}, etc.) that returns
-     * this builder rather than the field.
+     * Alias of {@link #eventHint(String)}.
      */
     public FieldCollectionBuilder<Type, StateType, Parent> caseEventFieldHint(String hint) {
-      lastField().caseEventFieldHint(hint);
+      return eventHint(hint);
+    }
+
+    /**
+     * Sets the most-recently-added complex-type member's {@code CaseEventToComplexTypes.PageID}, the
+     * wizard page the member is shown on within the event. Unlike {@link #page(String)} — which
+     * switches the page context for a top-level event field and drives {@code CaseEventToFields} —
+     * this tags a single member row emitted by {@link #complex} expansion, which otherwise carries
+     * no page. Default {@code null} omits the column.
+     *
+     * <p>Note: the definition-store importer parses complex-type rows without a page column, so this
+     * value is carried purely for round-trip fidelity with hand-authored definitions; it does not
+     * change how CCD renders the member.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> pageId(String pageId) {
+      lastField().eventComplexPageId(pageId);
       return this;
     }
 

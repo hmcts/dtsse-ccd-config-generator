@@ -83,6 +83,17 @@ a custom approach is warranted.
 
 ## ccd-runtime-indexing
 
+With the `hmcts.ccd.sdk` plugin applied, add the indexer without a version:
+
+```groovy
+dependencies {
+  implementation 'com.github.hmcts:ccd-runtime-indexing'
+}
+```
+
+Use `cftlibImplementation` instead for local indexing only. The plugin's BOM supplies the version;
+see [SDK libraries](../README.md#sdk-libraries) for setup and migration from the deprecated flags.
+
 This custom indexing component uses postgres to track all indexing state including the dead letter queue - as opposed to logstash container filesystems & dedicated elasticsearch indexes.
 
 This enables us to meet the correctness requirements above while improving observability to the owning service team by consolidating all state in a single database.

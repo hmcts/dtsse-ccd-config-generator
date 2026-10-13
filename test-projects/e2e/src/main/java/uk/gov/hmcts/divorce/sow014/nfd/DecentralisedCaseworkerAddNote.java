@@ -31,6 +31,7 @@ import uk.gov.hmcts.divorce.idam.User;
 public class DecentralisedCaseworkerAddNote implements CCDConfig<CaseData, State, UserRole> {
 
     public static final String CASEWORKER_DECENTRALISED_ADD_NOTE = "caseworker-decentralised-add-note";
+    public static final String CONCURRENT_CASEWORKER_DECENTRALISED_ADD_NOTE = "caseworker-concurrent-add-note";
 
     @Autowired
     private HttpServletRequest request;
@@ -46,6 +47,7 @@ public class DecentralisedCaseworkerAddNote implements CCDConfig<CaseData, State
         EventBuilder<CaseData, UserRole, State> eventBuilder = configBuilder
             .decentralisedEvent(CASEWORKER_DECENTRALISED_ADD_NOTE, this::submit, this::start)
             .forAllStates()
+            .nonConcurrent()
             .name("Add note (decentralised)")
             .showEventNotes()
             .grant(CREATE_READ_UPDATE, CASE_WORKER, JUDGE)
@@ -55,6 +57,18 @@ public class DecentralisedCaseworkerAddNote implements CCDConfig<CaseData, State
         new PageBuilder(eventBuilder)
             .page("addCaseNotesDecentralised")
             .pageLabel("Add case notes (decentralised)")
+            .optional(CaseData::getNote);
+
+        new PageBuilder(configBuilder
+            .decentralisedEvent(CONCURRENT_CASEWORKER_DECENTRALISED_ADD_NOTE, this::submit, this::start)
+            .forAllStates()
+            .name("Add note (concurrent)")
+            .showEventNotes()
+            .grant(CREATE_READ_UPDATE, CASE_WORKER, JUDGE)
+            .grant(CREATE_READ_UPDATE_DELETE, SUPER_USER)
+            .grantHistoryOnly(LEGAL_ADVISOR, JUDGE))
+            .page("addCaseNotesConcurrentDecentralised")
+            .pageLabel("Add case notes (concurrent)")
             .optional(CaseData::getNote);
     }
 

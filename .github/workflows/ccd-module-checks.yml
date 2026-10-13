@@ -1,8 +1,17 @@
 name: Semantic Diff Checks
 
 on:
+  # Pushes to master build and test each module without a semantic diff, saving the Gradle cache that pull requests and
+  # the merge queue restore, so their jobs skip compiles and tests whose inputs haven't changed.
+  push:
+    branches:
+      - master
   pull_request:
   merge_group:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   module:
@@ -15,44 +24,103 @@ jobs:
           - checkName: Semantic Diff - Adoption
             module: adoption
             gradleGenerate: adoption:generateCCDConfig
+            gradleTestClasses: adoption:testClasses
             gradleIntegration: adoption:integration
             definitionsDir: test-projects/adoption-cos-api/build/definitions
             runIntegration: false
+            compileTests: true
             runSemanticDiff: true
             changePath: test-projects/adoption-cos-api
           - checkName: Semantic Diff - NFDiv
             module: nfdiv
             gradleGenerate: nfdiv:generateCCDConfig
+            gradleTestClasses: nfdiv:testClasses
+            gradleIntegration: nfdiv:integration
+            definitionsDir: test-projects/nfdiv-case-api/build/definitions
+            runIntegration: false
+            compileTests: false
+            runSemanticDiff: true
+            changePath: test-projects/nfdiv-case-api
+          - checkName: NFDiv Integration
+            module: nfdiv
+            gradleGenerate: nfdiv:generateCCDConfig
+            gradleTestClasses: nfdiv:testClasses
             gradleIntegration: nfdiv:integration
             definitionsDir: test-projects/nfdiv-case-api/build/definitions
             runIntegration: true
-            runSemanticDiff: true
+            compileTests: true
+            runSemanticDiff: false
             changePath: test-projects/nfdiv-case-api
           - checkName: Semantic Diff - PCS
             module: pcs
             gradleGenerate: pcs:generateCCDConfig
+            gradleTestClasses: pcs:testClasses
             gradleIntegration: pcs:integration
             definitionsDir: test-projects/pcs-api/build/definitions
-            runIntegration: true
+            runIntegration: false
+            compileTests: false
             runSemanticDiff: true
+            changePath: test-projects/pcs-api
+          - checkName: PCS Integration 1
+            module: pcs
+            gradleGenerate: pcs:generateCCDConfig
+            gradleTestClasses: pcs:testClasses
+            gradleIntegration: pcs:integration -PintegrationShard=1/2
+            definitionsDir: test-projects/pcs-api/build/definitions
+            runIntegration: true
+            compileTests: true
+            runSemanticDiff: false
+            changePath: test-projects/pcs-api
+          - checkName: PCS Integration 2
+            module: pcs
+            gradleGenerate: pcs:generateCCDConfig
+            gradleTestClasses: pcs:testClasses
+            gradleIntegration: pcs:integration -PintegrationShard=2/2
+            definitionsDir: test-projects/pcs-api/build/definitions
+            runIntegration: true
+            compileTests: true
+            runSemanticDiff: false
             changePath: test-projects/pcs-api
           - checkName: Semantic Diff - SPTribs
             module: sptribs
             gradleGenerate: sptribs:generateCCDConfig
+            gradleTestClasses: sptribs:testClasses
+            gradleIntegration: sptribs:integration
+            definitionsDir: test-projects/sptribs-case-api/build/definitions
+            runIntegration: false
+            compileTests: false
+            runSemanticDiff: true
+            changePath: test-projects/sptribs-case-api
+          - checkName: SPTribs Integration
+            module: sptribs
+            gradleGenerate: sptribs:generateCCDConfig
+            gradleTestClasses: sptribs:testClasses
             gradleIntegration: sptribs:integration
             definitionsDir: test-projects/sptribs-case-api/build/definitions
             runIntegration: true
-            runSemanticDiff: true
+            compileTests: true
+            runSemanticDiff: false
             changePath: test-projects/sptribs-case-api
           - checkName: ET Integration
             module: et
             gradleGenerate: et:generateCCDConfig
+            gradleTestClasses: et:testClasses
             gradleIntegration: et:integration
             definitionsDir: test-projects/et-ccd-callbacks/build/definitions
             runIntegration: true
+            compileTests: true
             runSemanticDiff: false
             changePath: test-projects/et-ccd-callbacks
-
+          - checkName: Semantic Diff - IA
+            module: ia
+            gradleGenerate: ia:generateCCDConfig
+            gradleTestClasses: ia:testClasses
+            gradleIntegration: ia:integration
+            definitionsDir: test-projects/ia-case-api/build/definitions
+            runIntegration: false
+            compileTests: true
+            runSemanticDiff: true
+            changePath: test-projects/ia-case-api
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -61,16 +129,17 @@ jobs:
           submodules: recursive
       - name: Classify changes
         id: changes
+        env:
+          BASE_SHA: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.merge_group.head_sha || github.event.pull_request.head.sha }}
         run: |
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
+          if [ "${{ github.event_name }}" = "push" ]; then
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
-            echo "module_changed=false" >> "$GITHUB_OUTPUT"
+            echo "module_changed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          base="${{ github.event.pull_request.base.sha }}"
-          head="${{ github.event.pull_request.head.sha }}"
-          git fetch --no-tags --prune --depth=1 origin "$base" "$head"
-          files=$(git diff --name-only "$base" "$head")
+          git fetch --no-tags --prune origin "$BASE_SHA" "$HEAD_SHA"
+          files=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
           if [ -z "$files" ]; then
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
             echo "module_changed=false" >> "$GITHUB_OUTPUT"
@@ -82,7 +151,7 @@ jobs:
             echo "docs_only=true" >> "$GITHUB_OUTPUT"
           fi
           non_doc_files=$(echo "$files" | grep -vE '\.md$' || true)
-          if [ -n "$non_doc_files" ] && ! echo "$non_doc_files" | grep -vE '^${{ matrix.changePath }}(/|$)' >/dev/null; then
+          if echo "$non_doc_files" | grep -E '^${{ matrix.changePath }}(/|$)' >/dev/null; then
             echo "module_changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "module_changed=false" >> "$GITHUB_OUTPUT"
@@ -96,10 +165,18 @@ jobs:
 
       - name: Set up JDK
         if: steps.changes.outputs.docs_only != 'true'
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: 'zulu'
           java-version: 21
+
+      - name: Set up Gradle
+        if: steps.changes.outputs.docs_only != 'true'
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Compile ${{ matrix.module }} test classes
+        if: matrix.compileTests && steps.changes.outputs.docs_only != 'true'
+        run: ./gradlew ${{ matrix.gradleTestClasses }} -i --stacktrace
 
       - name: Run ${{ matrix.module }}:integration
         if: ${{ matrix.runIntegration && steps.changes.outputs.docs_only != 'true' }}
@@ -109,7 +186,7 @@ jobs:
         if: matrix.runSemanticDiff && steps.changes.outputs.docs_only != 'true' && steps.changes.outputs.module_changed != 'true'
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
           path: base
           fetch-depth: 0
           submodules: recursive

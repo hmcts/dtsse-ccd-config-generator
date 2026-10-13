@@ -20,9 +20,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.core.ResolvableType;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
@@ -317,12 +317,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       Class<?> dataClass, Field field, Map<String, Object> target) {
     String type = "Collection";
     Class<?> elementClass = resolveCollectionElementType(dataClass, field);
-    ComplexType complexType = elementClass.getAnnotation(ComplexType.class);
-    if (complexType != null && !Strings.isNullOrEmpty(complexType.name())) {
-      target.put("FieldTypeParameter", complexType.name());
-    } else {
-      target.put("FieldTypeParameter", elementClass.getSimpleName());
-    }
+    target.put("FieldTypeParameter", GeneratorUtils.typeId(elementClass));
 
     if (Set.class.isAssignableFrom(field.getType()) && elementClass.isEnum()) {
       type = "MultiSelectList";
@@ -337,11 +332,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       CCD annotation) {
     ComplexType complexType = field.getType().getAnnotation(ComplexType.class);
     if (field.getType().isEnum() && (complexType == null || complexType.generate())) {
-      // The list ID a FixedRadioList field references is the enum's @ComplexType(name) when set
-      // (a PascalCase-renamed enum preserving its original CCD list ID), else the simple name.
-      String listId = complexType != null && !Strings.isNullOrEmpty(complexType.name())
-          ? complexType.name() : field.getType().getSimpleName();
-      target.putIfAbsent("FieldTypeParameter", listId);
+      target.putIfAbsent("FieldTypeParameter", GeneratorUtils.typeId(field.getType()));
       return "FixedRadioList";
     }
     return switch (inferredType) {

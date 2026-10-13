@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.HashMap;
@@ -14,6 +15,7 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -56,6 +58,7 @@ class CaseDataRepository {
               version,
               last_state_modified_date,
               coalesce(c.last_modified, c.created_date) as last_modified,
+              c.resolved_ttl,
               supplementary_data::text,
               case_revision
          from ccd.case_data c
@@ -93,6 +96,7 @@ class CaseDataRepository {
               ce.version as version,
               ce.created_date as last_state_modified_date,
               ce.created_date as last_modified,
+              cd.resolved_ttl,
               cd.supplementary_data::text,
               ce.case_revision
          from ccd.case_event ce
@@ -172,6 +176,15 @@ class CaseDataRepository {
                                          else case_data.last_state_modified_date
                                        end
             where case_data.version = excluded.version
+               -- Allow decentralised events that do not mutate the case record
+               or (
+                 case_data.state is not distinct from excluded.state
+                 and case_data.resolved_ttl is not distinct from excluded.resolved_ttl
+                 and not :has_data
+                 and case_data.supplementary_data is not distinct from
+                   (case_data.supplementary_data || :enforced_supplementary_data::jsonb)
+                 and case_data.security_classification is not distinct from excluded.security_classification
+               )
             returning id;
         """;
 
@@ -189,7 +202,49 @@ class CaseDataRepository {
     params.put("enforced_supplementary_data",
         serialiseEnforcedSupplementaryData(event.getCaseDetails().getCaseTypeId()));
 
-    return ndb.queryForObject(sql, params, Long.class);
+    try {
+      return ndb.queryForObject(sql, params, Long.class);
+    } catch (EmptyResultDataAccessException e) {
+      try {
+        logConcurrentUpdate(event);
+      } catch (RuntimeException diagnosticFailure) {
+        e.addSuppressed(diagnosticFailure);
+      }
+      throw e;
+    }
+  }
+
+  private void logConcurrentUpdate(DecentralisedCaseEvent event) {
+    var caseReference = event.getCaseDetails().getReference();
+    var conflictingEvent = ndb.query(
+        """
+        select ce.event_id, ce.case_revision
+        from ccd.case_event ce
+        join ccd.case_data cd on cd.id = ce.case_data_id
+        where cd.reference = :caseReference
+          and ce.version > :submittedVersion
+        order by ce.case_revision asc
+        limit 1
+        """,
+        Map.of("caseReference", caseReference, "submittedVersion", event.getCaseDetails().getVersion()),
+        (rs, rowNum) -> new ConflictingEvent(
+            rs.getString("event_id"),
+            rs.getLong("case_revision")
+        )
+    ).stream().findFirst();
+
+    if (conflictingEvent.isPresent()) {
+      var conflict = conflictingEvent.get();
+      log.info(
+          "Rejecting event {} for case {} due to concurrent update: submittedVersion={}, "
+              + "conflictingEvent={}, conflictingEventRevision={}",
+          event.getEventDetails().getEventId(),
+          caseReference,
+          event.getCaseDetails().getVersion(),
+          conflict.eventId(),
+          conflict.caseRevision()
+      );
+    }
   }
 
   @SneakyThrows
@@ -208,6 +263,9 @@ class CaseDataRepository {
     return defaultMapper.writeValueAsString(node);
   }
 
+  private record ConflictingEvent(String eventId, long caseRevision) {
+  }
+
   @SneakyThrows
   private DecentralisedCaseDetails mapCaseDetails(ResultSet rs) throws SQLException {
     Long reference = rs.getObject("reference", Long.class);
@@ -223,6 +281,7 @@ class CaseDataRepository {
     caseDetails.setCreatedDate(rs.getObject("created_date", LocalDateTime.class));
     caseDetails.setLastModified(rs.getObject("last_modified", LocalDateTime.class));
     caseDetails.setLastStateModifiedDate(rs.getObject("last_state_modified_date", LocalDateTime.class));
+    caseDetails.setResolvedTTL(rs.getObject("resolved_ttl", LocalDate.class));
 
     var caseDataJson = rs.getString("case_data");
     caseDetails.setData(defaultMapper.readValue(caseDataJson, JSON_NODE_MAP));

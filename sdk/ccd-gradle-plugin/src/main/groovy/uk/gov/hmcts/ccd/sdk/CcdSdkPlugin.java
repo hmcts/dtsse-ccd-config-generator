@@ -1,6 +1,8 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import java.io.File;
 import java.util.Arrays;
+import java.util.HashSet;
 import lombok.Data;
 import org.gradle.api.Action;
 import org.gradle.api.Plugin;
@@ -8,13 +10,21 @@ import org.gradle.api.Project;
 import org.gradle.api.Task;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ExternalModuleDependency;
+import org.gradle.api.artifacts.component.ComponentIdentifier;
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier;
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository;
 import org.gradle.api.artifacts.repositories.MavenRepositoryContentDescriptor;
+import org.gradle.api.artifacts.result.ResolvedArtifactResult;
 import org.gradle.api.file.DirectoryProperty;
+import org.gradle.api.logging.Logging;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.tasks.JavaExec;
+import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
+import org.gradle.api.tasks.compile.JavaCompile;
+import org.gradle.jvm.toolchain.JavaLanguageVersion;
 
 public class CcdSdkPlugin implements Plugin<Project> {
 
@@ -34,9 +44,16 @@ public class CcdSdkPlugin implements Plugin<Project> {
     configGeneration.setCanBeConsumed(false);
     configGeneration.setCanBeResolved(true);
     configGeneration.setDescription("Dependencies used when generating CCD configuration");
+    addSdkPlatform(project, "implementation");
+    addSdkPlatform(project, "configGeneration");
+    project.getPluginManager().withPlugin("com.github.hmcts.rse-cft-lib", plugin ->
+        addSdkPlatform(project, "cftlibImplementation"));
     SourceSetContainer ssc = project.getExtensions()
         .getByType(JavaPluginExtension.class)
         .getSourceSets();
+    JacksonClasspathGuardExtension verification = project.getExtensions()
+        .create("ccdSdk", JacksonClasspathGuardExtension.class);
+    registerJacksonCompatibilityChecks(project, ssc, verification);
     generate.setClasspath(
         ssc.getByName("main").getRuntimeClasspath()
             .plus(configGeneration));
@@ -76,20 +93,23 @@ public class CcdSdkPlugin implements Plugin<Project> {
       }
 
       if (config.decentralised) {
-        // This is a signal to the cftlib to link in the feature branch
-        // TODO: remove on landing
-        project.getExtensions().getExtraProperties().set("cftlib.datastore", "decentralised");
         String version = getVersion();
         project.getDependencies().add("implementation", "com.github.hmcts:decentralised-runtime:"
             + version);
         String dependencyNotation = "com.github.hmcts:ccd-runtime-indexing:" + version;
-        addElasticsearchClientDependency(project);
         if (config.runtimeIndexing) {
           project.getDependencies().add("implementation", dependencyNotation);
-        } else {
+        } else if (!hasRuntimeDependency(project, "ccd-runtime-indexing")) {
           project.getPluginManager().withPlugin("com.github.hmcts.rse-cft-lib", plugin ->
               project.getDependencies().add("cftlibImplementation", dependencyNotation));
         }
+      }
+
+      if (hasRuntimeDependency(project, "decentralised-runtime")) {
+        // This is a signal to the cftlib to link in the feature branch
+        // TODO: remove on landing
+        project.getExtensions().getExtraProperties().set("cftlib.datastore", "decentralised");
+        addElasticsearchClientDependency(project);
         // Surface that we are decentralised to the spring boot apps.
         // This is an env var since it needs to be read beyond the application's classpath
         // to shut off the default cftlib elasticsearch indexer when decentralised)
@@ -105,6 +125,144 @@ public class CcdSdkPlugin implements Plugin<Project> {
             + getVersion());
       }
     });
+  }
+
+  private void registerJacksonCompatibilityChecks(Project project, SourceSetContainer sourceSets,
+                                                    JacksonClasspathGuardExtension verification) {
+    Project rootProject = project.getRootProject();
+    var sourceCheck = project.getTasks().register("jackson2CompatibilityGuard", JacksonCompatibilityCheck.class,
+        task -> {
+          task.setGroup("verification");
+          task.setDescription("Rejects Jackson 3 API usage in project sources and mapper configuration");
+          task.getProjectDirectory().set(rootProject.getLayout().getProjectDirectory());
+          task.getReportFile().convention(project.getLayout().getBuildDirectory()
+              .file("reports/jackson-compatibility/report.txt"));
+          // Include every registered source set without depending on compilation or source generation tasks.
+          task.getScanFiles().from(project.provider(() -> sourceSets.stream()
+              .flatMap(sourceSet -> sourceSet.getAllSource().getSrcDirs().stream())
+              .map(dir -> JacksonCompatibilityCheck.sourceTree(project, dir)).toList()));
+          task.getScanFiles().from(project.files(
+              project.file("build.gradle"),
+              project.file("build.gradle.kts"),
+              project.file("gradle.properties"),
+              project.file("settings.gradle"),
+              project.file("settings.gradle.kts")));
+          task.getScanFiles().from(JacksonCompatibilityCheck.sourceTree(project, project.file("gradle")));
+          task.getScanFiles().from(project.files(
+              rootProject.file("build.gradle"),
+              rootProject.file("build.gradle.kts"),
+              rootProject.file("gradle.properties"),
+              rootProject.file("settings.gradle"),
+              rootProject.file("settings.gradle.kts")));
+          task.getScanFiles().from(JacksonCompatibilityCheck.sourceTree(rootProject, rootProject.file("gradle")));
+          task.getLombokConfigs().from(project.provider(() -> {
+            var directories = new HashSet<File>();
+            directories.add(project.getProjectDir());
+            sourceSets.forEach(sourceSet -> directories.addAll(sourceSet.getAllSource().getSrcDirs()));
+            return directories.stream()
+                .flatMap(dir -> JacksonCompatibilityCheck.ancestorConfigs(dir).stream()).toList();
+          }));
+          task.getAllowedSourceFiles().set(project.provider(() ->
+              verification.getJackson2ClasspathGuard().getAllowedSourceFiles().stream()
+                  .map(file -> rootProject.relativePath(project.file(file)).replace(File.separatorChar, '/'))
+                  .toList()));
+        });
+    var classpathCheck = project.getTasks().register(
+        "jackson2ClasspathGuard", JacksonClasspathCompatibilityCheck.class, task -> {
+          task.setGroup("verification");
+          task.setDescription("Rejects Jackson 3 usage in compiled project and dependency bytecode");
+          task.getProjectComponent().set("project(" + project.getPath() + ")");
+          task.getReportFile().convention(project.getLayout().getBuildDirectory()
+              .file("reports/jackson-compatibility/classpath-report.txt"));
+          task.getFirstPartyGroups().set(project.provider(() ->
+              verification.getJackson2ClasspathGuard().getFirstPartyGroups()));
+          task.getAllowedClasses().set(project.provider(() ->
+              verification.getJackson2ClasspathGuard().getAllowedClasses()));
+          task.getAllowedComponents().set(project.provider(() ->
+              verification.getJackson2ClasspathGuard().getAllowedComponents()));
+          var java = project.getExtensions().getByType(JavaPluginExtension.class);
+          task.getJavaVersion().set(java.getToolchain().getLanguageVersion()
+              .orElse(JavaLanguageVersion.of(Runtime.version().feature())).map(JavaLanguageVersion::asInt));
+          var guardedSourceSets = sourceSets.matching(sourceSet -> !verification.getJackson2ClasspathGuard()
+              .getIgnoredSourceSets().contains(sourceSet.getName()));
+          guardedSourceSets.all(sourceSet -> {
+            task.getProjectClasses().from(sourceSet.getOutput().getClassesDirs());
+            task.dependsOn(sourceSet.getClassesTaskName());
+            task.dependsOn(project.getConfigurations()
+                .getByName(sourceSet.getRuntimeClasspathConfigurationName()));
+          });
+          var artifacts = project.provider(() -> resolvedRuntimeArtifacts(project, guardedSourceSets, sourceSets));
+          task.getDependencyArtifacts().from(artifacts.map(results -> results.stream()
+              .map(ResolvedArtifactResult::getFile).toList()));
+          task.getArtifactMetadata().set(artifacts.map(results -> results.stream()
+              .map(CcdSdkPlugin::stableArtifactMetadata).distinct().sorted().toList()));
+          task.getArtifactMetadataByPath().set(artifacts.map(results -> {
+            var metadata = new java.util.HashMap<String, String>();
+            results.forEach(result -> metadata.put(
+                result.getFile().getAbsoluteFile().toPath().normalize().toString(), artifactMetadata(result)));
+            return metadata;
+          }));
+        });
+    project.getTasks().named("check").configure(task -> task.dependsOn(sourceCheck, classpathCheck));
+    project.getTasks().withType(JavaCompile.class).configureEach(task -> task.mustRunAfter(sourceCheck));
+  }
+
+  private static java.util.List<ResolvedArtifactResult> resolvedRuntimeArtifacts(
+      Project project, java.util.Collection<SourceSet> guardedSourceSets, SourceSetContainer sourceSets) {
+    return guardedSourceSets.stream()
+        .map(sourceSet -> project.getConfigurations().getByName(sourceSet.getRuntimeClasspathConfigurationName()))
+        .flatMap(configuration -> configuration.getIncoming().getArtifacts().getArtifacts().stream())
+        .filter(result -> !isCurrentProject(result.getId().getComponentIdentifier(), project))
+        .filter(result -> !isCurrentProjectOutput(result.getFile(), sourceSets))
+        .collect(java.util.stream.Collectors.toMap(
+            result -> result.getFile().getAbsoluteFile().toPath().normalize().toString(),
+            result -> result,
+            (left, right) -> left,
+            java.util.TreeMap::new))
+        .values().stream().toList();
+  }
+
+  private static boolean isCurrentProject(ComponentIdentifier identifier, Project project) {
+    return identifier instanceof ProjectComponentIdentifier projectIdentifier
+        // Build-tree paths identify a project across included builds; BuildIdentifier
+        // .isCurrentBuild() was removed in Gradle 9, which consumers such as pcs-api now run.
+        && projectIdentifier.getBuildTreePath().equals(project.getBuildTreePath());
+  }
+
+  private static boolean isCurrentProjectOutput(File artifact, SourceSetContainer sourceSets) {
+    var artifactPath = artifact.getAbsoluteFile().toPath().normalize();
+    return sourceSets.stream()
+        .flatMap(sourceSet -> sourceSet.getOutput().getFiles().stream())
+        .map(file -> file.getAbsoluteFile().toPath().normalize())
+        .anyMatch(artifactPath::equals);
+  }
+
+  private static String stableArtifactMetadata(ResolvedArtifactResult result) {
+    return artifactMetadata(result) + "\t" + result.getFile().getName();
+  }
+
+  private static String artifactMetadata(ResolvedArtifactResult result) {
+    ComponentIdentifier identifier = result.getId().getComponentIdentifier();
+    if (identifier instanceof ProjectComponentIdentifier project) {
+      return "PROJECT\tproject(" + project.getBuildTreePath() + ")\t";
+    }
+    if (identifier instanceof ModuleComponentIdentifier module) {
+      return "MODULE\t" + module.getGroup() + ":" + module.getModule() + ":" + module.getVersion()
+          + "\t" + module.getGroup();
+    }
+    return "OTHER\t" + identifier.getDisplayName() + "\t";
+  }
+
+
+  private boolean hasRuntimeDependency(Project project, String module) {
+    return project.getConfigurations().getByName("runtimeClasspath").getAllDependencies().stream()
+        .anyMatch(dependency -> "com.github.hmcts".equals(dependency.getGroup())
+            && module.equals(dependency.getName()));
+  }
+
+  private void addSdkPlatform(Project project, String configuration) {
+    project.getDependencies().add(configuration, project.getDependencies().platform(
+        "com.github.hmcts:ccd-sdk-bom:" + getVersion()));
   }
 
   private String getVersion() {
@@ -130,6 +288,29 @@ public class CcdSdkPlugin implements Plugin<Project> {
     private boolean runtimeIndexing = false;
 
     public CCDConfig() {
+    }
+
+    public void setDecentralised(boolean decentralised) {
+      warnDeprecated("decentralised", "implementation 'com.github.hmcts:decentralised-runtime'"
+          + " and, for local indexing, cftlibImplementation 'com.github.hmcts:ccd-runtime-indexing'");
+      this.decentralised = decentralised;
+    }
+
+    public void setCaseEventServiceBus(boolean caseEventServiceBus) {
+      warnDeprecated("caseEventServiceBus", "implementation 'com.github.hmcts:ccd-servicebus-support'");
+      this.caseEventServiceBus = caseEventServiceBus;
+    }
+
+    public void setRuntimeIndexing(boolean runtimeIndexing) {
+      warnDeprecated("runtimeIndexing", "implementation 'com.github.hmcts:ccd-runtime-indexing'"
+          + " for application indexing, or cftlibImplementation 'com.github.hmcts:ccd-runtime-indexing'"
+          + " for local indexing only");
+      this.runtimeIndexing = runtimeIndexing;
+    }
+
+    private void warnDeprecated(String option, String replacement) {
+      Logging.getLogger(CcdSdkPlugin.class).warn("ccd.{} is deprecated. Remove this flag and declare {}"
+          + " in dependencies when needed; the CCD SDK BOM supplies the version.", option, replacement);
     }
   }
 }

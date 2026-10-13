@@ -9,16 +9,16 @@ import lombok.Data;
 @Data
 public class CaseRoleToAccessProfile<R extends HasRole> {
   /**
-   * The role this mapping is keyed on. Typed {@link HasRole} rather than {@code R} because
-   * {@code RoleToAccessProfiles} also maps roles outside the case's role class.
-   * Only {@link HasRole#getRole()} is ever read from it.
+   * The role this mapping is keyed on, when declared against a {@link HasRole} constant; {@code null}
+   * for a mapping declared against a plain role name. Typed {@link HasRole} rather than {@code R}
+   * because {@code RoleToAccessProfiles} also maps roles outside the case's role class.
    */
   private HasRole role;
   /**
-   * The literal role name for a mapping declared against a plain string rather than a
-   * {@link HasRole} constant. When set, {@link #role} is {@code null} and the generator emits this
-   * value verbatim as the {@code RoleName}. Used for organisational / IDAM roles that are not
-   * case-type {@code UserRole}s and therefore must not be registered as one.
+   * The {@code RoleName} this mapping is emitted under. Always set: taken from
+   * {@link HasRole#getRole()} for a typed mapping, or verbatim for one declared against a plain
+   * string (organisational / IDAM roles that are not case-type {@code UserRole}s and therefore must
+   * not be registered as one).
    */
   private String roleName;
   private List<String> authorisation;
@@ -33,6 +33,7 @@ public class CaseRoleToAccessProfile<R extends HasRole> {
     public static <R extends HasRole> CaseRoleToAccessProfileBuilder<R> builder(HasRole role) {
       CaseRoleToAccessProfileBuilder<R> result = CaseRoleToAccessProfile.builder();
       result.role = role;
+      result.roleName = role.getRole();
       result.authorisation = new ArrayList<>();
       result.accessProfiles = new ArrayList<>(List.of(role.getRole()));
       result.caseAccessCategories = new ArrayList<>();

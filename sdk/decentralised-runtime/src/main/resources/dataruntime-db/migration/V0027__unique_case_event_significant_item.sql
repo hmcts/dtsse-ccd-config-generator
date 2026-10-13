@@ -1,0 +1,4 @@
+create unique index concurrently idx_case_event_significant_items_case_event_id_unique
+    on ccd.case_event_significant_items(case_event_id);
+
+drop index concurrently ccd.idx_case_event_significant_items_case_event_id;

@@ -41,7 +41,8 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
   private List<Map<String, Object>> buildEntries(ResolvedCCDConfig<T, S, R> config,
                                                  Event<T, R, S> event) {
     FieldCollection collection = event.getFields();
-    if (collection.getFields().isEmpty()) {
+    // An external event's frontend is not EXUI, so it has no pages or fields to lay out.
+    if (collection.getFields().isEmpty() || event.isExternal()) {
       return List.of();
     }
 
@@ -221,10 +222,9 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
   }
 
   private void applyDefaultValue(Map<String, Object> row, Field field) {
-    // Only the opt-in fluent defaultValue(String) setter populates caseEventDefaultValue; the
-    // long-standing positional optional/mandatory defaultValue argument sets Field.defaultValue,
-    // which feeds CaseEventToComplexTypes alone. Reading the dedicated carrier here keeps this
-    // sheet byte-identical for every consumer that never calls the new setter.
+    // Only the fluent defaultValue(String) setter populates caseEventDefaultValue; the positional
+    // optional/mandatory defaultValue argument sets Field.defaultValue, which feeds
+    // CaseEventToComplexTypes alone.
     if (field.getCaseEventDefaultValue() == null) {
       return;
     }

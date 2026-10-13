@@ -78,4 +78,3 @@ public class EventTypeBuilderImpl<T, R extends HasRole, S> implements EventTypeB
     return result;
   }
 }
-

@@ -1,12 +1,29 @@
 name: PCS CFTLib Test
 
 on:
+  # Pushes to master save the Gradle cache that pull requests and the merge queue restore.
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - '**/*.md'
+      - '*.md'
   pull_request:
   merge_group:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   pcs-cftlib-test:
     runs-on: ubuntu-latest
+    environment:
+      name: cftlib-acr-pull
+      deployment: false
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -22,7 +39,7 @@ jobs:
           fi
           base="${{ github.event.pull_request.base.sha }}"
           head="${{ github.event.pull_request.head.sha }}"
-          git fetch --no-tags --prune --depth=1 origin "$base" "$head"
+          git fetch --no-tags --prune origin "$base" "$head"
           files=$(git diff --name-only "$base" "$head")
           if [ -z "$files" ]; then
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
@@ -39,10 +56,39 @@ jobs:
 
       - name: Set up JDK
         if: steps.changes.outputs.docs_only != 'true'
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: 'zulu'
           java-version: 21
+
+      - name: Set up Gradle
+        if: steps.changes.outputs.docs_only != 'true'
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Az CLI login
+        if: steps.changes.outputs.docs_only != 'true'
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43
+        with:
+          client-id: 7dbe3da2-315b-4937-bac6-3ab22a9c7b91
+          tenant-id: 531ff96d-0ae9-462a-8d2d-bec7c0b42082
+          allow-no-subscriptions: true
+
+      - name: ACR Login
+        if: steps.changes.outputs.docs_only != 'true'
+        run: az acr login --name hmctsprod
+
+      - name: Pull cftlib images in the background
+        if: steps.changes.outputs.docs_only != 'true'
+        # The images in rse-cft-lib's docker-compose.yml (pcs-api leaves POSTGRES_VERSION at its default), pulled while Gradle builds pcs-api.
+        run: |
+          for image in \
+            postgres:16 \
+            docker.elastic.co/elasticsearch/elasticsearch:9.2.4 \
+            hmctsprod.azurecr.io/xui/webapp:latest \
+            hmctsprod.azurecr.io/xui/mo-webapp:latest \
+            hmctsprod.azurecr.io/hmcts/rse/rse-idam-simulator:latest; do
+            nohup docker pull --quiet "$image" > /dev/null 2>&1 &
+          done
 
       - name: Run pcs:cftlibTest
         if: steps.changes.outputs.docs_only != 'true'

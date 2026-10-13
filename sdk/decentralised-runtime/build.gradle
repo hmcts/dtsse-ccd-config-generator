@@ -13,26 +13,30 @@ dependencies {
     implementation ('com.github.hmcts.rse-cft-lib:ccd-lib:0.19.2186') {
         transitive = false
     }
-    implementation group: 'org.springframework.boot', name: 'spring-boot-starter-web'
+    implementation(group: 'org.springframework.boot', name: 'spring-boot-starter-webmvc') {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-jackson'
+    }
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-jdbc'
-    implementation 'org.flywaydb:flyway-core'
-    implementation('com.github.hmcts:idam-java-client:3.0.5') {
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'
+    implementation('com.github.hmcts:idam-java-client:4.0.0') {
         transitive = false
     }
-    implementation 'com.github.hmcts:ccd-case-document-am-client:1.59.2'
-    implementation 'com.github.hmcts:service-auth-provider-java-client:5.3.4'
+    implementation 'com.github.hmcts:ccd-case-document-am-client:1.60.1'
+    implementation 'com.github.hmcts:service-auth-provider-java-client:6.1.2'
     implementation group: 'com.github.ben-manes.caffeine', name: 'caffeine'
-    compileOnly 'io.github.openfeign:feign-core:13.13'
-    compileOnly 'org.projectlombok:lombok:1.18.46'
+    compileOnly 'io.github.openfeign:feign-core:13.17'
+    compileOnly 'org.projectlombok:lombok:1.18.48'
 
-    annotationProcessor 'org.projectlombok:lombok:1.18.46'
+    annotationProcessor 'org.projectlombok:lombok:1.18.48'
 
     implementation "org.springframework.boot:spring-boot-autoconfigure"
+    implementation 'org.springframework.boot:spring-boot-jackson2'
     runtimeOnly 'org.flywaydb:flyway-database-postgresql'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation group: 'org.testcontainers', name: 'testcontainers'
-    testImplementation group: 'org.testcontainers', name: 'junit-jupiter'
-    testImplementation group: 'org.testcontainers', name: 'postgresql'
+    testImplementation group: 'org.testcontainers', name: 'testcontainers-junit-jupiter'
+    testImplementation group: 'org.testcontainers', name: 'testcontainers-postgresql'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     runtimeOnly 'org.postgresql:postgresql'
 }
 
@@ -44,44 +48,4 @@ java {
 
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
-    [
-        'ccd.data-migration.perf.cases',
-        'ccd.data-migration.perf.events-per-case',
-        'ccd.data-migration.perf.event-id-window-size',
-        'ccd.data-migration.perf.max-seconds'
-    ].each { propertyName ->
-        def propertyValue = System.getProperty(propertyName)
-        if (propertyValue != null) {
-            systemProperty propertyName, propertyValue
-        }
-    }
-}
-
-tasks.register('checkMigrationImmutability') {
-    group = 'verification'
-    description = 'Fails if existing decentralised runtime database migrations are modified, deleted, or renamed'
-
-    doLast {
-        def stdout = new ByteArrayOutputStream()
-        exec {
-            commandLine 'git', 'diff', '--name-status', '--find-renames', '--diff-filter=MDR',
-                'origin/master...HEAD', '--',
-                ':(top)sdk/decentralised-runtime/src/main/resources/dataruntime-db/migration/V*.sql'
-            standardOutput = stdout
-        }
-
-        def changedExistingMigrations = stdout.toString('UTF-8').readLines().findAll { it.trim() }
-
-        if (!changedExistingMigrations.isEmpty()) {
-            throw new GradleException(
-                "Existing decentralised runtime database migrations must not be modified, deleted, or renamed. "
-                    + "Add a new migration instead.\n\n"
-                    + changedExistingMigrations.join('\n')
-            )
-        }
-    }
-}
-
-tasks.named('check') {
-    dependsOn tasks.named('checkMigrationImmutability')
 }

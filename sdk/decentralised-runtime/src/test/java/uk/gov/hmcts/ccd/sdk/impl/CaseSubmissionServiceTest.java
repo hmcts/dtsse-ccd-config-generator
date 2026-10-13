@@ -2,17 +2,19 @@ package uk.gov.hmcts.ccd.sdk.impl;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
-import org.springframework.transaction.support.TransactionCallback;
-import org.springframework.transaction.support.TransactionTemplate;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
@@ -31,22 +33,16 @@ class CaseSubmissionServiceTest {
   private final DecentralisedSubmissionHandler submitHandler = mock(DecentralisedSubmissionHandler.class);
   private final LegacyCallbackSubmissionHandler legacyHandler = mock(LegacyCallbackSubmissionHandler.class);
   private final IdamService idam = mock(IdamService.class);
-  private final IdempotencyEnforcer idempotencyEnforcer = mock(IdempotencyEnforcer.class);
-  private final TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
-  private final AuditEventService auditEventService = mock(AuditEventService.class);
   private final CaseDataRepository caseDataRepository = mock(CaseDataRepository.class);
-  private final CaseProjectionService caseProjectionService = mock(CaseProjectionService.class);
+  private final CaseEventTransactionCoordinator transactionCoordinator = mock(CaseEventTransactionCoordinator.class);
 
   private final CaseSubmissionService service = new CaseSubmissionService(
       resolvedConfigRegistry,
       submitHandler,
       legacyHandler,
       idam,
-      idempotencyEnforcer,
-      transactionTemplate,
-      auditEventService,
-      caseDataRepository,
-      caseProjectionService
+      transactionCoordinator,
+      caseDataRepository
   );
 
   @Test
@@ -54,22 +50,54 @@ class CaseSubmissionServiceTest {
     DecentralisedCaseEvent event = event();
     Event<?, ?, ?> eventConfig = mock(Event.class);
     doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("TestCase", "submit");
-    when(eventConfig.getSubmitHandler()).thenReturn(null);
+    when(eventConfig.hasSubmitHandler()).thenReturn(false);
+    when(eventConfig.isConcurrent()).thenReturn(false);
+    doReturn(Set.of("Submitted")).when(eventConfig).getPreState();
+    var user = new IdamService.User(
+        "Bearer raw-token",
+        new UserInfo("sub", "uid", "name", "given", "family", List.of("caseworker"))
+    );
+    when(idam.retrieveUser("raw-token")).thenReturn(user);
+    when(legacyHandler.apply(eq(event), eq(user))).thenReturn(handlerResult());
+    when(transactionCoordinator.execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any(), any()))
+        .thenAnswer(invocation -> {
+          var work = invocation
+              .<Supplier<CaseEventTransactionCoordinator.CaseEventWrite<Supplier<SubmitResponse<?>>>>>getArgument(3);
+          var write = work.get();
+          return CaseEventTransactionCoordinator.TransactionResult.created(
+              42L,
+              savedCaseDetails(),
+              write.result()
+          );
+        });
+
+    service.submit(event, "raw-token", IDEMPOTENCY_KEY);
+
+    verify(legacyHandler).apply(event, user);
+    verify(transactionCoordinator).execute(
+        eq(123456789L),
+        eq(IDEMPOTENCY_KEY),
+        isNull(),
+        any()
+    );
+  }
+
+  @Test
+  void idempotentReplayDoesNotReserveAnotherEventId() {
+    DecentralisedCaseEvent event = event();
+    Event<?, ?, ?> eventConfig = mock(Event.class);
+    doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("TestCase", "submit");
+    when(eventConfig.hasSubmitHandler()).thenReturn(false);
     when(idam.retrieveUser("raw-token")).thenReturn(new IdamService.User(
         "Bearer raw-token",
         new UserInfo("sub", "uid", "name", "given", "family", List.of("caseworker"))
     ));
-    when(idempotencyEnforcer.lockCaseAndGetExistingEvent(IDEMPOTENCY_KEY, 123456789L))
-        .thenReturn(Optional.empty());
-    when(legacyHandler.apply(eq(event), eq("Bearer raw-token"))).thenReturn(handlerResult());
-    when(caseProjectionService.load(123456789L)).thenReturn(savedCaseDetails());
-    when(transactionTemplate.execute(any())).thenAnswer(invocation ->
-        invocation.<TransactionCallback<?>>getArgument(0).doInTransaction(null)
-    );
-
+    when(transactionCoordinator.execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any(), any()))
+        .thenReturn(CaseEventTransactionCoordinator.TransactionResult.replayed(99L));
+    when(caseDataRepository.caseDetailsAtEvent(123456789L, 99L)).thenReturn(savedCaseDetails());
     service.submit(event, "raw-token", IDEMPOTENCY_KEY);
 
-    verify(legacyHandler).apply(event, "Bearer raw-token");
+    verifyNoInteractions(legacyHandler);
   }
 
   private DecentralisedCaseEvent event() {

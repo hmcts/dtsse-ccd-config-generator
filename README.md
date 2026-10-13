@@ -5,6 +5,7 @@ Write CCD configuration in Java.
 ### Table of contents
 * [Why](#why)
 * [Installation](#installation)
+  + [SDK libraries](#sdk-libraries)
   + [Config generation](#config-generation)
 * [Getting started](#getting-started)
   + [Setting up the case type](#setting-up-the-case-type)
@@ -41,8 +42,12 @@ Write CCD configuration in Java.
 
 ## Requirements
 
-* Gradle 7.3
+* Gradle 8.14.5 for Spring Boot 4
 * Java 21
+
+Services moving to Spring Boot 4 should follow the
+[Spring Boot 4 upgrade guide](docs/upgrading-to-spring-boot-4.md). It covers the required Jackson 2
+configuration and the JSON contract issues found while upgrading the reference services.
 
 ## Installation
 
@@ -77,16 +82,48 @@ ccd {
 }
 ```
 
-For decentralised services you can opt in to specialised runtime features:
+### SDK libraries
+
+Declare optional SDK libraries in `dependencies`, without versions. The plugin imports
+`com.github.hmcts:ccd-sdk-bom` at the plugin's version into `implementation`, `configGeneration`, and
+`cftlibImplementation` when the cftlib plugin is applied. The generator itself is added automatically.
+
+For example, to run decentralised persistence, indexing and Service Bus publishing in your application:
 
 ```groovy
-ccd {
-  decentralised = true
-  runtimeIndexing = true // brings ccd-runtime-indexing into the main runtime classpath
+dependencies {
+  implementation 'com.github.hmcts:decentralised-runtime'
+  implementation 'com.github.hmcts:ccd-runtime-indexing'
+  implementation 'com.github.hmcts:ccd-servicebus-support'
 }
 ```
 
-When `runtimeIndexing` is enabled the decentralised indexer uses PostgreSQL `LISTEN`/`NOTIFY` for low latency indexing,
+Only declare the libraries you need, including `ccd-data-migration-support` when using
+`CcdDataMigrationTask`; `decentralised-runtime` does not bring it in. The BOM also covers
+`ccd-config-generator` and `task-management`.
+It supplies version constraints, not forced versions: normal Gradle conflict resolution still applies.
+
+After completing a CCD data migration, follow the
+[CCD data migration cleanup guide](docs/ccd-data-migration-cleanup.md) to remove migration-only FDW access.
+
+If indexing should run only in the local cftlib stack, use this instead of the indexer's `implementation` declaration:
+
+```groovy
+dependencies {
+  cftlibImplementation 'com.github.hmcts:ccd-runtime-indexing'
+}
+```
+
+Declaring `decentralised-runtime` on `implementation` (or `runtimeOnly`) also enables the plugin's
+decentralised cftlib configuration and Elasticsearch client compatibility constraint. It does not automatically
+add an indexer; declare one on the appropriate configuration as shown above.
+
+The old `ccd.decentralised`, `ccd.runtimeIndexing` and `ccd.caseEventServiceBus` flags still work but log
+deprecation warnings during Gradle configuration. Replace enabled flags with the dependency declarations above
+and remove disabled flags. When replacing `decentralised = true` with runtime indexing disabled, also add the
+`cftlibImplementation` indexer dependency if you use cftlib; this preserves the old local indexing behaviour.
+
+The decentralised indexer uses PostgreSQL `LISTEN`/`NOTIFY` for low latency indexing,
 with `ccd.sdk.decentralised.poll-interval-ms` as a fallback.
 
 Set `ELASTIC_SEARCH_HOSTS` to the Elasticsearch HTTP endpoint or a comma-separated list of endpoints. For example:
@@ -190,9 +227,10 @@ See [in-built types](https://github.com/hmcts/ccd-config-generator/tree/master/c
 `FieldType` also covers base types the definition-store importer accepts but that only appear via
 `typeOverride`, such as `WaysToPay`, `CaseHistoryViewer`, `AddressUK`/`AddressGlobal`/`AddressGlobalUK`,
 `DateTime`, `Number`, `Fee`, `Organisation`, `OrganisationPolicy` and `ChangeOrganisationRequest`.
-`JudicialUser` is a predefined complex type (like `CaseLink` or `Document`) — reference
-`uk.gov.hmcts.ccd.sdk.type.JudicialUser` as a field's Java type directly rather than using
-`typeOverride`.
+`JudicialUser` and `CaseQueriesCollection` are predefined complex types (like `CaseLink` or
+`Document`) — reference `uk.gov.hmcts.ccd.sdk.type.JudicialUser` or
+`uk.gov.hmcts.ccd.sdk.type.CaseQueriesCollection` as a field's Java type directly rather than
+using `typeOverride`.
 
 It is also possible to override the Java type for a CCD specific one. For example, a `String` that should be an `Email` type in CCD:
 
@@ -595,13 +633,21 @@ For the less common columns — searching *within* a complex field (`ListElement
 
 `FieldShowCondition` is valid only on the input sheets and `ResultsOrdering` only on the result sheets (the definition-store importer rejects the wrong one for a given sheet); `ListElementCode` is valid on all four. Calling the lambda once per element code emits one row each, so a complex field can expose several of its leaves.
 
-The `searchCasesFields()` (`SearchCasesResultFields` sheet) builder takes the same lambda overload for its two extra columns — an `AccessProfile`/`UserRole` scope and the `UseCase`. Both default to their historic values (empty `UserRole`, `UseCase = orgcases`) when unset, so plain `.field(...)` calls are unchanged; scope a field to several roles or use cases by calling it once per combination (both columns are part of the row's identity, so the rows stay distinct):
+The `searchCasesFields()` (`SearchCasesResultFields` sheet) builder takes the same lambda overload for its two extra columns — an `AccessProfile`/`UserRole` scope and the `UseCase`. Both default to an empty `UserRole` and `UseCase = orgcases` when unset; scope a field to several roles or use cases by calling it once per combination (both columns are part of the row's identity, so the rows stay distinct):
 
 ```java
   builder.searchCasesFields()
     .field(CaseData::getCaseName, "Case name")                               // orgcases, no role
     .field(CaseData::getCaseName, "Case name",
         f -> f.role(CASEWORKER).useCase("WORKBASKET"));
+```
+
+`DisplayContextParameter` and `ResultsOrdering` can be set either positionally — `field(id, label, displayContext, listElementCode, resultsOrdering)` — or through the lambda:
+
+```java
+  builder.searchCasesFields()
+    .field("[CASE_REFERENCE]", "Case Number",
+        f -> f.displayContextParameter("#DATETIMEDISPLAY(d MMMM yyyy)").resultsOrdering("1:ASC"));
 ```
 
 Similarly, the `searchParty()` builder can declare several parties that share a `SearchPartyName` as long as they point at different collections (`SearchPartyCollectionFieldName`) — each is emitted as its own `SearchParty` row.

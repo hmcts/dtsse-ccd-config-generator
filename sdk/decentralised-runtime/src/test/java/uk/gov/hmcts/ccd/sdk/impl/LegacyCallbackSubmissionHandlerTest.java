@@ -36,6 +36,7 @@ class LegacyCallbackSubmissionHandlerTest {
   private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String AUTHORISATION = "Bearer test-token";
+  private static final IdamService.User USER = new IdamService.User(AUTHORISATION, null);
 
   private final ResolvedConfigRegistry registry = mock(ResolvedConfigRegistry.class);
   private final CcdCallbackExecutor executor = mock(CcdCallbackExecutor.class);
@@ -57,7 +58,7 @@ class LegacyCallbackSubmissionHandlerTest {
         }
         """, List.of()));
 
-    var result = handler.apply(event, AUTHORISATION);
+    var result = handler.apply(event, USER);
 
     assertThat(event.getCaseDetails().getData().get("generatedDocument").get("document_hash").asText())
         .isEqualTo("hash-token");
@@ -79,7 +80,7 @@ class LegacyCallbackSubmissionHandlerTest {
         }
         """, List.of()));
 
-    var result = handler.apply(event, AUTHORISATION);
+    var result = handler.apply(event, USER);
 
     assertThat(event.getCaseDetails().getData().get("generatedDocument").get("document_hash").asText())
         .isEqualTo("hash-token");
@@ -111,7 +112,7 @@ class LegacyCallbackSubmissionHandlerTest {
         }
         """, List.of()));
 
-    var result = handler.apply(event, AUTHORISATION);
+    var result = handler.apply(event, USER);
 
     assertThat(event.getCaseDetails().getData().get("generatedDocument").has("document_hash")).isFalse();
     assertThat(result.dataUpdate()).isPresent();
@@ -143,7 +144,7 @@ class LegacyCallbackSubmissionHandlerTest {
         }
         """, List.of("callback error")));
 
-    assertThatThrownBy(() -> handler.apply(event, AUTHORISATION))
+    assertThatThrownBy(() -> handler.apply(event, USER))
         .isInstanceOf(CallbackValidationException.class);
 
     verify(cdamAttachService, never()).attachNewDocumentsAndStripHashes(any(), any(), any(), any());

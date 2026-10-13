@@ -67,7 +67,8 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     if (event.isCanSaveDraft()) {
       data.put("CanSaveDraft", "Y");
     }
-    if (!Strings.isNullOrEmpty(event.getEndButtonLabel())) {
+    // An external event's frontend is not EXUI, so it has no end button to label.
+    if (!Strings.isNullOrEmpty(event.getEndButtonLabel()) && !event.isExternal()) {
       data.put("EndButtonLabel", event.getEndButtonLabel());
     }
     if (Objects.nonNull(event.getTtlIncrement())) {
@@ -90,7 +91,7 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     data.put("SecurityClassification", "Public");
 
     addCallbackIfConfigured(data, callbackHost, event,
-        event.getAboutToStartCallback() != null || event.getStartHandler() != null,
+        event.getAboutToStartCallback() != null || event.hasStartHandler(),
         CallbackMetadata.ABOUT_TO_START);
     addCallbackIfConfigured(data, callbackHost, event,
         event.getAboutToSubmitCallback() != null,

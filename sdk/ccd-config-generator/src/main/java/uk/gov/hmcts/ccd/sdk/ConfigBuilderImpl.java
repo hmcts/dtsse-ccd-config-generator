@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import uk.gov.hmcts.ccd.sdk.api.AccessType;
@@ -22,6 +23,7 @@ import uk.gov.hmcts.ccd.sdk.api.AccessTypeRole.AccessTypeRoleBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Banner;
 import uk.gov.hmcts.ccd.sdk.api.CCDAccessGroup;
 import uk.gov.hmcts.ccd.sdk.api.CaseCategory.CaseCategoryBuilder;
+import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
 import uk.gov.hmcts.ccd.sdk.api.ComplexTypeAuthorisation;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
@@ -38,6 +40,9 @@ import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.api.TypedPropertyGetter;
 import uk.gov.hmcts.ccd.sdk.api.callback.Start;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalEventId;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalEventStates;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalSubmitHandler;
 
 public class ConfigBuilderImpl<T, S, R extends HasRole> implements DecentralisedConfigBuilder<T, S, R> {
 
@@ -46,12 +51,13 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   private final PropertyUtils propertyUtils = new PropertyUtils();
 
   final Map<String, List<Event.EventBuilder<T, R, S>>> events = Maps.newHashMap();
+  private final List<BiConsumer<Event<T, R, S>, Event<T, R, S>>> replacementListeners = Lists.newArrayList();
   final List<TabBuilder<T, R>> tabs = Lists.newArrayList();
   final List<SearchBuilder<T, R>> workBasketResultFields = Lists.newArrayList();
   final List<SearchBuilder<T, R>> workBasketInputFields = Lists.newArrayList();
   final List<SearchBuilder<T, R>> searchResultFields = Lists.newArrayList();
   final List<SearchBuilder<T, R>> searchInputFields = Lists.newArrayList();
-  final List<SearchCasesBuilder<T, R>> searchCaseResultFields = Lists.newArrayList();
+  final List<SearchCasesBuilder<T>> searchCaseResultFields = Lists.newArrayList();
   final List<CaseRoleToAccessProfileBuilder<R>> caseRoleToAccessProfiles = Lists.newArrayList();
   final List<CaseCategoryBuilder<R>> categories = Lists.newArrayList();
   final List<AccessTypeBuilder> accessTypes = Lists.newArrayList();
@@ -108,6 +114,12 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   @Override
   public EventTypeBuilder<T, R, S> decentralisedEvent(String id, Submit<T, S> submitHandler, Start<T, S> startHandler) {
     return new EventTypeBuilderImpl<>(config, events, id, submitHandler, startHandler);
+  }
+
+  @Override
+  public <O, I> ExternalEventStates<T, R, S, O, I> externalEvent(ExternalEventId<O, I> id,
+                                                          ExternalSubmitHandler<S, I> submitHandler) {
+    return new ExternalEventBuilderImpl<>(config, events, id, submitHandler);
   }
 
 
@@ -238,7 +250,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
-  public SearchCasesBuilder<T, R> searchCasesFields() {
+  public SearchCasesBuilder<T> searchCasesFields() {
     return registerSearchCasesBuilder(searchCaseResultFields);
   }
 
@@ -325,7 +337,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     // A mapping declared against a literal role name carries no HasRole constant, so read its name
     // from roleName instead — the same either/or RoleToAccessProfilesGenerator emits the row from.
     Set<String> mappedRoleNames = config.caseRoleToAccessProfiles.stream()
-        .map(profile -> profile.getRole() != null ? profile.getRole().getRole() : profile.getRoleName())
+        .map(CaseRoleToAccessProfile::getRoleName)
         .collect(Collectors.toCollection(HashSet::new));
 
     Map<List<String>, AccessType> derivedAccessTypes = new LinkedHashMap<>();
@@ -431,18 +443,34 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     return builder;
   }
 
-  private SearchCasesBuilder<T, R> registerSearchCasesBuilder(List<SearchCasesBuilder<T, R>> target) {
-    SearchCasesBuilder<T, R> builder = SearchCasesBuilder.builder(config.caseClass, propertyUtils);
+  private SearchCasesBuilder<T> registerSearchCasesBuilder(List<SearchCasesBuilder<T>> target) {
+    SearchCasesBuilder<T> builder = SearchCasesBuilder.builder(config.caseClass, propertyUtils);
     target.add(builder);
     return builder;
+  }
+
+  /**
+   * Internal hook for the JSON runtime; deliberately absent from ConfigBuilder.
+   * Listeners receive the replaced event and its replacement whenever a later
+   * config redefines an event ID.
+   */
+  public void onEventReplaced(BiConsumer<Event<T, R, S>, Event<T, R, S>> listener) {
+    replacementListeners.add(listener);
   }
 
   ImmutableMap<String, Event<T, R, S>> getEvents() {
     Map<String, Event<T, R, S>> result = Maps.newHashMap();
     for (Map.Entry<String, List<Event.EventBuilder<T, R, S>>> cell : events.entrySet()) {
+      Event<T, R, S> previous = null;
       for (Event.EventBuilder<T, R, S> builder : cell.getValue()) {
         Event<T, R, S> event = builder.doBuild();
+        if (previous != null) {
+          for (BiConsumer<Event<T, R, S>, Event<T, R, S>> listener : replacementListeners) {
+            listener.accept(previous, event);
+          }
+        }
         result.put(event.getId(), event);
+        previous = event;
       }
     }
 

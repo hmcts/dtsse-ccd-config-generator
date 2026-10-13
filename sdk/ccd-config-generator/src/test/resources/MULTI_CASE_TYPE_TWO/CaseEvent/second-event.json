@@ -1,0 +1,13 @@
+[
+  {
+    "CaseTypeID": "MULTI_CASE_TYPE_TWO",
+    "Description": "Second event",
+    "EndButtonLabel": "Save and continue",
+    "ID": "second-event",
+    "LiveFrom": "01/01/2017",
+    "Name": "Second event",
+    "PostConditionState": "*",
+    "PreConditionState(s)": "*",
+    "Publish": "N"
+  }
+]

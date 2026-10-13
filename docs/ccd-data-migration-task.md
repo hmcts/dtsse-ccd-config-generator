@@ -4,11 +4,25 @@ This page covers the SDK `CcdDataMigrationTask`, a reusable Java migration runne
 need to copy large CCD `case_event` history, event significant items and final `case_data` rows into
 their decentralised runtime database.
 
+Add the optional support library alongside the decentralised runtime:
+
+```groovy
+dependencies {
+  implementation 'com.github.hmcts:decentralised-runtime'
+  implementation 'com.github.hmcts:ccd-data-migration-support'
+}
+```
+
 Use this task after the FDW setup in [`fdw-data-migration.md`](fdw-data-migration.md) has created
 the FDW server, user mapping, and at least one of the CCD source foreign tables. The task creates
 any missing `fdw_stage.case_data`, `fdw_stage.case_event`, or
 `fdw_stage.case_event_significant_items` foreign tables from the same existing FDW table options so
-environments that were set up before a table was added can self-heal. The task is designed for
+environments that were set up before a table was added can self-heal. It also adds
+`use_remote_estimate 'true'` to the FDW server when that option is absent, because without it each
+event window fetches the whole source `case_data` table and times out (see
+[`fdw-data-migration.md`](fdw-data-migration.md#phase-1-set-up-fdw-objects)). An explicitly
+configured value is left unchanged. Altering the server needs ownership; if the migration user is not
+the owner the task logs a warning with the statement to run and carries on. The task is designed for
 repeated event preloads before downtime, followed by an explicit operator-run cutover after source
 writes for the selected case types have been frozen.
 
@@ -17,11 +31,15 @@ writes for the selected case types have been frozen.
 The task has one implementation with explicit modes:
 
 * `PRELOAD_EVENTS`: scheduled before cutover. Copies immutable source events by event ID high-water
-  mark and inserts provisional parent `case_data` rows so the target FK remains valid.
+  mark, subject to a transaction margin, and inserts provisional parent `case_data` rows so the
+  target FK remains valid.
 * `CUTOVER`: explicit operator action during downtime. Captures the cutover event high-water mark,
-  copies the final event delta, copies linked `case_event_significant_items` in a single set-based
-  query, refreshes target `case_data` from source, sets final case revisions, resets sequences,
-  validates, and marks the migration complete.
+  copies the final event delta, analyzes the join and filter columns of `ccd.case_data` and
+  `ccd.case_event` so cutover queries are not planned without statistics, copies linked
+  `case_event_significant_items` in a single set-based query, refreshes target `case_data` from
+  source, sets final case revisions, resets sequences, validates, and marks the migration complete.
+  `ANALYZE` needs table ownership; for any other user Postgres skips the table with a warning and
+  cutover continues, relying on autovacuum statistics.
 * `VALIDATE_ONLY`: runs final source-vs-target validation without copying data.
 
 Do not switch to `CUTOVER` automatically from a scheduler. The operator must first freeze source
@@ -42,6 +60,22 @@ The preload path keeps the target tables constraint-valid after every committed 
 * `case_event.version` and `case_event.case_revision` are calculated before insert
 * `case_event` user triggers are not disabled
 * resume position is stored as a source `case_event.id` window position after each committed batch
+
+The preload high-water mark excludes events created within the last two minutes. This is four times
+CCD's default 30-second transaction timeout and reduces the risk of advancing past a lower-ID event
+whose transaction commits after a higher-ID event. The source does not expose transaction commit
+timestamps through the FDW table, so `case_event.created_date` is used as the available proxy.
+`CUTOVER` does not apply the margin because source writes must be frozen and in-flight transactions
+drained first.
+
+Both the preload and cutover high-water marks are taken from the migrated case types' events only.
+A source database can hold events for other case types with ids far above the live sequence, for
+example data loaded with explicit ids. If the target were taken from those, progress would move past
+the ids that new events for the migrated case types are still being given, and those events would
+never be copied. Progress saved by an older SDK version that used every case type can be in that
+state. When the saved position is above the migrated case types' newest source event and newer
+source events exist than the newest copied one, the task rewinds the position to the newest copied
+event, logs a warning, and copies the gap.
 
 Preloaded `case_data` is provisional. Its purpose is to satisfy the event FK. Every copied event
 batch inserts missing parent source `case_data` rows for that batch. Significant items are copied
@@ -64,8 +98,8 @@ re-enabled in the same transaction that marks `CUTOVER` complete.
 
 ## Progress
 
-The decentralised runtime Flyway migration creates `ccd.ccd_data_migration_progress` with minimal
-state:
+The support library owns schema `ccd_data_migration` and creates
+`ccd_data_migration.ccd_data_migration_progress` with minimal state:
 
 * `task_name`
 * `config_hash`
@@ -75,10 +109,13 @@ state:
 * timestamps
 
 The migration configuration hash covers the migration identity. Runtime limits such as
-`eventIdWindowSize`, `significantItemIdWindowSize`, `maxBatchesPerRun`, `maxRunTime`, and `mode` can change between invocations.
+`eventIdWindowSize`, `significantItemIdWindowSize`, `maxBatchesPerRun`,
+`maxRunTime`, and `mode` can change between invocations.
 If the migration identity changes after a task has already created a progress row, the task fails
 fast rather than resuming under different source filters. Operators must either keep the same
 identity configuration or explicitly reset/use a new `task-name` after confirming the target state.
+
+When upgrading from a release where this task was packaged in `decentralised-runtime`, the legacy `ccd.ccd_data_migration_progress` table is dropped.
 
 ## Configuration
 
@@ -110,6 +147,10 @@ server. Create it during FDW setup with `FDW_ADDITIONAL_GRANTEE` or have Platfor
 create it manually. The Java task does not create one because the mapping contains source database
 credentials. Leave it blank to skip the extra grant. As an environment variable, use
 `CCD_DATA_MIGRATION_FDW_ADDITIONAL_SELECT_GRANTEE`.
+
+The example above is ET's prod role. `DTS JIT Access <product> DB Reader SC` roles only exist in
+prod; non-prod servers use `DTS CFT DB Access Reader` instead. See
+[Phase 1 of the FDW guide](fdw-data-migration.md#phase-1-set-up-fdw-objects) for details.
 
 For cutover, run the same task with:
 
@@ -180,18 +221,18 @@ they are unbounded on production-scale CCD data.
 ## Performance Harness
 
 The SDK integration tests include a configurable FDW migration harness that seeds a synthetic source
-dataset, runs `PRELOAD_EVENTS` and `CUTOVER` against the real decentralised runtime Flyway schema,
+dataset, runs `PRELOAD_EVENTS` and `CUTOVER` against the real runtime and support Flyway schemas,
 and verifies migrated case/event counts. By default it seeds 100,000 cases and 1,000,000 events.
 
 ```bash
-./gradlew -p sdk :decentralised-runtime:test \
+./gradlew -p sdk :ccd-data-migration-support:test \
   --tests '*CcdDataMigrationTaskIntegrationTest.migratesSeededDatasetWithinPerfHarnessLimit'
 ```
 
 Override the dataset with system properties:
 
 ```bash
-./gradlew -p sdk :decentralised-runtime:test \
+./gradlew -p sdk :ccd-data-migration-support:test \
   --tests '*CcdDataMigrationTaskIntegrationTest.migratesSeededDatasetWithinPerfHarnessLimit' \
   -Dccd.data-migration.perf.cases=10000 \
   -Dccd.data-migration.perf.events-per-case=5 \

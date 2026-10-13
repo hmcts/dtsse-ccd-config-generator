@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import lombok.SneakyThrows;
@@ -59,7 +61,8 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   }
 
   @Override
-  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, String authorisation) {
+  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, IdamService.User user) {
+    String authorisation = user.authToken();
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
@@ -124,10 +127,10 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
       eventMetadata = callbackResponse.getEventMetadata();
       significantItem = callbackResponse.getSignificantItem();
 
-      Map<String, JsonNode> normalisedData = callbackResponse.getData() == null
-          ? Map.of()
-          : mapper.convertValue(callbackResponse.getData(), JSON_NODE_MAP);
-      event.getCaseDetails().setData(normalisedData);
+      // Mirror CCD: a callback that returns no data leaves the event's data as it was.
+      if (callbackResponse.getData() != null) {
+        event.getCaseDetails().setData(mapper.convertValue(callbackResponse.getData(), JSON_NODE_MAP));
+      }
 
       if (callbackResponse.getState() != null) {
         event.getCaseDetails().setState(callbackResponse.getState().toString());
@@ -138,12 +141,29 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
         );
       }
 
-      response.setErrors(callbackResponse.getErrors());
+      response.setErrors(callbackErrors(callbackResponse));
       response.setWarnings(callbackResponse.getWarnings());
     }
 
     boolean hasSubmitted = eventConfig.getSubmittedCallback() != null;
     return new LegacySubmitOutcome(response, eventMetadata, significantItem, hasSubmitted);
+  }
+
+  /**
+   * CCD rejects an about to submit response with a non-empty error_message_override even when it has no errors.
+   * The decentralised submit response has no override field, so the override is returned to CCD as an error.
+   */
+  private static List<String> callbackErrors(AboutToStartOrSubmitResponse<?, ?> callbackResponse) {
+    String override = callbackResponse.getErrorMessageOverride();
+    if (override == null || override.isEmpty()) {
+      return callbackResponse.getErrors();
+    }
+    List<String> errors = new ArrayList<>();
+    errors.add(override);
+    if (callbackResponse.getErrors() != null) {
+      errors.addAll(callbackResponse.getErrors());
+    }
+    return errors;
   }
 
   private Optional<SubmittedCallbackResponse> runSubmittedCallback(DecentralisedCaseEvent event) {

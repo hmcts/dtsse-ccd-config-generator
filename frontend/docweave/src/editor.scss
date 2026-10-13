@@ -1,0 +1,808 @@
+.docweave-editor .ProseMirror {
+  position: relative;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  white-space: break-spaces;
+  -webkit-font-variant-ligatures: none;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0;
+}
+
+.docweave-editor .ProseMirror pre {
+  white-space: pre-wrap;
+}
+
+.docweave-editor .ProseMirror li {
+  position: relative;
+}
+
+.docweave-editor .ProseMirror-hideselection *::selection {
+  background: transparent;
+}
+
+.docweave-editor .ProseMirror-hideselection *::-moz-selection {
+  background: transparent;
+}
+
+.docweave-editor .ProseMirror-hideselection {
+  caret-color: transparent;
+}
+
+.docweave-editor .ProseMirror [draggable][contenteditable="false"] {
+  user-select: text;
+}
+
+.docweave-editor .ProseMirror-selectednode {
+  outline: 2px solid #8cf;
+}
+
+.docweave-editor li.ProseMirror-selectednode {
+  outline: none;
+}
+
+.docweave-editor li.ProseMirror-selectednode::after {
+  position: absolute;
+  inset: -2px -2px -2px -32px;
+  border: 2px solid #8cf;
+  pointer-events: none;
+  content: "";
+}
+
+.docweave-editor img.ProseMirror-separator {
+  display: inline !important;
+  margin: 0 !important;
+  border: none !important;
+}
+
+.docweave-editor .ProseMirror-gapcursor {
+  display: none;
+  position: absolute;
+  pointer-events: none;
+}
+
+.docweave-editor .ProseMirror-gapcursor::after {
+  display: block;
+  position: absolute;
+  top: -2px;
+  width: 20px;
+  border-top: 1px solid #0b0c0c;
+  animation: docweave-cursor-blink 1.1s steps(2, start) infinite;
+  content: "";
+}
+
+@keyframes docweave-cursor-blink {
+  to { visibility: hidden; }
+}
+
+.docweave-editor .ProseMirror-focused .ProseMirror-gapcursor {
+  display: block;
+}
+
+.docweave-editor {
+  --editor-gutter-width: 2.5rem;
+
+  position: relative;
+  border: 1px solid #b1b4b6;
+  color: #0b0c0c;
+  font-family: arial, sans-serif;
+  font-size: 19px;
+  line-height: 1.31579;
+}
+
+.docweave-editor__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 20px 8px var(--editor-gutter-width);
+  border-bottom: 1px solid #b1b4b6;
+  background: #f3f2f1;
+}
+
+.docweave-editor__toolbar-button {
+  appearance: none;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-width: 40px;
+  height: 40px;
+  margin-bottom: 0;
+  padding: 6px 10px;
+  border: 2px solid #0b0c0c;
+  background: #fff;
+  box-shadow: none;
+  color: #0b0c0c;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.docweave-editor__toolbar-button:hover {
+  background: #dbdad9;
+}
+
+.docweave-editor__toolbar-button:focus {
+  border-color: #0b0c0c;
+  outline: 3px solid #ffdd00;
+  outline-offset: 0;
+  background: #ffdd00;
+  box-shadow: 0 2px 0 #0b0c0c;
+}
+
+.docweave-editor__toolbar-button:disabled {
+  border-color: #505a5f;
+  background: #f3f2f1;
+  color: #505a5f;
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.docweave-editor__toolbar-icon {
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+
+.docweave-editor__toolbar-separator {
+  width: 1px;
+  height: 28px;
+  margin: 0 6px;
+  background: #b1b4b6;
+}
+
+.docweave-editor .ProseMirror {
+  min-height: 12rem;
+  padding: 20px;
+  padding-left: calc(var(--editor-gutter-width) + 20px);
+  outline: none;
+  background: linear-gradient(
+    to right,
+    #f3f2f1 0,
+    #f3f2f1 calc(var(--editor-gutter-width) - 1px),
+    #b1b4b6 calc(var(--editor-gutter-width) - 1px),
+    #b1b4b6 var(--editor-gutter-width),
+    transparent var(--editor-gutter-width)
+  );
+}
+
+.docweave-editor__revert {
+  display: flex;
+  position: absolute;
+  left: 10px;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid #505a5f;
+  border-radius: 2px;
+  background: #fff;
+  color: #505a5f;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.docweave-editor__revert:hover {
+  background: #f3f2f1;
+}
+
+.docweave-editor__revert:focus {
+  outline: 3px solid #ffdd00;
+  outline-offset: 0;
+}
+
+.docweave-editor__revert-icon {
+  display: block;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+// Read by screen readers, invisible to everyone else.
+.docweave-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.docweave-help {
+  box-sizing: border-box;
+  width: min(640px, calc(100vw - 64px));
+  max-height: 80vh;
+  margin: auto;
+  padding: 24px;
+  border: 0;
+  overflow: auto;
+  background: #fff;
+  color: #0b0c0c;
+  font-family: arial, sans-serif;
+  font-size: 19px;
+  line-height: 1.31579;
+  box-shadow: 0 8px 40px rgb(0 0 0 / 30%);
+}
+
+.docweave-help::backdrop {
+  background: rgb(11 12 12 / 55%);
+}
+
+.docweave-help__heading {
+  margin: 0 0 16px;
+  font-size: 24px;
+}
+
+.docweave-help__table {
+  width: 100%;
+  margin-bottom: 20px;
+  border-collapse: collapse;
+}
+
+.docweave-help__table th,
+.docweave-help__table td {
+  padding: 8px 12px 8px 0;
+  border-bottom: 1px solid #b1b4b6;
+  text-align: left;
+  vertical-align: top;
+}
+
+.docweave-help__table thead th {
+  border-bottom-color: #0b0c0c;
+}
+
+.docweave-help__table tbody th {
+  width: 40%;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.docweave-help__close {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 2px solid transparent;
+  background: #00703c;
+  box-shadow: 0 2px 0 #002d18;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.docweave-help__close:hover {
+  background: #005a30;
+}
+
+.docweave-help__close:focus {
+  outline: 3px solid #ffdd00;
+  outline-offset: 0;
+}
+
+.docweave-clause,
+li.docweave-clause > p {
+  box-sizing: border-box;
+}
+
+p.docweave-clause,
+li.docweave-clause > p {
+  width: fit-content;
+  max-width: 100%;
+}
+
+// A flagged list item leaves the highlight to its paragraph, so the marker
+// number stays outside the shaded area.
+li.docweave-clause {
+  border-left: 0;
+  background: transparent;
+}
+
+.docweave-clause--inserted,
+li.docweave-clause--inserted > p {
+  border-left: 4px solid #00703c;
+  background: #cce2d8;
+}
+
+.docweave-clause--modified,
+li.docweave-clause--modified > p {
+  border-left: 4px solid #1d70b8;
+  background: #d2e2f1;
+}
+
+.docweave-editor .ProseMirror li:has(.docweave-editor__revert) {
+  position: static;
+}
+
+.docweave-editor .ProseMirror-focused {
+  outline: 3px solid #ffdd00;
+  outline-offset: -3px;
+}
+
+.docweave-editor__fact-link {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 0.15em;
+}
+
+.docweave-editor__fact-link:hover,
+.docweave-editor__fact-link:focus {
+  background: #ffdd00;
+}
+
+.docweave-editor__fact-link:focus {
+  outline: 3px solid #ffdd00;
+  outline-offset: 1px;
+}
+
+// Offered beside the control a fact led to, until the reader is back.
+.docweave-editor__return {
+  display: inline-block;
+  margin: 8px 0 0;
+  padding: 6px 10px;
+  border: 2px solid #0b0c0c;
+  background: #f3f2f1;
+  box-shadow: 0 2px 0 #929191;
+  color: #0b0c0c;
+  font-family: arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.docweave-editor__return:hover {
+  background: #dbdad9;
+}
+
+.docweave-editor__return:focus {
+  outline: 3px solid #ffdd00;
+  outline-offset: 0;
+  background: #ffdd00;
+  box-shadow: 0 2px 0 #0b0c0c;
+}
+
+// Template picker: keep the search and footer visible while each pane scrolls.
+.docweave-templates {
+  box-sizing: border-box;
+  width: min(1000px, calc(100vw - 64px));
+  height: min(760px, 80vh);
+  max-width: none;
+  max-height: none;
+  margin: auto;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  background: #fff;
+  color: #0b0c0c;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 16px;
+  line-height: 1.4;
+  box-shadow: 0 8px 40px rgb(0 0 0 / 30%);
+}
+
+.docweave-templates::backdrop {
+  background: rgb(11 12 12 / 55%);
+}
+
+.docweave-templates__dialog {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.docweave-templates [hidden] {
+  display: none !important;
+}
+
+.docweave-templates__visually-hidden,
+.docweave-templates__status:not(.docweave-templates__status--error) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.docweave-templates__header {
+  display: flex;
+  justify-content: space-between;
+  flex-shrink: 0;
+  gap: 12px;
+  padding: 20px 24px 0;
+}
+
+.docweave-templates__search-row {
+  padding: 16px 24px 0;
+}
+
+.docweave-templates__label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 700;
+}
+
+.docweave-templates__hint {
+  margin-bottom: 6px;
+  color: #505a5f;
+  font-size: .9em;
+}
+
+.docweave-templates__search,
+.docweave-templates__form input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 40px;
+  padding: 5px;
+  border: 2px solid #0b0c0c;
+  border-radius: 0;
+  background: #fff;
+  color: #0b0c0c;
+  font: inherit;
+}
+
+.docweave-templates__content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  margin: 16px 24px 0;
+  border: 1px solid #b1b4b6;
+  overflow: hidden;
+}
+
+.docweave-templates__results-panel {
+  min-height: 0;
+  overflow-y: auto;
+  border-right: 1px solid #b1b4b6;
+}
+
+.docweave-templates__results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.docweave-templates__result-row {
+  border-left: 4px solid transparent;
+  border-bottom: 1px solid #f3f2f1;
+}
+
+.docweave-templates__result-row:hover {
+  background: #f3f2f1;
+}
+
+.docweave-templates__result--selected,
+.docweave-templates__result--selected:hover {
+  border-left-color: #1d70b8;
+  background: #e8f0fa;
+}
+
+.docweave-templates__result {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 12px 14px 6px;
+  background: transparent;
+  color: #0b0c0c;
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.docweave-templates__snippet {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: #505a5f;
+  font-size: .85em;
+  font-style: italic;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.docweave-templates__result-actions {
+  display: flex;
+  gap: 12px;
+  padding: 0 14px 12px;
+}
+
+.docweave-templates__result-action {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #1d70b8;
+  font: inherit;
+  font-size: .85em;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.docweave-templates__empty {
+  padding: 16px;
+  color: #505a5f;
+}
+
+.docweave-templates__preview {
+  min-height: 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding: 16px 18px;
+}
+
+.docweave-templates__preview h3 {
+  margin: 0 0 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #f3f2f1;
+  font-size: 1.15em;
+}
+
+.docweave-templates__preview p {
+  margin: 0 0 12px;
+}
+
+.docweave-templates__preview ol {
+  padding-left: 26px;
+}
+
+.docweave-templates__preview li {
+  margin-bottom: 6px;
+}
+
+.docweave-templates__actions {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid #b1b4b6;
+}
+
+.docweave-templates__button {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 2px solid transparent;
+  border-radius: 0;
+  background: #00703c;
+  box-shadow: 0 2px 0 #002d18;
+  color: #fff;
+  font-family: arial, sans-serif;
+  font-size: 19px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.docweave-templates__button:hover {
+  background: #005a30;
+}
+
+.docweave-templates__button--secondary {
+  background: #f3f2f1;
+  box-shadow: 0 2px 0 #929191;
+  color: #0b0c0c;
+}
+
+.docweave-templates__button--secondary:hover {
+  background: #dbdad9;
+}
+
+.docweave-templates__add,
+.docweave-templates__close {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  font-family: arial, sans-serif;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.docweave-templates__close {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: #0b0c0c;
+  cursor: pointer;
+}
+
+.docweave-templates__close:hover {
+  background: #f3f2f1;
+}
+
+.docweave-templates button:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+.docweave-templates button:focus,
+.docweave-templates__preview:focus,
+.docweave-templates__form input:focus,
+.docweave-templates__search:focus {
+  outline: 3px solid #ffdd00;
+  outline-offset: 0;
+}
+
+.docweave-templates__result:focus,
+.docweave-templates__preview:focus {
+  outline-offset: -3px;
+}
+
+.docweave-templates__search:focus {
+  box-shadow: inset 0 0 0 2px #0b0c0c;
+}
+
+.docweave-templates__status--error {
+  margin: 12px 24px 0;
+  border-left: 5px solid #d4351c;
+  padding-left: 16px;
+  color: #d4351c;
+  font-weight: 700;
+}
+
+.docweave-templates__form {
+  flex: 1;
+  min-height: 0;
+  padding: 16px 24px 0;
+  overflow: auto;
+  font-family: arial, sans-serif;
+}
+
+.docweave-templates__field {
+  max-width: 40rem;
+}
+
+.docweave-templates__error:not(:empty) {
+  display: block;
+  margin-bottom: 6px;
+  border-left: 5px solid #d4351c;
+  padding-left: 16px;
+  color: #d4351c;
+  font-weight: 700;
+}
+
+.docweave-templates__form input[aria-invalid="true"] {
+  border-color: #d4351c;
+}
+
+.docweave-templates__editor {
+  margin-top: 16px;
+}
+
+.docweave-templates__form .docweave-templates__actions {
+  margin-top: 16px;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.docweave-templates__date-hint {
+  margin-top: 8px;
+}
+
+.docweave-templates__dates {
+  flex: 1;
+  min-height: 0;
+  padding: 16px 24px 0;
+  overflow: auto;
+  font-family: arial, sans-serif;
+}
+
+.docweave-templates__dates h3 {
+  margin-top: 0;
+  font-size: 1.2em;
+}
+
+.docweave-templates__date {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 24px;
+  margin: 0 0 20px;
+}
+
+.docweave-templates__date fieldset {
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.docweave-templates__date-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 2px;
+}
+
+.docweave-templates .docweave-templates__date-pill {
+  border: 2px solid #b1b4b6;
+  border-radius: 18px;
+  padding: 4px 14px;
+  background: #fff;
+  color: #0b0c0c;
+  cursor: pointer;
+  font: inherit;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.docweave-templates .docweave-templates__date-pill:hover {
+  background: #f3f2f1;
+}
+
+.docweave-templates .docweave-templates__date-pill:active {
+  border-color: #1d70b8;
+  background: #1d70b8;
+  color: #fff;
+}
+
+.docweave-templates .docweave-templates__date-pill:focus {
+  outline: 3px solid #fd0;
+  outline-offset: 0;
+  box-shadow: inset 0 0 0 2px;
+}
+
+.docweave-templates__date legend {
+  padding: 0;
+}
+
+.docweave-templates__date-part {
+  display: inline-block;
+  margin-right: 16px;
+}
+
+.docweave-templates__date-part input {
+  display: block;
+  box-sizing: content-box;
+  min-height: 28px;
+  margin-top: 4px;
+  padding: 5px;
+  border: 2px solid #0b0c0c;
+  border-radius: 0;
+  background: #fff;
+  color: #0b0c0c;
+  font: inherit;
+}
+
+.docweave-templates__date-part input:focus {
+  outline: 3px solid #fd0;
+  outline-offset: 0;
+  box-shadow: inset 0 0 0 2px;
+}
+
+.docweave-templates__date-part input[aria-invalid="true"] {
+  border-color: #d4351c;
+}
+
+.docweave-templates__dates .docweave-templates__actions {
+  margin-top: 16px;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+// A date the template works out when it is inserted.
+.docweave-template-date {
+  border: 1px solid #1d70b8;
+  border-radius: 3px;
+  padding: 0 4px;
+  background: #e8f1f8;
+  color: #0b0c0c;
+  white-space: nowrap;
+}
+
+.docweave-editor .ProseMirror h3 {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.31579;
+}
+
+.docweave-editor .ProseMirror ol ol {
+  list-style-type: lower-roman;
+}

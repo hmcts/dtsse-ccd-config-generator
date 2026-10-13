@@ -48,6 +48,10 @@ public class FieldExtrasCaseType
         .retainHiddenValue()
         .mandatoryNoSummary(FieldExtrasCaseData::getNoSummaryField)
         .defaultValue("no-summary default")
+        // Positional defaultValue on a top-level field: routed to CaseEventToComplexTypes only, it
+        // must leave no DefaultValue on this field's CaseEventToFields row (the consumer regression
+        // that PR #1031's original applyDefaultValue introduced).
+        .optional(FieldExtrasCaseData::getPositionalDefaultField, null, "positional default")
         .optional(FieldExtrasCaseData::getPublishAliasField)
         .publishAs("aliasOnly");
   }

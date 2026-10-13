@@ -3,8 +3,8 @@ package uk.gov.hmcts.ccd.sdk.taskmanagement;
 import feign.RequestInterceptor;
 import feign.codec.Decoder;
 import feign.codec.Encoder;
-import org.springframework.beans.factory.ObjectFactory;
-import org.springframework.boot.autoconfigure.http.HttpMessageConverters;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.cloud.openfeign.support.FeignHttpMessageConverters;
 import org.springframework.cloud.openfeign.support.ResponseEntityDecoder;
 import org.springframework.cloud.openfeign.support.SpringDecoder;
 import org.springframework.cloud.openfeign.support.SpringEncoder;
@@ -19,12 +19,12 @@ public class TaskManagementFeignConfig {
   }
 
   @Bean
-  public Encoder feignEncoder(ObjectFactory<HttpMessageConverters> converters) {
+  public Encoder feignEncoder(ObjectProvider<FeignHttpMessageConverters> converters) {
     return new SpringEncoder(converters);
   }
 
   @Bean
-  public Decoder feignDecoder(ObjectFactory<HttpMessageConverters> converters) {
+  public Decoder feignDecoder(ObjectProvider<FeignHttpMessageConverters> converters) {
     return new ResponseEntityDecoder(new SpringDecoder(converters));
   }
 }

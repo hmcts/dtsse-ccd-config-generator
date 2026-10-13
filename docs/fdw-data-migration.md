@@ -68,7 +68,10 @@ You need:
 * a target application database connection string with permission to create extensions, schemas,
   FDW servers, user mappings and foreign tables for setup
 * a source CCD database user with read access to `case_data`, `case_event`, and
-  `case_event_significant_items`
+  `case_event_significant_items`. Use a dedicated read-only user rather than the CCD data store
+  admin or application user: `postgres_fdw` foreign tables are writable, so the role that owns
+  them (and any role granted write on them) can `INSERT`, `UPDATE`, `DELETE` and `TRUNCATE` the
+  source CCD tables with whatever rights the source user has
 * a target application database user with write access to `ccd.case_data`, `ccd.case_event`, and
   `ccd.case_event_significant_items`
 * permission for the migration user to run `SET LOCAL session_replication_role = replica`
@@ -77,6 +80,85 @@ You need:
 
 The application should be shuttered or read-only for the migrating case types before the final
 `--apply` migration run.
+
+## Operational cutover runbook
+
+The FDW setup and initial validation should be completed before the migration window. The final
+migration must run while source writes are frozen so that the source and target cannot diverge
+during cutover.
+
+### Service team preparation
+
+1. Prepare a shuttered CCD definition that blocks normal user access while retaining only the
+   punch-through access needed to verify the migration:
+   * a dedicated test superuser for post-migration smoke tests
+   * `R` access for `caseworker-wa-task-configuration` when Work Allocation verification is required
+2. Prepare any service frontends for shuttering. See the
+   [Platform shuttering guide](https://hmcts.github.io/cloud-native-platform/path-to-live/shutter.html#shutter-implementation-and-design).
+3. Prepare the CCD Flux PR that marks the case types as decentralised, for example the
+   [Special Tribunals cutover PR](https://github.com/hmcts/cnp-flux-config/pull/42025).
+4. Prepare a separate rollback PR that restores the centralised configuration, for example the
+   [Special Tribunals rollback PR](https://github.com/hmcts/cnp-flux-config/pull/42030).
+5. Agree the smoke-test cases, expected Work Allocation behaviour and go/no-go owners before the
+   migration window.
+
+### Platform Operations preparation
+
+1. Complete [Phase 1](#phase-1-set-up-fdw-objects), including the required user mappings and grants,
+   before the migration window.
+2. Make the setup and migration scripts available on the bastion or other approved runner:
+
+   ```bash
+   scp ./scripts/setup-ccd-data-fdw.sh <bastion-host>:
+   scp ./scripts/migrate-ccd-data-fdw.sh <bastion-host>:
+   ```
+
+3. Prepare the destination connection and case type environment variables described in
+   [Phase 2](#phase-2-run-the-migration).
+4. Run the migration script without `--apply` and resolve any validation failures before cutover:
+
+   ```bash
+   ./scripts/migrate-ccd-data-fdw.sh
+   ```
+
+5. Estimate the required shutter window from a representative environment. See
+   [Expected runtime](#expected-runtime) for an example; production runtime depends on the number of
+   cases and events being migrated.
+
+### On the night
+
+1. Create or identify test cases in central CCD for post-migration verification.
+2. Shutter the application and import the prepared shuttered CCD definition.
+3. Confirm writes for the migrating case types are frozen and allow in-flight source transactions
+   to finish.
+4. Run the final FDW migration:
+
+   ```bash
+   unset DELTA_SINCE
+   ./scripts/migrate-ccd-data-fdw.sh --apply
+   ```
+
+   If a full copy has already been performed and an agreed delta timestamp is being used, run the
+   final delta instead:
+
+   ```bash
+   export DELTA_SINCE='2026-04-30 10:00:00'
+   ./scripts/migrate-ccd-data-fdw.sh --apply
+   ```
+
+   Services using `CcdDataMigrationTask` should follow the preload and explicit `CUTOVER` process in
+   the [CCD data migration task guide](ccd-data-migration-task.md) instead of invoking the shell
+   migration script.
+5. Merge the prepared CCD Flux PR to mark the case types as decentralised.
+6. Complete the [post-migration checks](#post-migration-checks), including Work Allocation checks
+   where applicable.
+7. Make the go/no-go decision:
+   * **Go:** unshutter the service.
+   * **No-go:** merge the prepared CCD Flux rollback PR, confirm traffic is routed back to central
+     CCD, and then unshutter the service.
+
+The migration is non-destructive: the source cases remain in central CCD. Rollback changes the CCD
+configuration back to the centralised path; it does not require restoring source case data.
 
 ## Phase 1: Set up FDW objects
 
@@ -104,8 +186,29 @@ export DST_SCHEMA='ccd'                    # defaults to ccd
 export FDW_SCHEMA='fdw_stage'              # defaults to fdw_stage
 export FDW_SERVER='src_ccd_server'         # defaults to src_ccd_server
 export LOCAL_USER_SQL='current_user'       # role that will run the migration
-export FDW_ADDITIONAL_GRANTEE='DTS JIT Access et DB Reader SC'
+export FDW_ADDITIONAL_GRANTEE='DTS CFT DB Access Reader'
 ```
+
+`FDW_ADDITIONAL_GRANTEE` must name a role that already exists on the target server; setup fails
+part-way through if it does not. For servers built with
+[`terraform-module-postgresql-flexible`](https://github.com/hmcts/terraform-module-postgresql-flexible),
+the reader role the module creates depends on the environment:
+
+| Environment | Reader role |
+| --- | --- |
+| Non-prod (AAT, demo, ITHC, perftest) | `DTS <BUSINESS_AREA> DB Access Reader`, for example `DTS CFT DB Access Reader` |
+| Prod | `DTS JIT Access <product> DB Reader SC`, for example `DTS JIT Access et DB Reader SC` |
+
+`<product>` is the `product` passed to the module for the target server, which may differ from the
+service name (for example a service writing to another product's shared server). Check before
+running setup:
+
+```sql
+select rolname from pg_roles where rolname like 'DTS %';
+```
+
+The non-prod reader role is typically shared by everyone with CFT non-prod database read access, so
+granting it FDW access lets that whole group read the source CCD tables through `fdw_stage`.
 
 Validate the setup configuration without creating anything:
 
@@ -123,7 +226,7 @@ The setup script creates:
 
 * the `postgres_fdw` and `pgcrypto` extensions
 * the FDW staging schema, default `fdw_stage`
-* an FDW server pointing at the source CCD database
+* an FDW server pointing at the source CCD database, with `use_remote_estimate 'true'`
 * a user mapping for `LOCAL_USER_SQL` using `SRC_USER` and `SRC_PASSWORD`
 * when `FDW_ADDITIONAL_GRANTEE` is set, another user mapping for that role using the same
   source credentials
@@ -131,12 +234,24 @@ The setup script creates:
   * `fdw_stage.case_data`
   * `fdw_stage.case_event`
   * `fdw_stage.case_event_significant_items`
+* grants for `LOCAL_USER_SQL`
+* when `FDW_ADDITIONAL_GRANTEE` is set, grants for that additional role
 
 The foreign tables are created with `fetch_size '10000'` so large reads do not use the
 `postgres_fdw` default of 100 rows per cursor fetch. If the FDW objects were created before this
 option existed, recreate them with `setup-ccd-data-fdw.sh --apply` before running a large migration.
-* grants for `LOCAL_USER_SQL`
-* when `FDW_ADDITIONAL_GRANTEE` is set, grants for that additional role
+
+The server is created with `use_remote_estimate 'true'` so the planner asks the source database for
+row estimates. Without it the foreign tables have no statistics, the planner assumes `case_data` is
+tiny, and each Java task event window fetches the entire source `case_data` table (every
+jurisdiction) to join locally instead of looking cases up by `id`. On a large CCD database every
+window then exceeds the statement timeout and the preload never advances. The Java task adds the
+option when it is missing, provided the migration user owns the FDW server; otherwise it logs a
+warning with the statement to run. To add it by hand without recreating the server:
+
+```sql
+alter server src_ccd_server options (add use_remote_estimate 'true');
+```
 
 `SRC_PASSWORD_REQUIRED` defaults to `true`, matching `postgres_fdw`'s default safety check for
 non-superusers. Only set it to `false` for local/test FDW servers that use trust authentication and
@@ -152,11 +267,18 @@ tables from the same server, source schema, and fetch size options.
 
 For services using the Java task, set `ccd.data-migration.fdw-additional-select-grantee` or
 `CCD_DATA_MIGRATION_FDW_ADDITIONAL_SELECT_GRANTEE` to grant an additional team-specific reader role
-enough access to query the FDW tables, for example `DTS JIT Access et DB Reader SC`. The task grants
+enough access to query the FDW tables, for example `DTS JIT Access et DB Reader SC` in prod (see
+[Phase 1](#phase-1-set-up-fdw-objects) for the per-environment role names). The task grants
 schema usage, foreign server usage, and table select. The role must already have a user mapping for
 the FDW server; create it during setup with `FDW_ADDITIONAL_GRANTEE` or have Platform Operations
 create it manually. The Java task does not create user mappings because they contain source database
 credentials. Leave it blank to skip the extra grant.
+
+## Post-migration FDW cleanup
+
+After migration and cutover have completed, follow the
+[CCD data migration cleanup guide](ccd-data-migration-cleanup.md) to remove the temporary FDW
+connection from the application database.
 
 For services using the Java task, `case_event_significant_items` is copied during `CUTOVER` after
 events have caught up. It uses one set-based insert query joined through the migrated target events
@@ -277,9 +399,12 @@ After a successful run, smoke test:
 * edit a migrated case and confirm a new event can be created
 * create a new case
 * confirm search/indexing still works for newly created or edited cases
+* confirm Work Allocation can read the case through the
+  `caseworker-wa-task-configuration` punch-through role, where applicable
+* confirm Work Allocation Service Bus messages are published, where applicable
 
 ## Automated regression test
 
-`./gradlew verifyCcdMigration` runs the FDW migration test as well as the classic migration test.
-The FDW test uses the shared fixture under `scripts/migration-test/` to verify setup, full
-migration, delta migration, revision alignment, trigger suppression and constraint restoration.
+`./gradlew verifyCcdMigration` uses the fixture under `scripts/migration-test/` to verify FDW
+setup, full migration, delta migration, revision alignment, trigger suppression and constraint
+restoration.

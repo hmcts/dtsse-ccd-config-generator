@@ -44,3 +44,24 @@ Viewers still get a coherent, monotonic history (“what happened, and in what o
 If, for example, a blob update and a case note insertion were to race, one acquires the case lock first. The other waits, then runs, and both succeed. The event log reflects the order they committed and accurately reflects the changes each made.
 
 Note that this is a tightening of CCD's current implementation which allows multiple event submissions to run in parallel, only one of which will commit.
+
+## Non-concurrent events
+
+Events are concurrent by default, meaning they may still commit even if other events commit between their start and submission.
+
+Note that the legacy ccd.case_data.data json blob is protected by an optimistic lock; its concurrent modification will be rejected regardless of event concurrency settings.
+
+An event can still opt into a case-wide optimistic lock:
+
+```java
+configBuilder
+    .decentralisedEvent("amendFlags", this::submit)
+    .forAllStates()
+    .nonConcurrent();
+```
+
+In the above example `amendFlags` will be rejected and return an HTTP 409 if **any** event has committed to the case since `amendFlags` was started.
+
+Your own custom events that are concurrent-safe, eg. using inserts and merges, may still modify case flags and links and can remain concurrent.
+
+Mark an event non-concurrent when its submit handler writes potentially stale values, such as a collection edited in XUI and updated as a value eg. CCD/XUI's case flag and link management events.

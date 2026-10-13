@@ -4,6 +4,54 @@ tasks.register('check') {
     }
 }
 
+project(':adoption') {
+    pluginManager.withPlugin('hmcts.ccd.sdk') {
+        ccdSdk {
+            jackson2ClasspathGuard {
+                allowedComponents = [
+                    'com.github.hmcts:core-case-data-store-client:6.1.0'
+                ]
+            }
+        }
+    }
+}
+
+project(':pcs') {
+    // Each pcs-api integration test JVM starts its own Postgres container, so the tests can run across forks.
+    // pcs-api pins its Test tasks to one fork, so this has to apply after its build script.
+    afterEvaluate {
+        tasks.named('integration') { task ->
+            maxParallelForks = 2
+
+            // CI splits the integration tests across jobs with -PintegrationShard=<index>/<count>, dealing the
+            // top-level *IT and *Test classes out in name order so each job gets the same number. Other classes,
+            // such as base classes and test configuration, aren't tests themselves, so every job keeps them.
+            def shard = providers.gradleProperty('integrationShard')
+            if (shard.isPresent()) {
+                def (index, count) = shard.get().tokenize('/')*.toInteger()
+                def topLevelClass = { String path -> path.replaceAll(/(\$.*)?\.class$/, '') }
+                def isTestClass = { String name -> name ==~ /.*(IT|Test)$/ }
+                def shardOf = null
+                task.exclude { element ->
+                    if (element.directory || !element.name.endsWith('.class')) {
+                        return false
+                    }
+                    if (shardOf == null) {
+                        def classes = task.testClassesDirs.files.collectMany { dir ->
+                            fileTree(dir).matching { include '**/*.class' }.files.collect {
+                                topLevelClass(dir.toPath().relativize(it.toPath()).toString().replace(File.separator, '/'))
+                            }
+                        }.unique().findAll(isTestClass).sort()
+                        shardOf = classes.withIndex().collectEntries { name, i -> [name, i % count + 1] }
+                    }
+                    def name = topLevelClass(element.relativePath.pathString)
+                    shardOf.containsKey(name) && shardOf[name] != index
+                }
+            }
+        }
+    }
+}
+
 tasks.register('allTests')
 
 gradle.afterProject { project, _ ->
@@ -12,7 +60,8 @@ gradle.afterProject { project, _ ->
         project.tasks.matching { it.name == taskName }.configureEach { task ->
             if ((project.path == ':nfdiv' && taskName == 'cftlibTest')
                 || (project.path == ':sptribs' && taskName == 'cftlibTest')
-                || project.path == ':ccd-data-store-api') {
+                || project.path == ':ccd-data-store-api'
+                || project.path == ':ia') {
                 return
             }
             aggregate.configure { dependsOn(task) }
@@ -36,11 +85,6 @@ tasks.register('publishToAzureArtifacts') { task ->
             task.dependsOn(included.task(':publishToAzureArtifacts'))
         }
     }
-    subprojects.each { subproject ->
-        task.dependsOn(
-            subproject.tasks.matching { it.name.endsWith('ToAzureArtifactsRepository') }
-        )
-    }
 }
 
 def configurePostgresClientTools = { task ->
@@ -57,16 +101,6 @@ def configurePostgresClientTools = { task ->
 }
 
 tasks.register('verifyCcdMigration', Exec) {
-    group = 'verification'
-    description = 'Validates the classic and FDW CCD migration scripts after the e2e environment is up'
-    dependsOn ':e2e:dumpCCDDefinitions'
-    dependsOn 'verifyCcdMigrationFdw'
-    workingDir projectDir
-    configurePostgresClientTools(it)
-    commandLine 'bash', '-lc', './scripts/test-migrate-ccd-data.sh'
-}
-
-tasks.register('verifyCcdMigrationFdw', Exec) {
     group = 'verification'
     description = 'Validates and applies the FDW CCD migration scripts after the e2e environment is up'
     dependsOn ':e2e:dumpCCDDefinitions'
@@ -90,9 +124,11 @@ subprojects.each { subproject ->
                 // Ensure the local SDK projects are packaged so they appear on the manifest classpath
                 task.dependsOn gradle.includedBuild('sdk').task(':ccd-config-generator:jar')
                 task.dependsOn gradle.includedBuild('sdk').task(':decentralised-runtime:jar')
+                task.dependsOn gradle.includedBuild('sdk').task(':ccd-data-migration-support:jar')
                 task.dependsOn gradle.includedBuild('sdk').task(':ccd-runtime-indexing:jar')
                 task.dependsOn gradle.includedBuild('sdk').task(':ccd-servicebus-support:jar')
                 task.dependsOn gradle.includedBuild('sdk').task(':task-management:jar')
+                task.dependsOn gradle.includedBuild('sdk').task(':document-bundling:jar')
             }
         }
     }
@@ -109,4 +145,11 @@ if (project.findProject(':ccd-data-store-api')) {
             }
         }
     }
+}
+
+// ia-case-api is here to generate its definition and compile its tests. Its own checks (checkstyle
+// against a config path relative to its repo, integration tests needing its Spring Boot 3 runtime)
+// cannot run in this build, so its check does nothing.
+findProject(':ia')?.afterEvaluate { ia ->
+    ia.tasks.named('check').configure { setDependsOn([]) }
 }

@@ -74,6 +74,30 @@ return new JsonBackedCCDConfig<MyCaseData, MyState, MyRole>(
 ) {};
 ```
 
+### Sharing and overriding events in Java
+
+A Java `CCDConfig` can apply to multiple JSON-backed case types by overriding `caseTypeIds()`, for example:
+
+```java
+@Override
+public Set<String> caseTypeIds() {
+    return Set.of("ET_EnglandWales", "ET_Scotland");
+}
+```
+
+Use the same case data, state and role types as the corresponding JSON-backed configs.
+
+Leave Java overrides at the default Spring order so they run after JSON-backed configs, which use
+`Ordered.HIGHEST_PRECEDENCE`.
+
+A Java event applied after JSON with the same ID replaces the complete JSON-derived runtime event, including its
+callbacks and retry settings, so declare everything the replacement needs in Java. A callback-based replacement
+must retain the original JSON callbacks and those of the event it replaces; dropping a phase fails configuration
+resolution, including after an intermediate decentralised replacement.
+
+`decentralisedEvent` replaces both callback phases with its submit handler. Retain JSON callback URLs and endpoints
+until older instances and outstanding callback requests have drained.
+
 ### Callback invocation
 
 [`JsonCallbackBridge`][jcb] adapts JSON callback URLs into SDK callback handlers.
@@ -160,7 +184,7 @@ The submit flow remains the standard decentralised runtime flow:
 8. The transaction commits.
 9. The deferred response supplier invokes the `submitted` callback and applies confirmation header/body values.
 
-If no JSON callback URL is configured for an event phase, that phase is a no-op.
+For events without a Java override, a phase with no JSON callback URL is a no-op.
 
 ## ET compatibility notes
 

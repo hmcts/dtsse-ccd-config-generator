@@ -1,7 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
-import static org.apache.commons.lang3.StringUtils.capitalize;
+import static org.springframework.util.StringUtils.capitalize;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.caseFieldIds;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.ccdAnnotation;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
@@ -20,13 +20,13 @@ import com.google.common.collect.Table;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import org.apache.commons.lang3.ArrayUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
@@ -229,7 +229,16 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
     return null == ccdAnnotation || ccdAnnotation.access().length == 0
         ? defaultAccessControl
         : ccdAnnotation.inheritAccessFromParent()
-            ? ArrayUtils.addAll(defaultAccessControl, ccdAnnotation.access())
+            ? concat(defaultAccessControl, ccdAnnotation.access())
             : ccdAnnotation.access();
+  }
+
+  private static <A> A[] concat(A[] first, A[] second) {
+    if (null == first) {
+      return second.clone();
+    }
+    A[] result = Arrays.copyOf(first, first.length + second.length);
+    System.arraycopy(second, 0, result, first.length, second.length);
+    return result;
   }
 }

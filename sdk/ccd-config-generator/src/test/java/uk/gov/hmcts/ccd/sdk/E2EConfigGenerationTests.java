@@ -371,6 +371,28 @@ public class E2EConfigGenerationTests {
         CcdConfigComparator.assertEquivalent(expected, actual, JSONCompareMode.NON_EXTENSIBLE, "CaseTypeID");
     }
 
+    @Test
+    public void appliesSharedConfigToMultipleCaseTypes() {
+        for (String caseType : new String[] {"MULTI_CASE_TYPE_ONE", "MULTI_CASE_TYPE_TWO"}) {
+            Map<String, File> actual = CcdConfigComparator.dirToMap(
+                new File(tmp.getRoot(), caseType + "/CaseEvent")
+            );
+            Map<String, File> expected = CcdConfigComparator.resourcesDirToMap(caseType + "/CaseEvent");
+            CcdConfigComparator.assertEquivalent(expected, actual);
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void emitsFieldTypeCompletionFields() {
+        // See uk.gov.hmcts.reform.FieldTypeCompletionCaseData: typeOverride = WaysToPay pins the
+        // new base FieldType constant, and the JudicialUser/CaseQueriesCollection fields pin the
+        // new predefined complex types resolving to their FieldType via class-level @ComplexType.
+        File expected = resourceFile("FieldTypeCompletion/CaseField.json");
+        File actual = new File(tmp.getRoot(), "FieldTypeCompletion/CaseField.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
     @SneakyThrows
     @Test
     public void emitsSearchExtras() {
@@ -398,22 +420,12 @@ public class E2EConfigGenerationTests {
     @SneakyThrows
     @Test
     public void emitsSearchCasesRoleAndUseCase() {
-        // Role/use-case scoping of SearchCasesResultFields rows, keeping the historic default row
-        // (empty UserRole, UseCase=orgcases) byte-identical alongside the opted-in rows.
+        // Role/use-case scoping of SearchCasesResultFields rows alongside the default row (empty
+        // UserRole, UseCase=orgcases), and the DisplayContextParameter/ResultsOrdering values of
+        // both the fluent and positional overloads.
         File expected = resourceFile("SearchCasesRole/SearchCasesResultFields/SearchCasesResultFields.json");
         File actual =
             new File(tmp.getRoot(), "SearchCasesRole/SearchCasesResultFields/SearchCasesResultFields.json");
-        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
-    }
-
-    @SneakyThrows
-    @Test
-    public void emitsFieldTypeCompletionFields() {
-        // See uk.gov.hmcts.reform.FieldTypeCompletionCaseData: typeOverride = WaysToPay pins the
-        // new base FieldType constant, and the JudicialUser field pins the new predefined complex
-        // type resolving to FieldType "JudicialUser" via its class-level @ComplexType.
-        File expected = resourceFile("FieldTypeCompletion/CaseField.json");
-        File actual = new File(tmp.getRoot(), "FieldTypeCompletion/CaseField.json");
         CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
     }
 

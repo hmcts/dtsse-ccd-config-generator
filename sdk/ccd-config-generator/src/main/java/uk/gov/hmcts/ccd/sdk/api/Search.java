@@ -117,9 +117,8 @@ public class Search<T, R extends HasRole> {
   /**
    * Per-field configurer for the optional search/workbasket columns. Obtained via
    * {@link SearchBuilder#field(TypedPropertyGetter, String, Consumer)}; every setter returns
-   * {@code this} for chaining and any column left unset is omitted from the row (so a field that only
-   * calls, say, {@link #listElementCode(String)} produces exactly the same row as before plus that one
-   * column). See that method for the per-sheet rules governing which columns are legal where.
+   * {@code this} for chaining and any column left unset is omitted from the row. See that method for
+   * the per-sheet rules governing which columns are legal where.
    */
   public static class FieldBuilder<R extends HasRole> {
     private final SearchField.SearchFieldBuilder<R> field;

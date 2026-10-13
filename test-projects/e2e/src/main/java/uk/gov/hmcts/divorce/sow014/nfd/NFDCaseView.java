@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.CaseView;
 import uk.gov.hmcts.ccd.sdk.CaseViewRequest;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
+import uk.gov.hmcts.divorce.bundling.CaseBundleRepository;
 import uk.gov.hmcts.divorce.caseworker.model.CaseNote;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
@@ -19,9 +20,13 @@ public class NFDCaseView implements CaseView<CaseData, State> {
     @Autowired
     private NamedParameterJdbcTemplate db;
 
+    @Autowired
+    private CaseBundleRepository caseBundleRepository;
+
     @Override
     public CaseData getCase(CaseViewRequest<State> request, CaseData blobCase) {
         blobCase.setNotes(loadNotes(request.caseRef()));
+        blobCase.setCaseBundles(caseBundleRepository.findByCase(request.caseRef()));
         blobCase.setHyphenatedCaseRef(CaseData.formatCaseRef(request.caseRef()));
         return blobCase;
     }

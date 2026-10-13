@@ -26,6 +26,12 @@ management:
     case-document-am-api:
       enabled: ${ENABLE_CDAM:true}
 spring:
+  servlet:
+    multipart:
+      # The dm-store stub receives the embedded CDAM's document uploads (stitched bundles run to
+      # several megabytes); the default 1MB multipart ceiling would reject them.
+      max-file-size: 100MB
+      max-request-size: 100MB
   datasource:
     url: jdbc:postgresql://localhost:6432/nfd
     username: postgres
@@ -636,3 +642,10 @@ SERVICE_AUTH_MICROSERVICE: nfdiv_case_api
 role-assignment-service:
   url: http://localhost:4096
   maxResults: 20
+ccd:
+  bundling:
+    docmosis:
+      # The e2e app hosts its own Docmosis stub (DocmosisStubController), preserving the
+      # "runs locally without shared services" goal. Office conversion round-trips through it.
+      convert-endpoint: ${DOCMOSIS_ENDPOINT:http://localhost:4013/stub/rs/convert}
+      access-key: ${DOCMOSIS_ACCESS_KEY:stub-access-key}

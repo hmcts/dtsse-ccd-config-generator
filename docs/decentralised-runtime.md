@@ -5,16 +5,23 @@ teams can shift case ownership without rebuilding everything from scratch.
 
 ## Onboarding
 
-Opt in via the Gradle `ccd {}` block:
+Apply the `hmcts.ccd.sdk` Gradle plugin and declare the runtime library without a version:
 
 ```groovy
 ccd {
   configDir = file('build/definitions')
-  decentralised = true
+}
+
+dependencies {
+  implementation 'com.github.hmcts:decentralised-runtime'
+  // For indexing in the local cftlib stack (requires the cftlib plugin):
+  cftlibImplementation 'com.github.hmcts:ccd-runtime-indexing'
 }
 ```
 
-Setting `decentralised = true` adds the [decentralised-runtime](../sdk/decentralised-runtime) as a dependency to your project.
+The SDK plugin imports its BOM to supply library versions and detects the declared runtime dependency to configure
+decentralised cftlib support. The old `ccd.decentralised` flag is deprecated and logs a warning.
+See [SDK libraries](../README.md#sdk-libraries) for configuration choices and migration from the old flags.
 
 ## Native Notice of Change endpoints
 
@@ -124,7 +131,7 @@ the SDK-before-application ordering.
 
 - `case_data` mirrors CCD’s `case_data` table, including metadata such as state, security classification, TTL and the JSON payload.
 - `case_event` mirrors CCD’s `case_event` table and adds an idempotency key.
-- `es_queue` tracks cases that require Elasticsearch indexing 
+- `es_queue` tracks cases that require Elasticsearch indexing
 - `message_queue_candidates` mirrors CCD’s Service Bus transactional outbox table.
 
 
@@ -187,7 +194,14 @@ The SDK maintains a queue of cases requiring Elasticsearch indexing in `ccd.es_q
 
 - **Reindex helper:** `CaseReindexingService` (in `sdk/decentralised-runtime`) lets you count and enqueue cases modified since a given date. Autowire the bean and call `enqueueCasesModifiedSince(LocalDate)` to repopulate `ccd.es_queue` without bumping `case_revision`; the decentralised indexer uses `EXTERNAL_GTE` so same-revision rewrites are accepted while older revisions still conflict. A successful reindex automatically clears older `ccd.es_dead_letter_queue` rows for the same case reference and `index_id`.
 
-The runtime indexer is provided by the `ccd-runtime-indexing` module when `runtimeIndexing = true`.
+To run the indexer in your application, declare it on `implementation` instead of `cftlibImplementation`:
+
+```groovy
+dependencies {
+  implementation 'com.github.hmcts:ccd-runtime-indexing'
+}
+```
+
 Configure the target cluster with `ELASTIC_SEARCH_HOSTS`; multiple hosts can be supplied as a comma-separated
 list, for example `ELASTIC_SEARCH_HOSTS=http://es-1:9200,http://es-2:9200`.
 
@@ -202,7 +216,35 @@ The SDK wraps every case event inside a database transaction covering:
 - insert into `ccd.case_event` (audit history)
 - insert into the Elasticsearch queue table
 
-The orchestration lives in [`CaseSubmissionService`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/CaseSubmissionService.java). If a concurrent update to `ccd.case_data` is detected, a `409 CONFLICT` is returned and the transaction rolls back, aligning behaviour with CCD.
+The common transaction ordering lives in [`CaseEventTransactionCoordinator`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/CaseEventTransactionCoordinator.java) and is used by both CCD submissions and [local system events](./system-events.md). If a concurrent update to `ccd.case_data` is detected, a `409 CONFLICT` is returned and the transaction rolls back, aligning behaviour with CCD.
+
+### After the commit
+
+A submit handler can register work to run once its event has committed, before the response is returned, with `afterCommit(Runnable)`. Nothing runs if the event does not commit.
+
+An action that throws fails the request although the event has committed, as any failure after the commit would. A retry with the same idempotency key returns the case as the event left it, without running the actions again.
+
+A typical use is closing the Work Allocation task the user came from. The handler queues the task's completion in the event's transaction, so it is only sent if the event commits and is retried if sending fails, then waits for it after the commit, so the task has gone from the user's list when their page reloads:
+
+```java
+public record ReviewDecision(String taskId, boolean approved) {
+}
+
+private ExternalSubmitResponse<State> submit(ExternalSubmitRequest<ReviewDecision> submit) {
+    ReviewDecision decision = submit.payload();
+    reviews.record(submit.caseReference(), decision.approved());
+
+    // Queued in the event's transaction: it exists only if the event commits.
+    var completion = taskCompletions.schedule(decision.taskId());
+
+    // Once the event has committed, before the response: wait for the completion to be sent.
+    submit.afterCommit(completion::await);
+
+    return ExternalSubmitResponse.accepted("Review recorded", "Recorded a review decision");
+}
+```
+
+A decentralised event's handler registers work the same way, through `EventPayload.afterCommit(Runnable)`.
 
 ## Supplementary data
 
@@ -218,7 +260,70 @@ The SDK's `ccd-servicebus-support` module provides:
 - a scheduled publisher (`CcdCaseEventScheduler`) governed by the `ccd.servicebus.*` properties
 - a startup validator that simply opens a producer on the configured destination and closes it immediately.
 
+Add it without a version; the SDK plugin's BOM supplies it:
+
+```groovy
+dependencies {
+  implementation 'com.github.hmcts:ccd-servicebus-support'
+}
+```
+
+This replaces the deprecated `ccd.caseEventServiceBus` flag.
+
 The validator runs during application boot and fails the service fast if the topic does not exist or the supplied credentials lack `Send` rights.
+
+## External events
+
+An external event is one a bespoke frontend, such as a citizen or judicial journey, drives through CCD's API.
+
+External events may have bespoke payloads for both event start and event submission:
+
+```java
+// What the frontend is sent when it starts the event, and what it submits.
+public record MakeOrderStart(String caseName, List<String> parties) {}
+public record MakeOrderRequest(String orderType, String notes) {}
+
+public static final ExternalEventId<MakeOrderStart, MakeOrderRequest> MAKE_ORDER =
+    ExternalEventId.of("makeOrder", MakeOrderStart.class, MakeOrderRequest.class);
+
+configBuilder.externalEvent(MAKE_ORDER, this::submit)
+    .forStates(State.CASE_ISSUED)
+    .name("Make an order")
+    .grant(Permission.CRUD, UserRole.JUDGE)
+    .onStart(this::start);
+
+// Given the case reference and the user; answers the payload the frontend is sent.
+private ExternalStartResponse<MakeOrderStart> start(ExternalStartRequest start) {
+    return ExternalStartResponse.started(new MakeOrderStart(...));
+}
+
+// Given the case reference, the payload the frontend submitted and the user.
+private ExternalSubmitResponse<State> submit(ExternalSubmitRequest<MakeOrderRequest> submit) {
+    MakeOrderRequest order = submit.payload();
+    ...
+    return ExternalSubmitResponse.accepted("Order draft saved", "Saved an order as a draft");
+}
+```
+
+The submit handler is required. It answers `accepted(summary, description)`, optionally `.movingTo(state)`, or `rejected(errors)`, which the frontend receives as a 422.
+
+The start handler is optional. It answers `ExternalStartResponse.started(payload)` or `rejected(errors)`. Without one the event has no about-to-start callback and the frontend is sent no payload.
+
+Both requests carry `user()`: the IDAM id and roles of the user driving the event, and their bearer token for the handler's calls to downstream services such as CDAM.
+
+A handler rejects either by returning a rejection, or, from code below the handler where returning one is awkward, by throwing one:
+
+```java
+throw ExternalRejection.because("Choose an order type");
+```
+
+Both have the same effect: the frontend receives the errors, and a submission's database writes are rolled back.
+
+The payloads travel in the case field named by `DecentralisedConfigBuilder.PAYLOAD_FIELD`, `sdkEventPayload`, which the SDK defines for the case type with create and read permission for the event's roles.
+
+The frontend reads the start payload from that field of the start-event response, as a JSON string, and posts its own payload back in the same field. The SDK handles serialisation with the application's `ObjectMapper`.
+
+Like decentralisedEvents, external events cannot mutate the `ccd.case_data.data` json blob column.
 
 ## Event submission flow
 

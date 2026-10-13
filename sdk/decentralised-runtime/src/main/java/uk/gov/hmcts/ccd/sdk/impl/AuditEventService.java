@@ -23,6 +23,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedAuditEvent;
@@ -37,56 +39,79 @@ import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 @Service(value = "uk.gov.hmcts.ccd.sdk.impl.AuditEventService")
 class AuditEventService {
 
+  private static final String LOAD_HISTORY_SQL_TEMPLATE = """
+      select ce.id,
+             ce.created_date,
+             ce.security_classification,
+             ce.case_type_version,
+             ce.event_id,
+             ce.summary,
+             ce.description,
+             ce.user_id,
+             ce.case_type_id,
+             ce.state_id,
+             ce.user_first_name,
+             ce.user_last_name,
+             ce.event_name,
+             ce.state_name,
+             ce.proxied_by,
+             ce.proxied_by_first_name,
+             ce.proxied_by_last_name,
+             %s as data,
+             cast(:caseRef as bigint) as "case_reference",
+             significant_item.description as significant_item_description,
+             significant_item."type"::text as significant_item_type,
+             significant_item.url as significant_item_url
+      from ccd.case_event ce
+           left join ccd.case_event_significant_items significant_item
+             on significant_item.case_event_id = ce.id
+      -- Resolve the case ID once so PostgreSQL can preserve the (case_data_id, id desc) index order.
+      where ce.case_data_id = (
+        select cd.id
+        from ccd.case_data cd
+        where cd.reference = :caseRef
+      )
+      %s
+      order by ce.id desc
+      """;
+  // We create two different final SQL queries rather than parameterising the template at runtime for performance;
+  // fetching a single event vs bulk require different optimal query plans.
+  private static final String LOAD_HISTORY_SQL = LOAD_HISTORY_SQL_TEMPLATE.formatted(
+      "'{}'::jsonb",
+      ""
+  );
+  private static final String LOAD_HISTORY_EVENT_SQL = LOAD_HISTORY_SQL_TEMPLATE.formatted(
+      "ce.data",
+      "and ce.id = :eventId"
+  );
+
   private final NamedParameterJdbcTemplate ndb;
   private final ObjectMapper defaultMapper;
   private final Optional<MessagePublisher> publisher;
   private final ResolvedConfigRegistry registry;
 
-  public List<DecentralisedAuditEvent> loadHistory(long caseRef) {
-    final String sql = """
-        select ce.*,
-               cd.reference as "case_reference",
-               significant_item.description as significant_item_description,
-               significant_item."type"::text as significant_item_type,
-               significant_item.url as significant_item_url
-        from ccd.case_event ce
-             join ccd.case_data cd on cd.id = ce.case_data_id
-             left join lateral (
-               select item.description, item."type", item.url
-               from ccd.case_event_significant_items item
-               where item.case_event_id = ce.id
-               order by item.id desc
-               limit 1
-             ) significant_item on true
-        where cd.reference = :caseRef
-        order by id desc
-        """;
+  @Transactional(propagation = Propagation.MANDATORY)
+  long reserveCaseEventId() {
+    return ndb.getJdbcTemplate().queryForObject(
+        """
+        select set_config(
+            'ccd.case_event_id',
+            nextval('ccd.case_event_id_seq')::text,
+            true
+        )::bigint
+        """,
+        Long.class
+    );
+  }
 
-    return ndb.query(sql, Map.of("caseRef", caseRef), this::mapAuditEvent);
+  public List<DecentralisedAuditEvent> loadHistory(long caseRef) {
+    return ndb.query(LOAD_HISTORY_SQL, Map.of("caseRef", caseRef), this::mapAuditEvent);
   }
 
   public DecentralisedAuditEvent loadHistoryEvent(long caseRef, long eventId) {
-    final String sql = """
-        select ce.*,
-               cd.reference as "case_reference",
-               significant_item.description as significant_item_description,
-               significant_item."type"::text as significant_item_type,
-               significant_item.url as significant_item_url
-        from ccd.case_event ce
-             join ccd.case_data cd on cd.id = ce.case_data_id
-             left join lateral (
-               select item.description, item."type", item.url
-               from ccd.case_event_significant_items item
-               where item.case_event_id = ce.id
-               order by item.id desc
-               limit 1
-             ) significant_item on true
-        where cd.reference = :caseRef and ce.id = :eventId
-        """;
-
     try {
       return ndb.queryForObject(
-          sql,
+          LOAD_HISTORY_EVENT_SQL,
           Map.of("caseRef", caseRef, "eventId", eventId),
           this::mapAuditEvent
       );
@@ -98,6 +123,7 @@ class AuditEventService {
 
   @SneakyThrows
   public long saveAuditRecord(
+      long caseEventId,
       DecentralisedCaseEvent event,
       IdamService.User user,
       uk.gov.hmcts.ccd.domain.model.definition.CaseDetails currentView,
@@ -112,6 +138,7 @@ class AuditEventService {
     var eventDetails = event.getEventDetails();
     var sql = """
         insert into ccd.case_event (
+          id,
           data,
           event_id,
           user_id,
@@ -133,6 +160,7 @@ class AuditEventService {
           proxied_by_first_name,
           proxied_by_last_name)
         values (
+          :id,
           :data::jsonb,
           :event_id,
           :user_id,
@@ -180,6 +208,7 @@ class AuditEventService {
     }
 
     var params = new MapSqlParameterSource()
+        .addValue("id", caseEventId)
         .addValue("data", defaultMapper.writeValueAsString(currentView.getData()))
         .addValue("event_id", eventDetails.getEventId())
         .addValue("user_id", auditUserId)
@@ -215,7 +244,7 @@ class AuditEventService {
           user.userDetails().getUid(),
           eventDetails.getEventId(),
           oldState,
-          toCaseDetails(event.getCaseDetails()),
+          toCaseDetails(currentView),
           inserted.id(),
           inserted.createdDate()
       );

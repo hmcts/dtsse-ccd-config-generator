@@ -113,6 +113,12 @@ class RetainAndDisposeRepository {
     }
   }
 
+  void disableDatabaseAuditForTransaction() {
+    db.sql("select set_config('ccd.audit_disabled', 'true', true)")
+        .query(String.class)
+        .single();
+  }
+
   record CandidatePopulation(
       String caseTypeId,
       String state,

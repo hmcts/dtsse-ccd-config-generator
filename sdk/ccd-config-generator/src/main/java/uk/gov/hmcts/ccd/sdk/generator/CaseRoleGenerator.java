@@ -25,9 +25,8 @@ public class CaseRoleGenerator<T, S, R extends HasRole> implements ConfigGenerat
 
     final Path path = Paths.get(rootOutputfolder.getPath(), "CaseRoles.json");
 
-    // Only stamp JurisdictionID when the config opts in, so default output is byte-identical to
-    // before the column existed. The importer's CaseRoleParser reads only ID/Name/Description, so
-    // the extra column is additive.
+    // JurisdictionID is emitted only when the config opts in. The importer's CaseRoleParser reads
+    // only ID/Name/Description, so the extra column is additive.
     final String jurisdictionId = config.isEmitCaseRoleJurisdiction() ? config.getJurId() : null;
 
     final List<Map<String, Object>> caseRoles = Arrays.stream(config.getRoleClass().getEnumConstants())

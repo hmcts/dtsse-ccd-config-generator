@@ -1,0 +1,150 @@
+// Settings, tools and helpers only: the GOV.UK styles themselves come from the
+// playground stylesheet, which this page shares so they are bundled once.
+@use "govuk-frontend/dist/govuk/base" as *;
+
+.docs-introduction {
+  max-width: 48rem;
+}
+
+.docs-contents {
+  margin-bottom: govuk-spacing(8);
+}
+
+.docs-section {
+  margin-bottom: govuk-spacing(9);
+  padding-top: govuk-spacing(6);
+  border-top: 1px solid govuk-colour("black", $variant: "tint-80");
+}
+
+.docs-section__prose {
+  max-width: 48rem;
+}
+
+.docs-layout {
+  display: grid;
+  grid-template-columns: minmax(20rem, 1fr) minmax(20rem, 1fr);
+  gap: govuk-spacing(6);
+  align-items: start;
+}
+
+.docs-layout > * {
+  min-width: 0;
+}
+
+.docs-code__label {
+  @include govuk-font($size: 16);
+
+  display: block;
+  margin-bottom: govuk-spacing(1);
+  color: govuk-colour("dark-grey");
+}
+
+.docs-code__preamble,
+.docs-code__editor,
+.docs-code__static {
+  @include govuk-font($size: 16, $tabular: true);
+
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.docs-code__preamble {
+  margin: 0;
+  padding: govuk-spacing(2) govuk-spacing(3);
+  border: 2px solid govuk-colour("mid-grey");
+  border-bottom: 0;
+  background: govuk-colour("black", $variant: "tint-95");
+  color: govuk-colour("dark-grey");
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.docs-code__editor {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: govuk-spacing(2) govuk-spacing(3);
+  border: 2px solid govuk-colour("black");
+  background: govuk-colour("white");
+  color: govuk-colour("black");
+  resize: vertical;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+
+  &:focus {
+    outline: 3px solid $govuk-focus-colour;
+    outline-offset: 0;
+    box-shadow: inset 0 0 0 2px;
+  }
+}
+
+.docs-code__static {
+  margin: 0 0 govuk-spacing(4);
+  padding: govuk-spacing(3);
+  background: govuk-colour("black", $variant: "tint-95");
+  overflow-x: auto;
+}
+
+.docs-code__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: govuk-spacing(2);
+  margin-top: govuk-spacing(3);
+}
+
+.docs-code__actions .govuk-button {
+  margin-bottom: 0;
+}
+
+.docs-inputs {
+  margin-top: govuk-spacing(4);
+  padding: govuk-spacing(4);
+  background: govuk-colour("black", $variant: "tint-95");
+}
+
+.docs-inputs .govuk-form-group:last-child {
+  margin-bottom: 0;
+}
+
+.docs-error {
+  @include govuk-font($size: 16);
+
+  margin-top: govuk-spacing(3);
+  padding: govuk-spacing(3);
+  border: 4px solid $govuk-error-colour;
+  color: $govuk-error-colour;
+  white-space: pre-wrap;
+}
+
+.docs-editor__surface {
+  min-height: 12rem;
+}
+
+.docs-output {
+  margin-top: govuk-spacing(4);
+}
+
+.docs-output pre {
+  max-height: 20rem;
+  margin: 0;
+  padding: govuk-spacing(3);
+  background: govuk-colour("black", $variant: "tint-95");
+  font-size: 0.875rem;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.docs-try {
+  margin-top: govuk-spacing(6);
+  padding: govuk-spacing(4);
+  border-left: 5px solid govuk-colour("blue");
+  background: govuk-colour("black", $variant: "tint-95");
+}
+
+.docs-try .govuk-list {
+  margin-bottom: 0;
+}

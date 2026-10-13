@@ -2,7 +2,7 @@ import org.springframework.boot.gradle.plugin.SpringBootPlugin
 
 plugins {
     id("io.freefair.lombok") version "9.5.0" apply(false)
-    id("org.springframework.boot") version "3.4.3" apply(false)
+    id("org.springframework.boot") version "4.1.1" apply(false)
     id("io.spring.dependency-management") version "1.1.7" apply(false)
     id 'jacoco'
 }
@@ -13,7 +13,58 @@ repositories {
 
 def sdkCheck = tasks.register('check');
 
+def checkMigrationImmutability = tasks.register('checkMigrationImmutability') {
+    group = 'verification'
+    description = 'Fails if existing SDK library database migrations are modified, deleted, or renamed'
+
+    doLast {
+        def stdout = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', 'diff', '--name-status', '--find-renames', '--diff-filter=MDR',
+                'origin/master...HEAD', '--',
+                ':(glob,top)sdk/*/src/main/resources/**/migration/V*.sql'
+            standardOutput = stdout
+        }
+
+        def changedExistingMigrations = stdout.toString('UTF-8').readLines().findAll { it.trim() }
+
+        if (!changedExistingMigrations.isEmpty()) {
+            throw new GradleException(
+                "Existing SDK library database migrations must not be modified, deleted, or renamed. "
+                    + "Add a new migration instead.\n\n"
+                    + changedExistingMigrations.join('\n')
+            )
+        }
+    }
+}
+
+sdkCheck.configure {
+    dependsOn checkMigrationImmutability
+}
+
 subprojects {
+    version = System.getenv('RELEASE_VERSION')?.replace('refs/tags/', '') ?: 'DEV-SNAPSHOT'
+    group = 'com.github.hmcts'
+    apply plugin: 'maven-publish'
+
+    publishing {
+        repositories {
+            mavenLocal()
+            maven {
+                name = 'AzureArtifacts'
+                url = uri('https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/maven/v1')
+                credentials {
+                    username = System.getenv('AZURE_DEVOPS_ARTIFACT_USERNAME')
+                    password = System.getenv('AZURE_DEVOPS_ARTIFACT_TOKEN')
+                }
+            }
+        }
+    }
+}
+
+def javaProjects = subprojects.findAll { it.name != 'ccd-sdk-bom' }
+
+configure(javaProjects) {
     apply plugin: 'java'
     apply plugin: 'checkstyle'
     apply plugin: 'jacoco'
@@ -27,8 +78,6 @@ subprojects {
         }
     }
 
-    version = System.getenv('RELEASE_VERSION')?.replace('refs/tags/', '') ?: 'DEV-SNAPSHOT'
-
     compileJava   {
         sourceCompatibility = 21
         targetCompatibility = 21
@@ -37,11 +86,10 @@ subprojects {
 
     checkstyle {
         maxWarnings = 0
-        toolVersion = '13.10.0'
+        toolVersion = '14.3.0'
         sourceSets = [project.sourceSets.main]
     }
 
-    group = 'com.github.hmcts'
     repositories {
         mavenCentral()
         maven {
@@ -50,7 +98,6 @@ subprojects {
     }
 
     apply plugin: 'java-library'
-    apply plugin: 'maven-publish'
 
     java {
         withJavadocJar()
@@ -64,17 +111,6 @@ subprojects {
                 groupId = 'com.github.hmcts'
                 artifactId = project.name
                 version = project.version
-            }
-        }
-        repositories {
-            mavenLocal()
-            maven {
-                name = 'AzureArtifacts'
-                url = uri('https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/maven/v1')
-                credentials {
-                    username = System.getenv('AZURE_DEVOPS_ARTIFACT_USERNAME')
-                    password = System.getenv('AZURE_DEVOPS_ARTIFACT_TOKEN')
-                }
             }
         }
     }
@@ -108,12 +144,19 @@ tasks.register('jacocoAggregateReport', JacocoReport) {
     description = 'Generates an aggregate JaCoCo coverage report for all SDK subprojects.'
     group = 'verification'
 
-    subprojects.each { subproject ->
-        dependsOn subproject.tasks.withType(Test)
+    // CI runs the tests in other jobs and reports on the coverage data they hand over.
+    if (!providers.gradleProperty('coverageFromExecData').isPresent()) {
+        subprojects.each { subproject ->
+            dependsOn subproject.tasks.withType(Test).matching { it.name != 'chaosTest' }
+        }
     }
 
     def execFiles = subprojects.collect {
-        fileTree(dir: it.layout.buildDirectory.dir('jacoco'), includes: ['*.exec'])
+        fileTree(
+            dir: it.layout.buildDirectory.dir('jacoco'),
+            includes: ['*.exec'],
+            excludes: ['chaosTest.exec']
+        )
     }
     // Include e2e cftlibTest exec data when available.
     // Cannot declare a cross-build dependency on :e2e:cftlibTest from this included build;
@@ -123,8 +166,8 @@ tasks.register('jacocoAggregateReport', JacocoReport) {
 
     executionData.from = files(execFiles)
 
-    def srcDirs = subprojects.collect { it.sourceSets.main.allSource.srcDirs }.flatten()
-    def classDirs = subprojects.collect { it.sourceSets.main.output }.flatten()
+    def srcDirs = javaProjects.collect { it.sourceSets.main.allSource.srcDirs }.flatten()
+    def classDirs = javaProjects.collect { it.sourceSets.main.output }.flatten()
 
     sourceDirectories.from = files(srcDirs)
     classDirectories.from = files(classDirs)

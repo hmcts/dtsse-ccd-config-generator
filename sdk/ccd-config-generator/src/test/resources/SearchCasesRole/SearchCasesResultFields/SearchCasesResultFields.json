@@ -1,5 +1,28 @@
 [
   {
+    "CaseFieldID": "[CASE_REFERENCE]",
+    "CaseTypeID": "SearchCasesRole",
+    "DisplayContextParameter": "#DATETIMEDISPLAY(d MMMM yyyy)",
+    "DisplayOrder": 4,
+    "Label": "Case Number",
+    "LiveFrom": "03/02/2021",
+    "ResultsOrdering": "1:ASC",
+    "UseCase": "orgcases",
+    "UserRole": ""
+  },
+  {
+    "CaseFieldID": "[CREATED_DATE]",
+    "CaseTypeID": "SearchCasesRole",
+    "DisplayContextParameter": "#DATETIMEDISPLAY(dd/MM/yyyy)",
+    "DisplayOrder": 5,
+    "Label": "Created",
+    "ListElementCode": "createdLeaf",
+    "LiveFrom": "03/02/2021",
+    "ResultsOrdering": "2:DESC",
+    "UseCase": "orgcases",
+    "UserRole": ""
+  },
+  {
     "CaseFieldID": "caseName",
     "CaseTypeID": "SearchCasesRole",
     "DisplayOrder": 3,

@@ -2,8 +2,10 @@ package uk.gov.hmcts.ccd.sdk.runtime;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,6 +18,8 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 @RequestMapping("/callbacks")
 public class CallbackController {
 
+  public static final String CLIENT_CONTEXT_HEADER = "Client-Context";
+
   private final CcdCallbackExecutor executor;
 
   @Autowired
@@ -24,8 +28,11 @@ public class CallbackController {
   }
 
   @PostMapping("/about-to-start")
-  public AboutToStartOrSubmitResponse aboutToStart(@RequestBody CallbackRequest request) {
-    return executor.aboutToStart(request);
+  public AboutToStartOrSubmitResponse aboutToStart(
+      @RequestBody CallbackRequest request,
+      @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorisation,
+      @RequestHeader(value = CLIENT_CONTEXT_HEADER, required = false) String clientContext) {
+    return executor.aboutToStart(request, authorisation, clientContext);
   }
 
   @PostMapping("/about-to-submit")

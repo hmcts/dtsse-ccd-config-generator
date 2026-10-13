@@ -1,0 +1,73 @@
+<div>
+  <div class="attendance-panel__intro">
+    <h2 class="govuk-heading-m" id="attendance-heading">Attendance</h2>
+    <div id="attendance-hint" class="govuk-hint">
+      Choose attendance and optionally enter a representative's name.
+    </div>
+  </div>
+
+  {% set parties = [
+    { id: "claimant-1", kind: "claimant", number: 1, label: "Claimant: Mersey Community Housing", selected: "counsel" },
+    { id: "defendant-1", kind: "defendant", number: 1, label: "First defendant: David Jones", selected: "solicitor" },
+    { id: "defendant-2", kind: "defendant", number: 2, label: "Second defendant: Fatima Taylor", selected: "solicitors-agent" }
+  ] %}
+
+  <div class="attendance-grid" role="group" aria-describedby="attendance-hint">
+    <div class="attendance-grid__header" aria-hidden="true">
+      <span>Party</span>
+      <span>Counsel</span>
+      <span>Solicitor</span>
+      <span>Solicitor's agent</span>
+      <span>H/O or duty</span>
+      <span>In person</span>
+      <span>Written</span>
+      <span>Not present</span>
+      <span>Name</span>
+    </div>
+
+    {% for party in parties %}
+      <div class="attendance-row"
+           role="group"
+           aria-labelledby="attendance-{{ party.id }}-label"
+           data-attendance-row
+           data-party-kind="{{ party.kind }}"
+           data-party-number="{{ party.number }}">
+        <div class="attendance-party" id="attendance-{{ party.id }}-label">
+          {{ party.label }}
+        </div>
+        {% set choices = [
+          { value: "counsel", label: "Counsel" },
+          { value: "solicitor", label: "Solicitor" },
+          { value: "solicitors-agent", label: "Solicitor's agent" },
+          { value: "housing-officer" if party.kind == "claimant" else "duty-adviser", label: "Housing officer" if party.kind == "claimant" else "Duty adviser" },
+          { value: "in-person", label: "In person" },
+          { value: "letter", label: "Written representations" },
+          { value: "not-present", label: "Not present" }
+        ] %}
+        {% for choice in choices %}
+          <div class="attendance-choice">
+            <input class="govuk-radios__input"
+                   id="attendance-{{ party.id }}-{{ choice.value }}"
+                   name="attendance-{{ party.id }}"
+                   type="radio"
+                   value="{{ choice.value }}"
+                   {% if choice.value == party.selected %}checked{% endif %}>
+            <label class="govuk-visually-hidden"
+                   for="attendance-{{ party.id }}-{{ choice.value }}">
+              {{ choice.label }} for {{ party.label }}
+            </label>
+          </div>
+        {% endfor %}
+        <div>
+          <label class="govuk-visually-hidden" for="attendance-{{ party.id }}-name">
+            Representative's name for {{ party.label }} (optional)
+          </label>
+          <input class="govuk-input govuk-input--width-20"
+                 id="attendance-{{ party.id }}-name"
+                 name="attendance-{{ party.id }}-name"
+                 type="text">
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>

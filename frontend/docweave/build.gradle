@@ -1,0 +1,38 @@
+plugins {
+    id 'base'
+}
+
+tasks.register('npmInstall', Exec) {
+    workingDir projectDir
+    commandLine 'npm', 'ci'
+}
+
+tasks.register('npmTest', Exec) {
+    dependsOn 'npmBuild'
+    workingDir projectDir
+    commandLine 'npm', 'run', 'test:built'
+}
+
+tasks.register('npmBuild', Exec) {
+    dependsOn 'npmInstall'
+    workingDir projectDir
+    commandLine 'npm', 'run', 'build:lib'
+}
+
+tasks.register('npmDemo', Exec) {
+    dependsOn 'npmInstall'
+    workingDir projectDir
+    commandLine 'npm', 'run', 'build'
+}
+
+tasks.named('assemble') {
+    dependsOn 'npmBuild'
+}
+
+tasks.named('check') {
+    dependsOn 'npmTest'
+}
+
+tasks.named('clean') {
+    delete file('dist')
+}

@@ -13,7 +13,7 @@ Changes that deviate from this strategy should explain why in the PR.
 
 ## Data Migration and CCD Definition Diff Checks
 
-- `./gradlew verifyCcdMigration` exercises the classic and FDW migration scripts end-to-end.
-  The tests share the same source data fixture under `scripts/migration-test/`.
+- `./gradlew verifyCcdMigration` exercises the FDW migration scripts end-to-end using the source
+  data fixtures under `scripts/migration-test/`.
 - GitHub Actions run each test project's tests and compare generated CCD definitions against master to flag
   any discrepancies.
