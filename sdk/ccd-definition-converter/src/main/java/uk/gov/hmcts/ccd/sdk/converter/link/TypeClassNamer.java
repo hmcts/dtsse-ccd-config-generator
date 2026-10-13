@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.converter.link;
 
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -71,6 +72,49 @@ public final class TypeClassNamer {
       }
     }
     return pascalCase(id);
+  }
+
+  /**
+   * Whether a derived class name is a word plus a trailing sequence number ({@code Checklist1},
+   * {@code RespondentNotToDoEnum10}) — a name that says which one, not what it is.
+   *
+   * @param name the derived class name
+   * @return true when the name ends in a digit run preceded by a letter
+   */
+  public static boolean isNumbered(String name) {
+    return name != null && name.matches(".*[A-Za-z][0-9]+");
+  }
+
+  /**
+   * The PascalCase type name for a list option code, or null when it yields no usable name: an
+   * UPPER_SNAKE code is title-cased per word ({@code IS_ADULT} → {@code IsAdult}), any other code is
+   * PascalCased on its non-alphanumeric runs ({@code isNotEUDecision} → {@code IsNotEUDecision}). A
+   * result that is empty, does not start with a letter, or is itself {@link #isNumbered numbered}
+   * ({@code other1}) is rejected.
+   *
+   * @param code the ListElementCode
+   * @return the type name, or null
+   */
+  public static String optionTypeName(String code) {
+    if (code == null || code.isEmpty()) {
+      return null;
+    }
+    String name;
+    if (code.matches("[A-Z0-9_]+")) {
+      StringBuilder sb = new StringBuilder();
+      for (String word : code.split("_+")) {
+        if (!word.isEmpty()) {
+          sb.append(word.charAt(0)).append(word.substring(1).toLowerCase(Locale.ROOT));
+        }
+      }
+      name = sb.toString();
+    } else {
+      name = pascalCase(code);
+    }
+    if (name.isEmpty() || !Character.isLetter(name.charAt(0)) || isNumbered(name)) {
+      return null;
+    }
+    return name;
   }
 
   /**

@@ -37,6 +37,12 @@ public class ClusteredFieldRef {
   String memberGetter;
 
   /**
+   * Whether the moved field is a {@code Label}, which the config emitter places as {@code readonly}
+   * whatever its DisplayContext, exactly as it does for a Label member of CaseData.
+   */
+  boolean label;
+
+  /**
    * Package the {@link #clusterType} lives in. Null in generate mode (the cluster type is a freshly
    * generated class in the model package); set in retrofit mode when the team's
    * {@code @JsonUnwrapped} parent type lives in a different package from the root model class.

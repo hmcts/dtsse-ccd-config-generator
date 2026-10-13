@@ -28,6 +28,13 @@ public class ComplexTypeModel {
    */
   String javaClassName;
 
+  /**
+   * The package the generated class is emitted into, or null for the model package itself. Generate
+   * mode files every definition complex type under {@code <modelPackage>.complex}; retrofit mode
+   * and the synthetic {@code @JsonUnwrapped} cluster types leave it null.
+   */
+  String javaPackage;
+
   List<FieldModel> members;
 
   /**

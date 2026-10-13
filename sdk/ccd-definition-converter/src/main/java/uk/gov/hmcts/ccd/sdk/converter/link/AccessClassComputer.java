@@ -2,10 +2,10 @@ package uk.gov.hmcts.ccd.sdk.converter.link;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -17,18 +17,24 @@ import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapCollector;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapEntry;
 
 /**
- * Derives, per case field, the access grants that reproduce the AuthorisationCaseField sheet after
- * subtracting the grants the SDK's AuthorisationCaseFieldGenerator injects automatically (event,
- * caseHistory, tab/search read). Whatever a definition asks for beyond that injected baseline is the
- * field's <em>residual</em> grant map (role id to CRUD), which must be expressed on the field's
- * {@code @CCD(access = {...})}.
+ * Derives, per case field, the access grants that reproduce the AuthorisationCaseField sheet on top
+ * of the grants the SDK's AuthorisationCaseFieldGenerator injects automatically (event,
+ * caseHistory, tab/search read). Every role the injected baseline leaves short of its definition
+ * grant is part of the field's <em>residual</em> grant map (role id to CRUD), which must be
+ * expressed on the field's {@code @CCD(access = {...})}.
+ *
+ * <p><b>Normalisation.</b> A residual role carries its <em>full</em> definition CRUD, not just the
+ * permissions the injected baseline lacks. The SDK unions a field's class grants with what it
+ * injects, and the injected grant is always a subset of the definition grant (anything else is the
+ * advisory over-grant recorded in {@link #residual}), so the union is unchanged — but two fields
+ * granting a role the same CRUD now share one atom whatever the SDK happens to inject on each.
  *
  * <p><b>Emission policy — composition (nfdiv-style).</b> Instead of minting one class per distinct
  * residual pattern (thousands of single-use classes across the big case types), the converter
  * expresses every residual as a <em>union of named access-group classes</em>, exactly as a
- * hand-written HMCTS model does ({@code @CCD(access = {DefaultAccess.class, Applicant2Access.class})}).
- * This exploits the SDK's proven additive composition: a field's effective grant for a role is the
- * union of the permissions from every class it names (see
+ * hand-written HMCTS model does ({@code @CCD(access = {CaseworkerCruAccess.class,
+ * CitizenRAccess.class})}). This exploits the SDK's proven additive composition: a field's effective
+ * grant for a role is the union of the permissions from every class it names (see
  * {@code AuthorisationCaseFieldGenerator.addPermissionsFromFields}, which merges each class's
  * {@code getGrants()} into the same field/role cell). Class names never appear in the emitted
  * AuthorisationCaseField — only the resolved grants do — so any partition of a residual into classes
@@ -40,57 +46,51 @@ import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapEntry;
  *   <li><b>Atoms.</b> The finest grain is one class per distinct {@code (role -> CRUD)} pair that
  *       actually occurs — small and semantic ({@code CaseworkerCruAccess}, {@code CitizenRAccess}).
  *       A residual with distinct roles decomposes into one atom per role.</li>
- *   <li><b>Groups.</b> Frequently co-occurring atom-sets are mined into named bundles by a greedy
- *       frequent-itemset pass — the atom-set covering the most residual across the case type is
- *       carved out first, then the pass repeats on what remains. A group must be used by at least
- *       {@link #MIN_GROUP_FIELDS} fields and contain at least {@link #MIN_GROUP_ATOMS} atoms to earn
- *       a name. The single most-used group is named {@code DefaultAccess} for recognisability (the
- *       bundle most fields carry), the rest are named from their content.</li>
- *   <li><b>Per-field cover.</b> Each residual is covered greedily by the groups that carved it plus
- *       any leftover atoms. When a field would need more than {@link #MAX_CLASSES_PER_FIELD} classes,
- *       the whole residual falls back to one dedicated, semantically-named class (never {@code AccessNN})
- *       shared by every field with that exact residual.</li>
+ *   <li><b>Groups.</b> Frequently co-occurring atom-sets that grant one CRUD level to all their
+ *       roles are mined into named bundles by a greedy frequent-itemset pass — the bundle covering
+ *       the most residual across the case type is carved out first, then the pass repeats on what
+ *       remains. A group must be used by at least {@link #MIN_GROUP_FIELDS} fields, contain at least
+ *       {@link #MIN_GROUP_ATOMS} atoms and have a semantic name to be mined. Each is named from its
+ *       content ({@code JudgeLegalrepCruAccess}).</li>
+ *   <li><b>Per-field cover.</b> Each residual is covered by the groups that carved it plus any
+ *       leftover atoms. When a field would need more than {@link #MAX_CLASSES_PER_FIELD} classes,
+ *       the whole residual falls back to one dedicated, content-named class shared by every field
+ *       with that exact residual.</li>
  * </ol>
  *
  * <p>Only classes actually referenced by some field's cover are emitted (an atom always folded into a
  * group is never minted standalone). The per-case-type class counts and per-field array distribution
  * are recorded in {@link Result#summaryNote()} for the converter report.
  *
- * <p><b>Common-prefix elision.</b> Service teams' roles are conventionally namespaced
- * ({@code caseworker-probate-caseadmin}, {@code caseworker-probate-systemupdate}, …); when a
- * simple majority of the roles participating in a case type's access classes shares a
- * hyphen-delimited prefix, that prefix is redundant in every derived name and is stripped before
- * tokenisation (see {@link #computeCommonPrefix} and {@link #stripCommonPrefix}). Concretely: the
- * longest hyphen-token prefix shared by more than {@link #COMMON_PREFIX_MIN_SHARE} of the distinct
- * roles across all residual atoms — provided at least {@link #MIN_PREFIX_ROLES} roles carry it —
- * is computed once per case type (in {@link #compute}) and removed from
- * each role before it is turned into a name token — {@code caseworker-probate-caseadmin} becomes
- * {@code Caseadmin} rather than {@code CaseworkerProbateCaseadmin}. A role that has no other
- * remainder (it <em>is</em> the prefix exactly, e.g. {@code caseworker-probate}) keeps its last
- * hyphen token ({@code Probate}) so it still yields a non-empty, distinguishing name. Roles outside
- * the prefix (e.g. {@code citizen}) are never touched. Grants themselves always key on the full,
- * unstripped role id — only the derived class <em>name</em> is affected, so this cannot change what
- * a class grants.
+ * <p><b>Names.</b> A role id is split into lower-case alphanumeric tokens on every other character
+ * ({@code caseworker-ia-legalrep-solicitor}, {@code [CHILDSOLICITORA]}). Service teams' roles are
+ * namespaced, so up to {@link #MAX_PREFIX_STAGES} leading tokens are elided case-type-wide, one per
+ * pass (see {@link #computePrefixStages}): {@code caseworker-ia-legalrep-solicitor} names as
+ * {@code LegalrepSolicitor}. A multi-role name lists its roles grouped by CRUD (widest first), writes
+ * each CRUD token once after its run, factors a run of roles sharing leading tokens
+ * ({@code specific-access-admin, specific-access-judge} -> {@code SpecificAccessAdminJudge}) and
+ * collapses a one-letter series ({@code [CHILDSOLICITORA]}..{@code [CHILDSOLICITORO]} ->
+ * {@code ChildsolicitorAToO}). A name over {@link #MAX_SEMANTIC_NAME} characters is truncated to the
+ * first role's token plus a role count and a short stable digest. Grants always key on the full role
+ * id — only the derived class <em>name</em> is affected by any of this.
  */
 final class AccessClassComputer {
 
   /**
-   * The minimum share of distinct roles (participating in some case type's access classes) that
-   * must share a hyphen-token prefix before it is considered case-type-wide "common" and elided
-   * from derived names. A simple majority: real service teams' role namespaces (e.g. probate's
-   * 11/18 = 61%) commonly fall short of a supermajority while still being the dominant, redundant
-   * prefix for most roles — stripping is per-role (only prefix-carrying roles are touched, see
-   * {@link #stripCommonPrefix}), so a bare majority is enough to be safe and deterministic.
+   * The minimum share of the case type's non-case-role roles (participating in some residual) that
+   * must start with a token, with something after it, for that token to be elided from names.
    */
-  static final double COMMON_PREFIX_MIN_SHARE = 0.5;
+  static final double PREFIX_MIN_SHARE = 0.4;
 
   /**
-   * The minimum number of roles that must carry the candidate prefix, on top of clearing
-   * {@link #COMMON_PREFIX_MIN_SHARE}, before it qualifies. Guards tiny case types (e.g. 2 of 3
-   * roles sharing a prefix) where "majority" is a coincidence of a small sample rather than a
-   * real namespace convention.
+   * The minimum number of roles that must carry the candidate prefix token, on top of clearing
+   * {@link #PREFIX_MIN_SHARE}. Guards tiny case types where a "shared" token is a coincidence of a
+   * small sample rather than a real namespace convention.
    */
   static final int MIN_PREFIX_ROLES = 3;
+
+  /** How many leading tokens prefix elision may strip, one per pass. */
+  static final int MAX_PREFIX_STAGES = 3;
 
   /** A group must be used by at least this many fields to earn a name (else its atoms stand alone). */
   static final int MIN_GROUP_FIELDS = 3;
@@ -102,20 +102,26 @@ final class AccessClassComputer {
    * A field's {@code @CCD(access)} array is capped here; beyond it the residual gets one dedicated
    * class.
    */
-  static final int MAX_CLASSES_PER_FIELD = 6;
+  static final int MAX_CLASSES_PER_FIELD = 8;
 
   /** Safety bound on mined groups so a pathological input cannot loop unbounded. */
   private static final int MAX_GROUPS = 1024;
 
+  private static final int MAX_SEMANTIC_NAME = 70;
+
+  /**
+   * The minimum number of distinct roles a case type must have before prefix elision applies. With a
+   * single role there is nothing to compare it against, so it keeps its full token form.
+   */
+  private static final int MIN_ROLES_FOR_COMMON_PREFIX = 2;
+
   private final GapCollector gaps;
 
   /**
-   * The hyphen-tokens of the case type's common role prefix (e.g. {@code ["caseworker",
-   * "probate"]}), computed once per {@link #compute} call by {@link #computeCommonPrefix} and
-   * consumed by {@link #roleToken} via {@link #stripCommonPrefix}. Empty when no prefix clears the
-   * {@link #COMMON_PREFIX_MIN_SHARE} bar.
+   * The leading tokens elided from role names, in pass order (e.g. {@code ["caseworker", "ia"]}),
+   * computed once per {@link #compute} call by {@link #computePrefixStages}.
    */
-  private List<String> commonPrefixTokens = List.of();
+  private List<String> prefixStages = List.of();
 
   AccessClassComputer(GapCollector gaps) {
     this.gaps = gaps;
@@ -184,18 +190,18 @@ final class AccessClassComputer {
 
     List<Pattern> patterns = new ArrayList<>(patternsBySignature.values());
 
-    // Every role that will appear in some derived class name, so the common-prefix computation
-    // sees the same population that naming later tokenises.
+    // Every role that will appear in some derived class name, so prefix elision sees the same
+    // population that naming later tokenises.
     Set<String> rolesInResiduals = new LinkedHashSet<>();
     for (Pattern pattern : patterns) {
       for (Atom atom : pattern.atoms) {
         rolesInResiduals.add(atom.role());
       }
     }
-    commonPrefixTokens = computeCommonPrefix(rolesInResiduals);
+    prefixStages = computePrefixStages(rolesInResiduals);
 
-    // 2. Mine frequently co-occurring atom-sets into groups (greedy: carve the highest-coverage
-    //    bundle out of every pattern that contains it, then repeat).
+    // 2. Mine frequently co-occurring uniform-CRUD atom-sets into groups (greedy: carve the
+    //    highest-coverage bundle out of every pattern that contains it, then repeat).
     List<Set<Atom>> groups = mineGroups(patterns);
 
     // 3. Per-field cover: the groups that carved a pattern, then its leftover atoms; a residual that
@@ -234,8 +240,7 @@ final class AccessClassComputer {
       covers.add(cover);
     }
 
-    // 4. Assign names. DefaultAccess to the most-used group; the rest content-derived. Only referenced
-    //    classes are emitted.
+    // 4. Assign content-derived names. Only referenced classes are emitted.
     Set<String> usedNames = new LinkedHashSet<>();
     Map<Integer, String> groupNames = assignGroupNames(groups, covers, usedGroups, usedNames);
     Map<Atom, String> atomNames = assignAtomNames(atomUsage.keySet(), usedNames);
@@ -288,7 +293,7 @@ final class AccessClassComputer {
     }
 
     String note = summaryNote(fieldToClassNames, fieldsWithResidual, emittedGroups, atomList.size(),
-        fallbacks.size(), groupNames, groups, patterns, covers);
+        fallbacks.size(), groupNames, patterns, covers);
     return new Result(classes, fieldToClassNames, note);
   }
 
@@ -318,11 +323,13 @@ final class AccessClassComputer {
   }
 
   /**
-   * Greedy frequent-itemset mining. Each round, considers as candidate bundles the pairwise
-   * intersections of the still-uncovered atom-sets (plus each uncovered set itself), scores each by
-   * the residual it would cover ({@code (|bundle| - 1) * fields-using}), carves the best qualifying
-   * bundle out of every pattern that contains it, and repeats. Deterministic throughout: candidates
-   * are keyed and tie-broken by signature.
+   * Greedy frequent-itemset mining over uniform-CRUD bundles. Each round, the candidates are, per
+   * CRUD level, every pattern's still-uncovered atoms at that level and the pairwise intersections
+   * of those per-level sets, so a group always grants one permission level to each of its roles.
+   * Each candidate is scored by the residual it would cover ({@code (|bundle| - 1) * fields-using});
+   * the best qualifying bundle is carved out of every pattern that contains it, and the pass repeats.
+   * A bundle too wide for a semantic name is never mined (its roles stay atoms or fall back to a
+   * dedicated class). Deterministic throughout: candidates are keyed and tie-broken by signature.
    *
    * @param patterns the distinct residual patterns (their {@code uncovered}/{@code coverGroups} are mutated)
    * @return the mined groups, in mining order
@@ -330,60 +337,33 @@ final class AccessClassComputer {
   private List<Set<Atom>> mineGroups(List<Pattern> patterns) {
     List<Set<Atom>> groups = new ArrayList<>();
     while (groups.size() < MAX_GROUPS) {
-      Map<String, Set<Atom>> candidates = new TreeMap<>();
-      for (Pattern pattern : patterns) {
-        if (pattern.uncovered.size() >= MIN_GROUP_ATOMS) {
-          candidates.putIfAbsent(signatureOf(pattern.uncovered), pattern.uncovered);
-        }
-      }
-      for (int i = 0; i < patterns.size(); i++) {
-        Set<Atom> a = patterns.get(i).uncovered;
-        if (a.size() < MIN_GROUP_ATOMS) {
-          continue;
-        }
-        for (int j = i + 1; j < patterns.size(); j++) {
-          Set<Atom> b = patterns.get(j).uncovered;
-          if (b.size() < MIN_GROUP_ATOMS) {
-            continue;
-          }
-          Set<Atom> intersection = new LinkedHashSet<>(a);
-          intersection.retainAll(b);
-          if (intersection.size() >= MIN_GROUP_ATOMS) {
-            candidates.putIfAbsent(signatureOf(intersection), intersection);
-          }
-        }
-      }
-
       Set<Atom> best = null;
       long bestScore = -1;
-      int bestSupport = 0;
-      for (Set<Atom> candidate : candidates.values()) {
+      for (Set<Atom> candidate : uniformCandidates(patterns).values()) {
         int support = 0;
         for (Pattern pattern : patterns) {
           if (pattern.uncovered.containsAll(candidate)) {
             support += pattern.weight();
           }
         }
-        if (support < MIN_GROUP_FIELDS) {
+        if (support < MIN_GROUP_FIELDS || semanticName(grantsOf(candidate)) == null) {
           continue;
         }
         long score = (long) (candidate.size() - 1) * support;
-        // Higher coverage wins; ties to the larger, then higher-support, then signature (candidates
-        // are already iterated in signature order, so first-wins gives the signature tie-break).
+        // Higher coverage wins; ties to the larger, then signature (candidates are already iterated
+        // in signature order, so first-wins gives the signature tie-break).
         if (score > bestScore
             || (score == bestScore && best != null && candidate.size() > best.size())) {
           best = candidate;
           bestScore = score;
-          bestSupport = support;
         }
       }
 
       if (best == null) {
         break;
       }
-      // Snapshot the chosen bundle: the candidate map holds live pattern.uncovered sets, so the
-      // carve below (pattern.uncovered.removeAll(bundle)) would mutate `best` itself if it aliased
-      // one — emptying it mid-loop and matching every remaining pattern (leaking foreign atoms).
+      // Snapshot the chosen bundle: a candidate may alias a pattern's live uncovered set, which the
+      // carve below mutates.
       Set<Atom> bundle = new LinkedHashSet<>(best);
       int groupIndex = groups.size();
       groups.add(bundle);
@@ -393,16 +373,45 @@ final class AccessClassComputer {
           pattern.coverGroups.add(groupIndex);
         }
       }
-      // bestSupport is retained for readability of the loop; not otherwise needed here.
-      assert bestSupport >= MIN_GROUP_FIELDS;
     }
     return groups;
+  }
+
+  /**
+   * One mining round's candidate bundles, keyed by signature (see {@link #mineGroups}).
+   */
+  private Map<String, Set<Atom>> uniformCandidates(List<Pattern> patterns) {
+    Map<String, List<Set<Atom>>> byLevel = new TreeMap<>();
+    for (Pattern pattern : patterns) {
+      Map<String, Set<Atom>> atLevel = new TreeMap<>();
+      for (Atom atom : pattern.uncovered) {
+        atLevel.computeIfAbsent(atom.crud(), k -> new LinkedHashSet<>()).add(atom);
+      }
+      for (Map.Entry<String, Set<Atom>> entry : atLevel.entrySet()) {
+        if (entry.getValue().size() >= MIN_GROUP_ATOMS) {
+          byLevel.computeIfAbsent(entry.getKey(), k -> new ArrayList<>()).add(entry.getValue());
+        }
+      }
+    }
+    Map<String, Set<Atom>> candidates = new TreeMap<>();
+    for (List<Set<Atom>> sets : byLevel.values()) {
+      for (int i = 0; i < sets.size(); i++) {
+        candidates.putIfAbsent(signatureOf(sets.get(i)), sets.get(i));
+        for (int j = i + 1; j < sets.size(); j++) {
+          Set<Atom> intersection = new LinkedHashSet<>(sets.get(i));
+          intersection.retainAll(sets.get(j));
+          if (intersection.size() >= MIN_GROUP_ATOMS) {
+            candidates.putIfAbsent(signatureOf(intersection), intersection);
+          }
+        }
+      }
+    }
+    return candidates;
   }
 
   private Map<Integer, String> assignGroupNames(
       List<Set<Atom>> groups, List<List<CoverRef>> covers, Set<Integer> usedGroups,
       Set<String> usedNames) {
-    // Final usage per group (fields referencing it), to pick the most-used for DefaultAccess.
     Map<Integer, Integer> usage = new LinkedHashMap<>();
     for (List<CoverRef> cover : covers) {
       for (CoverRef ref : cover) {
@@ -415,18 +424,20 @@ final class AccessClassComputer {
     if (usedGroups.isEmpty()) {
       return names;
     }
-    // Most-used group -> DefaultAccess; ties break on mining order (lowest index).
-    int defaultGroup = usedGroups.stream()
+    // The most-used group (ties to the lowest mining index) claims its name first, so a collision
+    // suffix never lands on the bundle most fields carry; the rest follow in mining order.
+    int mostUsed = usedGroups.stream()
         .max(Comparator.<Integer>comparingInt(g -> usage.getOrDefault(g, 0))
             .thenComparing(Comparator.reverseOrder()))
         .orElseThrow();
-    names.put(defaultGroup, uniqueName("DefaultAccess", usedNames));
-    usedNames.add(names.get(defaultGroup));
-    // The rest, in mining order, content-derived.
+    List<Integer> order = new ArrayList<>();
+    order.add(mostUsed);
     for (int groupIndex : usedGroups) {
-      if (groupIndex == defaultGroup) {
-        continue;
+      if (groupIndex != mostUsed) {
+        order.add(groupIndex);
       }
+    }
+    for (int groupIndex : order) {
       String name = uniqueName(nameFor(grantsOf(groups.get(groupIndex))), usedNames);
       names.put(groupIndex, name);
       usedNames.add(name);
@@ -459,6 +470,10 @@ final class AccessClassComputer {
     return names;
   }
 
+  /**
+   * The field's residual: every role the injected grant leaves short of its definition grant,
+   * mapped to the full definition CRUD (see the class Javadoc on normalisation).
+   */
   private Map<String, String> residual(
       String fieldId, Map<String, String> want, Map<String, String> have) {
     Map<String, String> residual = new TreeMap<>();
@@ -499,10 +514,8 @@ final class AccessClassComputer {
             .build());
       }
 
-      Set<Character> missing = new LinkedHashSet<>(wantPerms);
-      missing.removeAll(havePerms);
-      if (!missing.isEmpty()) {
-        residual.put(role, CrudSet.format(missing));
+      if (!havePerms.containsAll(wantPerms)) {
+        residual.put(role, CrudSet.format(wantPerms));
       }
     }
     return residual;
@@ -562,7 +575,7 @@ final class AccessClassComputer {
    * @return the atom's class name (without collision suffix)
    */
   private String atomName(Atom atom) {
-    String role = roleToken(atom.role());
+    String role = pascal(roleTokens(atom.role()));
     if (role.isEmpty()) {
       return "Access" + digest(atom.signature());
     }
@@ -570,166 +583,230 @@ final class AccessClassComputer {
   }
 
   /**
-   * A deterministic, content-derived class name for a multi-role grant map. A single-role map keeps
-   * the {@code <Role>Access} form; a multi-role map is named from each role's short token plus its
-   * CRUD in title case, sorted by role (e.g. {@code {caseworker=CRU, citizen=R}} ->
-   * {@code CaseworkerCruCitizenRAccess}). When every role in the map is granted the identical CRUD,
-   * that per-role repetition is itself redundant, so the shared CRUD token is written once at the
-   * end instead of after every role (e.g. {@code {caseworker=CRU, citizen=CRU}} ->
-   * {@code CaseworkerCitizenCruAccess} rather than {@code CaseworkerCruCitizenCruAccess}) — safe
-   * because the token stream still names the same roles in the same order, just without the
-   * repeated suffix, so no information is lost and no other construction can collide with it
-   * (collisions are caught by {@link #uniqueName} regardless). When that would exceed
-   * {@link #MAX_SEMANTIC_NAME} characters the name is truncated to the first role's token plus a
-   * role count and a short stable digest.
+   * A deterministic, content-derived class name for a grant map (see the class Javadoc), falling
+   * back to {@code <FirstRole><Crud>Plus<N>Roles<Digest>Access} when the semantic form is too long.
    *
    * @param residual the grant map (role id to CRUD)
    * @return the class name (without collision suffix)
    */
   private String nameFor(Map<String, String> residual) {
-    Map<String, String> sorted = new TreeMap<>(residual);
-    if (sorted.size() == 1) {
-      Map.Entry<String, String> only = sorted.entrySet().iterator().next();
-      String pascal = roleToken(only.getKey());
-      if (!pascal.isEmpty()) {
-        return pascal + "Access";
-      }
-      return "Access" + digest(signature(residual));
+    String semantic = semanticName(residual);
+    if (semantic != null) {
+      return semantic;
     }
-    boolean uniformCrud = new HashSet<>(sorted.values()).size() == 1;
-    StringBuilder full = new StringBuilder();
-    for (Map.Entry<String, String> entry : sorted.entrySet()) {
-      full.append(roleToken(entry.getKey()));
-      if (!uniformCrud) {
-        full.append(crudToken(entry.getValue()));
-      }
-    }
-    if (uniformCrud) {
-      full.append(crudToken(sorted.values().iterator().next()));
-    }
-    String candidate = full + "Access";
-    if (candidate.length() <= MAX_SEMANTIC_NAME) {
-      return candidate;
-    }
-    Map.Entry<String, String> first = sorted.entrySet().iterator().next();
-    return roleToken(first.getKey()) + crudToken(first.getValue())
-        + "Plus" + (sorted.size() - 1) + "Roles" + digest(signature(residual)) + "Access";
-  }
-
-  private static final int MAX_SEMANTIC_NAME = 70;
-
-  /**
-   * The minimum number of distinct roles a case type must have before common-prefix elision
-   * applies. With a single role there is nothing to compare it against — "the whole role is the
-   * prefix" would be a vacuous, misleading result — so {@link #computeCommonPrefix} declines
-   * below this bound and every role keeps its full token form.
-   */
-  private static final int MIN_ROLES_FOR_COMMON_PREFIX = 2;
-
-  /**
-   * A role id turned into a PascalCase token (sanitised, brackets on case roles dropped, the
-   * case type's common role-namespace prefix elided per {@link #stripCommonPrefix}).
-   */
-  private String roleToken(String role) {
-    String cleaned = role.replace("[", "").replace("]", "");
-    String base = IdentifierSanitiser.toMemberName(stripCommonPrefix(cleaned));
-    return toPascalCase(base);
+    List<Map.Entry<List<String>, String>> entries = nameEntries(residual);
+    Map.Entry<List<String>, String> first = entries.get(0);
+    return pascal(first.getKey()) + crudToken(first.getValue())
+        + "Plus" + (entries.size() - 1) + "Roles" + digest(signature(residual)) + "Access";
   }
 
   /**
-   * The longest hyphen-token prefix shared by more than {@link #COMMON_PREFIX_MIN_SHARE} of the
-   * given roles (and by at least {@link #MIN_PREFIX_ROLES} of them), as a token list (e.g.
-   * {@code ["caseworker", "probate"]}), or empty when no prefix clears both bars or fewer than
-   * {@link #MIN_ROLES_FOR_COMMON_PREFIX} distinct roles are given.
-   *
-   * <p>Deterministic greedy extension: at each depth, the roles still matching the prefix built
-   * so far are grouped by their next hyphen token; since the groups at a given depth partition
-   * those roles, at most one group can hold &gt;{@code COMMON_PREFIX_MIN_SHARE} (a strict
-   * majority) of the <em>original</em> role count, so the winner (if any) is unambiguous — no
-   * tie-break is needed. The prefix is extended by that token and the pass repeats on the
-   * (shrinking) matching subset; it stops as soon as no token's group clears both the share and
-   * minimum-count bars, or every matching role is exhausted of tokens.
-   *
-   * @param roles the distinct role IDs participating in some case type's access-class residuals
-   * @return the shared prefix, as hyphen tokens (never null; empty when none applies)
+   * The semantic class name for a grant map, or null when it would exceed
+   * {@link #MAX_SEMANTIC_NAME}. Roles are ordered widest CRUD first; within a same-CRUD run, a role
+   * sharing leading tokens with the one before it drops them ({@code SpecificAccessAdminJudge}), and
+   * a trailing token the run's members share is written once, at the end of the run. The CRUD token
+   * follows each run.
    */
-  private List<String> computeCommonPrefix(Set<String> roles) {
-    List<List<String>> tokenLists = new ArrayList<>();
-    for (String role : roles) {
-      String cleaned = role.replace("[", "").replace("]", "");
-      if (!cleaned.isEmpty()) {
-        tokenLists.add(List.of(cleaned.split("-")));
-      }
-    }
-    int total = tokenLists.size();
-    if (total < MIN_ROLES_FOR_COMMON_PREFIX) {
-      return List.of();
-    }
-
-    List<String> prefix = new ArrayList<>();
-    List<List<String>> matching = tokenLists;
-    int depth = 0;
-    while (true) {
-      Map<String, List<List<String>>> byNextToken = new TreeMap<>();
-      for (List<String> tokens : matching) {
-        if (tokens.size() > depth) {
-          byNextToken.computeIfAbsent(tokens.get(depth), t -> new ArrayList<>()).add(tokens);
+  private String semanticName(Map<String, String> residual) {
+    List<Map.Entry<List<String>, String>> entries = nameEntries(residual);
+    List<List<String>> emitted = new ArrayList<>();
+    List<Integer> commons = new ArrayList<>();
+    List<String> prev = List.of();
+    String prevCrud = null;
+    for (Map.Entry<List<String>, String> entry : entries) {
+      List<String> tokens = entry.getKey();
+      int common = 0;
+      if (entry.getValue().equals(prevCrud)) {
+        while (common < prev.size() - 1 && common < tokens.size() - 1
+            && prev.get(common).equals(tokens.get(common))) {
+          common++;
         }
       }
-      Map.Entry<String, List<List<String>>> best = null;
-      for (Map.Entry<String, List<List<String>>> entry : byNextToken.entrySet()) {
-        if (best == null || entry.getValue().size() > best.getValue().size()) {
+      emitted.add(new ArrayList<>(tokens.subList(common, tokens.size())));
+      commons.add(common);
+      prev = tokens;
+      prevCrud = entry.getValue();
+    }
+    for (int i = 0; i + 1 < emitted.size(); i++) {
+      List<String> a = emitted.get(i);
+      List<String> b = emitted.get(i + 1);
+      if (commons.get(i + 1) > 0 && a.size() > 1 && b.size() > 1
+          && entries.get(i).getKey().size() > commons.get(i + 1) + 1
+          && a.get(a.size() - 1).equals(b.get(b.size() - 1))) {
+        a.remove(a.size() - 1);
+      }
+    }
+    StringBuilder name = new StringBuilder();
+    for (int i = 0; i < entries.size(); i++) {
+      String crud = entries.get(i).getValue();
+      name.append(pascal(emitted.get(i)));
+      if (i == entries.size() - 1 || !entries.get(i + 1).getValue().equals(crud)) {
+        name.append(crudToken(crud));
+      }
+    }
+    name.append("Access");
+    return name.length() <= MAX_SEMANTIC_NAME ? name.toString() : null;
+  }
+
+  /** A grant map as (elided role tokens, CRUD) entries in naming order, one-letter series collapsed. */
+  private List<Map.Entry<List<String>, String>> nameEntries(Map<String, String> residual) {
+    List<Map.Entry<List<String>, String>> entries = new ArrayList<>();
+    for (Map.Entry<String, String> e : residual.entrySet()) {
+      entries.add(Map.entry(roleTokens(e.getKey()), e.getValue()));
+    }
+    entries.sort(NAMING_ORDER);
+    return collapseSeries(entries);
+  }
+
+  /** Widest CRUD first, then CRUD, then the role tokens. */
+  private static final Comparator<Map.Entry<List<String>, String>> NAMING_ORDER =
+      Comparator.comparingInt((Map.Entry<List<String>, String> e) -> -e.getValue().length())
+          .thenComparing(Map.Entry::getValue)
+          .thenComparing(e -> String.join("-", e.getKey()));
+
+  /**
+   * Collapses three or more same-CRUD roles that differ only by a one-character suffix on a shared
+   * stem ({@code [CHILDSOLICITORA]..[CHILDSOLICITORO]}) into one entry {@code Childsolicitor A To O};
+   * a non-contiguous series lists its suffixes ({@code Solicitor A C F}).
+   */
+  private static List<Map.Entry<List<String>, String>> collapseSeries(
+      List<Map.Entry<List<String>, String>> entries) {
+    Map<String, List<Map.Entry<List<String>, String>>> byStem = new LinkedHashMap<>();
+    for (Map.Entry<List<String>, String> e : entries) {
+      List<String> t = e.getKey();
+      String last = t.get(t.size() - 1);
+      String key = last.length() > 2
+          ? e.getValue() + "|" + String.join("-", t.subList(0, t.size() - 1)) + "|"
+              + last.substring(0, last.length() - 1)
+          : "\u0000" + byStem.size();
+      byStem.computeIfAbsent(key, k -> new ArrayList<>()).add(e);
+    }
+    List<Map.Entry<List<String>, String>> out = new ArrayList<>();
+    for (List<Map.Entry<List<String>, String>> members : byStem.values()) {
+      if (members.size() < 3) {
+        out.addAll(members);
+        continue;
+      }
+      List<String> t0 = members.get(0).getKey();
+      String last0 = t0.get(t0.size() - 1);
+      List<Character> suffixes = new ArrayList<>();
+      for (Map.Entry<List<String>, String> m : members) {
+        String last = m.getKey().get(m.getKey().size() - 1);
+        suffixes.add(last.charAt(last.length() - 1));
+      }
+      suffixes.sort(Comparator.naturalOrder());
+      List<String> tokens = new ArrayList<>(t0.subList(0, t0.size() - 1));
+      tokens.add(last0.substring(0, last0.length() - 1));
+      boolean contiguous = suffixes.get(suffixes.size() - 1) - suffixes.get(0) == suffixes.size() - 1;
+      if (contiguous) {
+        tokens.add(String.valueOf(suffixes.get(0)));
+        tokens.add("to");
+        tokens.add(String.valueOf(suffixes.get(suffixes.size() - 1)));
+      } else {
+        for (char c : suffixes) {
+          tokens.add(String.valueOf(c));
+        }
+      }
+      out.add(Map.entry(tokens, members.get(0).getValue()));
+    }
+    out.sort(NAMING_ORDER);
+    return out;
+  }
+
+  /**
+   * A role id's naming tokens: its raw tokens with {@link #prefixStages} elided in order.
+   */
+  private List<String> roleTokens(String role) {
+    List<String> tokens = rawTokens(role);
+    for (String prefix : prefixStages) {
+      tokens = stripPrefix(tokens, prefix);
+    }
+    return tokens;
+  }
+
+  /** A role id lower-cased and split on every non-alphanumeric run, case-role brackets dropped. */
+  private static List<String> rawTokens(String role) {
+    String cleaned = role.replace("[", "").replace("]", "").toLowerCase(Locale.ROOT);
+    List<String> tokens = new ArrayList<>();
+    for (String t : cleaned.split("[^a-z0-9]+")) {
+      if (!t.isEmpty()) {
+        tokens.add(t);
+      }
+    }
+    return tokens;
+  }
+
+  /**
+   * Drops a leading {@code prefix} token. A role that is the prefix alone keeps it, so it still
+   * yields a non-empty, distinguishing name.
+   */
+  private static List<String> stripPrefix(List<String> tokens, String prefix) {
+    if (tokens.size() < 2 || !tokens.get(0).equals(prefix)) {
+      return tokens;
+    }
+    return tokens.subList(1, tokens.size());
+  }
+
+  /**
+   * The leading tokens to elide from role names, one per pass, at most {@link #MAX_PREFIX_STAGES}.
+   * Each pass picks the most common leading token among roles that have more after it (ties to the
+   * alphabetically first) and stops unless at least {@link #MIN_PREFIX_ROLES} roles and
+   * {@link #PREFIX_MIN_SHARE} of all roles carry it; the next pass runs on the stripped tokens.
+   * Case roles are their own namespace and are left out of the count.
+   *
+   * @param roles the distinct role IDs participating in some residual
+   * @return the tokens to strip, in pass order (never null)
+   */
+  private List<String> computePrefixStages(Set<String> roles) {
+    List<List<String>> current = new ArrayList<>();
+    for (String role : roles) {
+      if (role.startsWith("[")) {
+        continue;
+      }
+      List<String> tokens = rawTokens(role);
+      if (!tokens.isEmpty()) {
+        current.add(tokens);
+      }
+    }
+    int total = current.size();
+    List<String> stages = new ArrayList<>();
+    if (total < MIN_ROLES_FOR_COMMON_PREFIX) {
+      return stages;
+    }
+    while (stages.size() < MAX_PREFIX_STAGES) {
+      Map<String, Integer> byLead = new TreeMap<>();
+      for (List<String> tokens : current) {
+        if (tokens.size() > 1) {
+          byLead.merge(tokens.get(0), 1, Integer::sum);
+        }
+      }
+      Map.Entry<String, Integer> best = null;
+      for (Map.Entry<String, Integer> entry : byLead.entrySet()) {
+        if (best == null || entry.getValue() > best.getValue()) {
           best = entry;
         }
       }
-      if (best == null
-          || best.getValue().size() < MIN_PREFIX_ROLES
-          || (double) best.getValue().size() / total <= COMMON_PREFIX_MIN_SHARE) {
+      if (best == null || best.getValue() < MIN_PREFIX_ROLES
+          || (double) best.getValue() / total < PREFIX_MIN_SHARE) {
         break;
       }
-      prefix.add(best.getKey());
-      matching = best.getValue();
-      depth++;
+      String prefix = best.getKey();
+      stages.add(prefix);
+      List<List<String>> next = new ArrayList<>();
+      for (List<String> tokens : current) {
+        next.add(stripPrefix(tokens, prefix));
+      }
+      current = next;
     }
-    return List.copyOf(prefix);
+    return List.copyOf(stages);
   }
 
-  /**
-   * Removes the case type's common role prefix ({@link #commonPrefixTokens}) from a role, per the
-   * maintainer's rule: a role strictly inside the prefix keeps only its remainder tokens; a role
-   * that IS the prefix exactly (no remainder) keeps its last token, so it still yields a
-   * non-empty, distinguishing name; a role outside the prefix (including one sharing only part of
-   * it) is returned unchanged.
-   *
-   * @param cleaned the role ID with case-role brackets already stripped
-   * @return the role's naming-relevant remainder
-   */
-  private String stripCommonPrefix(String cleaned) {
-    if (commonPrefixTokens.isEmpty()) {
-      return cleaned;
+  private static String pascal(List<String> tokens) {
+    StringBuilder builder = new StringBuilder();
+    for (String t : tokens) {
+      builder.append(Character.toUpperCase(t.charAt(0))).append(t.substring(1));
     }
-    String[] tokens = cleaned.split("-");
-    int prefixLen = commonPrefixTokens.size();
-    for (int i = 0; i < prefixLen && i < tokens.length; i++) {
-      if (!tokens[i].equals(commonPrefixTokens.get(i))) {
-        return cleaned;
-      }
-    }
-    if (tokens.length < prefixLen) {
-      // Only partially overlaps the prefix — not the exact-prefix case, left untouched.
-      return cleaned;
-    }
-    if (tokens.length == prefixLen) {
-      return tokens[prefixLen - 1];
-    }
-    StringBuilder remainder = new StringBuilder();
-    for (int i = prefixLen; i < tokens.length; i++) {
-      if (i > prefixLen) {
-        remainder.append('-');
-      }
-      remainder.append(tokens[i]);
-    }
-    return remainder.toString();
+    return builder.toString();
   }
 
   // A CRUD string turned into a title-case token: "CRU" -> "Cru", "R" -> "R".
@@ -750,21 +827,7 @@ final class AccessClassComputer {
       builder.append((char) ('a' + (int) (value % 26)));
       value /= 26;
     }
-    return toPascalCase(builder.toString());
-  }
-
-  private String toPascalCase(String value) {
-    String[] parts = value.split("[^A-Za-z0-9]+");
-    StringBuilder builder = new StringBuilder();
-    for (String part : parts) {
-      if (!part.isEmpty()) {
-        builder.append(Character.toUpperCase(part.charAt(0)));
-        if (part.length() > 1) {
-          builder.append(part.substring(1));
-        }
-      }
-    }
-    return builder.toString();
+    return Character.toUpperCase(builder.charAt(0)) + builder.substring(1);
   }
 
   /**
@@ -774,8 +837,7 @@ final class AccessClassComputer {
   private String summaryNote(
       Map<String, List<String>> fieldToClassNames, int fieldsWithResidual,
       List<Map.Entry<String, Set<Atom>>> emittedGroups, int atomCount, int fallbackCount,
-      Map<Integer, String> groupNames, List<Set<Atom>> groups, List<Pattern> patterns,
-      List<List<CoverRef>> covers) {
+      Map<Integer, String> groupNames, List<Pattern> patterns, List<List<CoverRef>> covers) {
     int total = emittedGroups.size() + atomCount + fallbackCount;
     int sum = 0;
     int max = 0;

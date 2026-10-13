@@ -734,6 +734,11 @@ property of the test suite, not of any migration: 299 of it belongs to services 
 retrofit output instead. To regenerate a baseline after an intended change, run `GenerateGoldenFiles`
 with `-Djunit.jupiter.conditions.deactivate='*'`.
 
+`CaseData` grouping (`--group-case-data N`) changes only the Java shape: every grouped field still
+generates its original `CaseField` ID, so it must leave the definition unchanged. `roundTripTest
+-Droundtrip.caseDataGroupMin=10` converts every fixture with grouping on and gates against the same
+baselines.
+
 finrem is the only fixture reading **two** definition roots: its build copies the shared
 `definitions/common/json` tree into the per-case-type tree before each xlsx build
 (`yarn copy-common-components-contested`) and gitignores the copies, so the common tree is passed as a

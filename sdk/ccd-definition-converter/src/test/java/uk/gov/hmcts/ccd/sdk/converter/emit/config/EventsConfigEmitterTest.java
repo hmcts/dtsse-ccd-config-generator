@@ -6,6 +6,7 @@ import com.palantir.javapoet.JavaFile;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import org.junit.jupiter.api.Test;
 import uk.gov.hmcts.ccd.sdk.converter.api.ConversionOptions;
 import uk.gov.hmcts.ccd.sdk.converter.api.EmitContext;
@@ -217,7 +218,7 @@ class EventsConfigEmitterTest {
   @Test
   void multiPageEventEmitsFieldsChainAndPageClasses() {
     // A two-page event terminates its header at .fields() and delegates each page to its own class
-    // in <root>.event.page (finding #2).
+    // (finding #2); the event and its pages share the event's own sub-package <root>.event.createcase.
     PageModel.PageField field1 = PageModel.PageField.builder()
         .caseFieldId("applicantName")
         .displayContext("MANDATORY")
@@ -248,15 +249,72 @@ class EventsConfigEmitterTest {
 
     String eventSrc = classNamed(files, "CreateCase");
     assertThat(eventSrc).contains(".fields()");
+    assertThat(eventSrc).contains("package " + EnvironmentFlagsEmitterTest.CONFIG_PKG
+        + ".event.createcase;");
     assertThat(eventSrc).contains("CreateCasePage1.apply(fields)");
     assertThat(eventSrc).contains("CreateCasePage2.apply(fields)");
     // The placements live in the page classes, not the event class.
     assertThat(eventSrc).doesNotContain(".mandatory(");
     String pageSrc = classNamed(files, "CreateCasePage1");
     assertThat(pageSrc).contains("package " + EnvironmentFlagsEmitterTest.CONFIG_PKG
-        + ".event.page");
+        + ".event.createcase;");
     assertThat(pageSrc).contains(".page(\"1\")");
     assertThat(pageSrc).contains(".mandatory(");
+  }
+
+  private static EventModel multiPageEvent(String id, String... pageIds) {
+    List<PageModel> pages = new ArrayList<>();
+    for (String pageId : pageIds) {
+      pages.add(PageModel.builder().pageId(pageId).fields(List.of()).build());
+    }
+    return EventModel.builder()
+        .id(id).javaName(id).name("Event " + id)
+        .preStates(List.of()).postState("Open").grants(Map.of()).pages(pages)
+        .build();
+  }
+
+  @Test
+  void pageNamesDropTheEventPrefixUnlessOnlyANumberRemains() {
+    // The package names the event, so a semantic page drops the event prefix (and is not suffixed
+    // Page twice); a page that would be left with only a number (IA's allocateTheCase,
+    // allocateTheCase2) keeps the event name so it stays unique in a type search.
+    List<JavaFile> files = new EventsConfigEmitter().emit(modelWithEvents(List.of(
+        multiPageEvent("allocateTheCase", "allocateTheCase", "allocateTheCase2", "allocateTheCaseX",
+            "allocateTheCasePage4"),
+        multiPageEvent("applyForFTPAAppellant", "ftpaAppellantSubmissionPage", "selectHearing"),
+        // "addNotesDetail" must not lose "AddNote": the strip only happens at a word boundary.
+        multiPageEvent("addNote", "addNotesDetail", "2.0"))), contextWith(40));
+    Map<String, List<String>> byPkg = new TreeMap<>();
+    for (JavaFile f : files) {
+      byPkg.computeIfAbsent(f.packageName(), k -> new ArrayList<>()).add(f.typeSpec().name());
+    }
+    String root = EnvironmentFlagsEmitterTest.CONFIG_PKG + ".event.";
+    assertThat(byPkg.get(root + "allocatethecase"))
+        .containsExactly("AllocateTheCase", "AllocateTheCasePage", "AllocateTheCasePage2", "XPage",
+            "AllocateTheCasePage4");
+    assertThat(byPkg.get(root + "applyforftpaappellant"))
+        .containsExactly("ApplyForFTPAAppellant", "FtpaAppellantSubmissionPage", "SelectHearingPage");
+    assertThat(byPkg.get(root + "addnote"))
+        .containsExactly("AddNote", "AddNotesDetailPage", "AddNotePage20");
+  }
+
+  @Test
+  void eventPackagesDifferingOnlyByCaseAreSuffixed() {
+    // et declares both DELETE_DRAFT_CASE and deleteDraftCase: distinct class names, one lower-cased
+    // package name. A page-less event stays in <root>.event and takes no package name.
+    List<JavaFile> files = new EventsConfigEmitter().emit(modelWithEvents(List.of(
+        multiPageEvent("DELETE_DRAFT_CASE", "1", "2"),
+        simpleEvent("Deletedraftcase"),
+        multiPageEvent("deleteDraftCase", "1", "2"),
+        multiPageEvent("new", "1", "2"))), contextWith(40));
+    String root = EnvironmentFlagsEmitterTest.CONFIG_PKG + ".event";
+    assertThat(files.stream().filter(f -> f.typeSpec().name().matches("(?i)deletedraftcase|new"))
+        .map(f -> f.packageName() + "." + f.typeSpec().name()).toList())
+        .containsExactly(
+            root + ".deletedraftcase.DELETEDRAFTCASE",
+            root + ".Deletedraftcase",
+            root + ".deletedraftcase2.DeleteDraftCase",
+            root + ".new_.New");
   }
 
   @Test

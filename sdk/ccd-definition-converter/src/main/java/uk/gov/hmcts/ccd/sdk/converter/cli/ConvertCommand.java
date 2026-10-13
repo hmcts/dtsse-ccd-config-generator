@@ -49,13 +49,15 @@ public class ConvertCommand implements Callable<Integer> {
   Path outputSrc;
 
   @Option(names = "--model-package", required = true,
-      description = "Package for CaseData, complex types and enums. In retrofit mode this is the "
-          + "package the team's existing model lives in.")
+      description = "Package for CaseData, State and UserRole; generate mode files fixed-list enums "
+          + "in <model>.enums and complex types in <model>.complex. In retrofit mode this is "
+          + "the package the team's existing model lives in, and companion types are emitted into it.")
   String modelPackage;
 
   @Option(names = {"--config-package", "--root-package"},
       description = "Root package the generated CCD config lives under (events in <root>.event, "
-          + "page classes in <root>.event.page, access classes in <root>.access; tabs/search/"
+          + "a multi-page event and its page classes in <root>.event.<event>, access classes in "
+          + "<root>.access; tabs/search/"
           + "workbasket/case-type config beans directly in <root>). When omitted it is DERIVED from "
           + "--model-package: the model package is cut at its first 'model', 'models' or 'domain' "
           + "segment, then '.ccd' is appended unless the result already ends with '.ccd' "
@@ -125,6 +127,11 @@ public class ConvertCommand implements Callable<Integer> {
   @Option(names = "--allow-gaps", defaultValue = "false",
       description = "Complete with unresolvable gaps reported instead of failing.")
   boolean allowGaps;
+
+  @Option(names = "--group-case-data", defaultValue = "0",
+      description = "Generate mode: split CaseData into @JsonUnwrapped sub-objects of at least N "
+          + "fields sharing a leading camelCase word (or underscore segment). 0 keeps it flat.")
+  int caseDataGroupMin;
 
   @Option(names = "--env",
       description = "Environment the converted definition targets, KEY=VALUE (may repeat). Sheets "
@@ -334,6 +341,7 @@ public class ConvertCommand implements Callable<Integer> {
         .eventsPerConfig(eventsPerConfig)
         .emitApplication(emitApplication)
         .allowGaps(allowGaps)
+        .caseDataGroupMin(caseDataGroupMin)
         .build();
   }
 

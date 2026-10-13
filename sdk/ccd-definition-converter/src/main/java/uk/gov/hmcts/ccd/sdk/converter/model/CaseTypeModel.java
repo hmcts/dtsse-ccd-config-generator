@@ -91,6 +91,13 @@ public class CaseTypeModel {
   List<FieldModel> caseFields;
 
   List<ComplexTypeModel> complexTypes;
+
+  /**
+   * {@code @JsonUnwrapped} sub-objects CaseData is split into (see {@code CaseDataGrouper}); emitted
+   * as plain classes in the model package, never as CCD complex types. Empty unless grouping is on.
+   */
+  @Builder.Default
+  List<ComplexTypeModel> caseDataGroups = List.of();
   List<FixedListModel> fixedLists;
   List<EventModel> events;
   List<TabModel> tabs;

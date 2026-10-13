@@ -32,6 +32,13 @@ public class FixedListModel {
    */
   String javaClassName;
 
+  /**
+   * The package the generated enum is emitted into, or null for the model package itself. Generate
+   * mode files every fixed-list enum under {@code <modelPackage>.enums}; retrofit mode leaves it
+   * null.
+   */
+  String javaPackage;
+
   List<Item> items;
 
   @Value

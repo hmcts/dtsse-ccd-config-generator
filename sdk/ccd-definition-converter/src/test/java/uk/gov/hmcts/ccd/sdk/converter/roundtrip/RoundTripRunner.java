@@ -85,6 +85,9 @@ final class RoundTripRunner {
         .eventsPerConfig(40)
         .emitApplication(true)
         .allowGaps(true)
+        // Opt-in experiment: -Droundtrip.caseDataGroupMin=N splits every fixture's CaseData into
+        // @JsonUnwrapped groups (CaseDataGrouper); the baselines must still hold exactly.
+        .caseDataGroupMin(Integer.getInteger("roundtrip.caseDataGroupMin", 0))
         .build();
 
     // Conversion itself must run under the fixture's environment, not just generation: sheets the SDK

@@ -1,6 +1,8 @@
 package uk.gov.hmcts.ccd.sdk.converter.api;
 
 import com.palantir.javapoet.ClassName;
+import java.util.HashMap;
+import java.util.Map;
 import lombok.Builder;
 import lombok.Value;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapCollector;
@@ -13,6 +15,14 @@ public class EmitContext {
   ConversionOptions options;
   GapCollector gaps;
 
+  /**
+   * Generate mode: simple name to FQN for every generated model type emitted outside the model
+   * package itself (fixed-list enums in {@code <model>.enums}, complex types in
+   * {@code <model>.complex}). Empty in retrofit mode.
+   */
+  @Builder.Default
+  Map<String, String> generatedTypeFqns = Map.of();
+
   public String modelPackage() {
     return options.getModelPackage();
   }
@@ -22,7 +32,8 @@ public class EmitContext {
   }
 
   /**
-   * The package the per-event {@code CCDConfig} classes (and their page classes) are emitted into:
+   * The package the per-event {@code CCDConfig} classes are emitted into (an event that owns page
+   * classes goes, with them, into its own {@code <eventPackage>.<event>} sub-package):
    * {@code <configPackage>.event}, mirroring the reference services' {@code <root>.event} idiom
    * (nfdiv/sptribs). Being a sub-package of the (component-scanned) root config package, its beans
    * are still discovered by the SDK generator.
@@ -31,17 +42,6 @@ public class EmitContext {
    */
   public String eventPackage() {
     return configPackage() + ".event";
-  }
-
-  /**
-   * The package the per-wizard-page classes are emitted into: {@code <configPackage>.event.page},
-   * mirroring the reference services' {@code <root>.event.page} idiom. Page classes are plain
-   * static helpers referenced by their event class, not beans, so scanning is irrelevant to them.
-   *
-   * @return the page package
-   */
-  public String pagePackage() {
-    return eventPackage() + ".page";
   }
 
   /**
@@ -84,9 +84,29 @@ public class EmitContext {
    * @return the class name to reference
    */
   public ClassName modelTypeClass(String simpleName) {
-    String fqn = options.getRetrofitTypeFqnOverrides() == null
-        ? null : options.getRetrofitTypeFqnOverrides().get(simpleName);
+    String fqn = typeFqnOverrides().get(simpleName);
     return fqn == null ? ClassName.get(modelPackage(), simpleName) : ClassName.bestGuess(fqn);
+  }
+
+  /**
+   * Every simple name that resolves somewhere other than {@code <modelPackage>.<simpleName>}: the
+   * retrofit FQN overrides merged with generate mode's per-kind sub-package placements
+   * ({@link #generatedTypeFqns}). This is the map {@code JavaTypeParser} qualifies unqualified
+   * member types through.
+   *
+   * @return simple name to FQN
+   */
+  public Map<String, String> typeFqnOverrides() {
+    Map<String, String> retrofit = options.getRetrofitTypeFqnOverrides();
+    if (generatedTypeFqns == null || generatedTypeFqns.isEmpty()) {
+      return retrofit == null ? Map.of() : retrofit;
+    }
+    if (retrofit == null || retrofit.isEmpty()) {
+      return generatedTypeFqns;
+    }
+    Map<String, String> merged = new HashMap<>(generatedTypeFqns);
+    merged.putAll(retrofit);
+    return merged;
   }
 
   /**
@@ -139,7 +159,7 @@ public class EmitContext {
    * @return the enum constant name to reference
    */
   public String stateConstant(String stateId) {
-    java.util.Map<String, String> constants = options.getRetrofitStateConstants();
+    Map<String, String> constants = options.getRetrofitStateConstants();
     if (constants != null && constants.containsKey(stateId)) {
       return constants.get(stateId);
     }

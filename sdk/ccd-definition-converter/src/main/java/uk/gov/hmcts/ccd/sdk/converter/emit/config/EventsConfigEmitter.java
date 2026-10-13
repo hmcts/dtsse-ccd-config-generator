@@ -11,9 +11,12 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Modifier;
 import uk.gov.hmcts.ccd.sdk.converter.api.EmitContext;
 import uk.gov.hmcts.ccd.sdk.converter.api.SourceEmitter;
@@ -37,21 +40,26 @@ import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapEntry;
  * (nfdiv/sptribs) so each event is a findable, individually-ownable unit rather than the Nth private
  * method in a numbered grab-bag (finding #1).
  *
- * <p>A <b>multi-page</b> event's wizard pages are split into their own <b>page classes</b> in
- * {@code <root>.event.page}, one per CCD page, referenced from the event class via a static
- * {@code apply(fields)} call (finding #2). This matches both reference teams' page-per-concern
- * decomposition and, because every page's serializable getter lambdas land in that page class's own
- * synthesised {@code $deserializeLambda$}, keeps each class well under the JVM's 64&nbsp;KB bytecode
- * limits. A single page large enough to overflow one method on its own (prl's {@code waManageOrders})
- * falls back to the documented {@code <Page>FieldsN} line-budget split <em>within</em> that page's
- * package — the only place the numbered-fragment form survives.
+ * <p>A <b>multi-page</b> event's wizard pages are split into their own <b>page classes</b>, one per
+ * CCD page, referenced from the event class via a static {@code apply(fields)} call (finding #2). An
+ * event with page classes (or overflow fragments) moves, with them, into its own sub-package
+ * {@code <root>.event.<eventclassname-lowercased>} (the pcs-api {@code page/<event>} idiom). A
+ * semantic page name drops the event-name qualifier the package already carries; a numbered one
+ * keeps it so it stays findable: {@code event/allocatethecase/AllocateTheCase.java} beside
+ * {@code AllocateTheCasePage.java}, {@code AllocateTheCasePage2.java}, {@code XPage.java}. This
+ * matches both reference teams' page-per-concern decomposition and, because every page's
+ * serializable getter lambdas land in that page class's own synthesised {@code $deserializeLambda$},
+ * keeps each class well under the JVM's 64&nbsp;KB bytecode limits. A single page large enough to
+ * overflow one method on its own (prl's {@code waManageOrders}) falls back to the documented
+ * {@code <Page>FieldsN} line-budget split <em>within</em> the event's package — the only place the
+ * numbered-fragment form survives.
  *
  * <p>A <b>single-page</b> event carries no page class at all: its one page's field chain is inlined
  * directly into the event class's {@code configure()} method (a page class would be pure
  * indirection for one page). The inlined calls — {@code fields.page(id)}, the optional page label /
  * show condition, then the placements — are byte-for-byte what the page class's {@code apply(fields)}
  * would have run, so the regenerated definition is identical; a case type whose every event is
- * single-page therefore produces no {@code <root>.event.page} package. The overflow split still
+ * single-page (and within budget) therefore produces no event sub-packages. The overflow split still
  * applies to an oversized single page (fragments only, still no page class).
  */
 public class EventsConfigEmitter implements SourceEmitter {
@@ -71,7 +79,6 @@ public class EventsConfigEmitter implements SourceEmitter {
     }
 
     String eventPkg = context.eventPackage();
-    String pagePkg = context.pagePackage();
 
     // Retarget to the team's model/State in retrofit mode (see EmitContext); generate mode keeps
     // the freshly generated <modelPackage>.{CaseData,State,UserRole}.
@@ -84,20 +91,32 @@ public class EventsConfigEmitter implements SourceEmitter {
     ParameterizedTypeName configType =
         ParameterizedTypeName.get(ccdConfig, caseData, state, userRole);
 
-    // Event class names are PascalCased from the (already unique, sanitised) event javaName; page
-    // class names are qualified by their owning event's class name. Both are allocated collision-free
-    // against a shared used-name set so deterministic derivations never clash.
+    // Event class names are PascalCased from the (already unique, sanitised) event javaName and
+    // allocated collision-free across the case type. An event that owns helper classes (page
+    // classes, or FieldsN/ScopesN overflow fragments) is emitted together with them into its own
+    // sub-package <root>.event.<eventpackage>, so page names only need to be unique within their
+    // event and can drop the event-name qualifier. An event with no helpers stays in <root>.event.
     Set<String> usedEventNames = new LinkedHashSet<>();
-    Set<String> usedPageNames = new LinkedHashSet<>();
+    Set<String> usedEventPackages = new LinkedHashSet<>();
 
     List<JavaFile> files = new ArrayList<>();
     for (EventModel event : events) {
       String eventClassName = uniqueName(Names.toClassName(event.getJavaName()), usedEventNames);
+      String segment = eventPackageSegment(eventClassName, usedEventPackages);
+      String pagePkg = eventPkg + "." + segment;
+      // Page names are scoped to the event's own package; the event class's own simple name is
+      // reserved so no page can shadow it.
+      Set<String> usedPageNames = new LinkedHashSet<>();
+      usedPageNames.add(eventClassName);
 
       List<TypeSpec> pageClasses = new ArrayList<>();
       MethodSpec configure = buildConfigure(
           event, model, context, caseData, state, userRole, permission,
           eventClassName, pagePkg, pageClasses, usedPageNames);
+      String classPkg = pageClasses.isEmpty() ? eventPkg : pagePkg;
+      if (!pageClasses.isEmpty()) {
+        usedEventPackages.add(segment);
+      }
 
       TypeSpec eventClass = TypeSpec.classBuilder(eventClassName)
           .addModifiers(Modifier.PUBLIC)
@@ -113,7 +132,7 @@ public class EventsConfigEmitter implements SourceEmitter {
           .addMethod(configure)
           .build();
 
-      files.add(JavaFile.builder(eventPkg, eventClass)
+      files.add(JavaFile.builder(classPkg, eventClass)
           .indent("    ")
           .skipJavaLangImports(true)
           .build());
@@ -125,6 +144,31 @@ public class EventsConfigEmitter implements SourceEmitter {
       }
     }
     return files;
+  }
+
+  /**
+   * The sub-package segment for an event that owns helper classes: its class name lower-cased (the
+   * pcs-api {@code page/<event>} idiom, e.g. {@code ApplyForFTPAAppellant} →
+   * {@code applyforftpaappellant}). Event class names are unique but may differ only by case
+   * ({@code DELETEDRAFTCASE} / {@code DeleteDraftCase} in et), so the lower-cased form is suffixed
+   * {@code 2,3,…} against the segments already taken. A segment that is a Java keyword, literal or
+   * restricted identifier gets a trailing underscore (JLS 6.1's convention). The class name always
+   * starts with a letter, so no digit guard is needed. Not reserved here: the caller records it only
+   * once the event actually emits helpers.
+   */
+  private String eventPackageSegment(String eventClassName, Set<String> used) {
+    String base = eventClassName.toLowerCase(Locale.ROOT);
+    if (SourceVersion.isKeyword(base) || base.equals("record")
+        || base.equals("var") || base.equals("yield") || base.equals("sealed")
+        || base.equals("permits")) {
+      base = base + "_";
+    }
+    String segment = base;
+    int suffix = 2;
+    while (used.contains(segment)) {
+      segment = base + (suffix++);
+    }
+    return segment;
   }
 
   /**
@@ -374,8 +418,8 @@ public class EventsConfigEmitter implements SourceEmitter {
       // its field chain directly into configure() rather than splitting it into its own page class.
       // A page class earns its keep only when an event has several pages to separate; for one page
       // the class is pure indirection. The emitted calls are identical to what the page class's
-      // apply(fields) would have run, so the regenerated definition is byte-identical, and no empty
-      // <root>.event.page package is created for a case type whose every event is single-page.
+      // apply(fields) would have run, so the regenerated definition is byte-identical, and the event
+      // stays in <root>.event with no sub-package of its own.
       emitInlinePage(cb, pages.get(0), event, model, context, caseData, state, userRole,
           pagePkg, eventClassName, pageClasses, usedPageNames);
       emitOrphanScopes(cb, event, model, caseData, state, userRole, context, pagePkg,
@@ -383,12 +427,12 @@ public class EventsConfigEmitter implements SourceEmitter {
       return cb.build();
     }
 
-    // Multi-page event: split each page into its own page class under <root>.event.page (finding
+    // Multi-page event: split each page into its own page class in the event's sub-package (finding
     // #2), spreading each page's serializable getter lambdas into its own class so no one class
     // approaches the JVM's 64 KB per-method / $deserializeLambda$ bytecode limits.
     for (PageModel page : pages) {
       String pageClassName = uniqueName(
-          pageClassName(eventClassName, page), usedPageNames);
+          pageClassName(eventClassName, event, page), usedPageNames);
       buildPageClass(
           pageClassName, page, event, model, context, caseData, state, userRole, pagePkg,
           pageClasses);
@@ -438,8 +482,9 @@ public class EventsConfigEmitter implements SourceEmitter {
     // Documented overflow, the same one the page path already handles: each member inside a scope is
     // its own serializable getter lambda, and an event with many orphan groups (prl's
     // editAndApproveAnOrder: 39 groups, ~700 lambdas) blows configure()'s 64 KB bytecode budget
-    // ("code too large"). Split the runs across <Event>ScopesN classes invoked in order — the scopes
-    // register nothing, so moving them out of configure() cannot alter the generated definition.
+    // ("code too large"). Split the runs across <Event>ScopesN classes in the event's package,
+    // invoked in order — the scopes register nothing, so moving them out of configure() cannot
+    // alter the generated definition.
     ParameterizedTypeName fieldsType = fieldsBuilderType(caseData, state, userRole);
     String base = uniqueName(eventClassName + "Scopes", usedPageNames);
     List<List<EventComplexTypeGroup>> groups = groupOrphanScopes(orphans);
@@ -567,7 +612,7 @@ public class EventsConfigEmitter implements SourceEmitter {
     // Documented overflow: too many placements for configure()'s own bytecode budget. Split them
     // across FieldsN fragment classes and invoke each inline; the fragment names are derived from
     // the page-class name this event would otherwise have used, kept collision-free.
-    String base = uniqueName(pageClassName(eventClassName, page), usedPageNames);
+    String base = uniqueName(pageClassName(eventClassName, event, page), usedPageNames);
     ParameterizedTypeName fieldsType = fieldsBuilderType(caseData, state, userRole);
     List<List<PageModel.PageField>> groups = groupFields(page.getFields(), model, event);
     for (int i = 0; i < groups.size(); i++) {
@@ -592,20 +637,51 @@ public class EventsConfigEmitter implements SourceEmitter {
   }
 
   /**
-   * The page class name for a wizard page: the owning event class name plus a page token derived
-   * from the CCD page ID. A numeric page ID ({@code "1"}, {@code "2.0"}) reads best as
-   * {@code <Event>Page1}; a semantic ID ({@code "SDO"}, {@code "selectHearing"}) as
-   * {@code <Event><Page>Page} (e.g. {@code CreateSdoOrderTypePage}).
+   * The page class name for a wizard page, unique only within its event's own package. Derived from
+   * the CCD page ID:
+   *
+   * <ul>
+   *   <li>a page ID that repeats the event ID ({@code allocateTheCaseX} on event
+   *   {@code allocateTheCase}) has that prefix stripped at a word boundary, since the package already
+   *   names the event;</li>
+   *   <li>a semantic remainder gets a {@code Page} suffix unless it already ends in one, optionally
+   *   numbered ({@code ftpaAppellantSubmissionPage} → {@code FtpaAppellantSubmissionPage}, not
+   *   {@code …PagePage});</li>
+   *   <li>a remainder that is only a number, optionally after {@code Page}, or nothing at all, keeps
+   *   the event name instead, so numbered pages stay distinguishable in a type search:
+   *   {@code <Event>Page<n>} ({@code "1"}, {@code "2.0"} → {@code CreateCasePage1},
+   *   {@code CreateCasePage20}; probate's {@code applyForGrantPage2} → {@code ApplyForGrantPage2}),
+   *   and {@code <Event>Page} for a page ID equal to the event ID (IA's {@code allocateTheCase},
+   *   {@code allocateTheCase2} → {@code AllocateTheCasePage}, {@code AllocateTheCasePage2}).</li>
+   * </ul>
+   *
+   * <p>The {@code Page} suffix keeps page names off model type names the class imports. Collisions
+   * within the event are resolved by the caller's {@code 2,3,…} suffixing.
    */
-  private String pageClassName(String eventClassName, PageModel page) {
+  private String pageClassName(String eventClassName, EventModel event, PageModel page) {
     String pageId = page.getPageId() == null ? "" : page.getPageId();
-    String token = Names.toClassName(pageId);
-    boolean numericLead = token.isEmpty() || Character.isDigit(token.charAt(0));
-    if (numericLead) {
-      return eventClassName + "Page" + token.replaceAll("[^A-Za-z0-9]", "");
+    String token = pageId.replaceAll("[^A-Za-z0-9]", "").isEmpty() ? "" : Names.toClassName(pageId);
+    // Strip the event's own name: its class name, or the bare event-ID token when the class name
+    // differs from it (an overlay variant's FooNonprod, a collision-suffixed Foo2).
+    for (String prefix : List.of(eventClassName, Names.toClassName(event.getId()))) {
+      if (token.startsWith(prefix)) {
+        String rest = token.substring(prefix.length());
+        if (rest.isEmpty() || Character.isUpperCase(rest.charAt(0))
+            || Character.isDigit(rest.charAt(0))) {
+          token = rest;
+          break;
+        }
+      }
     }
-    return eventClassName + token + "Page";
+    Matcher numbered = NUMBERED_PAGE.matcher(token);
+    if (numbered.matches()) {
+      return eventClassName + "Page" + numbered.group(1);
+    }
+    return PAGE_SUFFIX.matcher(token).find() ? token : token + "Page";
   }
+
+  private static final Pattern NUMBERED_PAGE = Pattern.compile("(?:Page)?([0-9]*)");
+  private static final Pattern PAGE_SUFFIX = Pattern.compile("Page[0-9]*$");
 
   /**
    * Page-field count above which a single page's field placements are split out of its
@@ -891,8 +967,11 @@ public class EventsConfigEmitter implements SourceEmitter {
       if (ref != null) {
         // As for the direct-field path below, honour an input ShowSummaryChangeOption=N by
         // selecting the *NoSummary builder variant (the SDK otherwise defaults the flag to Y).
+        // A Label moved into a CaseData group is placed readonly whatever its DisplayContext, as the
+        // direct Label path below places a Label member of CaseData.
+        String clusterBase = ref.isLabel() ? "readonly" : builderMethod;
         String clusterMethod = Boolean.FALSE.equals(field.getShowSummary())
-            ? builderMethod + "NoSummary" : builderMethod;
+            ? clusterBase + "NoSummary" : clusterBase;
         // The cluster type is a generated complex type in modelPkg (generate mode) or, in retrofit
         // mode, the team's own @JsonUnwrapped parent type, which may live in another package.
         String clusterPkg = ref.getClusterTypePackage() != null

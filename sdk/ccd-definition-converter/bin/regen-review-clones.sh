@@ -7,12 +7,12 @@
 # converter change affects). RETROFIT-REPORT-NARRATIVE*.md files are preserved untouched.
 #
 # STRUCTURAL ROUND (2026-07-16): the companion sources now follow the reference-service package
-# layout — one @Component per event in <root>.event, page classes in <root>.event.page, access
-# classes in <root>.access, config split by concern in <root> — rooted at each lane's derived `.ccd`
-# root package (config-package column below). At integration the orchestrator writes this tree into
-# the real service clone's MAIN source tree (untracked in the clone's git status), retiring the flat
-# generated-config/ directory; this offline refresh stages the same tree under the review clone for
-# inspection.
+# layout — one @Component per event in <root>.event (a multi-page event, with its page classes, in
+# <root>.event.<event>), access classes in <root>.access, config split by concern in <root> — rooted
+# at each lane's derived `.ccd` root package (config-package column below). At integration the
+# orchestrator writes this tree into the real service clone's MAIN source tree (untracked in the
+# clone's git status), retiring the flat generated-config/ directory; this offline refresh stages
+# the same tree under the review clone for inspection.
 #
 # Each lane regenerates: <clone>/companion/  (the reference-layout companion tree) and
 # ../patches/retrofit-<CaseType>.patch  (the model annotation patch).

@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.converter.link;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -51,6 +52,17 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
 
   private static final String CASE_ROLE_PATTERN = "^\\[.+\\]$";
 
+  /**
+   * Generate mode files the definition-derived model types by kind under the model package:
+   * fixed-list enums in {@code <modelPackage>.enums}, complex types in
+   * {@code <modelPackage>.complex}. CaseData, State, UserRole, EnvironmentFlags and the
+   * synthetic {@code @JsonUnwrapped} cluster types stay in the model package itself. Class simple
+   * names are allocated from one shared set, so no two generated types share a simple name across
+   * the sub-packages.
+   */
+  static final String FIXED_LISTS_SUBPACKAGE = "enums";
+  static final String COMPLEX_TYPES_SUBPACKAGE = "complex";
+
   @Override
   public CaseTypeModel link(DefinitionIr ir, ConversionOptions options, GapCollector gaps) {
     String caseTypeId = selectCaseType(ir, options);
@@ -85,7 +97,8 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       usedTypeNames.addAll(options.getRetrofitReservedFixedListNames());
     }
     final List<FixedListModel> fixedLists =
-        buildFixedLists(ir, caseTypeId, gaps, fixedListEnumNames, complexTypeIds, usedTypeNames);
+        buildFixedLists(ir, caseTypeId, options, gaps, fixedListEnumNames, complexTypeIds,
+            usedTypeNames);
     // Drop the reserved class names again before the complex-type pass: a complex type DOES bind to
     // an existing class of the same name (no companion), so keeping them reserved would suffix its
     // shared reference. The complex-type pass instead reserves existing enum names. Names actually
@@ -145,9 +158,21 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     // @JsonUnwrapped structure; synthesising fresh cluster complex types would invent members the
     // model does not have. So clustering is skipped and the flat fields are kept as-is — the
     // retrofit binder later maps each unwrapped leaf to the model's real parent/member getter.
+    List<ComplexTypeModel> caseDataGroups = List.of();
     FieldClusterer.Result clustered = options.isRetrofit()
         ? FieldClusterer.Result.unclustered(caseFieldsWithAccess)
         : new FieldClusterer(gaps).cluster(caseFieldsWithAccess, reservedTypeNames);
+    // Optionally split CaseData into @JsonUnwrapped sub-objects. Generate mode only: retrofit binds
+    // to the team's own model shape.
+    if (!options.isRetrofit() && options.getCaseDataGroupMin() > 0) {
+      CaseDataGrouper.Result grouped = new CaseDataGrouper(options.getCaseDataGroupMin())
+          .group(clustered.caseFields(), groupPinnedFieldIds(ir, caseTypeId, options),
+              reservedTypeNames);
+      Map<String, ClusteredFieldRef> refs = new LinkedHashMap<>(clustered.refs());
+      refs.putAll(grouped.refs());
+      caseDataGroups = grouped.groups();
+      clustered = new FieldClusterer.Result(grouped.caseFields(), clustered.synthesizedTypes(), refs);
+    }
     List<ComplexTypeModel> allComplexTypes = new ArrayList<>(complexTypes);
     allComplexTypes.addAll(clustered.synthesizedTypes());
 
@@ -221,6 +246,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
         .categories(activeRows(ir, SheetName.CATEGORY, caseTypeId, options))
         .passthroughSheets(passthroughSheets)
         .clusteredFieldRefs(clustered.refs())
+        .caseDataGroups(caseDataGroups)
         .eventComplexTypeGroups(eventComplexTypes.groups())
         .build();
   }
@@ -388,6 +414,61 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
   }
 
   /**
+   * The package a generated model type of one kind is emitted into: {@code <modelPackage>.<sub>} in
+   * generate mode, null (the model package itself) in retrofit mode, where companion types sit
+   * beside the team's own model and are matched against it by simple name.
+   */
+  private static String generatedSubPackage(ConversionOptions options, String sub) {
+    if (options.isRetrofit() || options.getModelPackage() == null) {
+      return null;
+    }
+    return options.getModelPackage() + "." + sub;
+  }
+
+  /**
+   * Generate mode's names for the referenced fixed lists whose derived name carries no meaning: an
+   * ID that is a word plus a sequence number ({@code checklist1}..{@code checklist7}) and a list with
+   * exactly one option. Such a list is a single tick-box, so its one option says what it is; the enum
+   * is named after that option ({@code checklist1} = {@code isAdult} → {@code IsAdult}) and the CCD ID
+   * still round-trips via {@code @ComplexType(name = id)}.
+   *
+   * <p>A candidate is dropped (the list keeps its ID-derived name) when the option-derived name is
+   * unusable (empty, not a legal identifier start, or itself ending in a digit), when it equals the
+   * ID-derived name of any fixed list or complex type in the case type or an already reserved name,
+   * or when two candidates derive the same name — all colliding candidates are dropped together, so
+   * the outcome does not depend on sheet order.
+   *
+   * @return list ID to the option-derived enum base name, for the lists the rule renames
+   */
+  private static Map<String, String> singleOptionListNames(Map<String, List<SheetRow>> byId,
+      Set<String> referenced, Set<String> complexTypeIds, Set<String> usedTypeNames) {
+    Set<String> taken = new LinkedHashSet<>(usedTypeNames);
+    byId.keySet().forEach(id -> taken.add(TypeClassNamer.fixedListName(id)));
+    complexTypeIds.forEach(id -> taken.add(TypeClassNamer.complexTypeName(id)));
+    Map<String, String> candidates = new LinkedHashMap<>();
+    Map<String, Integer> counts = new HashMap<>();
+    for (Map.Entry<String, List<SheetRow>> entry : byId.entrySet()) {
+      String id = entry.getKey();
+      if (!referenced.contains(id) || !TypeClassNamer.isNumbered(TypeClassNamer.fixedListName(id))) {
+        continue;
+      }
+      Set<String> codes = new LinkedHashSet<>();
+      entry.getValue().forEach(row -> codes.add(row.getString(Columns.LIST_ELEMENT_CODE).orElse("")));
+      if (codes.size() != 1) {
+        continue;
+      }
+      String name = TypeClassNamer.optionTypeName(codes.iterator().next());
+      if (name == null || taken.contains(name)) {
+        continue;
+      }
+      candidates.put(id, name);
+      counts.merge(name, 1, Integer::sum);
+    }
+    candidates.values().removeIf(name -> counts.get(name) > 1);
+    return candidates;
+  }
+
+  /**
    * Builds fixed lists, grouping rows by ID across every sheet fragment that contributed one
    * (see {@link DefinitionIr#rowsForCaseType}: FixedLists rows carry no CaseTypeID in the
    * canonical schema, so a shared {@code common/} layout legitimately re-reads the same list
@@ -404,10 +485,12 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
    * @return the fixed list models, one per distinct ID
    */
   private List<FixedListModel> buildFixedLists(
-      DefinitionIr ir, String caseTypeId, GapCollector gaps, Map<String, String> enumNames,
-      Set<String> complexTypeIds, Set<String> usedTypeNames) {
+      DefinitionIr ir, String caseTypeId, ConversionOptions options, GapCollector gaps,
+      Map<String, String> enumNames, Set<String> complexTypeIds, Set<String> usedTypeNames) {
     Map<String, List<SheetRow>> byId = groupById(ir.rowsForCaseType(SheetName.FIXED_LISTS, caseTypeId));
     Set<String> referenced = referencedTypeParameters(ir, caseTypeId);
+    final Map<String, String> optionNames = options.isRetrofit()
+        ? Map.of() : singleOptionListNames(byId, referenced, complexTypeIds, usedTypeNames);
     List<FixedListModel> lists = new ArrayList<>();
     for (Map.Entry<String, List<SheetRow>> entry : byId.entrySet()) {
       String id = entry.getKey();
@@ -441,7 +524,10 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       // An ID that also names a complex type (ia's appealGroundsProtection: a list, and a one-member
       // type wrapping a MultiSelectList of it) leaves the plain name to the complex-type class; the
       // two are separate sheets keyed by @ComplexType(name), so only the Java names must differ.
-      String enumBase = TypeClassNamer.fixedListName(id) + (complexTypeIds.contains(id) ? "List" : "");
+      // A digit-numbered single-option list (ia's checklist1..7) is named after its one option
+      // instead (generate mode only; see singleOptionListNames).
+      String enumBase = optionNames.containsKey(id) ? optionNames.get(id)
+          : TypeClassNamer.fixedListName(id) + (complexTypeIds.contains(id) ? "List" : "");
       String enumClassName = TypeClassNamer.allocate(enumBase, usedTypeNames);
       enumNames.put(id, enumClassName);
       Set<String> usedConstants = new LinkedHashSet<>();
@@ -509,6 +595,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       lists.add(FixedListModel.builder()
           .id(id)
           .javaClassName(enumNames.get(id))
+          .javaPackage(generatedSubPackage(options, FIXED_LISTS_SUBPACKAGE))
           .items(items)
           .build());
     }
@@ -754,6 +841,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       models.add(ComplexTypeModel.builder()
           .id(id)
           .javaClassName(complexTypeRefs.get(id))
+          .javaPackage(generatedSubPackage(options, COMPLEX_TYPES_SUBPACKAGE))
           .members(members)
           .depth(depths.getOrDefault(id, 0))
           .build());
@@ -2743,6 +2831,33 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       return s;
     }
     return Character.toUpperCase(s.charAt(0)) + s.substring(1);
+  }
+
+  /**
+   * Fields {@code CaseDataGrouper} must leave on CaseData, because a typed SDK reference to them
+   * accepts only a CaseData getter or a member scope generate mode does not route through a group.
+   */
+  private Set<String> groupPinnedFieldIds(
+      DefinitionIr ir, String caseTypeId, ConversionOptions options) {
+    Set<String> pinned = new LinkedHashSet<>();
+    for (SheetRow row : ir.rowsForCaseType(SheetName.AUTHORISATION_COMPLEX_TYPE, caseTypeId)) {
+      row.getString(Columns.CASE_FIELD_ID).ifPresent(pinned::add);
+    }
+    for (SheetRow row : ir.rowsForCaseType(SheetName.CASE_EVENT_TO_COMPLEX_TYPES, caseTypeId)) {
+      row.getString(Columns.CASE_FIELD_ID).ifPresent(pinned::add);
+    }
+    for (SheetRow row : activeRows(ir, SheetName.CASE_TYPE_TAB, caseTypeId, options)) {
+      if (row.getString(Columns.DISPLAY_CONTEXT_PARAMETER).filter(s -> !s.isBlank()).isPresent()) {
+        row.getString(Columns.CASE_FIELD_ID).ifPresent(pinned::add);
+      }
+    }
+    for (SheetRow row : activeRows(ir, SheetName.CASE_EVENT_TO_FIELDS, caseTypeId, options)) {
+      if (row.getString(Columns.DISPLAY_CONTEXT).filter(s -> "COMPLEX".equalsIgnoreCase(s.trim()))
+          .isPresent()) {
+        row.getString(Columns.CASE_FIELD_ID).ifPresent(pinned::add);
+      }
+    }
+    return pinned;
   }
 
   /**

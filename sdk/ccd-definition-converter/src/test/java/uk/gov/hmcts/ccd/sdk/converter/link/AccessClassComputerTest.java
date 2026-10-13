@@ -12,19 +12,19 @@ import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapCategory;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapCollector;
 
 /**
- * Direct unit tests for {@link AccessClassComputer}'s common-role-prefix elision, exercised
- * beneath the {@code DefaultDefinitionLinkerTest} end-to-end cases so the digest-fallback path
- * (a residual too wide for a semantic name, even after prefix stripping) is covered precisely.
+ * Direct unit tests for {@link AccessClassComputer}'s naming and residual maths, exercised beneath
+ * the {@code DefaultDefinitionLinkerTest} end-to-end cases so the digest-fallback path (a residual
+ * too wide for a semantic name, even after prefix stripping) is covered precisely.
  */
 class AccessClassComputerTest {
 
   @Test
   void digestFallbackStillAppliesAfterPrefixStripping() {
-    // 7 distinct roles on one field: covering them as 7 atoms exceeds MAX_CLASSES_PER_FIELD (6),
-    // so the whole residual falls back to one dedicated class. All 7 share the "caseworker-
-    // probate-" prefix (>=80%), so their tokens are stripped before nameFor tries the semantic
-    // form; the remainders are still long enough (non-uniform CRUD) to overflow MAX_SEMANTIC_NAME,
-    // so the digest-fallback form ("<role><crud>Plus<N>Roles<digest>Access") must still trigger.
+    // 9 distinct roles on one field: covering them as 9 atoms exceeds MAX_CLASSES_PER_FIELD (8),
+    // so the whole residual falls back to one dedicated class. All 9 share the "caseworker-
+    // probate-" namespace, so those tokens are elided before naming; the remainders are still long
+    // enough (non-uniform CRUD) to overflow MAX_SEMANTIC_NAME, so the digest-fallback form
+    // ("<role><crud>Plus<N>Roles<digest>Access") must still trigger.
     Map<String, String> residual = new LinkedHashMap<>();
     residual.put("caseworker-probate-administrationteam", "CRU");
     residual.put("caseworker-probate-systemupdateservice", "CU");
@@ -33,6 +33,8 @@ class AccessClassComputerTest {
     residual.put("caseworker-probate-exceptionsreportinguser", "R");
     residual.put("caseworker-probate-feepaymentprocessing", "CU");
     residual.put("caseworker-probate-staffadministrationrole", "R");
+    residual.put("caseworker-probate-bulkscanprocessor", "CRU");
+    residual.put("caseworker-probate-registrarauthority", "RU");
 
     AccessClassComputer computer = new AccessClassComputer(new GapCollector());
     AccessClassComputer.Result result = computer.compute(
@@ -43,7 +45,7 @@ class AccessClassComputerTest {
       // Prefix-free: the shared "CaseworkerProbate" token must not appear anywhere in the name.
       assertThat(name).doesNotContain("CaseworkerProbate");
       // Still recognisable as the digest-fallback shape.
-      assertThat(name).contains("Plus6Roles").endsWith("Access");
+      assertThat(name).contains("Plus8Roles").endsWith("Access");
     });
   }
 
@@ -88,8 +90,9 @@ class AccessClassComputerTest {
   @Test
   void definitionGrantBeyondTheInjectedReadStillDerivesToAnAccessClassWithNoGap() {
     // Sanity guard on the residual maths: when the definition grants MORE than the injected R
-    // (CRU vs injected R), the surplus is derivable to an access class and produces no gap at all —
-    // the ADVISORY path fires strictly for the injected-only-R over-grant, nothing else.
+    // (CRU vs injected R), the role is derivable to an access class carrying its full definition
+    // CRUD and produces no gap at all — the ADVISORY path fires strictly for the injected-only-R
+    // over-grant, nothing else.
     GapCollector gaps = new GapCollector();
     AccessClassComputer computer = new AccessClassComputer(gaps);
     AccessClassComputer.Result result = computer.compute(
@@ -97,6 +100,24 @@ class AccessClassComputerTest {
 
     assertThat(gaps.getEntries()).isEmpty();
     assertThat(result.accessClasses()).singleElement()
-        .satisfies(ac -> assertThat(ac.getGrants()).containsEntry("citizen", "CU"));
+        .satisfies(ac -> assertThat(ac.getGrants()).containsOnly(Map.entry("citizen", "CRU")));
+  }
+
+  @Test
+  void oneLetterCaseRoleSeriesCollapsesInAGroupName() {
+    // Three fields grant the same CRUD to [CHILDSOLICITORA]..[CHILDSOLICITORC]: one uniform group,
+    // whose name collapses the contiguous one-letter series.
+    Map<String, String> grants = Map.of(
+        "[CHILDSOLICITORA]", "R", "[CHILDSOLICITORB]", "R", "[CHILDSOLICITORC]", "R");
+    AccessClassComputer computer = new AccessClassComputer(new GapCollector());
+    AccessClassComputer.Result result = computer.compute(
+        List.of("a", "b", "c"), Map.of("a", grants, "b", grants, "c", grants), Map.of());
+
+    assertThat(result.accessClasses()).singleElement().satisfies(ac -> {
+      assertThat(ac.getClassName()).isEqualTo("ChildsolicitorAToCRAccess");
+      assertThat(ac.getGrants()).isEqualTo(grants);
+    });
+    assertThat(result.fieldClassNames().values())
+        .allSatisfy(names -> assertThat(names).containsExactly("ChildsolicitorAToCRAccess"));
   }
 }

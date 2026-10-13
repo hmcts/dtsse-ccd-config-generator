@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.converter.link;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static uk.gov.hmcts.ccd.sdk.converter.link.IrBuilder.cols;
 
 import java.util.List;
@@ -140,6 +141,80 @@ class DefaultDefinitionLinkerTest {
     assertThat(creator.isCaseRole()).isTrue();
     assertThat(creator.getJavaConstant()).isEqualTo("CREATOR");
     assertThat(creator.getName()).isEqualTo("Creator");
+  }
+
+  private DefinitionIr checklistDefinition() {
+    return minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "checklist", "Label", "Checklist",
+                "FieldType", "checklist"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "checklist", "ListElementCode", "checklist1", "FieldType", "MultiSelectList",
+                "FieldTypeParameter", "checklist1", "ElementLabel", " "))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "checklist", "ListElementCode", "checklist2", "FieldType", "MultiSelectList",
+                "FieldTypeParameter", "checklist2", "ElementLabel", " "))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "checklist", "ListElementCode", "selector1", "FieldType", "MultiSelectList",
+                "FieldTypeParameter", "selector1", "ElementLabel", " "))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "checklist", "ListElementCode", "selector2", "FieldType", "MultiSelectList",
+                "FieldTypeParameter", "selector2", "ElementLabel", " "))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "checklist", "ListElementCode", "reason3", "FieldType", "FixedList",
+                "FieldTypeParameter", "reason3", "ElementLabel", " "))
+        .row(SheetName.FIXED_LISTS,
+            cols("ID", "checklist1", "ListElementCode", "isAdult", "ListElement", "Adult"))
+        .row(SheetName.FIXED_LISTS,
+            cols("ID", "checklist2", "ListElementCode", "IS_NOT_DETAINED", "ListElement", "Free"))
+        .row(SheetName.FIXED_LISTS,
+            cols("ID", "selector1", "ListElementCode", "SELECTED", "ListElement", "Selected"))
+        .row(SheetName.FIXED_LISTS,
+            cols("ID", "selector2", "ListElementCode", "SELECTED", "ListElement", "Selected"))
+        .row(SheetName.FIXED_LISTS,
+            cols("ID", "reason3", "ListElementCode", "a", "ListElement", "A"))
+        .row(SheetName.FIXED_LISTS,
+            cols("ID", "reason3", "ListElementCode", "b", "ListElement", "B"))
+        .build();
+  }
+
+  @Test
+  void generateModeFilesFixedListsAndComplexTypesInPerKindSubPackages() {
+    CaseTypeModel model = linker.link(checklistDefinition(), options("Minimal"), new GapCollector());
+
+    assertThat(model.getFixedLists()).extracting(FixedListModel::getJavaPackage)
+        .containsOnly("uk.gov.hmcts.test.model.enums");
+    assertThat(model.getComplexTypes()).extracting(ComplexTypeModel::getJavaPackage)
+        .containsOnly("uk.gov.hmcts.test.model.complex");
+  }
+
+  @Test
+  void retrofitModeKeepsCompanionTypesInTheModelPackage() {
+    ConversionOptions retrofit = options("Minimal").toBuilder().retrofit(true).build();
+    CaseTypeModel model = linker.link(checklistDefinition(), retrofit, new GapCollector());
+
+    assertThat(model.getFixedLists()).extracting(FixedListModel::getJavaPackage).containsOnlyNulls();
+    assertThat(model.getComplexTypes()).extracting(ComplexTypeModel::getJavaPackage)
+        .containsOnlyNulls();
+    // ...and the single-option rename does not apply either.
+    assertThat(model.getFixedLists()).extracting(FixedListModel::getJavaClassName)
+        .contains("Checklist1", "Checklist2");
+  }
+
+  @Test
+  void namesNumberedSingleOptionListsAfterTheirOption() {
+    CaseTypeModel model = linker.link(checklistDefinition(), options("Minimal"), new GapCollector());
+
+    Map<String, String> names = new java.util.LinkedHashMap<>();
+    model.getFixedLists().forEach(fl -> names.put(fl.getId(), fl.getJavaClassName()));
+    assertThat(names)
+        .containsEntry("checklist1", "IsAdult")
+        .containsEntry("checklist2", "IsNotDetained")
+        // two lists deriving the same option name both keep their ID-derived names
+        .containsEntry("selector1", "Selector1")
+        .containsEntry("selector2", "Selector2")
+        // more than one option: not a single tick-box, so not renamed
+        .containsEntry("reason3", "Reason3");
   }
 
   @Test
@@ -1844,10 +1919,11 @@ class DefaultDefinitionLinkerTest {
   }
 
   @Test
-  void frequentAtomSetMinedIntoDefaultAccessGroup() {
+  void frequentUniformAtomSetMinedIntoAGroup() {
     GapCollector gaps = new GapCollector();
-    // Three fields share the atom-set {caseworker=CRU, citizen=R}; it clears the >=3 fields, >=2
-    // atoms threshold, so it is mined into a group. As the most-used group it is named DefaultAccess.
+    // Three fields share {caseworker=CRU, citizen=CRU, solicitor=R}. The CRU-level atom-set clears
+    // the >=3 fields, >=2 atoms threshold, so it is mined into a group named from its content; the
+    // lone R atom stays a standalone class.
     var builder = minimal("Minimal");
     for (String id : new String[] {"a", "b", "c"}) {
       builder.row(SheetName.CASE_FIELD,
@@ -1855,26 +1931,27 @@ class DefaultDefinitionLinkerTest {
           .row(SheetName.AUTHORISATION_CASE_FIELD,
               cols("CaseTypeID", "Minimal", "CaseFieldID", id, "UserRole", "caseworker", "CRUD", "CRU"))
           .row(SheetName.AUTHORISATION_CASE_FIELD,
-              cols("CaseTypeID", "Minimal", "CaseFieldID", id, "UserRole", "citizen", "CRUD", "R"));
+              cols("CaseTypeID", "Minimal", "CaseFieldID", id, "UserRole", "citizen", "CRUD", "CRU"))
+          .row(SheetName.AUTHORISATION_CASE_FIELD,
+              cols("CaseTypeID", "Minimal", "CaseFieldID", id, "UserRole", "solicitor", "CRUD", "R"));
     }
     CaseTypeModel model = linker.link(builder.build(), options("Minimal"), gaps);
 
-    assertThat(model.getAccessClasses()).singleElement()
-        .satisfies(ac -> {
-          assertThat(ac.getClassName()).isEqualTo("DefaultAccess");
-          assertThat(ac.getGrants()).containsOnly(
-              Map.entry("caseworker", "CRU"), Map.entry("citizen", "R"));
-        });
+    assertThat(model.getAccessClasses())
+        .extracting(AccessClassModel::getClassName, AccessClassModel::getGrants)
+        .containsExactly(
+            tuple("CaseworkerCitizenCruAccess", Map.of("caseworker", "CRU", "citizen", "CRU")),
+            tuple("SolicitorRAccess", Map.of("solicitor", "R")));
     assertThat(model.getCaseFields()).allSatisfy(f ->
-        assertThat(f.getAccessClassNames()).containsExactly("DefaultAccess"));
+        assertThat(f.getAccessClassNames())
+            .containsExactly("CaseworkerCitizenCruAccess", "SolicitorRAccess"));
   }
 
   @Test
   void commonRolePrefixIsElidedFromAtomNames() {
     GapCollector gaps = new GapCollector();
-    // Every role sharing the "caseworker-probate-" prefix carries no information (maintainer
-    // directive): the derived atom names should drop it and keep only each role's remainder. A
-    // third prefixed role clears the MIN_PREFIX_ROLES floor alongside the >50% share bar.
+    // Every role shares the "caseworker-probate-" namespace, which carries no information: each
+    // pass elides one shared leading token, leaving only each role's remainder.
     DefinitionIr ir = minimal("Minimal")
         .row(SheetName.CASE_FIELD,
             cols("CaseTypeID", "Minimal", "ID", "a", "Label", "A", "FieldType", "Text"))
@@ -1901,10 +1978,9 @@ class DefaultDefinitionLinkerTest {
   @Test
   void roleThatIsExactlyTheCommonPrefixKeepsItsLastToken() {
     GapCollector gaps = new GapCollector();
-    // "caseworker-probate" IS the shared prefix "caseworker-probate" exactly (no remainder), so
-    // per the documented rule it keeps its last hyphen token ("probate") rather than collapsing
-    // to an empty name. A third prefixed role clears the MIN_PREFIX_ROLES floor alongside the
-    // >50% share bar.
+    // "caseworker" and then "probate" are each elided (every role carries them, at least three with
+    // something after them), but "caseworker-probate" has nothing after "probate", so it keeps that
+    // token rather than collapsing to an empty name.
     DefinitionIr ir = minimal("Minimal")
         .row(SheetName.CASE_FIELD,
             cols("CaseTypeID", "Minimal", "ID", "a", "Label", "A", "FieldType", "Text"))
@@ -1917,21 +1993,24 @@ class DefaultDefinitionLinkerTest {
         .row(SheetName.AUTHORISATION_CASE_FIELD,
             cols("CaseTypeID", "Minimal", "CaseFieldID", "a", "UserRole",
                 "caseworker-probate-systemupdate", "CRUD", "CU"))
+        .row(SheetName.AUTHORISATION_CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "CaseFieldID", "a", "UserRole",
+                "caseworker-probate-superuser", "CRUD", "CRUD"))
         .build();
 
     CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
 
     assertThat(model.getAccessClasses())
         .extracting(AccessClassModel::getClassName)
-        .containsExactlyInAnyOrder("ProbateRAccess", "CaseadminCruAccess", "SystemupdateCuAccess");
+        .containsExactlyInAnyOrder("ProbateRAccess", "CaseadminCruAccess", "SystemupdateCuAccess",
+            "SuperuserCrudAccess");
   }
 
   @Test
-  void mixedPrefixCaseTypeStripsNothingBelowTheShareBar() {
+  void prefixBelowTheMinimumRoleCountIsNotElided() {
     GapCollector gaps = new GapCollector();
-    // Only 1 of 3 distinct roles shares "caseworker-probate-"; that is below both the >50% share
-    // bar and the minimum-3-roles bar, so no prefix is common and every role keeps its full token
-    // form.
+    // Only 1 of 3 distinct roles starts with "caseworker"; that is below the minimum-3-roles bar, so
+    // nothing is elided and every role keeps its full token form.
     DefinitionIr ir = minimal("Minimal")
         .row(SheetName.CASE_FIELD,
             cols("CaseTypeID", "Minimal", "ID", "a", "Label", "A", "FieldType", "Text"))
@@ -1953,13 +2032,13 @@ class DefaultDefinitionLinkerTest {
   }
 
   @Test
-  void simpleMajorityPrefixCaseTypeStripsTheMajorityRoles() {
+  void prefixElisionStripsOneSharedLeadingTokenPerPass() {
     GapCollector gaps = new GapCollector();
-    // Probate-shaped: 11 of 18 distinct roles (61%) carry "caseworker-probate-" — a simple
-    // majority but below a supermajority. That still clears the >50% bar (and the minimum-3-roles
-    // bar), so the 11 prefixed roles are stripped to their remainder while the 7 non-prefixed
-    // roles are left untouched. One role per field (distinct CRUD) so every residual stays within
-    // MAX_CLASSES_PER_FIELD and is named as a standalone atom rather than a dedicated fallback.
+    // Probate-shaped: 13 of 18 distinct roles start with "caseworker" and 11 of them continue with
+    // "probate", so both tokens are elided, one per pass (each clears the 40% share and
+    // minimum-3-roles bars). The divorce roles keep "divorce", which only two roles share, and
+    // roles outside the namespace are left untouched. One role per field so every residual is
+    // named as a standalone atom.
     String[] prefixed = {
         "administrationteam", "approver", "caa", "systemupdate", "issuinganddebugadmin",
         "solicitor", "poarpasenior", "poarpaadmin", "exceptaide", "grantaide", "superuser",
@@ -1993,16 +2072,15 @@ class DefaultDefinitionLinkerTest {
     // Prefixed roles: stripped, no "CaseworkerProbate" token survives.
     assertThat(names).noneMatch(n -> n.contains("CaseworkerProbate"));
     assertThat(names).contains("ApproverRAccess", "CaaRAccess", "SystemupdateRAccess");
-    // Roles outside the prefix (including other case types' full namespaces) are untouched.
+    // The divorce roles lose only the shared "caseworker"; roles outside the namespace are untouched.
     assertThat(names).contains(
-        "CitizenRAccess", "CaseworkerDivorceCaseadminRAccess", "IacLegalrepSolicitorRAccess");
+        "CitizenRAccess", "DivorceCaseadminRAccess", "IacLegalrepSolicitorRAccess");
   }
 
   @Test
   void commonPrefixDerivationIsDeterministicAcrossRuns() {
     // Same input, run twice: the derived (prefix-stripped) names must match exactly, since the
-    // scheme has no randomness or hash-map-ordering dependence. A third prefixed role clears the
-    // MIN_PREFIX_ROLES floor alongside the >50% share bar.
+    // scheme has no randomness or hash-map-ordering dependence.
     DefinitionIr ir = minimal("Minimal")
         .row(SheetName.CASE_FIELD,
             cols("CaseTypeID", "Minimal", "ID", "a", "Label", "A", "FieldType", "Text"))
@@ -2034,9 +2112,8 @@ class DefaultDefinitionLinkerTest {
   void uniformCrudAcrossMultiRoleGroupWritesCrudTokenOnce() {
     GapCollector gaps = new GapCollector();
     // Two groups qualify for mining (>=3 fields, >=2 atoms each): {caseworker=CRU, citizen=CRU}
-    // (uniform CRUD, 3 fields) and {solicitor=R, expert=R} (4 fields, so it wins DefaultAccess).
-    // The first group's content-derived name should then write its shared CRUD token once rather
-    // than repeating it per role.
+    // (3 fields) and {solicitor=R, expert=R} (4 fields). Each name writes its shared CRUD token
+    // once rather than repeating it per role.
     var builder = minimal("Minimal");
     for (String id : new String[] {"a", "b", "c"}) {
       builder.row(SheetName.CASE_FIELD,
@@ -2062,7 +2139,7 @@ class DefaultDefinitionLinkerTest {
 
     assertThat(model.getAccessClasses())
         .extracting(AccessClassModel::getClassName)
-        .contains("CaseworkerCitizenCruAccess", "DefaultAccess");
+        .containsExactlyInAnyOrder("CaseworkerCitizenCruAccess", "ExpertSolicitorRAccess");
   }
 
   @Test

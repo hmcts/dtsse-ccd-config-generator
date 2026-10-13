@@ -20,8 +20,9 @@ import uk.gov.hmcts.ccd.sdk.converter.model.OverlayCondition;
  * contract the retrofit clone-regeneration relies on (findings #1/#2/#6). Runs the full converter
  * over the bundled {@code golden/minimal} fixture and asserts the emitted file tree matches the
  * reference-service idiom (nfdiv/sptribs): one event class per event under {@code <root>.event}, a
- * page class per wizard page under {@code <root>.event.page} for multi-page events (a single-page
- * event inlines its one page into the event class instead), access classes under
+ * page class per wizard page for multi-page events, the event and its pages together in the event's
+ * own {@code <root>.event.<event>} sub-package (a single-page event inlines its one page into the
+ * event class instead and stays in {@code <root>.event}), access classes under
  * {@code <root>.access}, the config split by concern under {@code <root>}, and the model classes
  * under {@code <modelPackage>}.
  *
@@ -73,16 +74,17 @@ class GeneratedLayoutTest {
     // Events: one class per event under <root>.event (finding #1), PascalCase-named from the ID,
     // overlay events keeping their suffix (createCase, addNotes, closeCase + the two overlay events).
     assertThat(tree).contains(
-        "uk/gov/hmcts/minimal/ccd/event/CreateCase.java",
+        "uk/gov/hmcts/minimal/ccd/event/createcase/CreateCase.java",
         "uk/gov/hmcts/minimal/ccd/event/AddNotes.java",
         "uk/gov/hmcts/minimal/ccd/event/CloseCase.java");
-    // Page classes under <root>.event.page (finding #2) only for MULTI-page events: createCase has
-    // two pages so it keeps its page classes. A single-page event (addNotes) inlines its one page
-    // into the event class instead, so no AddNotesPage1 class is emitted.
+    // Page classes (finding #2) only for MULTI-page events: createCase has two pages so it keeps its
+    // page classes, beside it in its own package. A single-page event (addNotes) inlines its one page
+    // into the event class instead, so it gets neither a page class nor a package.
     assertThat(tree).contains(
-        "uk/gov/hmcts/minimal/ccd/event/page/CreateCasePage1.java",
-        "uk/gov/hmcts/minimal/ccd/event/page/CreateCasePage2.java");
-    assertThat(tree).noneMatch(p -> p.contains("AddNotesPage"));
+        "uk/gov/hmcts/minimal/ccd/event/createcase/CreateCasePage1.java",
+        "uk/gov/hmcts/minimal/ccd/event/createcase/CreateCasePage2.java");
+    assertThat(tree).noneMatch(p -> p.contains("/event/addnotes/"));
+    assertThat(tree).noneMatch(p -> p.contains("/event/page/"));
     // Access classes under <root>.access.
     assertThat(tree).anyMatch(p -> p.startsWith("uk/gov/hmcts/minimal/ccd/access/"));
     // Config split by concern under <root> (finding #6): CaseType always, plus the concerns present.
@@ -105,7 +107,7 @@ class GeneratedLayoutTest {
     // The event class references its page classes and uses the concise Permission set shortcut and
     // varargs roles (findings #2/#5); the page class carries the field placements.
     String createCase = Files.readString(
-        srcOut.resolve("uk/gov/hmcts/minimal/ccd/event/CreateCase.java"));
+        srcOut.resolve("uk/gov/hmcts/minimal/ccd/event/createcase/CreateCase.java"));
     assertThat(createCase).contains("public static final String CREATE_CASE = \"createCase\"");
     assertThat(createCase).contains("builder.event(CREATE_CASE)");
     assertThat(createCase).contains("CreateCasePage1.apply(fields)");

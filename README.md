@@ -997,21 +997,54 @@ team wants a specific home. Under `<root>` the converter emits:
   ├─ <Prefix>Search.java        search input/result, search-cases, criteria, parties
   ├─ <Prefix>NoticeOfChange.java, <Prefix>RoleToAccessProfiles.java, <Prefix>Categories.java
   ├─ event/                     one @Component CCDConfig per event (finding #1):
-  │    ├─ CreateCase.java          PascalCase of the event ID; ID as a `static final String` constant
-  │    └─ event/page/             one class per wizard page, MULTI-page events only (finding #2):
-  │         └─ CreateCasePage1.java   `public static void apply(fields)` called by the event class
+  │    ├─ AddNotes.java            PascalCase of the event ID; ID as a `static final String` constant
+  │    └─ createcase/             a MULTI-page event, with one class per wizard page (finding #2):
+  │         ├─ CreateCase.java
+  │         ├─ CreateCasePage1.java   `public static void apply(fields)` called by the event class
+  │         └─ ApplicantDetailsPage.java
   └─ access/                    HasAccessControl classes referenced by @CCD(access = {…})
 ```
 
-Model classes (`CaseData`, complex types, `State`, `UserRole`, enums, `EnvironmentFlags`) stay in
-`--model-package`. Each config bean is emitted only when its concern carries content (`CaseType`
-always). A **single-page event** carries no page class: its one page's header (`page(id)`, optional
-page label / show condition) and field chain are inlined directly into the event class's
-`configure()` method — a page class would be pure indirection for one page — so a case type whose
-every event is single-page produces no `event/page/` package at all. **Multi-page** events keep the
-page-class split above. A single wizard page large enough to overflow the JVM method-size limit on
-its own splits into documented `<Page>FieldsN` fragments within its page package (the only surviving
-numbered form); this applies even to an oversized single page, which still gets no page class.
+Model classes stay under `--model-package`: `CaseData`, `State`, `UserRole`, `EnvironmentFlags` and
+any synthesised `@JsonUnwrapped` classes in the package itself, fixed-list enums in
+`<model>.enums` and complex types in `<model>.complex` (retrofit mode emits its companion types into
+the model package itself). Each config bean is emitted only when its concern carries content
+(`CaseType` always). A **single-page event** carries no page class and stays in `event/`: its one
+page's header (`page(id)`, optional page label / show condition) and field chain are inlined
+directly into the event class's `configure()` method — a page class would be pure indirection for
+one page. A **multi-page** event moves, with its page classes, into its own package
+`event/<eventclassname-lowercased>` (suffixed `2`, `3`, … when two event class names differ only by
+case; a Java keyword gets a trailing `_`). A page class is named from its CCD page ID with the event
+name dropped, since the package already carries it (`applyForFTPAAppellant`'s
+`ftpaAppellantSubmissionPage` → `FtpaAppellantSubmissionPage`, `selectHearing` →
+`SelectHearingPage`); a page ID that would be left with only a number, or nothing, keeps the event
+name so numbered pages stay unique in a type search (`1` → `CreateCasePage1`; IA's
+`allocateTheCase`, `allocateTheCase2` → `AllocateTheCasePage`, `AllocateTheCasePage2`). A single
+wizard page large enough to overflow the JVM method-size limit on its own splits into documented
+`<Page>FieldsN` fragments within the event's package (the only surviving numbered form); this
+applies even to an oversized single page, which still gets no page class.
+
+Fixed lists whose ID is a word plus a number and that hold a single option (IA's `checklist1` …
+`checklist7`, each one tick-box) are named after that option instead (`checklist1` = `isAdult` →
+`IsAdult`); the CCD ID still round-trips through `@ComplexType(name = …)`. A list keeps its
+ID-derived name when the option name is unusable, already taken by another generated type, or
+derived by more than one such list.
+
+`--group-case-data N` (generate mode, default `0` = off) splits a large `CaseData` into
+`@JsonUnwrapped` sub-objects of at least `N` fields, so the root class reads as an outline. Fields
+sharing a leading camelCase word (`appellantGivenNames`, `appellantFamilyName`, …) become members of
+an `Appellant` class held as `@JsonUnwrapped(prefix = "appellant") Appellant appellant` and named for
+the remainder (`givenNames`); the prefix extends while every member shares the next word
+(`homeOffice…` → `HomeOffice`). The group class carries
+`@JsonNaming(PropertyNamingStrategies.UpperCamelCaseStrategy.class)` so Jackson's flat key matches the
+`prefix + capitalize(member)` ID the SDK derives. Underscore-separated IDs (`progress_caseOfficer_…`)
+group by their leading segments under a bare `@JsonUnwrapped`, keeping their full IDs. Leading
+predicate/action words (`is`, `has`, `add`, `case`, …) never form a group; a field stays flat when a
+typed SDK reference to it accepts only a `CaseData` getter (an `AuthorisationComplexType` grant, a tab
+row with a `DisplayContextParameter`, `CaseEventToComplexTypes` overrides or a `COMPLEX` placement), or
+when its remainder starts with an acronym (`hearingHMCId`, which Jackson would read back as `hmcid`).
+Group classes live in the model package, and `CaseData` declares their containers first, by member
+name, initialised so a getter chain never meets `null`.
 
 Key behaviours:
 
@@ -1054,12 +1087,15 @@ only an explicit, documented set of superficial config-generator differences.
 ### Access-class emission policy (both modes)
 
 The converter reproduces a definition's `AuthorisationCaseField` grants as `@CCD(access = {…})` on
-each field, after subtracting the grants the SDK injects automatically (event grants, `caseHistory`,
-tab/search read). Whatever a field asks for beyond that baseline is its **residual** grant map. The
-converter expresses every residual as a **union of named access-group classes**, exactly as a
-hand-written HMCTS model does (e.g. `@CCD(access = {DefaultAccess.class, Applicant2Access.class})`).
-This exploits the SDK's proven additive composition — a field's effective grant for a role is the
-union of the permissions from every class it names (see
+each field, on top of the grants the SDK injects automatically (event grants, `caseHistory`,
+tab/search read). Every role the injected baseline leaves short of its definition grant is part of
+the field's **residual** grant map, carrying the role's **full** definition CRUD (not just the
+missing permissions): the SDK unions class grants with what it injects, so the result is the same,
+and two fields granting a role the same CRUD share one class whatever the SDK injects on each. The
+converter expresses every residual as a **union of named access-group classes**, as a hand-written
+HMCTS model does (e.g. `@CCD(access = {CaseworkerCruAccess.class, CitizenRAccess.class})`). This
+exploits the SDK's proven additive composition — a field's effective grant for a role is the union
+of the permissions from every class it names (see
 `AuthorisationCaseFieldGenerator.addPermissionsFromFields`). Class names never appear in the emitted
 `AuthorisationCaseField`, only the resolved grants, so any decomposition whose classes' grants union
 back to the residual round-trips byte-for-byte. The decomposition is deterministic (identical in
@@ -1068,19 +1104,26 @@ generate and retrofit mode — `AccessClassComputer`):
 1. **Atoms.** The finest grain is one class per distinct `(role → CRUD)` pair that occurs — small and
    semantic (`CaseworkerCruAccess`, `CitizenRAccess`). A residual with distinct roles decomposes into
    one atom per role.
-2. **Groups.** Frequently co-occurring atom-sets are mined into named bundles by a greedy
-   frequent-itemset pass — the atom-set covering the most residual across the case type is carved out
-   first, then the pass repeats on what remains. A group must be used by **≥ 3 fields** and bundle
-   **≥ 2 atoms** to earn a name. The single most-used group is named **`DefaultAccess`** for
-   recognisability (the bundle most fields carry); the rest are named from their content — each role's
-   short token plus its CRUD in title case, sorted by role (e.g. `{caseworker=CRU, citizen=R}` →
-   `CaseworkerCruCitizenRAccess`), collision-suffixed and stable across re-runs. A name over 70
-   characters is truncated to the first role's token, a role count and a short stable digest.
-3. **Per-field cover.** Each residual is covered greedily by the groups that carved it plus any
-   leftover atoms. When a field would need more than **6 classes**
+2. **Groups.** Frequently co-occurring atom-sets that grant **one CRUD level to all their roles** are
+   mined into named bundles by a greedy frequent-itemset pass — the bundle covering the most residual
+   across the case type is carved out first, then the pass repeats on what remains. A group must be
+   used by **≥ 3 fields**, bundle **≥ 2 atoms** and have a semantic name (see below) to be mined.
+3. **Per-field cover.** Each residual is covered by the groups that carved it plus any leftover
+   atoms. When a field would need more than **8 classes**
    (`AccessClassComputer.MAX_CLASSES_PER_FIELD`), the whole residual falls back to **one dedicated,
-   semantically-named class** (never `AccessNN`) shared by every field with that exact residual — so
-   per-field arrays stay readable.
+   content-named class** shared by every field with that exact residual — so per-field arrays stay
+   readable.
+
+Every class is named from its content, collision-suffixed and stable across re-runs. A role ID is
+split into lower-case tokens on every non-alphanumeric character, and the case type's role namespace
+is elided: up to three passes each drop one leading token shared by at least 40 % (and at least 3) of
+the non-case roles that have something after it — IA's `caseworker-ia-legalrep-solicitor` names as
+`LegalrepSolicitor`. A multi-role name lists roles widest CRUD first, writes each CRUD token once
+after its run (`{judge=CRU, legalrep=CRU}` → `JudgeLegalrepCruAccess`), factors roles sharing leading
+tokens (`specific-access-admin`, `specific-access-judge` → `SpecificAccessAdminJudge`) and collapses
+one-letter case-role series (`[CHILDSOLICITORA]`…`[CHILDSOLICITORO]` → `ChildsolicitorAToO`). A name
+over 70 characters is truncated to the first role's token, a role count and a short stable digest;
+groups are never mined under such a name, so only dedicated fallbacks can carry one.
 
 Only classes actually referenced by some field's cover are emitted. The outcome is recorded per case
 type in `CaseTypeModel.accessSummaryNote` (and the gap report's *Access emission* section): the total
@@ -1172,8 +1215,9 @@ short-circuits back to phase 1 and needs neither. The root package for the compa
 same rule as generate mode — derived from `--model-package` (here `uk.gov.hmcts.reform.civil.model`
 → `uk.gov.hmcts.reform.civil.ccd`) unless `--root-package`/`--config-package` overrides it — so the
 companions land in the service's main source tree beside the model, laid out as documented under
-[Generated package layout](#generated-package-layout) (events in `<root>.event`, page classes in
-`<root>.event.page`, access classes in `<root>.access`, config beans split by concern in `<root>`).
+[Generated package layout](#generated-package-layout) (events in `<root>.event`, a multi-page event and
+its page classes in `<root>.event.<event>`, access classes in `<root>.access`, config beans split by
+concern in `<root>`).
 The retrofit clone-regeneration script writes exactly this tree (untracked in the clone's git
 status), retiring the old flat `generated-config/` directory. Invalid combinations are rejected with
 a clear error.

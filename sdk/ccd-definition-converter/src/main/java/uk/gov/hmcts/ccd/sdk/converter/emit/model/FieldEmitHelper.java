@@ -50,9 +50,11 @@ final class FieldEmitHelper {
     // member complex type back to prefixed CCD field IDs. Such a field has no flat CaseField of
     // its own, so it carries neither @JsonProperty nor @CCD.
     if (field.getUnwrapPrefix() != null) {
-      fb.addAnnotation(AnnotationSpec.builder(ClassName.get(JsonUnwrapped.class))
-          .addMember("prefix", "$S", field.getUnwrapPrefix())
-          .build());
+      AnnotationSpec.Builder unwrapped = AnnotationSpec.builder(ClassName.get(JsonUnwrapped.class));
+      if (!field.getUnwrapPrefix().isEmpty()) {
+        unwrapped.addMember("prefix", "$S", field.getUnwrapPrefix());
+      }
+      fb.addAnnotation(unwrapped.build());
       return fb.build();
     }
 

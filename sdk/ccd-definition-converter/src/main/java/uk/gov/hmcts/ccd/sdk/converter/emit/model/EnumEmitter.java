@@ -46,7 +46,8 @@ public class EnumEmitter implements SourceEmitter {
     List<JavaFile> files = new ArrayList<>();
 
     for (FixedListModel fl : model.getFixedLists()) {
-      files.add(emitFixedList(fl, pkg, context.banner(model.getCaseTypeId(), "FixedLists")));
+      files.add(emitFixedList(fl, fl.getJavaPackage() != null ? fl.getJavaPackage() : pkg,
+          context.banner(model.getCaseTypeId(), "FixedLists")));
     }
     // In retrofit mode the team's own State enum is reused (its IDs all resolve — proposal decision
     // 3), so no fresh State enum is generated; the config references the team's enum via

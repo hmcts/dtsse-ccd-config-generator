@@ -29,7 +29,7 @@ public class ComplexTypeEmitter implements SourceEmitter {
   public List<JavaFile> emit(CaseTypeModel model, EmitContext context) {
     String pkg = context.modelPackage();
     FieldEmitHelper helper = new FieldEmitHelper(pkg, context.accessPackage(),
-        context.getOptions().getRetrofitTypeFqnOverrides());
+        context.typeFqnOverrides());
     List<JavaFile> files = new ArrayList<>();
 
     for (ComplexTypeModel ct : model.getComplexTypes()) {
@@ -74,7 +74,8 @@ public class ComplexTypeEmitter implements SourceEmitter {
       classBuilder.addAnnotation(complexTypeAnn.build());
       classBuilder.addFields(fields);
 
-      JavaFile jf = JavaFile.builder(pkg, classBuilder.build())
+      JavaFile jf = JavaFile.builder(ct.getJavaPackage() != null ? ct.getJavaPackage() : pkg,
+              classBuilder.build())
           .skipJavaLangImports(true)
           .indent("    ")
           .build();

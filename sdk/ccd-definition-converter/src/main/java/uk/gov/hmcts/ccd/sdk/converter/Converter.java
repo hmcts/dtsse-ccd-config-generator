@@ -4,7 +4,9 @@ import com.palantir.javapoet.JavaFile;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.BiFunction;
 import lombok.Builder;
 import lombok.Value;
@@ -16,6 +18,8 @@ import uk.gov.hmcts.ccd.sdk.converter.api.ReportWriter;
 import uk.gov.hmcts.ccd.sdk.converter.api.SourceEmitter;
 import uk.gov.hmcts.ccd.sdk.converter.ir.DefinitionIr;
 import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
+import uk.gov.hmcts.ccd.sdk.converter.model.ComplexTypeModel;
+import uk.gov.hmcts.ccd.sdk.converter.model.FixedListModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapCollector;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapEntry;
 
@@ -58,6 +62,7 @@ public class Converter {
     EmitContext context = EmitContext.builder()
         .options(options)
         .gaps(gaps)
+        .generatedTypeFqns(generatedTypeFqns(model))
         .build();
 
     List<JavaFile> files = new ArrayList<>();
@@ -88,6 +93,32 @@ public class Converter {
         .files(files)
         .gaps(gaps.getEntries())
         .build();
+  }
+
+  /**
+   * Simple name to FQN for each generated complex type / fixed-list enum the linker placed in a
+   * sub-package of the model package (generate mode); empty when every type sits in the model
+   * package itself (retrofit mode).
+   */
+  private static Map<String, String> generatedTypeFqns(CaseTypeModel model) {
+    Map<String, String> fqns = new LinkedHashMap<>();
+    if (model.getComplexTypes() != null) {
+      for (ComplexTypeModel ct : model.getComplexTypes()) {
+        if (ct.getJavaPackage() != null) {
+          String simple = ct.getJavaClassName() != null ? ct.getJavaClassName() : ct.getId();
+          fqns.put(simple, ct.getJavaPackage() + "." + simple);
+        }
+      }
+    }
+    if (model.getFixedLists() != null) {
+      for (FixedListModel fl : model.getFixedLists()) {
+        if (fl.getJavaPackage() != null) {
+          String simple = fl.getJavaClassName() != null ? fl.getJavaClassName() : fl.getId();
+          fqns.put(simple, fl.getJavaPackage() + "." + simple);
+        }
+      }
+    }
+    return fqns;
   }
 
   @Value

@@ -52,6 +52,12 @@ public class ConversionOptions {
   boolean allowGaps;
 
   /**
+   * Generate mode: split CaseData into {@code @JsonUnwrapped} sub-objects of at least this many
+   * fields (see {@code CaseDataGrouper}). 0, the default, keeps CaseData flat.
+   */
+  int caseDataGroupMin;
+
+  /**
    * Retrofit mode: emit companion config/enum/access sources targeting the team's EXISTING model
    * (via {@link #retrofitCaseDataClass} etc.) instead of a fresh generated {@code CaseData}. When
    * set the linker skips {@code FieldClusterer} (a real model already carries its own
