@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import { getDocumentNode } from "../src/builder.js";
 import { createDocEditorController } from "../src/controller.js";
+import { editorSchema } from "../src/schema.js";
 import { buildDoc, createDocEditor } from "../src/index.js";
 
 describe("headless editor", () => {
@@ -122,5 +123,70 @@ describe("headless editor", () => {
     assert.equal(changes.length, seenChanges);
     assert.equal(states.length, seenStates + 1);
     assert.deepEqual(runtime.controller.getSnapshot(), saved);
+  });
+
+  describe("inserting wording for the reader", () => {
+    const order = (withCosts: boolean) =>
+      buildDoc((doc) => {
+        doc.paragraph("heading", "IT IS ORDERED THAT:");
+        doc.orderedList("clauses", (list) => {
+          list.item("decision", "The application is granted.");
+          if (withCosts) list.item("costs", "Costs in the case.");
+        });
+      });
+    const text = (controller: ReturnType<typeof createDocEditor>) => {
+      const doc = editorSchema.nodeFromJSON(controller.getSnapshot().current);
+      return doc.textBetween(0, doc.content.size, "\n");
+    };
+
+    it("adds paragraphs after the last clause as the reader's own numbered clauses", () => {
+      const changes: unknown[] = [];
+      const controller = createDocEditor({ onChange: (s) => changes.push(s) });
+      controller.render(order(false));
+      const rendered = changes.length;
+
+      controller.insert(
+        ["The hearing is adjourned.", "  ", "Costs reserved."],
+        { at: "end" },
+      );
+
+      assert.equal(
+        text(controller),
+        "IT IS ORDERED THAT:\nThe application is granted.\nThe hearing is adjourned.\nCosts reserved.",
+      );
+      assert.equal(changes.length, rendered + 1);
+      const list = editorSchema.nodeFromJSON(controller.getSnapshot().current)
+        .child(1);
+      assert.equal(list.childCount, 3);
+      assert.equal(list.child(1).attrs.id, null);
+      assert.equal(list.child(2).attrs.id, null);
+    });
+
+    it("keeps the inserted wording through later renders of the same clauses", () => {
+      const controller = createDocEditor();
+      controller.render(order(false));
+      controller.insert(["The hearing is adjourned."], { at: "end" });
+
+      controller.render(order(true));
+
+      // The new generated clause follows its generated sibling; the reader's stays.
+      assert.equal(
+        text(controller),
+        "IT IS ORDERED THAT:\nThe application is granted.\nCosts in the case.\nThe hearing is adjourned.",
+      );
+    });
+
+    it("inserts nothing when every paragraph is blank", () => {
+      const changes: unknown[] = [];
+      const controller = createDocEditor({ onChange: (s) => changes.push(s) });
+      controller.render(order(false));
+      const rendered = changes.length;
+
+      controller.insert(["", "  "]);
+      controller.insert(["", "  "], { at: "end" });
+
+      assert.equal(changes.length, rendered);
+      assert.equal(text(controller), "IT IS ORDERED THAT:\nThe application is granted.");
+    });
   });
 });
