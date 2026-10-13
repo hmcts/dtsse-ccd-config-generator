@@ -347,6 +347,9 @@ overlay and so cannot be expressed by a field-level gate on the CaseData class:
 When the gate is inactive the gated member vanishes from that type's `ComplexTypes` rows, and any nested
 complex type reachable only through the gated member disappears from the definition entirely.
 
+A gate on a `@JsonUnwrapped` container applies to every member it flattens into `CaseData`: when it is
+inactive, all of them are dropped, whatever their own gates.
+
 ### Setting up case states
 
 The case states are implemented by an enum:
@@ -1067,8 +1070,8 @@ name dropped, since the package already carries it (`applyForFTPAAppellant`'s
 name so numbered pages stay unique in a type search (`1` → `CreateCasePage1`; IA's
 `allocateTheCase`, `allocateTheCase2` → `AllocateTheCasePage`, `AllocateTheCasePage2`). A single
 wizard page large enough to overflow the JVM method-size limit on its own splits into documented
-`<Page>FieldsN` fragments within the event's package (the only surviving numbered form); this
-applies even to an oversized single page, which still gets no page class.
+`<Page>FieldsN` fragments within the event's package; this applies even to an oversized single
+page, which still gets no page class.
 
 Fixed lists whose ID is a word plus a number and that hold a single option (IA's `checklist1` …
 `checklist7`, each one tick-box) are named after that option instead (`checklist1` = `isAdult` →
@@ -1092,6 +1095,10 @@ when its remainder starts with an acronym (`hearingHMCId`, which Jackson would r
 Group classes live in the model package, and `CaseData` declares their containers first, by member
 name, initialised so a getter chain never meets `null`.
 
+Every generated source file is written through `GeneratedSourceFormatter`, which puts an annotation
+on one line when it fits 120 columns (`@JsonUnwrapped(prefix = "legal")`) and leaves a longer one
+with one member per line.
+
 Key behaviours:
 
 - **Callbacks** — each callback is emitted as a URL callback pointing at the endpoint the definition
@@ -1109,7 +1116,10 @@ Key behaviours:
   …); the SDK rejects a handler and a URL on the same hook.
 - **Per-environment overlays** — files such as `CaseEvent-prod.json` / `CaseEvent-nonprod.json`
   become environment-guarded Java (an `EnvironmentFlags.flag(...)` check), configured via
-  repeatable `--overlay-suffix suffix=[!]ENV_VAR:value` (defaults ship for `prod`/`nonprod`).
+  repeatable `--overlay-suffix suffix=[!]ENV_VAR:value` (defaults ship for `prod`/`nonprod`). A
+  `CaseField` that exists only in an overlay fragment with a configured predicate becomes a real
+  model member carrying `@CCD(gate = "[!]ENV_VAR:value")` (see
+  [Generation-time environment gates](#generation-time-environment-gates)), in both modes.
 - **Gaps and passthrough** — anything the SDK cannot express in code (unsupported sheets like
   `UserProfile`, unsupported columns, non-derivable authorisations) is written to a
   gap report (`gap-report.json`/`.md`) and, where safe, passed through as raw JSON to be merged
@@ -1118,7 +1128,7 @@ Key behaviours:
   definition carrying the sheet fails conversion with an `OMITTED_FAIL` gap unless `--allow-gaps` is
   set. Its rows are per-user, per-environment workbasket-filter defaults keyed on real IDAM emails —
   environment/deployment config, not case-type model — and that one user-visible effect (the
-  case-list default filter) no longer appears to be consumed by current XUI code, which computes the
+  case-list default filter) does not appear to be consumed by current XUI code, which computes the
   default a different way (maintainer decision 2026-07-16). Migrating teams
   should either **drop the sheet** or **hand-manage `UserProfile.json` per environment** outside the
   generated definition. The importer only needs the `UserProfile` sheet/tab to be present, which
@@ -1245,8 +1255,8 @@ counts, and a map-based-model check that reports *"retrofit not applicable — u
 **Resolved (exact + type-conflict): 93.6%. Exact: 26.9%.**
 ```
 
-Measured resolved rates (name resolution) against the four POJO archetypes: **FPL ~71 %, ET ~98 %,
-Civil ~95 %, SSCS ~94 %** — see the proposal for the per-fixture breakdown and how the FPL figure
+Measured resolved rates (name resolution) against the four POJO archetypes: **FPL 73.4 %, ET 97.9 %,
+Civil 94.7 %, SSCS 93.6 %** — see the proposal for the per-fixture breakdown and how the FPL figure
 lifts far above the proposal's 28 % top-level-name-only hand floor once `@JsonUnwrapped` and
 superclasses are walked.
 
@@ -1274,11 +1284,10 @@ same rule as generate mode — derived from `--model-package` (here `uk.gov.hmct
 → `uk.gov.hmcts.reform.civil.ccd`) unless `--root-package`/`--config-package` overrides it — so the
 companions land in the service's main source tree beside the model, laid out as documented under
 [Generated package layout](#generated-package-layout) (events in `<root>.event`, a multi-page event and
-its page classes in `<root>.event.<event>`, access classes in `<root>.access`, config beans split by
-concern in `<root>`).
+its page classes in `<root>.event.<event class name, lower-cased>`, access classes in `<root>.access`,
+config beans split by concern in `<root>`).
 The retrofit clone-regeneration script writes exactly this tree (untracked in the clone's git
-status), retiring the old flat `generated-config/` directory. Invalid combinations are rejected with
-a clear error.
+status). Invalid combinations are rejected with a clear error.
 
 **Wiring — no generated application class.** The converter does **not** emit a
 `@SpringBootApplication` into the service's tree (that option, `--emit-application`, exists only for
@@ -1423,29 +1432,30 @@ In short: every construct the SDK can express round-trips byte-identically, modu
 set of cosmetic normalisation rules (column aliases, defaults, ordering, and similar
 spelling-only differences). State authorisation is reproduced exactly (via
 `ConfigBuilder.explicitStateGrants()`), field authorisation is reproduced exactly (the converter
-emits `Event.explicitGrants()` on every event so event grants no longer cascade onto their fields,
+emits `Event.explicitGrants()` on every event so event grants do not cascade onto their fields,
 and derives each field's `@CCD(access = …)` classes to match the input's `AuthorisationCaseField`
 rows), role-scoped search/workbasket fields round-trip through the SDK's role-scoped
-`SearchBuilder.field(id, label, role)` overload, and the `AuthorisationComplexType` sheet round-trips
-through verbatim passthrough. The array shorthands (`UserRoles[]` and `AccessControl[]`) that
+`SearchBuilder.field(id, label, role)` overload, and `AuthorisationComplexType` rows emit as
+`grantComplexType(...)` (a row with an unresolvable field or role, or from an overlay fragment, is
+carried by verbatim passthrough). The array shorthands (`UserRoles[]` and `AccessControl[]`) that
 definitions use to grant many roles in one row — which `ccd-definition-processor` flattens at build
-time — are now expanded on both sides across every `Authorisation*` sheet, so grants encoded that
+time — are expanded on both sides across every `Authorisation*` sheet, so grants encoded that
 way round-trip exactly. Genuine semantic differences are accepted only where the SDK's generation model
 makes them structural, each absorbed by a narrowly-scoped comparator rule so the round-trip tests pass
 while the difference stays visible in the gap report — the largest being that the SDK grants `CR` on
 immutable Label/READONLY display fields to any role that holds a grant on the event where the field is
-read-only, regardless of the input's narrower per-field grants (`IMMUTABLE_FIELD_CR`). (The former
-per-field `Publish` cascade is no longer among them: the SDK carries a per-field
-`publish(boolean)`/`publishAs(String)` API and `PUBLISH_CASCADE` is retired.) Callbacks are emitted as
+read-only, regardless of the input's narrower per-field grants (`IMMUTABLE_FIELD_CR`). Per-field
+`Publish` is expressed through the SDK's `publish(boolean)`/`publishAs(String)` API. Callbacks are emitted as
 URL callbacks the generator writes verbatim, so callback URLs (including per-page mid-event URLs, with
 their `${CCD_DEF_*}` placeholders) round-trip byte-for-byte and are compared exactly.
-Seven real-service fixture tests (ia/sscs/fpl/ET/civil/prl/probate) convert, compile and round-trip
-end-to-end and are all **enabled**, each gating its residuals against a
-checked-in baseline under `src/test/resources/roundtrip-baselines/` (ia 4, probate 6, ET 15, fpl 21,
-sscs 32, prl 55, civil 126 — 259 lines total). The baseline file *is* the enumerated list of that
+Eight real-service fixture tests (ia/sscs/fpl/ET/civil/prl/probate/finrem) convert in generate mode,
+compile and round-trip end-to-end and are all **enabled**, each gating its residuals against a
+checked-in baseline under `src/test/resources/roundtrip-baselines/` (ia 1, probate 6, fpl 7, ET 10,
+sscs 11, prl 43, civil 89, finrem 98 — 265 lines total). The baseline file *is* the enumerated list of that
 fixture's open gaps; the test fails on a new diff and on a vanished one, so the ratchet only tightens.
-Retrofit mode is measured separately by `bin/retrofit-verify` and is much further from zero (11,898
-lines across the six service lanes) — see the fidelity doc's retrofit-lane section.
+Retrofit mode is measured separately by `bin/retrofit-verify` and is further from zero — see the
+fidelity doc's retrofit-lane section, and [`STATUS.md`](sdk/ccd-definition-converter/STATUS.md) for
+each lane's resolved rate, generate-mode residual and passthrough rows.
 
 ## Where to get help
 
