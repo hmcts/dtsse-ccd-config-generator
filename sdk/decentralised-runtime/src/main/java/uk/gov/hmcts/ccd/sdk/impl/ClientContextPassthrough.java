@@ -55,6 +55,11 @@ public final class ClientContextPassthrough {
     }
   }
 
+  /** Restores the context a submission returned when CCD replays it. */
+  static void replayed(String clientContext) {
+    request().ifPresent(request -> request.setAttribute(RETURNED, clientContext));
+  }
+
   static String merge(String original, String returned) {
     var returnedNode = decode(returned);
     if (returnedNode == null) {
