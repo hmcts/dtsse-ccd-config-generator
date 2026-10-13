@@ -211,7 +211,10 @@ own schedule if the table grows.
 When a job completes, the worker records a `BundleJobReport` with it, from the same render the
 handler stored: the request that was rendered (for a selector-driven job, the documents it
 selected), where each document landed, the missing documents and why, the warnings, and the PDF's
-file name, size, checksum and page count. `findReport(externalId)` returns it, so a service can
+file name, size, checksum and page count. Missing-document entries also carry the selected
+document `title` and `sectionPath` (outermost to innermost, excluding the request root), so
+consumers can display snapshot metadata without searching the request or live source data.
+Older stored entries fall back to the document ID and an empty path. `findReport(externalId)` returns it, so a service can
 keep just the job id beside the stored PDF and describe the bundle from the job: "pages 40 to 52",
 "two documents are missing", without a table of its own. Rows that back a stored bundle are then
 the bundle's record, so purge only those no stored bundle points at.
