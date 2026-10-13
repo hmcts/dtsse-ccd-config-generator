@@ -40,17 +40,25 @@ public final class ClientContextPassthrough {
     return request().map(request -> (String) request.getAttribute(RETURNED));
   }
 
-  /** Merges a context a callback returned into the current one. A callback that returns none leaves it as it was. */
+  /**
+   * Merges a context a callback returned into the current one. A callback that returns none, or one that is not a
+   * base64-encoded JSON object, leaves it as it was.
+   */
   public static void returned(String clientContext) {
     if (present(clientContext)) {
-      request().ifPresent(request -> request.setAttribute(RETURNED, merge(current().orElse(null), clientContext)));
+      request().ifPresent(request -> {
+        String merged = merge(current().orElse(null), clientContext);
+        if (merged != null) {
+          request.setAttribute(RETURNED, merged);
+        }
+      });
     }
   }
 
   static String merge(String original, String returned) {
     var returnedNode = decode(returned);
     if (returnedNode == null) {
-      return original == null ? unbracketed(returned) : original;
+      return original;
     }
     var originalNode = decode(original);
     if (originalNode == null) {
