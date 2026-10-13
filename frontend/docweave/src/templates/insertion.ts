@@ -75,9 +75,19 @@ function listItems(document: ProseMirrorNode): Fragment {
   return Fragment.from(items);
 }
 
+export interface InsertTemplateOptions {
+  /**
+   * Put the wording after the clause at the selection even from its start,
+   * where it would otherwise go before: for adding to the end of a document
+   * whose last clause is empty.
+   */
+  after?: boolean;
+}
+
 export function insertTemplate(
   document: ProseMirrorNode,
   selection?: Selection,
+  { after: alwaysAfter = false }: InsertTemplateOptions = {},
 ): Command {
   return (state, dispatch) => {
     if (!dispatch) return true;
@@ -124,7 +134,9 @@ export function insertTemplate(
         // The template becomes the clause the reader has just started.
         insertAndSelect(transaction, before, after, content);
       } else {
-        const position = atClauseStart($to, clause.depth) ? before : after;
+        const position = !alwaysAfter && atClauseStart($to, clause.depth)
+          ? before
+          : after;
         insertAndSelect(transaction, position, position, content);
       }
     }

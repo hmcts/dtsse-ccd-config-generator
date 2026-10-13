@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { TextSelection } from "prosemirror-state";
+
 import { getDocumentNode } from "../src/builder.js";
 import { createDocEditorController } from "../src/controller.js";
-import { buildDoc, createDocEditor } from "../src/index.js";
+import { editorSchema } from "../src/schema.js";
+import { buildDoc, createDocEditor, renderText } from "../src/index.js";
 
 describe("headless editor", () => {
   it("runs the controller headlessly and restores snapshots", () => {
@@ -122,5 +125,114 @@ describe("headless editor", () => {
     assert.equal(changes.length, seenChanges);
     assert.equal(states.length, seenStates + 1);
     assert.deepEqual(runtime.controller.getSnapshot(), saved);
+  });
+
+  describe("inserting wording for the reader", () => {
+    const order = (withCosts: boolean) =>
+      buildDoc((doc) => {
+        doc.paragraph("heading", "IT IS ORDERED THAT:");
+        doc.orderedList("clauses", (list) => {
+          list.item("decision", "The application is granted.");
+          if (withCosts) list.item("costs", "Costs in the case.");
+        });
+      });
+    const text = (controller: ReturnType<typeof createDocEditor>) =>
+      renderText(controller.getSnapshot());
+
+    it("adds paragraphs after the last clause as the reader's own numbered clauses", () => {
+      const changes: unknown[] = [];
+      const controller = createDocEditor({ onChange: (s) => changes.push(s) });
+      controller.render(order(false));
+      const rendered = changes.length;
+
+      const inserted = controller.insert(
+        ["The hearing is adjourned.", "  ", "Costs reserved."],
+        { at: "end" },
+      );
+
+      assert.equal(inserted, true);
+      assert.equal(
+        text(controller),
+        "IT IS ORDERED THAT:\nThe application is granted.\nThe hearing is adjourned.\nCosts reserved.",
+      );
+      assert.equal(changes.length, rendered + 1);
+      const list = editorSchema.nodeFromJSON(controller.getSnapshot().current)
+        .child(1);
+      assert.equal(list.childCount, 3);
+      assert.equal(list.child(1).attrs.id, null);
+      assert.equal(list.child(2).attrs.id, null);
+    });
+
+    it("keeps the inserted wording through later renders of the same clauses", () => {
+      const controller = createDocEditor();
+      controller.render(order(false));
+      controller.insert(["The hearing is adjourned."], { at: "end" });
+
+      controller.render(order(true));
+
+      // The new generated clause follows its generated sibling; the reader's stays.
+      assert.equal(
+        text(controller),
+        "IT IS ORDERED THAT:\nThe application is granted.\nCosts in the case.\nThe hearing is adjourned.",
+      );
+    });
+
+    it("adds after the last clause even when the reader has emptied it", () => {
+      for (const numbered of [false, true]) {
+        const runtime = createDocEditorController({});
+        runtime.controller.render(numbered ? order(false) : buildDoc((doc) => {
+          doc.paragraph("heading", "IT IS ORDERED THAT:");
+          doc.paragraph("decision", "The application is granted.");
+        }));
+        const { doc } = runtime.state;
+        const last = doc.content.size - (numbered ? 3 : 1);
+        runtime.dispatch(runtime.state.tr.delete(
+          last - "The application is granted.".length,
+          last,
+        ));
+        assert.equal(renderText(runtime.controller.getSnapshot()), "IT IS ORDERED THAT:\n");
+
+        runtime.controller.insert(["Costs reserved."], { at: "end" });
+
+        assert.equal(
+          renderText(runtime.controller.getSnapshot()),
+          "IT IS ORDERED THAT:\n\nCosts reserved.",
+          numbered ? "numbered clause" : "paragraph",
+        );
+      }
+    });
+
+    it("inserts at the selection by default, after the clause the caret is in", () => {
+      const runtime = createDocEditorController({});
+      runtime.controller.render(order(true));
+      const { doc } = runtime.state;
+      let decision = -1;
+      doc.descendants((node, pos) => {
+        if (node.attrs.id === "item:decision") decision = pos;
+      });
+      runtime.dispatch(runtime.state.tr.setSelection(
+        TextSelection.create(doc, decision + 2 + "The application".length),
+      ));
+
+      runtime.controller.insert(["The hearing is adjourned."]);
+
+      assert.equal(
+        renderText(runtime.controller.getSnapshot()),
+        "IT IS ORDERED THAT:\nThe application is granted.\nThe hearing is adjourned.\nCosts in the case.",
+      );
+    });
+
+    it("inserts nothing when every paragraph is blank", () => {
+      const changes: unknown[] = [];
+      const controller = createDocEditor({ onChange: (s) => changes.push(s) });
+      controller.render(order(false));
+      const rendered = changes.length;
+
+      assert.equal(controller.insert(["", "  "]), false);
+      assert.equal(controller.insert(["", "  "], { at: "end" }), false);
+
+      assert.equal(changes.length, rendered);
+      assert.equal(text(controller), "IT IS ORDERED THAT:\nThe application is granted.");
+    });
   });
 });

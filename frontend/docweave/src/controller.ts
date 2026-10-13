@@ -1,7 +1,9 @@
+import { closeHistory } from "prosemirror-history";
 import { type Node as ProseMirrorNode } from "prosemirror-model";
 import {
   EditorState,
   type Plugin,
+  Selection,
   type Transaction,
 } from "prosemirror-state";
 
@@ -9,10 +11,17 @@ import {
   type DocWeaveDocument,
   getDocumentNode,
 } from "./builder.js";
-import { assertValidGeneratedDocument } from "./invariants.js";
+import {
+  assertCurrentDocumentMatchesGenerated,
+  assertValidGeneratedDocument,
+} from "./invariants.js";
 import { reconcileDocument } from "./reconciliation.js";
 import { editorSchema } from "./schema.js";
 import { type DocWeaveSnapshot, readSnapshot } from "./snapshot.js";
+import {
+  insertTemplate,
+  type InsertTemplateOptions,
+} from "./templates/insertion.js";
 
 export type { DocWeaveSnapshot } from "./snapshot.js";
 
@@ -25,9 +34,23 @@ export interface DocEditorController {
    * in one editor rather than destroying the editor and creating another.
    */
   load(snapshot?: DocWeaveSnapshot): void;
+  /**
+   * Adds wording to the document as the reader's own clauses, one per
+   * paragraph, as if they had typed it: they can change, move or delete any of
+   * it, and one undo takes it all out again. It goes in where a template would,
+   * at the selection or, with at "end", after the document's last clause, as a
+   * numbered clause when that is one. Blank paragraphs are left out; nothing
+   * happens when none remain. Returns whether anything was inserted.
+   */
+  insert(paragraphs: readonly string[], options?: InsertOptions): boolean;
   getDocument(): DocWeaveDocument | undefined;
   getSnapshot(): DocWeaveSnapshot;
   destroy(): void;
+}
+
+export interface InsertOptions {
+  /** Where the wording goes: the selection, or after the last clause. */
+  at?: "selection" | "end";
 }
 
 /** What a render changed, for telling the reader. */
@@ -81,6 +104,15 @@ export interface DocEditorRuntime {
   readonly state: EditorState;
   readonly generatedDocument: ProseMirrorNode;
   dispatch(transaction: Transaction): void;
+  /**
+   * Inserts a document's content as the reader's own clauses at the selection,
+   * as one undo step that follow-up typing does not join.
+   */
+  insertDocument(
+    wording: ProseMirrorNode,
+    selection?: Selection,
+    options?: InsertTemplateOptions,
+  ): void;
   setStateListener(listener: (state: EditorState) => void): void;
 }
 
@@ -128,6 +160,29 @@ export function createDocEditorController(
 
   const notifyState = (): void => {
     stateListener?.(state);
+  };
+
+  const dispatch = (transaction: Transaction): void => {
+    const before = state.doc;
+    state = state.apply(transaction);
+    notifyState();
+    if (!state.doc.eq(before)) options.onChange?.(getSnapshot());
+  };
+
+  const insertDocument = (
+    wording: ProseMirrorNode,
+    selection?: Selection,
+    insertOptions?: InsertTemplateOptions,
+  ): void => {
+    insertTemplate(wording, selection, insertOptions)(state, (transaction) => {
+      assertCurrentDocumentMatchesGenerated(
+        transaction.doc,
+        generatedDocument,
+      );
+      dispatch(closeHistory(transaction));
+      // Keep immediate follow-up typing in its own undo group too.
+      dispatch(closeHistory(state.tr));
+    });
   };
 
   const controller: DocEditorController = {
@@ -182,6 +237,25 @@ export function createDocEditorController(
         options.onChange?.(getSnapshot());
       }
     },
+    insert(paragraphs, { at = "selection" }: InsertOptions = {}): boolean {
+      const wording = paragraphs.map((text) => text.trim()).filter(Boolean);
+      if (wording.length === 0) return false;
+      const document = editorSchema.node(
+        "doc",
+        null,
+        wording.map((text) =>
+          editorSchema.node("paragraph", null, editorSchema.text(text))
+        ),
+      );
+      // The end of the document is also the start of its last clause when
+      // that clause is empty, and the wording still belongs after it.
+      if (at === "end") {
+        insertDocument(document, Selection.atEnd(state.doc), { after: true });
+      } else {
+        insertDocument(document);
+      }
+      return true;
+    },
     getDocument(): DocWeaveDocument | undefined {
       return document;
     },
@@ -197,12 +271,8 @@ export function createDocEditorController(
     get generatedDocument(): ProseMirrorNode {
       return generatedDocument;
     },
-    dispatch(transaction: Transaction): void {
-      const before = state.doc;
-      state = state.apply(transaction);
-      notifyState();
-      if (!state.doc.eq(before)) options.onChange?.(getSnapshot());
-    },
+    dispatch,
+    insertDocument,
     setStateListener(listener: (state: EditorState) => void): void {
       stateListener = listener;
     },

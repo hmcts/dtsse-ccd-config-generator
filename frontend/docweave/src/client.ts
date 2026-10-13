@@ -1,7 +1,7 @@
 import { dropCursor } from "prosemirror-dropcursor";
 import { gapCursor } from "prosemirror-gapcursor";
 import { toggleMark } from "prosemirror-commands";
-import { closeHistory, history, redo, undo } from "prosemirror-history";
+import { history, redo, undo } from "prosemirror-history";
 import { keymap } from "prosemirror-keymap";
 import { wrapInList } from "prosemirror-schema-list";
 import { type Command } from "prosemirror-state";
@@ -53,7 +53,6 @@ import {
   outdentListItem,
 } from "./keymap.js";
 import { createListNumberingPlugin } from "./list-numbering.js";
-import { assertCurrentDocumentMatchesGenerated } from "./invariants.js";
 import { editorSchema } from "./schema.js";
 import { InvalidSnapshotError, parseSnapshot } from "./snapshot.js";
 import {
@@ -65,7 +64,6 @@ import {
   parseTemplateFragment,
   type TemplateProvider,
 } from "./templates/index.js";
-import { insertTemplate } from "./templates/insertion.js";
 
 export interface CreateDocEditorOptions {
   mount?: HTMLElement | string;
@@ -361,19 +359,7 @@ export function createDocEditor(
         const { document } = parseTemplateFragment(template.content, {
           dates: false,
         });
-        const command = insertTemplate(
-          document,
-          view.state.selection,
-        );
-        command(view.state, (transaction) => {
-          assertCurrentDocumentMatchesGenerated(
-            transaction.doc,
-            runtime.generatedDocument,
-          );
-          view.dispatch(closeHistory(transaction));
-          // Keep immediate follow-up typing in its own undo group too.
-          view.dispatch(closeHistory(view.state.tr));
-        }, view);
+        runtime.insertDocument(document, view.state.selection);
       },
       onInserted: () => view.focus(),
     });
@@ -385,6 +371,11 @@ export function createDocEditor(
     load: runtime.controller.load,
     getDocument: runtime.controller.getDocument,
     getSnapshot: runtime.controller.getSnapshot,
+    insert(paragraphs, options): boolean {
+      const inserted = runtime.controller.insert(paragraphs, options);
+      if (inserted) view.focus();
+      return inserted;
+    },
     destroy(): void {
       editor.removeEventListener("input", stopAtMount);
       editor.removeEventListener("change", stopAtMount);

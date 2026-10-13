@@ -197,6 +197,41 @@ describe("public editor API", () => {
     assert.deepEqual(hostEvents, ["input"]);
   });
 
+  it("inserts wording for the reader into the mounted editor as one undo step", async () => {
+    const { createDocEditor, buildDoc } = await import("../src/index.js");
+    const controller = createDocEditor({ mount: "#editor" });
+    const surface = dom.window.document.querySelector<HTMLElement>("#editor .ProseMirror")!;
+    controller.render(buildDoc((doc) => {
+      doc.paragraph("heading", "IT IS ORDERED THAT:");
+      doc.orderedList("clauses", (list) => list.item("decision", "The application is granted."));
+    }));
+    const generated = controller.getSnapshot();
+
+    controller.insert(["The hearing is adjourned.", "Costs reserved."], { at: "end" });
+
+    assert.equal(surface.querySelectorAll("ol > li").length, 3);
+    assert.match(surface.textContent!, /The application is granted\..*The hearing is adjourned\..*Costs reserved\.$/);
+    dom.window.document.querySelector<HTMLButtonElement>('[aria-label="Undo"]')!.click();
+    assert.deepEqual(controller.getSnapshot(), generated);
+    controller.destroy();
+  });
+
+  it("leaves focus where it was when there is nothing to insert", async () => {
+    const { createDocEditor, buildDoc } = await import("../src/index.js");
+    const host = dom.window.document.createElement("input");
+    dom.window.document.body.append(host);
+    const controller = createDocEditor({ mount: "#editor" });
+    controller.render(buildDoc((doc) => doc.paragraph("heading", "IT IS ORDERED THAT:")));
+    host.focus();
+
+    assert.equal(controller.insert(["", "  "], { at: "end" }), false);
+    assert.equal(dom.window.document.activeElement, host);
+
+    assert.equal(controller.insert(["Costs reserved."], { at: "end" }), true);
+    assert.equal(dom.window.document.activeElement?.classList.contains("ProseMirror"), true);
+    controller.destroy();
+  });
+
   it("loads another document into the mounted editor without carrying undo across", async () => {
     const { createDocEditor, buildDoc } = await import("../src/index.js");
     const controller = createDocEditor({ mount: "#editor" });

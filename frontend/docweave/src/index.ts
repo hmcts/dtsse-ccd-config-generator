@@ -12,7 +12,10 @@ export {
   createDocEditor,
   type CreateDocEditorOptions,
 } from "./client.js";
-export { type DocEditorController } from "./controller.js";
+export {
+  type DocEditorController,
+  type InsertOptions,
+} from "./controller.js";
 export {
   type DocWeaveSnapshot,
   InvalidSnapshotError,
