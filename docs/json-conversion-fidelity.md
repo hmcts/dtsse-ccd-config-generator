@@ -75,9 +75,8 @@ conscious decision instead of inheriting invisible JSON — see
 | Conditional / multi-target `PostConditionState` | **Semantic, accepted** | `CONDITIONAL_POST_STATE` | Runtime honours `state(cond):priority` (JEXL, first-match-wins); `EventBuilder` models one post-state, so the SDK emits only the primary and the alternatives are dropped ([detail](#4-conditional--multi-target-postconditionstate-collapse-conditional_post_state)) |
 | Non-derivable `EventToComplexTypes` groups | Fixed with passthrough | row | A `(event, field)` group the member chains cannot express — unresolvable dotted `ListElementCode`, an undeclared field or event, non-O/M/R/C `DisplayContext`, a repeated `ListElementCode`, raw whitespace/case key quirks, or an overlay-suffixed sibling. The root field's placement context is **not** a cause ([detail](#5-eventtocomplextypes-generated-java-vs-fallback)) |
 | `EventToComplexTypes` exotic-tail columns on derived groups | Fixed with passthrough | column-graft | `SecurityClassification`/`Publish`/`RetainHiddenValue`/… on a member-override row; grafted additively over the generated row (a group with no tail leaves no carrier) |
-| FixedList whose ID collides with a ComplexType ID | Fixed with passthrough | row | The complex-type class takes the Java name, so no enum is generated; the list rows are carried verbatim (fpl `*Selector`, civil `Court`) |
-| `AuthorisationComplexType` rows with an unresolvable field/role | Fixed with passthrough | row | Most rows emit via `grantComplexType(...)`; a row whose field is not a plain `CaseData` member or whose role is unregistered is carried verbatim (~24 rows, prl) |
-| Per-field metadata for un-referenceable placements | Fixed with passthrough | column-graft | A field reached through a suppressed-getter `@JsonUnwrapped` parent, or a bracketed metadata `CaseFieldID` like `[STATE]`: no compilable getter exists, so the placement is skipped and the row's display metadata grafted (sscs `writeFinalDecision*`) |
+| `AuthorisationComplexType` rows with an unresolvable field/role | Fixed with passthrough | row | Most rows emit via `grantComplexType(...)`; a row whose field is not a plain `CaseData` member or whose role is unregistered or which comes from an overlay fragment is carried verbatim (24 rows, all civil's `prod` fragment) |
+| Un-referenceable `CaseEventToFields` placements | **Semantic, accepted** | fixture baseline (ratchet) | A field reached through a suppressed-getter `@JsonUnwrapped` parent, or a bracketed metadata `CaseFieldID` like `[STATE]`: no compilable getter exists, so the placement is skipped. The gap report records it as `PASSTHROUGH_COLUMN`, but no passthrough file is written, so the row is an enumerated baseline line (probate's five `[STATE]` rows) |
 | Overlay-only complex-type *members* (ET) | **Semantic, accepted** | fixture baseline (ratchet) | Members reachable only through an env-gated field; carried as enumerated lines in the ET baseline — a per-member `@CCD(gate)` emission would close them, none scheduled |
 | `CaseField`-sheet `ShowSummaryContentOption` (`Y`, fpl/prl) | **Semantic, accepted** | fixture baseline (ratchet) | A CaseField-sheet flag distinct from the `CaseEventToFields` integer column (which is emitted); carried as enumerated baseline lines |
 
@@ -589,13 +588,14 @@ matched-surplus and actual-only-row shapes. The gap entry is an honest "nothing 
 record; it is **not** load-bearing.
 
 **The count, and what it is.** This is the dominant `AUTH_NOT_DERIVABLE` category by row count —
-**52,232 records across the seven fixtures** (ia 15,823, prl 11,958, fpl 11,676, civil 7,615,
-et 3,595, sscs 323, probate 1,242). Every single one is the injected-read case: the `extra`
+**58,481 records across the eight fixtures** (ia 15,823, prl 11,958, fpl 11,676, civil 7,615,
+finrem 6,260, et 3,577, probate 1,242, sscs 330; generate mode, 2026-10-13; the retrofit lanes record
+the same counts). Every single one is the injected-read case: the `extra`
 permission is `{R}` for **100%** of them, because the converter's only injection into the derivation's
 `have` map is `Set.of('R')` from the tab and search loops — no other permission can appear there, so
 there is no other-cause subset. These are **not** un-converted JSON: no row is carried through, and
 the field/role's *intended* grant is derived into a genuine `@CCD(access)` class exactly as for any
-other field. The 52k figure is a gap-report artifact — a per-(field, role) note about a display-only
+other field. The 58k figure is a gap-report artifact — a per-(field, role) note about a display-only
 over-grant the comparator forgives — not a measure of fidelity loss.
 
 ## Constructs carried by passthrough (not expressed in Java)
@@ -605,14 +605,15 @@ after generation), because the SDK has no API for them. They round-trip exactly 
 exceptions — but they live as JSON under `--passthrough-dir`, not as Java. Each construct below is one
 row (source: `DefaultDefinitionLinker`). *Mechanism* is the merge shape:
 
-> **Measured scale (all six service fixtures — Benefit, fpl, civil, ET_EnglandWales, probate, prl).**
-> Total passthrough artifacts: **~79**, breaking down as — `CaseEventToFields` column-grafts **57**
-> (skipped-unwrapped-field metadata, mostly sscs's `writeFinalDecision`), `FixedLists`
-> ID-collision rows **15**, non-derivable `EventToComplexTypes` groups **5** (one summary row per
-> fixture *with* a residual — ia and sscs have none; the underlying member rows total 810 against
-> the ~12.2k emitted as Java), and
-> `AuthorisationComplexType` unresolved rows **1**. There is **no** `AuthorisationCaseField`
-> passthrough — the ~52k `AUTH_NOT_DERIVABLE` entries are report-only `ADVISORY` records of an
+> **Measured scale (2026-10-13, converter at 87911088).** Only two sheets carry passthrough:
+> `CaseEventToComplexTypes` and `AuthorisationComplexType`. Across the seven retrofit lanes, plus
+> ia in generate mode, the passthrough directories hold **631 rows in 214 files**: 532 verbatim
+> `EventToComplexTypes` member rows (et 161, prl 208, civil 104, probate 40, fpl 19), against
+> 11,447 member rows those five lanes emit as Java; 75 exotic-tail column-graft rows (fpl 51, civil 20,
+> prl 2, finrem 2); and 24 `AuthorisationComplexType` rows (civil's `prod` fragment). ia and sscs
+> write none. Generate mode over the other seven definitions writes 700 rows (prl 302, civil 152,
+> et 144, fpl 70, probate 30, finrem 2, sscs 0). There is **no** `AuthorisationCaseField`
+> passthrough — the ~58k `AUTH_NOT_DERIVABLE` entries are report-only `ADVISORY` records of an
 > injected read the comparator forgives (see [§6](#authorisationcasefield-injected-read-records)),
 > not carried JSON.
 
@@ -630,9 +631,7 @@ is a removed construct.)
 |---|---|---|---|
 | EventToComplexTypes — **derived-group tail** | `CaseEventToComplexTypes` (→ `EventToComplexTypes`) | column-graft (per event/field) | For a group emitted as generated `.complex(...)` Java (see [§5](#5-eventtocomplextypes-generated-java-vs-fallback)), only the **exotic tail** the generator cannot compute (`SecurityClassification`/`Publish`/`RetainHiddenValue`/…) is grafted onto the generated rows, additively, keyed on `(CaseEventID, CaseFieldID, ListElementCode)`. The row's `ID` (importer-ignored, `EVENT_COMPLEX_TYPE_ID_IGNORED`) and `FieldDisplayOrder` (SDK per-event counter; relative member order preserved by emission order — display-order disposition) are accepted differences rather than grafted columns; a derived group with no exotic tail leaves **no carrier at all**. |
 | EventToComplexTypes — **non-derivable group** | `CaseEventToComplexTypes` (→ `EventToComplexTypes`) | row (per event/field) | A whole `(event, field)` group the converter cannot express as builder chains stays a verbatim row passthrough (ID-keyed). Causes: an unresolvable dotted `ListElementCode`, a field no `CaseField` row declares, an event no `CaseEvent` row declares (dead rows, or an event belonging to a sibling case type), a `DisplayContext` outside `OPTIONAL`/`MANDATORY`/`READONLY`/`COMPLEX`, a `ListElementCode` repeated within the group, a raw derivable-key value the generator would normalise (whitespace/case), or an overlay-suffixed sibling. (`Collection`-typed roots/intermediates, hint-cascade rows, and every root-placement shape — non-`COMPLEX`, unplaced, page-less — are derived; see [§5](#5-eventtocomplextypes-generated-java-vs-fallback).) |
-| Per-field metadata for a placement skipped as un-referenceable (`@JsonUnwrapped` parent whose getter the model suppresses with `@Getter(AccessLevel.NONE)`, or a bracketed metadata `CaseFieldID` like `[STATE]`) | `CaseEventToFields` | column-graft | No compilable typed getter reference exists for the field, so the placement is skipped in Java and the row's per-field display metadata is grafted back (sscs's `writeFinalDecision*` unwrapped members are the bulk of this). |
-| FixedList whose ID collides with a ComplexType ID | `FixedLists` | row | When a definition declares a FixedList and a ComplexType under the same ID (fpl's `*Selector`, civil's `Court`), the complex-type class takes the Java name, so no enum is generated and the list's rows are carried verbatim. |
-| `AuthorisationComplexType` rows with an unresolvable field/role | `AuthorisationComplexType` | row | Most rows emit via `grantComplexType(...)`; a row whose complex field does not resolve to a plain `CaseData` member, or whose role is not a registered `UserRole`, is carried verbatim (≈24 rows, all in prl). |
+| `AuthorisationComplexType` rows with an unresolvable field/role | `AuthorisationComplexType` | row | Most rows emit via `grantComplexType(...)`; a row whose complex field does not resolve to a plain `CaseData` member, or whose role is not a registered `UserRole`, or which comes from an overlay fragment (`grantComplexType` has no environment gate), is carried verbatim (24 rows, all from civil's `prod` fragment). |
 
 Anything not expressible as code *or* passthrough is an `OMITTED_FAIL` entry in the gap report and
 fails the conversion unless `--allow-gaps`.
@@ -680,7 +679,7 @@ only by admitting the fragment the build being converted would actually have use
 halves produces a definition wrong in *every* environment, because the two collide and the loser's
 rows survive as grants and placements a real build never emits. `OverlayResolver.isActiveRow` applies
 that rule (true for a base row, and for a suffixed row whose predicate is active in the convert-time
-environment) across the seven row loops that need it, and the new repeatable `--env KEY=VALUE` option
+environment) across the seven row loops that need it, and the repeatable `--env KEY=VALUE` option
 names the target environment: the values are applied as system properties, which `OverlayCondition`
 reads before the real environment. Without `--env` those predicates are judged against the ambient
 environment.
@@ -724,13 +723,13 @@ a baseline refresh — the ratchet only tightens).
 | probate  |        6 | regression gate | five `[STATE]` `CaseEventToFields` no-match rows, plus one `MaNDATORY` typo |
 | fpl      |        7 | regression gate | `caseProgressionReport` pre-states, `colleaguesToNotify` `Label`, `allocationDecision ShowSummaryContentOption`, one `colleagues` `EventToComplexTypes` row, two `HearingVenue LiveTo`, `RepresentativeRole`/`LA_BARRISTER` |
 | et       |       10 | regression gate | two `retainHiddenValue`, `UnavailabilityDateRange` ×2, `sendNotificationCollection` ×4, two `SearchCriteria` `LiveTo=` rows |
-| sscs     |       11 | regression gate | three `TextArea`-vs-`Text` `FieldTypeParameter`, two `confidentialityRequiredChangedDate` no-match, four `JudicialUser`-vs-`Text`, three `FL_selectWhoReviewsCase` |
+| sscs     |       11 | regression gate | three `TextArea`-vs-`Text` `FieldTypeParameter`, two `confidentialityRequiredChangedDate` no-match, three `JudicialUser`-vs-`Text`, three `FL_selectWhoReviewsCase` |
 | prl      |       43 | regression gate | `CaseField` 20 (16 of them `ShowSummaryContentOption`), `AuthorisationCaseEvent` 6, `FixedLists`/`CaseEventToFields` 4 each |
 | civil    |       89 | regression gate | `ComplexTypes` 36 (`Label` 11, `CaseFieldID` 10, `CaseEventID` 8), `CaseField` 13, `CaseEventToFields` 12, `CaseTypeTab` 9, `FixedLists` 8 |
-| finrem   |      133 | regression gate | `FixedLists` 63 and `ComplexTypes` 18 (all no-match, all on the `CU_fl_`/`CU_ct_` citizen-upload types), `AuthorisationCaseField` 22 (17 `CRUD`), `CaseTypeTab` 16 (all `DisplayContextParameter` missing), `CaseEventToFields` 13 no-match, one `CaseEvent` `Name` with a trailing space |
+| finrem   |       98 | regression gate | `FixedLists` 63 (all no-match, all `CU_fl_citizenUploadDocuments`), `ComplexTypes` 18 (all no-match: 16 on `CU_ct_citizenApplicantDocument`/`CU_ct_citizenRespondentDocument`, 2 on `FR_accessCodeEntry`), `CaseTypeTab` 16 (all `DisplayContextParameter` missing), one `CaseEvent` `Name` with a trailing space |
 
-300 lines in total (measured 2026-08-17 from the checked-in baseline files) — but that total is a
-property of the test suite, not of any migration: 299 of it belongs to services that will ship the
+265 lines in total (counted 2026-10-13 from the checked-in baseline files) — but that total is a
+property of the test suite, not of any migration: 264 of it belongs to services that will ship the
 retrofit output instead. To regenerate a baseline after an intended change, run `GenerateGoldenFiles`
 with `-Djunit.jupiter.conditions.deactivate='*'`.
 
@@ -742,36 +741,37 @@ baselines.
 finrem is the only fixture reading **two** definition roots: its build copies the shared
 `definitions/common/json` tree into the per-case-type tree before each xlsx build
 (`yarn copy-common-components-contested`) and gitignores the copies, so the common tree is passed as a
-second input or the fixture reads a definition the real xlsx does not have. It is also the first
-fixture whose definition addresses rows to a `CaseTypeID` *placeholder* (`${CCD_DEF_CASE_TYPE_ID}`);
-the converter's read path does not substitute `${CCD_DEF_*}`, so `DefinitionIr.rowsForCaseType`
-compares the literal placeholder against the case type. Its baseline is measured with that gap
-present.
+second input or the fixture reads a definition the real xlsx does not have. Its shared
+fragments address their rows to a `CaseTypeID` *placeholder* (`${CCD_DEF_CASE_TYPE_ID}`);
+`JsonDefinitionReader` substitutes that one placeholder with `--case-type` at read time, so the shared
+rows belong to the case type being converted. Every other `${CCD_DEF_*}` is left verbatim.
 
-finrem was also the first fixture to reach `FieldUtils.isUnwrappedField` with a JDK-owned class:
+finrem is also the one fixture that reaches `FieldUtils.isUnwrappedField` with a JDK-owned class:
 `CaseEventToComplexTypesGenerator.expand` passes the member's *own* type as the lookup class, so
 `ordersToSend`'s `ListElementCode`s of the form `value.documentName` — a collection wrapper spelled
-out in the path, seven rows of `FR_sendOrder` — resolved `String`'s private `value`. The lookup asked
-for accessibility it never used, so the hit threw `InaccessibleObjectException` and aborted generation
-for the whole case type. Only the terminal segment is safe by luck; no other fixture has a
-*non-terminal* `value` segment. Fixed by not calling `makeAccessible` (reading an annotation never
-needs it); pinned by the `JdkNamedMember` case type in `E2EConfigGenerationTests`.
+out in the path, seven rows of `FR_sendOrder` — resolve `String`'s private `value`. The lookup reads
+the annotation without `makeAccessible`, so the hit answers "not unwrapped" rather than throwing
+`InaccessibleObjectException`; pinned by the `JdkNamedMember` case type in
+`E2EConfigGenerationTests`.
 
 The categories behind those baselines, all SDK-structural limitations or fixture-data findings (none
 are converter bugs):
 
 - **Complex-type members that are themselves overlay-only** (et: `UnavailabilityDateRange`,
-  `sendNotificationCollection`) — `@CCD(gate)` gates a `CaseData` field; a shared complex class
-  would need per-member gates. Routed to passthrough today; imperfect when the gate is on.
+  `sendNotificationCollection`) — the SDK accepts `@CCD(gate)` on a complex-type member, but the
+  converter emits no member gate: an overlay-only member is left out of the generated class and
+  nothing carries its rows, so they stay residuals.
 - **`CaseField`-sheet `ShowSummaryContentOption=Y`** (fpl, prl): a `CaseField`-sheet flag distinct
   from the numeric `CaseEventToFields.ShowSummaryContentOption` column (which is emitted as Java);
   it has no SDK API and stays a residual.
 
-Three shapes that look like they belong here are **not** residuals: an orphan (unreachable) complex
+Four shapes that look like they belong here are **not** residuals: an orphan (unreachable) complex
 type or fixed list and a redundant redeclaration of an SDK-predefined type are dropped as accepted
 semantic differences (`ORPHAN_COMPLEX_TYPE`/`ORPHAN_FIXED_LIST`/
 `PREDEFINED_COMPLEX_TYPE_REDECLARATION`); an illegal-ID complex type or fixed list is generated as
-Java via the `@ComplexType(name)` carrier (prl's `schoolDirections&Details`); and platform types such
+Java via the `@ComplexType(name)` carrier (prl's `schoolDirections&Details`); a fixed list sharing its
+ID with a complex type is generated as an enum named `<Id>List` (fpl's `*Selector` lists become
+`ChildSelectorList`, …), its wire ID pinned by `@ComplexType(name)`; and platform types such
 as `JudicialUser` are real `FieldType` constants emitting `typeOverride` rather than `Text`.
 
 ## Retrofit-lane residual {#retrofit-lane-residual}
@@ -1124,9 +1124,6 @@ A conversion run (via `--report-dir`) writes:
   No `ADVISORY` entry corresponds to a passed-through row.
 - **`gap-report.json`** — the same findings as structured data (`entries` plus `summary` counts),
   for tooling.
-
-(There is no `callback-map.json`: every callback is emitted with the URL the definition authored,
-so there is nothing to map, and the regenerated definition carries each URL byte-for-byte.)
 
 Passthrough content lands under `--passthrough-dir` (`base/<relativePath>` for unconditional
 sheets, `<overlay-suffix>/<relativePath>` for environment-gated ones, indexed by `manifest.json`);
