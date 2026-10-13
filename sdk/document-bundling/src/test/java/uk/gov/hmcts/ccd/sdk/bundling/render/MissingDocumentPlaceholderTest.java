@@ -96,6 +96,32 @@ class MissingDocumentPlaceholderTest {
   }
 
   @Test
+  void missingReportCarriesSelectedTitlesAndNestedSectionPaths() throws Exception {
+    BundleRequest request = BundleRequest.builder().externalId(UUID.randomUUID()).title("Bundle")
+        .fileName("bundle.pdf").missingDocuments(MissingDocumentPolicy.PLACEHOLDER)
+        .root(BundleSection.builder("Root")
+            .document(doc("root", "Root witness", "deleted"))
+            .section(BundleSection.builder("Evidence")
+                .section(BundleSection.builder("Witnesses")
+                    .document(doc("nested", "Selected witness name", "deleted")).build()).build())
+            .build()).build();
+    try (BundleResult result = renderer.render(request, BundleExecutionContext.empty())) {
+      assertThat(result.missingDocuments()).extracting(MissingDocument::title)
+          .containsExactly("Root witness", "Selected witness name");
+      assertThat(result.missingDocuments().get(0).sectionPath()).isEmpty();
+      assertThat(result.missingDocuments().get(1).sectionPath()).containsExactly("Evidence", "Witnesses");
+      var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+      MissingDocument snapshot = result.missingDocuments().get(1);
+      assertThat(mapper.readValue(mapper.writeValueAsString(snapshot), MissingDocument.class)).isEqualTo(snapshot);
+      var legacy = mapper.valueToTree(snapshot);
+      ((com.fasterxml.jackson.databind.node.ObjectNode) legacy).remove(java.util.List.of("title", "sectionPath"));
+      MissingDocument restored = mapper.treeToValue(legacy, MissingDocument.class);
+      assertThat(restored.title()).isEqualTo(snapshot.documentId());
+      assertThat(restored.sectionPath()).isEmpty();
+    }
+  }
+
+  @Test
   void documentsThatCannotBeConvertedOrOpenedAreReplacedOnTheFinalAttempt() {
     BundleRequest request = placeholderRequest(doc("d1", "Claim form", "good"), doc("d2", "Broken", "broken"),
         doc("d3", "Email", "msg"));
