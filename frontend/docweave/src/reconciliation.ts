@@ -41,6 +41,7 @@ function insertionPosition(
   parentPosition: number | null,
   targetParent: ProseMirrorNode,
   id: string,
+  { pastReaderContent = true }: { pastReaderContent?: boolean } = {},
 ): number {
   const targetChildren = managedChildren(targetParent);
   const targetIndex = targetChildren.findIndex((child) => child.id === id);
@@ -52,7 +53,29 @@ function insertionPosition(
     transaction,
     targetChildren[targetIndex - 1]!.id,
   );
-  return predecessor.position + predecessor.node.nodeSize;
+  const end = predecessor.position + predecessor.node.nodeSize;
+  return pastReaderContent ? afterReaderContent(transaction, end) : end;
+}
+
+function containsManagedNode(node: ProseMirrorNode): boolean {
+  return typeof node.attrs.id === "string" || managedChildren(node).length > 0;
+}
+
+/**
+ * Past the reader's own content that follows a position among its siblings:
+ * what the reader added after a generated node stays with it, so a node the
+ * next render adds goes after it rather than between the two.
+ */
+function afterReaderContent(transaction: Transaction, position: number): number {
+  const $position = transaction.doc.resolve(position);
+  const parent = $position.parent;
+  let index = $position.index();
+  let end = position;
+  while (index < parent.childCount && !containsManagedNode(parent.child(index))) {
+    end += parent.child(index).nodeSize;
+    index++;
+  }
+  return end;
 }
 
 function isManagedContainer(node: ProseMirrorNode): boolean {
@@ -96,11 +119,14 @@ function addNestedList(
     target.marks,
   );
   for (const child of managedChildren(target)) {
+    // The generated subclauses go in together ahead of the reader's, as they
+    // are all new: none of the reader's content follows one of them yet.
     const position = insertionPosition(
       transaction,
       existing.position,
       target,
       child.id,
+      { pastReaderContent: false },
     );
     transaction.insert(position, child.node);
   }

@@ -41,6 +41,40 @@ describe("document reconciliation", () => {
     assert.equal(result.doc.firstChild!.textContent, "New heading");
   });
 
+  it("adds a generated node after the reader's content that follows its generated predecessor", () => {
+    const paragraph = (id: string | null, text: string) =>
+      editorSchema.node("paragraph", { id }, editorSchema.text(text));
+    const previousTarget = editorSchema.node("doc", null, [
+      paragraph("paragraph:upon", "UPON the application"),
+      paragraph("paragraph:signed", "Signed"),
+    ]);
+    const target = editorSchema.node("doc", null, [
+      paragraph("paragraph:upon", "UPON the application"),
+      paragraph("paragraph:ordered-that", "IT IS ORDERED THAT:"),
+      paragraph("paragraph:signed", "Signed"),
+    ]);
+    const transaction = EditorState.create({
+      schema: editorSchema,
+      doc: editorSchema.node("doc", null, [
+        paragraph("paragraph:upon", "UPON the application"),
+        paragraph(null, "The reader's note on the application"),
+        paragraph("paragraph:signed", "Signed"),
+      ]),
+    }).tr;
+
+    reconcileDocument(transaction, previousTarget, target);
+
+    assert.deepEqual(
+      transaction.doc.children.map((node) => node.textContent),
+      [
+        "UPON the application",
+        "The reader's note on the application",
+        "IT IS ORDERED THAT:",
+        "Signed",
+      ],
+    );
+  });
+
   it("updates generated text while preserving edited surrounding text", () => {
     const orderWithDate = (prefix: string, date: string) =>
       buildDoc((doc) => {
@@ -424,10 +458,20 @@ describe("document reconciliation", () => {
       { id: "item:subclause-a" },
       paragraph("Generated subclause"),
     );
+    const secondGeneratedSubclause = editorSchema.node(
+      "list_item",
+      { id: "item:subclause-b" },
+      paragraph("Second generated subclause"),
+    );
     const userSubclause = editorSchema.node(
       "list_item",
       null,
       paragraph("User subclause"),
+    );
+    const secondUserSubclause = editorSchema.node(
+      "list_item",
+      null,
+      paragraph("Second user subclause"),
     );
     const previousItem = editorSchema.node(
       "list_item",
@@ -442,7 +486,7 @@ describe("document reconciliation", () => {
         editorSchema.node(
           "ordered_list",
           { id: "ordered-list:subclauses" },
-          generatedSubclause,
+          [generatedSubclause, secondGeneratedSubclause],
         ),
       ],
     );
@@ -451,7 +495,7 @@ describe("document reconciliation", () => {
       { id: "item:parent" },
       [
         paragraph("Edited parent clause"),
-        editorSchema.node("ordered_list", null, userSubclause),
+        editorSchema.node("ordered_list", null, [userSubclause, secondUserSubclause]),
       ],
     );
     const documentWith = (item: typeof previousItem) =>
@@ -481,7 +525,7 @@ describe("document reconciliation", () => {
     assert.equal(reconciledList.attrs.id, "ordered-list:subclauses");
     assert.deepEqual(
       reconciledList.children.map((item) => item.attrs.id),
-      ["item:subclause-a", null],
+      ["item:subclause-a", "item:subclause-b", null, null],
     );
   });
 

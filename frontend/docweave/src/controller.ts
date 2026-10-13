@@ -1,6 +1,7 @@
 import { closeHistory } from "prosemirror-history";
 import { type Node as ProseMirrorNode } from "prosemirror-model";
 import {
+  type Command,
   EditorState,
   type Plugin,
   Selection,
@@ -19,6 +20,7 @@ import { reconcileDocument } from "./reconciliation.js";
 import { editorSchema } from "./schema.js";
 import { type DocWeaveSnapshot, readSnapshot } from "./snapshot.js";
 import {
+  insertAfterNode,
   insertTemplate,
   type InsertTemplateOptions,
 } from "./templates/insertion.js";
@@ -38,8 +40,9 @@ export interface DocEditorController {
    * Adds wording to the document as the reader's own clauses, one per
    * paragraph, as if they had typed it: they can change, move or delete any of
    * it, and one undo takes it all out again. It goes in where a template would,
-   * at the selection or, with at "end", after the document's last clause, as a
-   * numbered clause when that is one. Blank paragraphs are left out; nothing
+   * at the selection, after the document's last clause with at "end", or after
+   * a generated node with at { after: id }; as numbered clauses when the clause
+   * it follows is one, or when numbered. Blank paragraphs are left out; nothing
    * happens when none remain. Returns whether anything was inserted.
    */
   insert(paragraphs: readonly string[], options?: InsertOptions): boolean;
@@ -49,8 +52,16 @@ export interface DocEditorController {
 }
 
 export interface InsertOptions {
-  /** Where the wording goes: the selection, or after the last clause. */
-  at?: "selection" | "end";
+  /**
+   * Where the wording goes: the selection, after the last clause, or after the
+   * generated node with an id, such as "paragraph:ordered-that".
+   */
+  at?: "selection" | "end" | { after: string };
+  /**
+   * Adds the wording as numbered clauses even where the clause before it is
+   * not one, as after a heading.
+   */
+  numbered?: boolean;
 }
 
 /** What a render changed, for telling the reader. */
@@ -169,12 +180,8 @@ export function createDocEditorController(
     if (!state.doc.eq(before)) options.onChange?.(getSnapshot());
   };
 
-  const insertDocument = (
-    wording: ProseMirrorNode,
-    selection?: Selection,
-    insertOptions?: InsertTemplateOptions,
-  ): void => {
-    insertTemplate(wording, selection, insertOptions)(state, (transaction) => {
+  const runInsertion = (command: Command): void => {
+    command(state, (transaction) => {
       assertCurrentDocumentMatchesGenerated(
         transaction.doc,
         generatedDocument,
@@ -184,6 +191,12 @@ export function createDocEditorController(
       dispatch(closeHistory(state.tr));
     });
   };
+
+  const insertDocument = (
+    wording: ProseMirrorNode,
+    selection?: Selection,
+    insertOptions?: InsertTemplateOptions,
+  ): void => runInsertion(insertTemplate(wording, selection, insertOptions));
 
   const controller: DocEditorController = {
     render(nextDocument: DocWeaveDocument): void {
@@ -237,20 +250,32 @@ export function createDocEditorController(
         options.onChange?.(getSnapshot());
       }
     },
-    insert(paragraphs, { at = "selection" }: InsertOptions = {}): boolean {
+    insert(
+      paragraphs,
+      { at = "selection", numbered = false }: InsertOptions = {},
+    ): boolean {
       const wording = paragraphs.map((text) => text.trim()).filter(Boolean);
       if (wording.length === 0) return false;
+      const blocks = wording.map((text) =>
+        editorSchema.node("paragraph", null, editorSchema.text(text))
+      );
       const document = editorSchema.node(
         "doc",
         null,
-        wording.map((text) =>
-          editorSchema.node("paragraph", null, editorSchema.text(text))
-        ),
+        numbered
+          ? editorSchema.node(
+            "ordered_list",
+            null,
+            blocks.map((block) => editorSchema.node("list_item", null, block)),
+          )
+          : blocks,
       );
       // The end of the document is also the start of its last clause when
       // that clause is empty, and the wording still belongs after it.
       if (at === "end") {
         insertDocument(document, Selection.atEnd(state.doc), { after: true });
+      } else if (typeof at === "object" && at !== null) {
+        runInsertion(insertAfterNode(document, at.after));
       } else {
         insertDocument(document);
       }
