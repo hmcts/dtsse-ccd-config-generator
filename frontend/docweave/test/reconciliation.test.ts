@@ -458,10 +458,20 @@ describe("document reconciliation", () => {
       { id: "item:subclause-a" },
       paragraph("Generated subclause"),
     );
+    const secondGeneratedSubclause = editorSchema.node(
+      "list_item",
+      { id: "item:subclause-b" },
+      paragraph("Second generated subclause"),
+    );
     const userSubclause = editorSchema.node(
       "list_item",
       null,
       paragraph("User subclause"),
+    );
+    const secondUserSubclause = editorSchema.node(
+      "list_item",
+      null,
+      paragraph("Second user subclause"),
     );
     const previousItem = editorSchema.node(
       "list_item",
@@ -476,7 +486,7 @@ describe("document reconciliation", () => {
         editorSchema.node(
           "ordered_list",
           { id: "ordered-list:subclauses" },
-          generatedSubclause,
+          [generatedSubclause, secondGeneratedSubclause],
         ),
       ],
     );
@@ -485,7 +495,7 @@ describe("document reconciliation", () => {
       { id: "item:parent" },
       [
         paragraph("Edited parent clause"),
-        editorSchema.node("ordered_list", null, userSubclause),
+        editorSchema.node("ordered_list", null, [userSubclause, secondUserSubclause]),
       ],
     );
     const documentWith = (item: typeof previousItem) =>
@@ -515,7 +525,7 @@ describe("document reconciliation", () => {
     assert.equal(reconciledList.attrs.id, "ordered-list:subclauses");
     assert.deepEqual(
       reconciledList.children.map((item) => item.attrs.id),
-      ["item:subclause-a", null],
+      ["item:subclause-a", "item:subclause-b", null, null],
     );
   });
 

@@ -205,7 +205,11 @@ view state, the previous target and the new target:
 - Insert and remove managed children at the document root and within managed
   containers. A new child goes after the generated node before it and after any
   of the reader's own content that follows that node, so what the reader added
-  after a generated clause stays next to it.
+  after a generated clause stays next to it. Wording the reader wrote as a
+  lead-in to the next generated clause is therefore separated from it by a
+  clause added between the two. When a render adds a nested list to a clause
+  the reader has given subclauses of their own, its generated subclauses go in
+  together ahead of the reader's.
 - Preserve user-authored content where it belongs to clauses still present in
   the document.
 

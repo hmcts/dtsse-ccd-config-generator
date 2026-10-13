@@ -1,6 +1,7 @@
 import { closeHistory } from "prosemirror-history";
 import { type Node as ProseMirrorNode } from "prosemirror-model";
 import {
+  type Command,
   EditorState,
   type Plugin,
   Selection,
@@ -19,6 +20,7 @@ import { reconcileDocument } from "./reconciliation.js";
 import { editorSchema } from "./schema.js";
 import { type DocWeaveSnapshot, readSnapshot } from "./snapshot.js";
 import {
+  insertAfterNode,
   insertTemplate,
   type InsertTemplateOptions,
 } from "./templates/insertion.js";
@@ -178,12 +180,8 @@ export function createDocEditorController(
     if (!state.doc.eq(before)) options.onChange?.(getSnapshot());
   };
 
-  const insertDocument = (
-    wording: ProseMirrorNode,
-    selection?: Selection,
-    insertOptions?: InsertTemplateOptions,
-  ): void => {
-    insertTemplate(wording, selection, insertOptions)(state, (transaction) => {
+  const runInsertion = (command: Command): void => {
+    command(state, (transaction) => {
       assertCurrentDocumentMatchesGenerated(
         transaction.doc,
         generatedDocument,
@@ -194,16 +192,11 @@ export function createDocEditorController(
     });
   };
 
-  /** A selection at the end of the generated node with the id. */
-  const endOf = (id: string): Selection => {
-    let end: number | undefined;
-    state.doc.descendants((node, position) => {
-      if (node.attrs.id === id) end = position + node.nodeSize;
-      return end === undefined;
-    });
-    if (end === undefined) throw new Error(`No generated node with id ${id}`);
-    return Selection.near(state.doc.resolve(end), -1);
-  };
+  const insertDocument = (
+    wording: ProseMirrorNode,
+    selection?: Selection,
+    insertOptions?: InsertTemplateOptions,
+  ): void => runInsertion(insertTemplate(wording, selection, insertOptions));
 
   const controller: DocEditorController = {
     render(nextDocument: DocWeaveDocument): void {
@@ -281,10 +274,10 @@ export function createDocEditorController(
       // that clause is empty, and the wording still belongs after it.
       if (at === "end") {
         insertDocument(document, Selection.atEnd(state.doc), { after: true });
-      } else if (at === "selection") {
-        insertDocument(document);
+      } else if (typeof at === "object" && at !== null) {
+        runInsertion(insertAfterNode(document, at.after));
       } else {
-        insertDocument(document, endOf(at.after), { after: true });
+        insertDocument(document);
       }
       return true;
     },

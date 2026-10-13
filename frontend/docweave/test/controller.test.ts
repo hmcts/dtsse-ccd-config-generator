@@ -251,6 +251,65 @@ describe("headless editor", () => {
       assert.deepEqual(lists, [[null, 2], ["ordered-list:costs", 1]]);
     });
 
+    it("adds wording after a whole list or clause, however many subclauses it has", () => {
+      const clauses = buildDoc((doc) => {
+        doc.paragraph("ordered-that", "IT IS ORDERED THAT:");
+        doc.orderedList("clauses", (list) => {
+          list.item("one", "Clause one.");
+          list.item("two", "Clause two.", (item) => {
+            item.orderedList("two-sub", (sub) => sub.item("two-a", "Subclause two (a)."));
+          });
+        });
+        doc.paragraph("signed", "Signed");
+      });
+      const current = (controller: ReturnType<typeof createDocEditor>) =>
+        editorSchema.nodeFromJSON(controller.getSnapshot().current);
+
+      const afterList = createDocEditor();
+      afterList.render(clauses);
+      afterList.insert(["Costs reserved."], { at: { after: "ordered-list:clauses" }, numbered: true });
+      assert.deepEqual(
+        current(afterList).children.map((node) => [node.type.name, node.attrs.id]),
+        [
+          ["paragraph", "paragraph:ordered-that"],
+          ["ordered_list", "ordered-list:clauses"],
+          ["ordered_list", null],
+          ["paragraph", "paragraph:signed"],
+        ],
+      );
+
+      const afterClause = createDocEditor();
+      afterClause.render(clauses);
+      afterClause.insert(["Costs reserved."], { at: { after: "item:two" } });
+      assert.deepEqual(
+        current(afterClause).child(1).children.map((item) => [item.attrs.id, item.firstChild!.textContent]),
+        [["item:one", "Clause one."], ["item:two", "Clause two."], [null, "Costs reserved."]],
+      );
+    });
+
+    it("inserts at the selection for an unrecognised position, and not after a fact within a clause", () => {
+      const unrecognised = createDocEditor();
+      unrecognised.render(order(true));
+      unrecognised.insert(["Costs reserved."], { at: "start" as never });
+      const atSelection = createDocEditor();
+      atSelection.render(order(true));
+      atSelection.insert(["Costs reserved."]);
+      assert.deepEqual(unrecognised.getSnapshot(), atSelection.getSnapshot());
+
+      const withFact = createDocEditor();
+      withFact.render(buildDoc((doc) => {
+        doc.paragraph("dated", (content) => content.text("Dated ").fact("date", "1 October 2026"));
+      }));
+      let fact = "";
+      editorSchema.nodeFromJSON(withFact.getSnapshot().current).descendants((node) => {
+        if (node.isInline && typeof node.attrs.id === "string") fact = node.attrs.id;
+      });
+      assert.throws(
+        () => withFact.insert(["Costs reserved."], { at: { after: fact } }),
+        /within a clause/,
+      );
+    });
+
     it("refuses to insert after a generated node the document does not have", () => {
       const controller = createDocEditor();
       controller.render(order(false));

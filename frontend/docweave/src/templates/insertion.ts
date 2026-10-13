@@ -75,6 +75,43 @@ function listItems(document: ProseMirrorNode): Fragment {
   return Fragment.from(items);
 }
 
+/**
+ * Inserts the wording as the reader's own content straight after the managed
+ * paragraph, clause or list with the id, as clauses of the same list when it is
+ * a clause, and leaves the caret after it.
+ */
+export function insertAfterNode(
+  document: ProseMirrorNode,
+  id: string,
+): Command {
+  return (state, dispatch) => {
+    let found: { node: ProseMirrorNode; position: number } | undefined;
+    state.doc.descendants((node, position) => {
+      if (found) return false;
+      if (node.attrs.id === id) found = { node, position };
+      return true;
+    });
+    if (!found) throw new Error(`No generated node with id ${id}`);
+    if (found.node.isInline) {
+      throw new Error(`Cannot insert after ${id}, which is within a clause`);
+    }
+    if (!dispatch) return true;
+
+    const transaction = state.tr;
+    const end = found.position + found.node.nodeSize;
+    const inList = transaction.doc.resolve(found.position).parent.type ===
+      editorSchema.nodes.ordered_list;
+    insertAndSelect(
+      transaction,
+      end,
+      end,
+      inList ? listItems(document) : document.content,
+    );
+    dispatch(transaction.scrollIntoView());
+    return true;
+  };
+}
+
 export interface InsertTemplateOptions {
   /**
    * Put the wording after the clause at the selection even from its start,
