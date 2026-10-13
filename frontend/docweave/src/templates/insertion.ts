@@ -78,7 +78,8 @@ function listItems(document: ProseMirrorNode): Fragment {
 /**
  * Inserts the wording as the reader's own content straight after the managed
  * paragraph, clause or list with the id, as clauses of the same list when it is
- * a clause, and leaves the caret after it.
+ * a clause, and leaves the caret after it. A clause's subclauses can only end
+ * its clause, so wording after them becomes its last subclauses.
  */
 export function insertAfterNode(
   document: ProseMirrorNode,
@@ -98,14 +99,17 @@ export function insertAfterNode(
     if (!dispatch) return true;
 
     const transaction = state.tr;
-    const end = found.position + found.node.nodeSize;
-    const inList = transaction.doc.resolve(found.position).parent.type ===
-      editorSchema.nodes.ordered_list;
+    const parent = transaction.doc.resolve(found.position).parent;
+    const subclauses = found.node.type === editorSchema.nodes.ordered_list &&
+      parent.type === editorSchema.nodes.list_item;
+    const end = found.position + found.node.nodeSize - (subclauses ? 1 : 0);
     insertAndSelect(
       transaction,
       end,
       end,
-      inList ? listItems(document) : document.content,
+      subclauses || parent.type === editorSchema.nodes.ordered_list
+        ? listItems(document)
+        : document.content,
     );
     dispatch(transaction.scrollIntoView());
     return true;

@@ -278,6 +278,26 @@ describe("headless editor", () => {
         ],
       );
 
+      for (const lastClause of [true, false]) {
+        const afterSubclauses = createDocEditor();
+        afterSubclauses.render(lastClause ? clauses : buildDoc((doc) => {
+          doc.orderedList("clauses", (list) => {
+            list.item("two", "Clause two.", (item) => {
+              item.orderedList("two-sub", (sub) => sub.item("two-a", "Subclause two (a)."));
+            });
+            list.item("three", "Clause three.");
+          });
+        }));
+        afterSubclauses.insert(["Costs reserved."], { at: { after: "ordered-list:two-sub" }, numbered: true });
+        let subclauses: string[] = [];
+        current(afterSubclauses).descendants((node) => {
+          if (node.attrs.id === "ordered-list:two-sub") {
+            subclauses = node.children.map((item) => item.textContent);
+          }
+        });
+        assert.deepEqual(subclauses, ["Subclause two (a).", "Costs reserved."]);
+      }
+
       const afterClause = createDocEditor();
       afterClause.render(clauses);
       afterClause.insert(["Costs reserved."], { at: { after: "item:two" } });
