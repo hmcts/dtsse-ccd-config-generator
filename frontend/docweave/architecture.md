@@ -203,7 +203,9 @@ view state, the previous target and the new target:
 - Otherwise, preserve direct edits to the clause's ordinary content while
   updating its managed descendants.
 - Insert and remove managed children at the document root and within managed
-  containers.
+  containers. A new child goes after the generated node before it and after any
+  of the reader's own content that follows that node, so what the reader added
+  after a generated clause stays next to it.
 - Preserve user-authored content where it belongs to clauses still present in
   the document.
 

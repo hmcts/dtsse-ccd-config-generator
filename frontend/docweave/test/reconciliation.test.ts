@@ -41,6 +41,40 @@ describe("document reconciliation", () => {
     assert.equal(result.doc.firstChild!.textContent, "New heading");
   });
 
+  it("adds a generated node after the reader's content that follows its generated predecessor", () => {
+    const paragraph = (id: string | null, text: string) =>
+      editorSchema.node("paragraph", { id }, editorSchema.text(text));
+    const previousTarget = editorSchema.node("doc", null, [
+      paragraph("paragraph:upon", "UPON the application"),
+      paragraph("paragraph:signed", "Signed"),
+    ]);
+    const target = editorSchema.node("doc", null, [
+      paragraph("paragraph:upon", "UPON the application"),
+      paragraph("paragraph:ordered-that", "IT IS ORDERED THAT:"),
+      paragraph("paragraph:signed", "Signed"),
+    ]);
+    const transaction = EditorState.create({
+      schema: editorSchema,
+      doc: editorSchema.node("doc", null, [
+        paragraph("paragraph:upon", "UPON the application"),
+        paragraph(null, "The reader's note on the application"),
+        paragraph("paragraph:signed", "Signed"),
+      ]),
+    }).tr;
+
+    reconcileDocument(transaction, previousTarget, target);
+
+    assert.deepEqual(
+      transaction.doc.children.map((node) => node.textContent),
+      [
+        "UPON the application",
+        "The reader's note on the application",
+        "IT IS ORDERED THAT:",
+        "Signed",
+      ],
+    );
+  });
+
   it("updates generated text while preserving edited surrounding text", () => {
     const orderWithDate = (prefix: string, date: string) =>
       buildDoc((doc) => {

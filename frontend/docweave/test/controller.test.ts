@@ -170,10 +170,10 @@ describe("headless editor", () => {
 
       controller.render(order(true));
 
-      // The new generated clause follows its generated sibling; the reader's stays.
+      // The reader's clause stays with the generated one it followed; the new one comes after both.
       assert.equal(
         text(controller),
-        "IT IS ORDERED THAT:\nThe application is granted.\nCosts in the case.\nThe hearing is adjourned.",
+        "IT IS ORDERED THAT:\nThe application is granted.\nThe hearing is adjourned.\nCosts in the case.",
       );
     });
 
@@ -219,6 +219,45 @@ describe("headless editor", () => {
       assert.equal(
         renderText(runtime.controller.getSnapshot()),
         "IT IS ORDERED THAT:\nThe application is granted.\nThe hearing is adjourned.\nCosts in the case.",
+      );
+    });
+
+    it("adds numbered clauses after a generated heading, which a clause added later follows", () => {
+      const decision = (withCosts: boolean) =>
+        buildDoc((doc) => {
+          doc.paragraph("upon", "UPON the application of Jane Doe");
+          doc.paragraph("ordered-that", "IT IS ORDERED THAT:");
+          if (withCosts) {
+            doc.orderedList("costs", (list) => list.item("costs", "Costs in the case."));
+          }
+        });
+      const controller = createDocEditor();
+      controller.render(decision(false));
+
+      controller.insert(["The hearing is adjourned.", "The defendant may file evidence."], {
+        at: { after: "paragraph:ordered-that" },
+        numbered: true,
+      });
+      controller.render(decision(true));
+
+      assert.equal(
+        text(controller),
+        "UPON the application of Jane Doe\nIT IS ORDERED THAT:\nThe hearing is adjourned.\n" +
+          "The defendant may file evidence.\nCosts in the case.",
+      );
+      const lists = editorSchema.nodeFromJSON(controller.getSnapshot().current).children
+        .filter((node) => node.type.name === "ordered_list")
+        .map((node) => [node.attrs.id, node.childCount]);
+      assert.deepEqual(lists, [[null, 2], ["ordered-list:costs", 1]]);
+    });
+
+    it("refuses to insert after a generated node the document does not have", () => {
+      const controller = createDocEditor();
+      controller.render(order(false));
+
+      assert.throws(
+        () => controller.insert(["Costs reserved."], { at: { after: "paragraph:missing" } }),
+        /No generated node with id paragraph:missing/,
       );
     });
 
