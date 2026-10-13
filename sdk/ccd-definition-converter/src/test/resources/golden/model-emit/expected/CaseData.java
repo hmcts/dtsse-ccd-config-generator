@@ -19,29 +19,19 @@ import uk.gov.hmcts.test.config.access.CaseworkerAccess;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CaseData {
-    @CCD(
-            label = "Claimant Name"
-    )
+    @CCD(label = "Claimant Name")
     private String claimantName;
 
     @JsonProperty("some_field_id")
-    @CCD(
-            label = "Some Field"
-    )
+    @CCD(label = "Some Field")
     private String someFieldId;
 
     private List<ListValue<TestAddress>> parties;
 
-    @CCD(
-            label = "Notes",
-            typeOverride = FieldType.TextArea
-    )
+    @CCD(label = "Notes", typeOverride = FieldType.TextArea)
     private String notes;
 
-    @CCD(
-            label = "Claim Type",
-            typeParameterOverride = "ClaimType"
-    )
+    @CCD(label = "Claim Type", typeParameterOverride = "ClaimType")
     private String claimType;
 
     @CCD(
@@ -58,9 +48,6 @@ public class CaseData {
     )
     private String richField;
 
-    @CCD(
-            label = "A label",
-            typeOverride = FieldType.Label
-    )
+    @CCD(label = "A label", typeOverride = FieldType.Label)
     private String labelField;
 }

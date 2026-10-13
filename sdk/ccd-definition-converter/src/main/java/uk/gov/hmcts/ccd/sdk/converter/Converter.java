@@ -16,6 +16,7 @@ import uk.gov.hmcts.ccd.sdk.converter.api.DefinitionReader;
 import uk.gov.hmcts.ccd.sdk.converter.api.EmitContext;
 import uk.gov.hmcts.ccd.sdk.converter.api.ReportWriter;
 import uk.gov.hmcts.ccd.sdk.converter.api.SourceEmitter;
+import uk.gov.hmcts.ccd.sdk.converter.emit.GeneratedSourceFormatter;
 import uk.gov.hmcts.ccd.sdk.converter.ir.DefinitionIr;
 import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.ComplexTypeModel;
@@ -80,7 +81,7 @@ public class Converter {
 
     for (JavaFile file : files) {
       try {
-        file.writeTo(options.getOutputSrc());
+        GeneratedSourceFormatter.writeTo(file, options.getOutputSrc());
       } catch (IOException e) {
         throw new UncheckedIOException("Failed writing generated source to "
             + options.getOutputSrc(), e);

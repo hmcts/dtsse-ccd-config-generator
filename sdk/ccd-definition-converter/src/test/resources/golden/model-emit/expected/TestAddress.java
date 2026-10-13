@@ -14,18 +14,11 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@ComplexType(
-        name = "TestAddress",
-        generate = true
-)
+@ComplexType(name = "TestAddress", generate = true)
 public class TestAddress {
-    @CCD(
-            label = "Address Line 1"
-    )
+    @CCD(label = "Address Line 1")
     private String addressLine1;
 
-    @CCD(
-            label = "City"
-    )
+    @CCD(label = "City")
     private String city;
 }

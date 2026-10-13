@@ -15,14 +15,9 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@ComplexType(
-        name = "schoolDirections&Details",
-        generate = true
-)
+@ComplexType(name = "schoolDirections&Details", generate = true)
 public class SchoolDirectionsDetails {
     @JsonProperty("fl404SchoolDirections&DetailsComplex")
-    @CCD(
-            label = "Add directions and any further details"
-    )
+    @CCD(label = "Add directions and any further details")
     private String fl404SchoolDirectionsDetailsComplex;
 }

@@ -13,6 +13,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import uk.gov.hmcts.ccd.sdk.converter.api.ConversionOptions;
 import uk.gov.hmcts.ccd.sdk.converter.api.EmitContext;
+import uk.gov.hmcts.ccd.sdk.converter.emit.GeneratedSourceFormatter;
 import uk.gov.hmcts.ccd.sdk.converter.model.AccessClassModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.ComplexTypeModel;
@@ -279,7 +280,7 @@ class ModelEmitterGoldenTest {
     List<JavaFile> files = new CaseDataEmitter().emit(model, ctx);
 
     assertThat(files).hasSize(1);
-    String actual = normalise(files.get(0).toString());
+    String actual = normalise(GeneratedSourceFormatter.format(files.get(0)));
     String expected = loadGolden("CaseData.java");
     assertThat(actual).isEqualTo(expected);
   }
@@ -295,7 +296,7 @@ class ModelEmitterGoldenTest {
     List<JavaFile> files = new ComplexTypeEmitter().emit(model, ctx);
 
     assertThat(files).hasSize(1);
-    String actual = normalise(files.get(0).toString());
+    String actual = normalise(GeneratedSourceFormatter.format(files.get(0)));
     String expected = loadGolden("TestAddress.java");
     assertThat(actual).isEqualTo(expected);
   }
@@ -330,7 +331,7 @@ class ModelEmitterGoldenTest {
     assertThat(files).hasSize(1);
     // Class named sanely, not with the raw ID.
     assertThat(files.get(0).typeSpec().name()).isEqualTo("SchoolDirectionsDetails");
-    String actual = normalise(files.get(0).toString());
+    String actual = normalise(GeneratedSourceFormatter.format(files.get(0)));
     assertThat(actual).isEqualTo(loadGolden("SchoolDirectionsDetails.java"));
     // The raw wire ID is carried on the annotation, not the class name.
     assertThat(actual).contains("name = \"schoolDirections&Details\"");
@@ -421,7 +422,7 @@ class ModelEmitterGoldenTest {
         .filter(f -> f.typeSpec().name().equals("ClaimType"))
         .findFirst()
         .orElseThrow();
-    String actual = normalise(claimType.toString());
+    String actual = normalise(GeneratedSourceFormatter.format(claimType));
     String expected = loadGolden("ClaimType.java");
     assertThat(actual).isEqualTo(expected);
   }
@@ -436,7 +437,7 @@ class ModelEmitterGoldenTest {
         .filter(f -> f.typeSpec().name().equals("YesOrNoChoice"))
         .findFirst()
         .orElseThrow();
-    String actual = normalise(yesOrNo.toString());
+    String actual = normalise(GeneratedSourceFormatter.format(yesOrNo));
     String expected = loadGolden("YesOrNoChoice.java");
     assertThat(actual).isEqualTo(expected);
   }
@@ -451,7 +452,7 @@ class ModelEmitterGoldenTest {
         .filter(f -> f.typeSpec().name().equals("State"))
         .findFirst()
         .orElseThrow();
-    String actual = normalise(state.toString());
+    String actual = normalise(GeneratedSourceFormatter.format(state));
     String expected = loadGolden("State.java");
     assertThat(actual).isEqualTo(expected);
   }
@@ -466,7 +467,7 @@ class ModelEmitterGoldenTest {
         .filter(f -> f.typeSpec().name().equals("UserRole"))
         .findFirst()
         .orElseThrow();
-    String actual = normalise(userRole.toString());
+    String actual = normalise(GeneratedSourceFormatter.format(userRole));
     String expected = loadGolden("UserRole.java");
     assertThat(actual).isEqualTo(expected);
   }
@@ -482,7 +483,7 @@ class ModelEmitterGoldenTest {
     List<JavaFile> files = new AccessClassEmitter().emit(model, ctx);
 
     assertThat(files).hasSize(1);
-    String actual = normalise(files.get(0).toString());
+    String actual = normalise(GeneratedSourceFormatter.format(files.get(0)));
     String expected = loadGolden("CaseworkerAccess.java");
     assertThat(actual).isEqualTo(expected);
   }

@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import uk.gov.hmcts.ccd.sdk.converter.api.ConversionOptions;
 import uk.gov.hmcts.ccd.sdk.converter.api.EmitContext;
+import uk.gov.hmcts.ccd.sdk.converter.emit.GeneratedSourceFormatter;
 import uk.gov.hmcts.ccd.sdk.converter.model.AccessClassModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.ComplexTypeModel;
@@ -55,7 +56,7 @@ class GenerateGoldenFiles {
 
   private static void writeFiles(Path dir, List<JavaFile> files) throws IOException {
     for (JavaFile jf : files) {
-      String content = normalise(jf.toString());
+      String content = normalise(GeneratedSourceFormatter.format(jf));
       Path out = dir.resolve(jf.typeSpec().name() + ".java");
       Files.writeString(out, content, StandardCharsets.UTF_8);
       System.out.println("  Written: " + out.getFileName());
