@@ -21,7 +21,9 @@ public record CcdDataMigrationTaskOptions(
     Duration maxRunTime,
     Duration statementTimeout,
     String sourceJurisdiction,
-    String fdwAdditionalSelectGrantee
+    String fdwAdditionalSelectGrantee,
+    boolean preloadCaseDataSync,
+    int caseDataSyncBatchSize
 ) {
   private static final String TARGET_SCHEMA = "ccd";
   private static final String FDW_SCHEMA = "fdw_stage";
@@ -36,6 +38,9 @@ public record CcdDataMigrationTaskOptions(
 
     if (eventIdWindowSize < 1) {
       throw new IllegalArgumentException("eventIdWindowSize must be greater than zero");
+    }
+    if (caseDataSyncBatchSize < 1) {
+      throw new IllegalArgumentException("caseDataSyncBatchSize must be greater than zero");
     }
     if (significantItemIdWindowSize < 1) {
       throw new IllegalArgumentException("significantItemIdWindowSize must be greater than zero");
@@ -133,6 +138,8 @@ public record CcdDataMigrationTaskOptions(
     private Duration statementTimeout = DEFAULT_STATEMENT_TIMEOUT;
     private String sourceJurisdiction;
     private String fdwAdditionalSelectGrantee;
+    private boolean preloadCaseDataSync = true;
+    private int caseDataSyncBatchSize = 1_000;
 
     private Builder(List<String> caseTypeIds) {
       this.caseTypeIds = caseTypeIds;
@@ -188,6 +195,16 @@ public record CcdDataMigrationTaskOptions(
       return this;
     }
 
+    public Builder preloadCaseDataSync(boolean preloadCaseDataSync) {
+      this.preloadCaseDataSync = preloadCaseDataSync;
+      return this;
+    }
+
+    public Builder caseDataSyncBatchSize(int caseDataSyncBatchSize) {
+      this.caseDataSyncBatchSize = caseDataSyncBatchSize;
+      return this;
+    }
+
     public CcdDataMigrationTaskOptions build() {
       return new CcdDataMigrationTaskOptions(
           taskName,
@@ -200,7 +217,9 @@ public record CcdDataMigrationTaskOptions(
           maxRunTime,
           statementTimeout,
           sourceJurisdiction,
-          fdwAdditionalSelectGrantee
+          fdwAdditionalSelectGrantee,
+          preloadCaseDataSync,
+          caseDataSyncBatchSize
       );
     }
   }

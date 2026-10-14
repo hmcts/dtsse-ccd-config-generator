@@ -22,6 +22,8 @@ public class CcdDataMigrationProperties {
   private Duration statementTimeout = Duration.ofMinutes(10);
   private String sourceJurisdiction;
   private String fdwAdditionalSelectGrantee;
+  private boolean preloadCaseDataSync = true;
+  private int caseDataSyncBatchSize = 1_000;
 
   CcdDataMigrationTaskOptions toOptions() {
     if (caseTypeIds == null || caseTypeIds.isEmpty()) {
@@ -42,6 +44,8 @@ public class CcdDataMigrationProperties {
         .statementTimeout(statementTimeout)
         .sourceJurisdiction(sourceJurisdiction)
         .fdwAdditionalSelectGrantee(fdwAdditionalSelectGrantee)
+        .preloadCaseDataSync(preloadCaseDataSync)
+        .caseDataSyncBatchSize(caseDataSyncBatchSize)
         .build();
   }
 

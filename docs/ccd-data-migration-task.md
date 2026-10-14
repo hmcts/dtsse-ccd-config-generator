@@ -32,11 +32,12 @@ The task has one implementation with explicit modes:
 
 * `PRELOAD_EVENTS`: scheduled before cutover. Copies immutable source events by event ID high-water
   mark, subject to a transaction margin, and inserts provisional parent `case_data` rows so the
-  target FK remains valid.
+  target FK remains valid. Once events have caught up, syncs target `case_data` with the source (see
+  [`case_data` sync](#case_data-sync)) so cutover only has to re-read cases that changed since.
 * `CUTOVER`: explicit operator action during downtime. Captures the cutover event high-water mark,
   copies the final event delta, analyzes the join and filter columns of `ccd.case_data` and
   `ccd.case_event` so cutover queries are not planned without statistics, copies linked
-  `case_event_significant_items` in a single set-based query, refreshes target `case_data` from
+  `case_event_significant_items` in a single set-based query, syncs target `case_data` with the
   source, sets final case revisions, resets sequences, validates, and marks the migration complete.
   `ANALYZE` needs table ownership; for any other user Postgres skips the table with a warning and
   cutover continues, relying on autovacuum statistics.
@@ -77,17 +78,45 @@ state. When the saved position is above the migrated case types' newest source e
 source events exist than the newest copied one, the task rewinds the position to the newest copied
 event, logs a warning, and copies the gap.
 
-Preloaded `case_data` is provisional. Its purpose is to satisfy the event FK. Every copied event
-batch inserts missing parent source `case_data` rows for that batch. Significant items are copied
-only during `CUTOVER`, using one `insert into ... select` query that reads source significant items
-and joins through already migrated target events up to the captured cutover event high-water mark.
-`CUTOVER` then upserts every selected source `case_data` row into the target, deletes selected target
-cases that no longer exist in the source, and sets
-`case_data.case_revision = max(case_event.case_revision) + caseRevisionOffset`.
+Every copied event batch inserts missing parent source `case_data` rows for that batch so the event
+FK stays valid. Significant items are copied only during `CUTOVER`, using one `insert into ... select`
+query that reads source significant items and joins through already migrated target events up to the
+captured cutover event high-water mark. `CUTOVER` then syncs `case_data` with the source, deletes
+selected target cases that no longer exist in the source, and sets
+`case_data.case_revision = max(case_event.case_revision) + caseRevisionOffset` on rows where it differs.
 
-The runtime `case_data` revision trigger is deliberately disabled only inside the cutover refresh
-transaction so the final source-derived revision can be written. The trigger is re-enabled before the
-transaction completes.
+The runtime `case_data` revision trigger is deliberately disabled inside each `case_data` sync
+transaction, so syncing does not bump revisions and the final source-derived revision can be written at
+cutover. The trigger is re-enabled before the transaction completes.
+
+## `case_data` sync
+
+Re-reading every source case's `data` over the FDW is slow: on a Civil perftest dataset of 644k cases
+it took 36 minutes to read, before any writes. The sync avoids that by re-reading `data` only for the
+cases that need it. Each run, inside one transaction:
+
+1. One FDW scan copies every column except `data` for the migrated cases into a temp table.
+2. Target rows whose `version` and `last_modified` match the source have their other columns updated
+   where they differ. This compares `supplementary_data` in full for every case, because CCD's
+   supplementary data endpoints change it without changing `version` or `last_modified`. A `NULL`
+   source value is stored as `{}`, as elsewhere in the migration.
+3. Cases whose `version` or `last_modified` differ, or that the target does not have yet, are re-read
+   in full in batches of `case-data-sync-batch-size` ids. The id list is sent to the source, which
+   reads those rows by primary key.
+4. At cutover only, target cases that are no longer in the source are deleted.
+
+Steps 1 and 2 read only small columns and took seconds on the same dataset. CCD only changes `data`
+by saving the case through the data store, which always increments `version` and sets
+`last_modified`. **A change made directly in the source database that alters `data` without changing
+either column is not detected.** Do not apply direct SQL fixes to the migrated cases while the
+migration is running, or bump `version` when you do.
+
+During `PRELOAD_EVENTS` the sync runs after events have caught up and stops at `max-run-time`; the
+next run picks up where it left off, because it compares the tables again rather than storing a
+position. Set `preload-case-data-sync: false` to leave preloaded `case_data` provisional until cutover,
+for example to keep load off the source database during working hours. `CUTOVER` always runs the
+sync to completion. The cutover sync takes as long as the preload sync left it: if preload has kept
+up, it re-reads only the cases changed since the last preload run.
 
 The `ccd.case_data` Elasticsearch enqueue trigger is disabled while migration work is in progress
 because it fires after inserts and updates on `ccd.case_data` and would otherwise populate
@@ -136,6 +165,8 @@ ccd:
     max-batches-per-run: 100
     max-run-time: 4h
     case-revision-offset: 1000000000
+    preload-case-data-sync: true
+    case-data-sync-batch-size: 1000
     fdw-additional-select-grantee: DTS JIT Access et DB Reader SC
 ```
 
