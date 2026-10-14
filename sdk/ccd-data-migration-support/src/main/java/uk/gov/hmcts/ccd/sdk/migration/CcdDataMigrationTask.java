@@ -35,6 +35,9 @@ public class CcdDataMigrationTask implements Runnable {
   private static final String STATUS_PRELOAD = "PRELOAD";
   private static final String STATUS_CUTOVER = "CUTOVER";
   private static final String STATUS_COMPLETE = "COMPLETE";
+  private static final String CHANGED_CASE_IDS_TABLE = "migration_changed_case_ids";
+  private static final String MISMATCHED_CASE_IDS_TABLE = "migration_mismatched_case_ids";
+  private static final String SOURCE_DATA_HASH_TABLE = "migration_source_case_data_hash";
 
   private final NamedParameterJdbcTemplate db;
   private final TransactionOperations transaction;
@@ -156,6 +159,14 @@ public class CcdDataMigrationTask implements Runnable {
       );
     }
 
+    if (options.cutoverDataHashCheck() && !dblinkInstalled()) {
+      log.warn(
+          "CCD data migration taskName={} needs the dblink extension before CUTOVER, which checks every "
+              + "migrated case's data against the source. Install it (create extension dblink) or set "
+              + "ccd.data-migration.cutover-data-hash-check=false",
+          options.taskName()
+      );
+    }
     prepareElasticsearchQueueForMigration();
     long targetEventHwm = preloadSourceEventHighWaterMark();
     LocalDateTime stopAt = calculateStopAt();
@@ -192,6 +203,13 @@ public class CcdDataMigrationTask implements Runnable {
   }
 
   private CcdDataMigrationRunResult cutover() {
+    if (options.cutoverDataHashCheck() && !dblinkInstalled()) {
+      throw new CcdDataMigrationException(
+          "CUTOVER checks every migrated case's data against the source with the dblink extension, which is "
+              + "not installed in the target database. Install it (create extension dblink) or set "
+              + "ccd.data-migration.cutover-data-hash-check=false. See " + DOCS_URL
+      );
+    }
     Progress progress = getOrCreateProgress();
     if (STATUS_COMPLETE.equals(progress.status())) {
       prepareCompleteProgressForNextCutover(progress.requiredCutoverEventHwm());
@@ -565,8 +583,9 @@ public class CcdDataMigrationTask implements Runnable {
       disableCaseDataRevisionTrigger();
       try {
         CaseDataSyncTotals totals = syncCaseData(null, true);
+        long hashMismatches = options.cutoverDataHashCheck() ? checkCaseDataHashes() : 0;
         updateCaseRevisionsForCutover();
-        return totals.casesProcessed();
+        return totals.casesProcessed() + hashMismatches;
       } finally {
         enableCaseDataRevisionTrigger();
       }
@@ -601,23 +620,7 @@ public class CcdDataMigrationTask implements Runnable {
     int metadataUpdated = updateCaseMetadataFromSource();
     int changedCases = collectChangedCaseIds();
 
-    long dataRefreshed = 0;
-    long batches = 0;
-    long afterId = Long.MIN_VALUE;
-    boolean stoppedByTimeLimit = false;
-    while (true) {
-      List<Long> caseIds = nextChangedCaseIds(afterId);
-      if (caseIds.isEmpty()) {
-        break;
-      }
-      dataRefreshed += refreshCaseDataFromSource(caseIds);
-      batches++;
-      afterId = caseIds.getLast();
-      if (isTimeLimitReached(stopAt)) {
-        stoppedByTimeLimit = true;
-        break;
-      }
-    }
+    BatchRefreshTotals refresh = refreshCaseDataInBatches(CHANGED_CASE_IDS_TABLE, stopAt);
 
     int deleted = deleteRemovedCases ? deleteCasesRemovedFromSource() : 0;
     log.info(
@@ -627,12 +630,145 @@ public class CcdDataMigrationTask implements Runnable {
         options.mode(),
         metadataUpdated,
         changedCases,
-        dataRefreshed,
-        batches,
+        refresh.refreshed(),
+        refresh.batches(),
         deleted,
-        stoppedByTimeLimit
+        refresh.stoppedByTimeLimit()
     );
-    return new CaseDataSyncTotals(metadataUpdated + dataRefreshed, stoppedByTimeLimit);
+    return new CaseDataSyncTotals(metadataUpdated + refresh.refreshed(), refresh.stoppedByTimeLimit());
+  }
+
+  // idsTable is one of the temp table constants, never caller input.
+  private BatchRefreshTotals refreshCaseDataInBatches(String idsTable, LocalDateTime stopAt) {
+    long refreshed = 0;
+    long batches = 0;
+    long afterId = Long.MIN_VALUE;
+    while (true) {
+      List<Long> caseIds = nextCaseIds(idsTable, afterId);
+      if (caseIds.isEmpty()) {
+        return new BatchRefreshTotals(refreshed, batches, false);
+      }
+      refreshed += refreshCaseDataFromSource(caseIds);
+      batches++;
+      afterId = caseIds.getLast();
+      if (isTimeLimitReached(stopAt)) {
+        return new BatchRefreshTotals(refreshed, batches, true);
+      }
+    }
+  }
+
+  /**
+   * Compares an md5 of every migrated case's data with the source and re-copies any that differ.
+   *
+   * <p>The incremental sync relies on version and last_modified to spot changed data, which misses
+   * a change made directly in the source database. postgres_fdw cannot send md5(data::text) to the
+   * source, so the source hashes are read through dblink using the FDW server's connection; only
+   * the id and hash cross the network. Fails the cutover if a re-copied case still differs.
+   */
+  private long checkCaseDataHashes() {
+    db.getJdbcTemplate().execute(
+        "create temp table " + SOURCE_DATA_HASH_TABLE + " (id bigint primary key, data_md5 text) on commit drop"
+    );
+    db.update(
+        "insert into " + SOURCE_DATA_HASH_TABLE + " (id, data_md5) "
+            + "select id, data_md5 from dblink(:server, :remoteSql) as remote(id bigint, data_md5 text)",
+        new MapSqlParameterSource()
+            .addValue("server", sourceCaseDataServer())
+            .addValue("remoteSql", sourceCaseDataHashQuery())
+    );
+    db.getJdbcTemplate().execute(
+        "create temp table " + MISMATCHED_CASE_IDS_TABLE + " on commit drop as "
+            + "select source.id from " + SOURCE_DATA_HASH_TABLE + " source "
+            + "join ccd.case_data target on target.id = source.id "
+            + "where md5(target.data::text) is distinct from source.data_md5"
+    );
+    db.getJdbcTemplate().execute("alter table " + MISMATCHED_CASE_IDS_TABLE + " add primary key (id)");
+    List<Long> sample = db.getJdbcTemplate().queryForList(
+        "select id from " + MISMATCHED_CASE_IDS_TABLE + " order by id limit 20",
+        Long.class
+    );
+    if (sample.isEmpty()) {
+      log.info("CCD data migration data hash check taskName={} found no differences", options.taskName());
+      return 0;
+    }
+
+    BatchRefreshTotals refresh = refreshCaseDataInBatches(MISMATCHED_CASE_IDS_TABLE, null);
+    log.warn(
+        "CCD data migration data hash check taskName={} re-copied {} cases whose data differed from the source "
+            + "although version and last_modified matched, which means the source was changed outside CCD. "
+            + "First ids: {}",
+        options.taskName(),
+        refresh.refreshed(),
+        sample
+    );
+
+    Integer stillDifferent = db.getJdbcTemplate().queryForObject(
+        "select count(*) from " + MISMATCHED_CASE_IDS_TABLE + " ids "
+            + "join " + SOURCE_DATA_HASH_TABLE + " source on source.id = ids.id "
+            + "join ccd.case_data target on target.id = ids.id "
+            + "where md5(target.data::text) is distinct from source.data_md5",
+        Integer.class
+    );
+    if (stillDifferent != null && stillDifferent > 0) {
+      throw new CcdDataMigrationException(
+          "CCD data migration taskName=" + options.taskName() + " re-copied case data that still differs from the "
+              + "source for " + stillDifferent + " cases; cutover was not completed. First ids: " + sample
+      );
+    }
+    return refresh.refreshed();
+  }
+
+  private String sourceCaseDataServer() {
+    return db.getJdbcTemplate().queryForObject(
+        """
+        select s.srvname
+        from pg_foreign_table ft
+        join pg_class c on c.oid = ft.ftrelid
+        join pg_namespace n on n.oid = c.relnamespace
+        join pg_foreign_server s on s.oid = ft.ftserver
+        where n.nspname = 'fdw_stage'
+          and c.relname = 'case_data'
+        """,
+        String.class
+    );
+  }
+
+  // Built with format() so the remote table names and filter values are quoted by Postgres.
+  private String sourceCaseDataHashQuery() {
+    return db.queryForObject(
+        """
+        select format(
+          'select id, md5(data::text) from %I.%I where jurisdiction = %L and case_type_id = any(%L::text[])',
+          coalesce((
+            select split_part(option, '=', 2)
+            from unnest(ft.ftoptions) option
+            where split_part(option, '=', 1) = 'schema_name'
+          ), 'public'),
+          coalesce((
+            select split_part(option, '=', 2)
+            from unnest(ft.ftoptions) option
+            where split_part(option, '=', 1) = 'table_name'
+          ), 'case_data'),
+          :sourceJurisdiction,
+          array[:caseTypeIds]::text[]
+        )
+        from pg_foreign_table ft
+        join pg_class c on c.oid = ft.ftrelid
+        join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'fdw_stage'
+          and c.relname = 'case_data'
+        """,
+        baseParams(),
+        String.class
+    );
+  }
+
+  private boolean dblinkInstalled() {
+    Boolean installed = db.getJdbcTemplate().queryForObject(
+        "select exists (select 1 from pg_extension where extname = 'dblink')",
+        Boolean.class
+    );
+    return Boolean.TRUE.equals(installed);
   }
 
   private void loadSourceCaseMetadata() {
@@ -736,23 +872,17 @@ public class CcdDataMigrationTask implements Runnable {
            or (target.version, target.last_modified) is distinct from (source.version, source.last_modified)
         """
     );
-    db.getJdbcTemplate().execute("alter table migration_changed_case_ids add primary key (id)");
+    db.getJdbcTemplate().execute("alter table " + CHANGED_CASE_IDS_TABLE + " add primary key (id)");
     Integer changedCases = db.getJdbcTemplate().queryForObject(
-        "select count(*) from migration_changed_case_ids",
+        "select count(*) from " + CHANGED_CASE_IDS_TABLE,
         Integer.class
     );
     return changedCases == null ? 0 : changedCases;
   }
 
-  private List<Long> nextChangedCaseIds(long afterId) {
+  private List<Long> nextCaseIds(String idsTable, long afterId) {
     return db.queryForList(
-        """
-        select id
-        from migration_changed_case_ids
-        where id > :afterId
-        order by id
-        limit :batchSize
-        """,
+        "select id from " + idsTable + " where id > :afterId order by id limit :batchSize",
         new MapSqlParameterSource()
             .addValue("afterId", afterId)
             .addValue("batchSize", options.caseDataSyncBatchSize()),
@@ -1627,6 +1757,9 @@ public class CcdDataMigrationTask implements Runnable {
     private CopyTotals markStoppedByTimeLimit() {
       return new CopyTotals(batches, events, caughtUp, true);
     }
+  }
+
+  private record BatchRefreshTotals(long refreshed, long batches, boolean stoppedByTimeLimit) {
   }
 
   private record CaseDataSyncTotals(long casesProcessed, boolean stoppedByTimeLimit) {

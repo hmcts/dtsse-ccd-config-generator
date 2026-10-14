@@ -23,7 +23,8 @@ public record CcdDataMigrationTaskOptions(
     String sourceJurisdiction,
     String fdwAdditionalSelectGrantee,
     boolean preloadCaseDataSync,
-    int caseDataSyncBatchSize
+    int caseDataSyncBatchSize,
+    boolean cutoverDataHashCheck
 ) {
   private static final String TARGET_SCHEMA = "ccd";
   private static final String FDW_SCHEMA = "fdw_stage";
@@ -140,6 +141,7 @@ public record CcdDataMigrationTaskOptions(
     private String fdwAdditionalSelectGrantee;
     private boolean preloadCaseDataSync = true;
     private int caseDataSyncBatchSize = 1_000;
+    private boolean cutoverDataHashCheck = true;
 
     private Builder(List<String> caseTypeIds) {
       this.caseTypeIds = caseTypeIds;
@@ -205,6 +207,11 @@ public record CcdDataMigrationTaskOptions(
       return this;
     }
 
+    public Builder cutoverDataHashCheck(boolean cutoverDataHashCheck) {
+      this.cutoverDataHashCheck = cutoverDataHashCheck;
+      return this;
+    }
+
     public CcdDataMigrationTaskOptions build() {
       return new CcdDataMigrationTaskOptions(
           taskName,
@@ -219,7 +226,8 @@ public record CcdDataMigrationTaskOptions(
           sourceJurisdiction,
           fdwAdditionalSelectGrantee,
           preloadCaseDataSync,
-          caseDataSyncBatchSize
+          caseDataSyncBatchSize,
+          cutoverDataHashCheck
       );
     }
   }

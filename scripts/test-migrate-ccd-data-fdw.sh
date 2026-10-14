@@ -92,7 +92,7 @@ assert_fdw_setup() {
   extension_count="$(psql_dst --quiet -tA <<'SQL'
 select count(*)
 from pg_extension
-where extname in ('postgres_fdw', 'pgcrypto');
+where extname in ('postgres_fdw', 'pgcrypto', 'dblink');
 SQL
 )"
   foreign_server_count="$(psql_dst --quiet -tA --set=fdw_server="$FDW_SERVER" <<'SQL'
@@ -141,7 +141,7 @@ reset role;
 SQL
 )"
 
-  if [[ "$extension_count" != "2" || "$foreign_server_count" != "1" || "$foreign_table_count" != "3" \
+  if [[ "$extension_count" != "3" || "$foreign_server_count" != "1" || "$foreign_table_count" != "3" \
       || "$source_case_count" != "2" || "$additional_mapping_count" != "1" || "$additional_role_case_count" != "2" ]]; then
     echo "FDW setup validation failed:" \
       "extensions=${extension_count}, server=${foreign_server_count}," \
