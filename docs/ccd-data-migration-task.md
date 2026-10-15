@@ -107,9 +107,9 @@ cases that need it. Each run, inside one transaction:
 
 Steps 1 and 2 read only small columns and took seconds on the same dataset. CCD only changes `data`
 by saving the case through the data store, which always increments `version` and sets
-`last_modified`. A change made directly in the source database that alters `data` without changing
-either column is not detected by the sync. At cutover the [data hash check](#data-hash-check-at-cutover)
-catches it.
+`last_modified`. **A change made directly in the source database that alters `data` without changing
+either column is not detected.** Do not apply direct SQL fixes to the migrated cases while the
+migration is running, or bump `version` when you do.
 
 During `PRELOAD_EVENTS` the sync runs after events have caught up and stops at `max-run-time`; the
 next run picks up where it left off, because it compares the tables again rather than storing a
@@ -124,28 +124,6 @@ because it fires after inserts and updates on `ccd.case_data` and would otherwis
 deleted when the task starts migration work because those case types do not use the queue until after
 cutover. Final validation requires the migrated case types to have no queue rows, and the trigger is
 re-enabled in the same transaction that marks `CUTOVER` complete.
-
-## Data hash check at cutover
-
-After the `CUTOVER` sync, and in the same transaction, the task compares an md5 of every migrated
-case's `data` with the source and re-copies any case that differs. This makes the cutover check every
-case's data rather than relying on `version` and `last_modified`.
-
-postgres_fdw cannot send `md5(data::text)` to the source, so hashing through `fdw_stage.case_data`
-would still transfer every case's data. The task instead runs the hash query on the source through
-`dblink`, using the server and user mapping of `fdw_stage.case_data`, so only the id and hash cross the
-network. On the Civil perftest dataset (644k cases) the source query took 36 seconds and hashing the
-target took under a minute.
-
-Any re-copied case is logged as a warning with the first ids, because it means the source was changed
-outside CCD. If a re-copied case still differs from its source hash, the cutover fails and rolls back
-the `case_data` refresh, leaving the migration in `CUTOVER`.
-
-The check needs the `dblink` extension in the target database (see
-[`fdw-data-migration.md`](fdw-data-migration.md#database-extensions)). `CUTOVER` fails before
-changing anything if it is missing. Set `cutover-data-hash-check: false` to skip the check and rely on
-`version` and `last_modified` alone; then do not apply direct SQL fixes to the migrated cases while the
-migration is running.
 
 ## Progress
 
@@ -189,7 +167,6 @@ ccd:
     case-revision-offset: 1000000000
     preload-case-data-sync: true
     case-data-sync-batch-size: 1000
-    cutover-data-hash-check: true
     fdw-additional-select-grantee: DTS JIT Access et DB Reader SC
 ```
 

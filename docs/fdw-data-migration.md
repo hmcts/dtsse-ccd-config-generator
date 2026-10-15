@@ -40,19 +40,17 @@ flowchart LR
 
 ### Database extensions
 
-The target Postgres server must allow these extensions before setup is run:
+The target Postgres server must allow both extensions before setup is run:
 
 * `postgres_fdw`
 * `pgcrypto`
-* `dblink`, used by the `CUTOVER` data hash check in
-  [`ccd-data-migration-task.md`](ccd-data-migration-task.md#data-hash-check-at-cutover)
 
-For Azure Flexible Server this normally means `azure.extensions` includes all three values, for example:
+For Azure Flexible Server this normally means `azure.extensions` includes both values, for example:
 
 ```hcl
 {
   name  = "azure.extensions"
-  value = "postgres_fdw,pgcrypto,dblink"
+  value = "postgres_fdw,pgcrypto"
 }
 ```
 
@@ -61,11 +59,7 @@ After the extensions are allowed, the setup script creates them in the target da
 ```sql
 create extension if not exists postgres_fdw;
 create extension if not exists pgcrypto;
-create extension if not exists dblink;
 ```
-
-An environment set up before `dblink` was added needs it allowed and created before cutover; the
-migration task logs a warning on each preload run until it is.
 
 ### Database access
 
@@ -230,7 +224,7 @@ Create or replace the FDW setup:
 
 The setup script creates:
 
-* the `postgres_fdw`, `pgcrypto` and `dblink` extensions
+* the `postgres_fdw` and `pgcrypto` extensions
 * the FDW staging schema, default `fdw_stage`
 * an FDW server pointing at the source CCD database, with `use_remote_estimate 'true'`
 * a user mapping for `LOCAL_USER_SQL` using `SRC_USER` and `SRC_PASSWORD`

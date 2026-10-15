@@ -281,72 +281,21 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
-  void cutoverHashCheckRecopiesDataChangedWithoutVersionOrLastModified() {
+  void cutoverTrustsVersionAndLastModifiedToDetectDataChanges() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
-    insertSourceCase(20, 1000000000000020L, 1, "Submitted", "{\"field\":\"two\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
-    insertSourceCaseEvent(102, 20, "create", "Submitted", "{\"field\":\"two\"}", minutesAgo(60));
     task(PRELOAD_EVENTS, 1000, 10).runMigration();
 
-    // A direct SQL fix in the source changes data without touching version or last_modified.
+    // A direct SQL fix that changes data without version or last_modified is not picked up.
+    // Documented as a limitation: no direct fixes to migrated cases during the migration window.
     jdbc.getJdbcTemplate().execute("""
         update source.case_data set data = '{"field":"direct-sql"}'::jsonb where id = 10
         """);
 
     CcdDataMigrationRunResult cutover = task(CUTOVER, 1000, 10).runMigration();
 
-    assertThat(cutover.casesProcessed()).isEqualTo(1);
-    assertThat(progressStatus()).isEqualTo("COMPLETE");
-    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"direct-sql\"}");
-    assertThat(targetCaseData(20)).isEqualTo("{\"field\": \"two\"}");
-    assertThat(caseRevision(10)).isEqualTo(CASE_REVISION_OFFSET + 1);
-  }
-
-  @Test
-  void cutoverWithoutHashCheckTrustsVersionAndLastModifiedToDetectDataChanges() {
-    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
-    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
-    task(PRELOAD_EVENTS, 1000, 10).runMigration();
-
-    jdbc.getJdbcTemplate().execute("""
-        update source.case_data set data = '{"field":"direct-sql"}'::jsonb where id = 10
-        """);
-
-    CcdDataMigrationRunResult cutover = task(optionsBuilder(List.of("TestCase"))
-        .mode(CUTOVER)
-        .cutoverDataHashCheck(false)
-        .build()).runMigration();
-
     assertThat(cutover.casesProcessed()).isZero();
     assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"one\"}");
-  }
-
-  @Test
-  void cutoverFailsBeforeChangingAnythingWhenDblinkIsMissing() {
-    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
-    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
-    task(PRELOAD_EVENTS, 1000, 10).runMigration();
-    jdbc.getJdbcTemplate().execute("drop extension dblink");
-
-    assertThatThrownBy(() -> task(CUTOVER, 1000, 10).runMigration())
-        .isInstanceOf(CcdDataMigrationException.class)
-        .hasMessageContaining("dblink")
-        .hasMessageContaining("cutover-data-hash-check=false");
-
-    assertThat(progressStatus()).isEqualTo("PRELOAD");
-    assertThat(cutoverEventHwm()).isNull();
-  }
-
-  @Test
-  void preloadRunsWithoutDblink() {
-    jdbc.getJdbcTemplate().execute("drop extension dblink");
-    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
-    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
-
-    CcdDataMigrationRunResult preload = task(PRELOAD_EVENTS, 1000, 10).runMigration();
-
-    assertThat(preload.caughtUp()).isTrue();
-    assertThat(countRows("ccd.case_event")).isEqualTo(1);
   }
 
   @Test
@@ -1012,7 +961,6 @@ class CcdDataMigrationTaskIntegrationTest {
   private void createFdwTables() {
     jdbc.getJdbcTemplate().execute("create extension if not exists pgcrypto");
     jdbc.getJdbcTemplate().execute("create extension if not exists postgres_fdw");
-    jdbc.getJdbcTemplate().execute("create extension if not exists dblink");
     jdbc.getJdbcTemplate().execute("create schema fdw_stage");
     jdbc.getJdbcTemplate().execute("""
         create server ccd_migration_test_server

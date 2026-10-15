@@ -6,7 +6,7 @@ set -euo pipefail
 # CCD data migration FDW setup
 #
 # Creates the FDW objects used by migrate-ccd-data-fdw.sh:
-#   - postgres_fdw, pgcrypto and dblink extensions (dblink is used by the cutover data hash check)
+#   - postgres_fdw and pgcrypto extensions
 #   - FDW staging schema
 #   - FDW server and user mapping
 #   - foreign tables for source case_data, case_event and case_event_significant_items
@@ -159,7 +159,6 @@ setup_extensions() {
   psql_dst --quiet <<'SQL'
 create extension if not exists postgres_fdw;
 create extension if not exists pgcrypto;
-create extension if not exists dblink;
 SQL
 }
 

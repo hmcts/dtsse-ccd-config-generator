@@ -24,7 +24,6 @@ public class CcdDataMigrationProperties {
   private String fdwAdditionalSelectGrantee;
   private boolean preloadCaseDataSync = true;
   private int caseDataSyncBatchSize = 1_000;
-  private boolean cutoverDataHashCheck = true;
 
   CcdDataMigrationTaskOptions toOptions() {
     if (caseTypeIds == null || caseTypeIds.isEmpty()) {
@@ -47,7 +46,6 @@ public class CcdDataMigrationProperties {
         .fdwAdditionalSelectGrantee(fdwAdditionalSelectGrantee)
         .preloadCaseDataSync(preloadCaseDataSync)
         .caseDataSyncBatchSize(caseDataSyncBatchSize)
-        .cutoverDataHashCheck(cutoverDataHashCheck)
         .build();
   }
 
