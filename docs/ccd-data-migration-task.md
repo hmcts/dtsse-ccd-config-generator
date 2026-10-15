@@ -80,7 +80,8 @@ source events exist than the newest copied one, the task rewinds the position to
 event, logs a warning, and copies the gap.
 
 Every copied event batch inserts missing parent source `case_data` rows for that batch so the event
-FK stays valid. Significant items are copied only during `CUTOVER`, using one `insert into ... select`
+FK stays valid. When `fdw_stage.case_data_versioned` is available it reads them through it and records
+their versions, so the [`case_data` sync](#case_data-sync) does not read their data again. Significant items are copied only during `CUTOVER`, using one `insert into ... select`
 query that reads source significant items and joins through already migrated target events up to the
 captured cutover event high-water mark. `CUTOVER` then syncs `case_data` with the source, deletes
 selected target cases that no longer exist in the source, and sets
@@ -88,7 +89,8 @@ selected target cases that no longer exist in the source, and sets
 
 The runtime `case_data` revision trigger is deliberately disabled inside each `case_data` sync
 transaction, so syncing does not bump revisions and the final source-derived revision can be written at
-cutover. The trigger is re-enabled before the transaction completes.
+cutover. The trigger is re-enabled before the transaction commits; if the transaction fails, rolling it back
+restores the trigger.
 
 The `ccd.case_data` Elasticsearch enqueue trigger is disabled while migration work is in progress
 because it fires after inserts and updates on `ccd.case_data` and would otherwise populate

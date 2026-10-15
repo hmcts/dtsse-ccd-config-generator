@@ -162,10 +162,10 @@ public class CcdDataMigrationTask implements Runnable {
     prepareElasticsearchQueueForMigration();
     long targetEventHwm = preloadSourceEventHighWaterMark();
     LocalDateTime stopAt = calculateStopAt();
-    CopyTotals totals = copyEventBatches(targetEventHwm, stopAt);
+    boolean caseDataSyncAvailable = createCaseDataVersionedSql == null;
+    CopyTotals totals = copyEventBatches(targetEventHwm, stopAt, caseDataSyncAvailable);
     long sourceEventHwm = sourceEventProgressHighWaterMark();
     boolean eventsCaughtUp = sourceEventHwm >= targetEventHwm;
-    boolean caseDataSyncAvailable = createCaseDataVersionedSql == null;
     if (options.preloadCaseDataSync() && !caseDataSyncAvailable) {
       log.warn(
           "CCD data migration taskName={} is skipping the case_data sync because fdw_stage.{} is missing and "
@@ -221,7 +221,7 @@ public class CcdDataMigrationTask implements Runnable {
         ? captureCutoverEventHighWaterMark()
         : progress.cutoverEventHwm();
     LocalDateTime stopAt = calculateStopAt();
-    CopyTotals totals = copyEventBatches(cutoverEventHwm, stopAt);
+    CopyTotals totals = copyEventBatches(cutoverEventHwm, stopAt, true);
     long sourceEventHwm = sourceEventProgressHighWaterMark();
     if (totals.stoppedByTimeLimit() || sourceEventHwm < cutoverEventHwm) {
       log.info(
@@ -332,7 +332,7 @@ public class CcdDataMigrationTask implements Runnable {
     return new CcdDataMigrationRunResult(true, 0, 0, 0, true, false);
   }
 
-  private CopyTotals copyEventBatches(long targetEventHwm, LocalDateTime stopAt) {
+  private CopyTotals copyEventBatches(long targetEventHwm, LocalDateTime stopAt, boolean recordCaseDataVersions) {
     var totals = new CopyTotals();
 
     for (int i = 0; i < options.maxBatchesPerRun(); i++) {
@@ -346,7 +346,7 @@ public class CcdDataMigrationTask implements Runnable {
       long batchStartEventId = sourceEventHwm + 1L;
       int events = transaction.execute(status -> {
         applyMigrationStatementTimeout();
-        int copiedEvents = copyNextEventBatch(batchStartEventId, batchEndEventHwm);
+        int copiedEvents = copyNextEventBatch(batchStartEventId, batchEndEventHwm, recordCaseDataVersions);
         updateSourceEventProgressHighWaterMark(batchEndEventHwm);
         return copiedEvents;
       });
@@ -375,7 +375,15 @@ public class CcdDataMigrationTask implements Runnable {
     return totals;
   }
 
-  private int copyNextEventBatch(long batchStartEventId, long batchEndEventHwm) {
+  /**
+   * Copies one window of events, inserting any parent case_data rows missing from the target. When
+   * fdw_stage.case_data_versioned is available the parent rows are read through it and their
+   * versions recorded, so the case_data sync does not read their data again.
+   */
+  private int copyNextEventBatch(long batchStartEventId, long batchEndEventHwm, boolean recordCaseDataVersions) {
+    String sourceCasesSelect = recordCaseDataVersions
+        ? "select cd.*, cd.row_xmin::text::bigint as source_xmin from fdw_stage.case_data_versioned cd"
+        : "select cd.*, null::bigint as source_xmin from fdw_stage.case_data cd";
     return db.update(
         """
         with events_to_insert as materialized (
@@ -398,8 +406,7 @@ public class CcdDataMigrationTask implements Runnable {
           )
         ),
         source_cases as materialized (
-          select cd.*
-          from fdw_stage.case_data cd
+          %s
           join missing_case_ids ids on ids.case_data_id = cd.id
         ),
         inserted_cases as (
@@ -436,7 +443,17 @@ public class CcdDataMigrationTask implements Runnable {
             0
           from source_cases cd
           on conflict do nothing
-          returning id
+          returning id, xmin::text::bigint as target_xmin
+        ),
+        recorded_cases as (
+          insert into ccd_data_migration.case_data_copy_versions (case_data_id, source_xmin, target_xmin)
+          select inserted.id, source.source_xmin, inserted.target_xmin
+          from inserted_cases inserted
+          join source_cases source on source.id = inserted.id
+          where source.source_xmin is not null
+          on conflict (case_data_id) do update
+          set source_xmin = excluded.source_xmin,
+              target_xmin = excluded.target_xmin
         ),
         affected_cases as (
           select distinct case_data_id
@@ -505,7 +522,7 @@ public class CcdDataMigrationTask implements Runnable {
           coalesce(local_revisions.case_revision, 0) + calculated_revision
         from numbered_events
         left join local_revisions on local_revisions.case_data_id = numbered_events.case_data_id
-        """,
+        """.formatted(sourceCasesSelect),
         eventBatchParams(batchStartEventId, batchEndEventHwm)
     );
   }
@@ -597,12 +614,9 @@ public class CcdDataMigrationTask implements Runnable {
     transaction.execute(status -> {
       applyMigrationStatementTimeout();
       disableCaseDataRevisionTrigger();
-      try {
-        updateCaseRevisionsForCutover();
-        return null;
-      } finally {
-        enableCaseDataRevisionTrigger();
-      }
+      updateCaseRevisionsForCutover();
+      enableCaseDataRevisionTrigger();
+      return null;
     });
     return totals;
   }
@@ -698,11 +712,9 @@ public class CcdDataMigrationTask implements Runnable {
       applyMigrationStatementTimeout();
       // Cutover sets the final revisions, so copying must not bump them.
       disableCaseDataRevisionTrigger();
-      try {
-        return copyCaseData(caseIds);
-      } finally {
-        enableCaseDataRevisionTrigger();
-      }
+      int copiedCases = copyCaseData(caseIds);
+      enableCaseDataRevisionTrigger();
+      return copiedCases;
     });
     return copied == null ? 0 : copied;
   }
@@ -863,8 +875,8 @@ public class CcdDataMigrationTask implements Runnable {
 
   // Records the new target xmin of every row it updates, so the revision update itself is not
   // mistaken for a change to the target on a later run.
-  private int updateCaseRevisionsForCutover() {
-    return db.update(
+  private void updateCaseRevisionsForCutover() {
+    db.update(
         """
         with event_counts as (
           select ce.case_data_id, max(ce.case_revision)::bigint as max_revision
@@ -1195,6 +1207,9 @@ public class CcdDataMigrationTask implements Runnable {
     return Boolean.TRUE.equals(rowsExist);
   }
 
+  // ALTER TABLE is transactional, so a failure before the matching enable rolls the disable back
+  // with the rest of the transaction. Re-enabling in a finally block would instead run in the
+  // aborted transaction and replace the original error with "current transaction is aborted".
   private void disableCaseDataRevisionTrigger() {
     db.getJdbcTemplate().execute("alter table ccd.case_data disable trigger trigger_increment_case_revision");
   }
@@ -1344,17 +1359,17 @@ public class CcdDataMigrationTask implements Runnable {
           'xmin',
           s.srvname,
           coalesce((
-            select split_part(option, '=', 2)
+            select substr(option, strpos(option, '=') + 1)
             from unnest(ft.ftoptions) option
             where split_part(option, '=', 1) = 'schema_name'
           ), 'public'),
           coalesce((
-            select split_part(option, '=', 2)
+            select substr(option, strpos(option, '=') + 1)
             from unnest(ft.ftoptions) option
             where split_part(option, '=', 1) = 'table_name'
           ), 'case_data'),
           coalesce((
-            select split_part(option, '=', 2)
+            select substr(option, strpos(option, '=') + 1)
             from unnest(ft.ftoptions) option
             where split_part(option, '=', 1) = 'fetch_size'
           ), '10000')
@@ -1467,12 +1482,12 @@ public class CcdDataMigrationTask implements Runnable {
 
           select s.srvname,
                  coalesce((
-                   select split_part(option, '=', 2)
+                   select substr(option, strpos(option, '=') + 1)
                    from unnest(ft.ftoptions) option
                    where split_part(option, '=', 1) = 'schema_name'
                  ), 'public'),
                  (
-                   select split_part(option, '=', 2)
+                   select substr(option, strpos(option, '=') + 1)
                    from unnest(ft.ftoptions) option
                    where split_part(option, '=', 1) = 'fetch_size'
                  )

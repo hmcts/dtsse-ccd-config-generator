@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationMode.CUTOVER;
 import static uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationMode.PRELOAD_EVENTS;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Clock;
@@ -327,6 +329,8 @@ class CcdDataMigrationTaskIntegrationTest {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
     task(preloadWithoutCaseDataSync(1000, 10)).runMigration();
+    // Earlier SDK versions inserted parent cases without recording their versions.
+    jdbc.getJdbcTemplate().execute("delete from ccd_data_migration.case_data_copy_versions");
     jdbc.getJdbcTemplate().execute("update source.case_data set data = '{\"field\":\"later\"}'::jsonb where id = 10");
 
     assertThat(recordedSourceXmin(10)).isNull();
@@ -469,6 +473,37 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(second.caughtUp()).isTrue();
     assertThat(second.casesProcessed()).isEqualTo(1);
     assertThat(targetCaseData(20)).isEqualTo("{\"field\": \"two\"}");
+  }
+
+  @Test
+  void preloadRecordsVersionsOfParentCasesInsertedWithEventsSoTheSyncDoesNotReadThemAgain() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+
+    task(preloadWithoutCaseDataSync(1000, 10)).runMigration();
+
+    assertThat(recordedSourceXmin(10)).isEqualTo(sourceXmin(10));
+    assertThat(recordedTargetXmin(10)).isEqualTo(targetXmin(10));
+
+    jdbc.getJdbcTemplate().execute("update source.case_data set data = '{\"field\":\"later\"}'::jsonb where id = 10");
+    CcdDataMigrationRunResult preload = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    assertThat(preload.casesProcessed()).isEqualTo(1);
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"later\"}");
+  }
+
+  @Test
+  void caseDataSyncBatchFailureReportsItsOwnErrorAndLeavesTheRevisionTriggerEnabled() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    // A different target case already holds the source case's reference, so the upsert fails.
+    insertTargetCase(99, 1000000000000010L, 1, "Submitted", "{\"field\":\"clash\"}", 0);
+
+    assertThatThrownBy(() -> task(PRELOAD_EVENTS, 1000, 10).runMigration())
+        .hasStackTraceContaining("duplicate key value")
+        .satisfies(ex -> assertThat(stackTrace(ex)).doesNotContain("current transaction is aborted"));
+
+    assertThat(caseDataTriggerEnabled("trigger_increment_case_revision")).isTrue();
+    assertThat(recordedSourceXmin(10)).isNull();
   }
 
   @Test
@@ -1749,6 +1784,28 @@ class CcdDataMigrationTaskIntegrationTest {
         Map.of("id", id),
         rs -> rs.next() ? rs.getLong(1) : null
     );
+  }
+
+  private Long recordedTargetXmin(long id) {
+    return jdbc.query(
+        "select target_xmin from ccd_data_migration.case_data_copy_versions where case_data_id = :id",
+        Map.of("id", id),
+        rs -> rs.next() ? rs.getLong(1) : null
+    );
+  }
+
+  private long targetXmin(long id) {
+    return jdbc.queryForObject(
+        "select xmin::text::bigint from ccd.case_data where id = :id",
+        Map.of("id", id),
+        Long.class
+    );
+  }
+
+  private static String stackTrace(Throwable throwable) {
+    StringWriter writer = new StringWriter();
+    throwable.printStackTrace(new PrintWriter(writer));
+    return writer.toString();
   }
 
   private long sourceXmin(long id) {
