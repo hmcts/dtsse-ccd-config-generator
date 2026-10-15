@@ -6,3 +6,10 @@ create table ccd_data_migration.case_data_copy_versions (
     source_xmin bigint not null,
     target_xmin bigint not null
 );
+
+-- Cases the last scan found changed and the case_data sync has not copied yet. Kept in a table
+-- rather than in memory so a large first sync is not limited by heap size, and a run stopped by
+-- its time limit can carry on from here without scanning the source first.
+create table ccd_data_migration.case_data_sync_queue (
+    case_data_id bigint primary key
+);

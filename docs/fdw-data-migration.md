@@ -262,12 +262,13 @@ do not request a password.
 ## Phase 2: Run the migration
 
 The migration script only reads from the FDW foreign tables. It does not create or write to
-`fdw_stage`. The Java `CcdDataMigrationTask` is a little more forgiving: if the FDW server and at
+`fdw_stage`. The Java `CcdDataMigrationTask` does create foreign tables in `fdw_stage` when they are
+missing, so its role needs `CREATE` on the schema unless they already exist: if the FDW server and at
 least one of the expected source foreign tables already exist, it creates any missing
 `fdw_stage.case_data`, `fdw_stage.case_event`, or `fdw_stage.case_event_significant_items` foreign
 tables from the same server, source schema, and fetch size options. It also creates
 `fdw_stage.case_data_versioned`, `case_data` with the source row version (`xmin`), for the `case_data`
-sync, when its role has `CREATE` on the FDW schema (see
+sync, and fails before copying anything if it cannot create or read it (see
 [`ccd-data-migration-task.md`](ccd-data-migration-task.md#case_data-sync)). The setup script creates
 it too.
 

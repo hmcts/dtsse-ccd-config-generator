@@ -271,30 +271,50 @@ options (
   fetch_size '10000'
 );
 
--- case_data with the source row version (the xmin system column), read by the Java task's
--- case_data sync to tell which cases changed since they were copied.
-create foreign table :"fdw_schema".case_data_versioned (
-  reference bigint,
-  version integer,
-  created_date timestamp without time zone,
-  security_classification :"dst_schema".securityclassification,
-  last_state_modified_date timestamp without time zone,
-  resolved_ttl date,
-  last_modified timestamp without time zone,
-  jurisdiction varchar(255),
-  case_type_id varchar(255),
-  state varchar(255),
-  data jsonb,
-  supplementary_data jsonb,
-  id bigint,
-  row_xmin xid options (column_name 'xmin')
+-- case_data with the source row version (the xmin system column), read by the Java task's event
+-- copy and case_data sync to tell which cases changed since they were copied. Defined from the
+-- case_data foreign table above, so the two cannot drift apart. CcdDataMigrationTask runs the same
+-- query (CREATE_CASE_DATA_VERSIONED_SQL) for environments set up before this table existed.
+select format(
+  'create foreign table %I.case_data_versioned (%s, row_xmin xid options (column_name %L)) server %I%s',
+  n.nspname,
+  (
+    select string_agg(
+      format('%I %s', a.attname, format_type(a.atttypid, a.atttypmod))
+        || coalesce(
+          ' options (' || (
+            select string_agg(
+              format('%I %L', split_part(o, '=', 1), substr(o, strpos(o, '=') + 1)),
+              ', '
+            )
+            from unnest(a.attfdwoptions) o
+          ) || ')',
+          ''
+        ),
+      ', ' order by a.attnum
+    )
+    from pg_attribute a
+    where a.attrelid = ft.ftrelid
+      and a.attnum > 0
+      and not a.attisdropped
+  ),
+  'xmin',
+  s.srvname,
+  coalesce(
+    ' options (' || (
+      select string_agg(format('%I %L', split_part(o, '=', 1), substr(o, strpos(o, '=') + 1)), ', ')
+      from unnest(ft.ftoptions) o
+    ) || ')',
+    ''
+  )
 )
-server :"fdw_server"
-options (
-  schema_name :'src_schema',
-  table_name 'case_data',
-  fetch_size '10000'
-);
+from pg_foreign_table ft
+join pg_class c on c.oid = ft.ftrelid
+join pg_namespace n on n.oid = c.relnamespace
+join pg_foreign_server s on s.oid = ft.ftserver
+where n.nspname = :'fdw_schema'
+  and c.relname = 'case_data'
+\gexec
 SQL
 }
 
