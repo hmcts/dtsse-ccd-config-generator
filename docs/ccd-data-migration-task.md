@@ -17,7 +17,8 @@ Use this task after the FDW setup in [`fdw-data-migration.md`](fdw-data-migratio
 the FDW server, user mapping, and at least one of the CCD source foreign tables. The task creates
 any missing `fdw_stage.case_data`, `fdw_stage.case_event`, or
 `fdw_stage.case_event_significant_items` foreign tables from the same existing FDW table options so
-environments that were set up before a table was added can self-heal. It also adds
+environments that were set up before a table was added can self-heal, and creates
+`fdw_stage.case_data_xmin` for the [`case_data` sync](#case_data-sync). It also adds
 `use_remote_estimate 'true'` to the FDW server when that option is absent, because without it each
 event window fetches the whole source `case_data` table and times out (see
 [`fdw-data-migration.md`](fdw-data-migration.md#phase-1-set-up-fdw-objects)). An explicitly
@@ -89,41 +90,52 @@ The runtime `case_data` revision trigger is deliberately disabled inside each `c
 transaction, so syncing does not bump revisions and the final source-derived revision can be written at
 cutover. The trigger is re-enabled before the transaction completes.
 
-## `case_data` sync
-
-Re-reading every source case's `data` over the FDW is slow: on a Civil perftest dataset of 644k cases
-it took 36 minutes to read, before any writes. The sync avoids that by re-reading `data` only for the
-cases that need it. Each run, inside one transaction:
-
-1. One FDW scan copies every column except `data` for the migrated cases into a temp table.
-2. Target rows whose `version` and `last_modified` match the source have their other columns updated
-   where they differ. This compares `supplementary_data` in full for every case, because CCD's
-   supplementary data endpoints change it without changing `version` or `last_modified`. A `NULL`
-   source value is stored as `{}`, as elsewhere in the migration.
-3. Cases whose `version` or `last_modified` differ, or that the target does not have yet, are re-read
-   in full in batches of `case-data-sync-batch-size` ids. The id list is sent to the source, which
-   reads those rows by primary key.
-4. At cutover only, target cases that are no longer in the source are deleted.
-
-Steps 1 and 2 read only small columns and took seconds on the same dataset. CCD only changes `data`
-by saving the case through the data store, which always increments `version` and sets
-`last_modified`. **A change made directly in the source database that alters `data` without changing
-either column is not detected.** Do not apply direct SQL fixes to the migrated cases while the
-migration is running, or bump `version` when you do.
-
-During `PRELOAD_EVENTS` the sync runs after events have caught up and stops at `max-run-time`; the
-next run picks up where it left off, because it compares the tables again rather than storing a
-position. Set `preload-case-data-sync: false` to leave preloaded `case_data` provisional until cutover,
-for example to keep load off the source database during working hours. `CUTOVER` always runs the
-sync to completion. The cutover sync takes as long as the preload sync left it: if preload has kept
-up, it re-reads only the cases changed since the last preload run.
-
 The `ccd.case_data` Elasticsearch enqueue trigger is disabled while migration work is in progress
 because it fires after inserts and updates on `ccd.case_data` and would otherwise populate
 `ccd.es_queue` with stale revision entries. Existing queue rows for the migrated case types are
 deleted when the task starts migration work because those case types do not use the queue until after
 cutover. Final validation requires the migrated case types to have no queue rows, and the trigger is
 re-enabled in the same transaction that marks `CUTOVER` complete.
+
+## `case_data` sync
+
+Re-reading every source case's `data` over the FDW is slow: on a Civil perftest dataset of 644k cases
+it took 36 minutes to read, before any writes. The sync re-reads `data` only for cases that have
+changed since they were copied.
+
+It detects changes with the source row's `xmin`, the Postgres system column holding the id of the
+transaction that wrote the row version. Postgres writes a new row version on every update, however
+it is made: a CCD case save, a supplementary data call, a Logstash index flag or a direct SQL fix.
+Maintenance such as `VACUUM FREEZE` or `VACUUM FULL` keeps the value. The task reads it through the
+foreign table `fdw_stage.case_data_xmin`, which it creates from the `fdw_stage.case_data` options,
+and records the source `xmin` of every case it copies in `ccd_data_migration.case_data_source_xmin`.
+Source and target `xmin` values are never compared with each other; only the source value now with
+the source value when the case was copied.
+
+Each run, inside one transaction:
+
+1. One FDW scan reads the source id and `xmin` of every migrated case. It reads no `data`.
+2. Cases with no target row, no recorded `xmin`, or a recorded `xmin` different from the source are
+   re-read in full in batches of `case-data-sync-batch-size` ids, and their source `xmin` is recorded.
+   The id list is sent to the source, which reads those rows by primary key.
+3. At cutover only, target cases that are no longer in the source are deleted, along with their
+   recorded `xmin`.
+
+postgres_fdw reads the source through one repeatable read transaction per local transaction, so the
+recorded `xmin` and the copied data always come from the same row version. A row whose `xmin`
+changed without any copied column changing, for example a Logstash index flag, is re-read but left
+as it is, and only its recorded `xmin` moves on.
+
+During `PRELOAD_EVENTS` the sync runs after events have caught up and stops at `max-run-time`; the
+next run picks up where it left off, because it compares again rather than storing a position. Set
+`preload-case-data-sync: false` to leave preloaded `case_data` provisional until cutover, for example
+to keep load off the source database during working hours. `CUTOVER` always runs the sync to
+completion, so it takes as long as preload left it: if preload has kept up, cutover re-reads only the
+cases changed since the last preload run.
+
+Cases preloaded by an earlier SDK version have no recorded `xmin`, so the first sync after upgrading
+re-reads every one of them. Let preload do that before cutover; with `max-run-time` set it spreads
+over several runs.
 
 ## Progress
 

@@ -263,7 +263,9 @@ The migration script only reads from the FDW foreign tables. It does not create 
 `fdw_stage`. The Java `CcdDataMigrationTask` is a little more forgiving: if the FDW server and at
 least one of the expected source foreign tables already exist, it creates any missing
 `fdw_stage.case_data`, `fdw_stage.case_event`, or `fdw_stage.case_event_significant_items` foreign
-tables from the same server, source schema, and fetch size options.
+tables from the same server, source schema, and fetch size options. It also creates
+`fdw_stage.case_data_xmin`, which reads the source `case_data` row version for the `case_data` sync
+(see [`ccd-data-migration-task.md`](ccd-data-migration-task.md#case_data-sync)).
 
 For services using the Java task, set `ccd.data-migration.fdw-additional-select-grantee` or
 `CCD_DATA_MIGRATION_FDW_ADDITIONAL_SELECT_GRANTEE` to grant an additional team-specific reader role

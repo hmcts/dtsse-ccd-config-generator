@@ -589,16 +589,19 @@ public class CcdDataMigrationTask implements Runnable {
   /**
    * Brings target case_data into line with the source without re-reading every case's data.
    *
-   * <p>One FDW scan loads every column except {@code data} for the migrated cases into a temp
-   * table, so those columns, including supplementary_data, which CCD updates without changing
-   * version or last_modified, are compared in full for every case. CCD changes {@code data} only
-   * by saving the case, which increments version and sets last_modified, so the full row is
-   * re-read only for cases where either differs from the target or that the target does not have
-   * yet. Must run inside a transaction: the temp table is dropped on commit.
+   * <p>Postgres writes a new row version, with a new xmin, on every update to a row, whether it
+   * comes from CCD, a supplementary data call or a direct SQL fix, and maintenance such as VACUUM
+   * FREEZE or VACUUM FULL keeps it. The task records the source xmin of each case it copies, and
+   * re-reads a case in full only when the source xmin no longer matches the recorded one, or the
+   * case has no recorded xmin or no target row. One FDW scan of the source id and xmin finds those
+   * cases; data is fetched only for them.
+   *
+   * <p>Must run inside a transaction: postgres_fdw reads the source through one repeatable read
+   * transaction per local transaction, so the recorded xmin and the copied data come from the
+   * same snapshot, and the temp tables are dropped on commit.
    */
   private CaseDataSyncTotals syncCaseData(LocalDateTime stopAt, boolean deleteRemovedCases) {
-    loadSourceCaseMetadata();
-    int metadataUpdated = updateCaseMetadataFromSource();
+    loadSourceCaseVersions();
     int changedCases = collectChangedCaseIds();
 
     long dataRefreshed = 0;
@@ -611,6 +614,7 @@ public class CcdDataMigrationTask implements Runnable {
         break;
       }
       dataRefreshed += refreshCaseDataFromSource(caseIds);
+      recordSourceXmins(caseIds);
       batches++;
       afterId = caseIds.getLast();
       if (isTimeLimitReached(stopAt)) {
@@ -621,106 +625,35 @@ public class CcdDataMigrationTask implements Runnable {
 
     int deleted = deleteRemovedCases ? deleteCasesRemovedFromSource() : 0;
     log.info(
-        "CCD data migration case_data sync taskName={} mode={} metadataUpdated={} changedCases={} "
-            + "dataRefreshed={} dataBatches={} deleted={} stoppedByTimeLimit={}",
+        "CCD data migration case_data sync taskName={} mode={} changedCases={} dataRefreshed={} "
+            + "dataBatches={} deleted={} stoppedByTimeLimit={}",
         options.taskName(),
         options.mode(),
-        metadataUpdated,
         changedCases,
         dataRefreshed,
         batches,
         deleted,
         stoppedByTimeLimit
     );
-    return new CaseDataSyncTotals(metadataUpdated + dataRefreshed, stoppedByTimeLimit);
+    return new CaseDataSyncTotals(dataRefreshed, stoppedByTimeLimit);
   }
 
-  private void loadSourceCaseMetadata() {
+  private void loadSourceCaseVersions() {
     db.getJdbcTemplate().execute(
-        """
-        create temp table migration_source_case_data on commit drop as
-        select id,
-               reference,
-               version,
-               created_date,
-               security_classification,
-               last_state_modified_date,
-               resolved_ttl,
-               last_modified,
-               jurisdiction,
-               case_type_id,
-               state,
-               supplementary_data
-        from ccd.case_data
-        with no data
-        """
+        "create temp table migration_source_case_versions (id bigint, source_xmin bigint) on commit drop"
     );
     db.update(
         """
-        insert into migration_source_case_data
-        select source.id,
-               source.reference,
-               source.version,
-               source.created_date,
-               source.security_classification,
-               source.last_state_modified_date,
-               source.resolved_ttl,
-               source.last_modified,
-               source.jurisdiction,
-               source.case_type_id,
-               source.state,
-               coalesce(source.supplementary_data, jsonb_build_object())
-        from fdw_stage.case_data source
+        insert into migration_source_case_versions (id, source_xmin)
+        select source.id, source.row_xmin::text::bigint
+        from fdw_stage.case_data_xmin source
         where source.jurisdiction = :sourceJurisdiction
           and source.case_type_id in (:caseTypeIds)
         """,
         baseParams()
     );
-    db.getJdbcTemplate().execute("alter table migration_source_case_data add primary key (id)");
-    db.getJdbcTemplate().execute("analyze migration_source_case_data");
-  }
-
-  // Only rows whose data is current: a row whose version or last_modified differs is re-read in
-  // full by refreshCaseDataFromSource, which also writes version and last_modified with the data.
-  private int updateCaseMetadataFromSource() {
-    return db.getJdbcTemplate().update(
-        """
-        update ccd.case_data target
-        set reference = source.reference,
-            created_date = source.created_date,
-            security_classification = source.security_classification,
-            last_state_modified_date = source.last_state_modified_date,
-            resolved_ttl = source.resolved_ttl,
-            jurisdiction = source.jurisdiction,
-            case_type_id = source.case_type_id,
-            state = source.state,
-            supplementary_data = source.supplementary_data
-        from migration_source_case_data source
-        where target.id = source.id
-          and (target.version, target.last_modified) is not distinct from (source.version, source.last_modified)
-          and (
-            target.reference,
-            target.created_date,
-            target.security_classification,
-            target.last_state_modified_date,
-            target.resolved_ttl,
-            target.jurisdiction,
-            target.case_type_id,
-            target.state,
-            target.supplementary_data
-          ) is distinct from (
-            source.reference,
-            source.created_date,
-            source.security_classification,
-            source.last_state_modified_date,
-            source.resolved_ttl,
-            source.jurisdiction,
-            source.case_type_id,
-            source.state,
-            source.supplementary_data
-          )
-        """
-    );
+    db.getJdbcTemplate().execute("alter table migration_source_case_versions add primary key (id)");
+    db.getJdbcTemplate().execute("analyze migration_source_case_versions");
   }
 
   // Captured once per sync so each batch pages through a small table rather than comparing every
@@ -730,10 +663,11 @@ public class CcdDataMigrationTask implements Runnable {
         """
         create temp table migration_changed_case_ids on commit drop as
         select source.id
-        from migration_source_case_data source
+        from migration_source_case_versions source
         left join ccd.case_data target on target.id = source.id
+        left join ccd_data_migration.case_data_source_xmin copied on copied.case_data_id = source.id
         where target.id is null
-           or (target.version, target.last_modified) is distinct from (source.version, source.last_modified)
+           or copied.source_xmin is distinct from source.source_xmin
         """
     );
     db.getJdbcTemplate().execute("alter table migration_changed_case_ids add primary key (id)");
@@ -742,6 +676,20 @@ public class CcdDataMigrationTask implements Runnable {
         Integer.class
     );
     return changedCases == null ? 0 : changedCases;
+  }
+
+  private void recordSourceXmins(List<Long> caseIds) {
+    db.update(
+        """
+        insert into ccd_data_migration.case_data_source_xmin (case_data_id, source_xmin)
+        select source.id, source.source_xmin
+        from migration_source_case_versions source
+        where source.id in (:caseIds)
+        on conflict (case_data_id) do update
+        set source_xmin = excluded.source_xmin
+        """,
+        new MapSqlParameterSource("caseIds", caseIds)
+    );
   }
 
   private List<Long> nextChangedCaseIds(long afterId) {
@@ -853,11 +801,17 @@ public class CcdDataMigrationTask implements Runnable {
           and target.case_type_id in (:caseTypeIds)
           and not exists (
             select 1
-            from migration_source_case_data source
+            from migration_source_case_versions source
             where source.id = target.id
           )
         """,
         baseParams()
+    );
+    db.getJdbcTemplate().update(
+        """
+        delete from ccd_data_migration.case_data_source_xmin copied
+        where not exists (select 1 from ccd.case_data target where target.id = copied.case_data_id)
+        """
     );
     log.info("Deleted CCD cases removed from source taskName={} cases={}", options.taskName(), deletedCases);
     return deletedCases;
@@ -1377,7 +1331,8 @@ public class CcdDataMigrationTask implements Runnable {
         begin
           if to_regclass('fdw_stage.case_data') is not null
               and to_regclass('fdw_stage.case_event') is not null
-              and to_regclass('fdw_stage.case_event_significant_items') is not null then
+              and to_regclass('fdw_stage.case_event_significant_items') is not null
+              and to_regclass('fdw_stage.case_data_xmin') is not null then
             return;
           end if;
 
@@ -1481,10 +1436,29 @@ public class CcdDataMigrationTask implements Runnable {
             );
           end if;
 
+          -- Reads the source row version (xmin system column) of each case, so the case_data sync
+          -- can tell which cases have changed since they were copied.
+          if to_regclass('fdw_stage.case_data_xmin') is null then
+            execute format(
+              'create foreign table fdw_stage.case_data_xmin (
+                id bigint,
+                jurisdiction varchar(255),
+                case_type_id varchar(255),
+                row_xmin xid options (column_name %L)
+              ) server %I options (schema_name %L, table_name %L, fetch_size %L)',
+              'xmin',
+              fdw_server,
+              source_schema,
+              'case_data',
+              fetch_size
+            );
+          end if;
+
           grant select on
             fdw_stage.case_data,
             fdw_stage.case_event,
-            fdw_stage.case_event_significant_items
+            fdw_stage.case_event_significant_items,
+            fdw_stage.case_data_xmin
           to current_user;
         end $$;
         """);

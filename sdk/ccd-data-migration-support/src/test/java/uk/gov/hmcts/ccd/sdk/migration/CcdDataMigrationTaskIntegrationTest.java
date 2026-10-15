@@ -57,6 +57,7 @@ class CcdDataMigrationTaskIntegrationTest {
     jdbc.getJdbcTemplate().execute("drop schema if exists source cascade");
     jdbc.getJdbcTemplate().execute("drop server if exists ccd_migration_test_server cascade");
     jdbc.getJdbcTemplate().execute("delete from ccd_data_migration.ccd_data_migration_progress");
+    jdbc.getJdbcTemplate().execute("delete from ccd_data_migration.case_data_source_xmin");
     jdbc.getJdbcTemplate().execute("truncate table ccd.case_event, ccd.case_data restart identity cascade");
     restoreTargetSchemaState();
     createSourceTables();
@@ -281,21 +282,75 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
-  void cutoverTrustsVersionAndLastModifiedToDetectDataChanges() {
+  void cutoverRecopiesDataChangedDirectlyInTheSource() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCase(20, 1000000000000020L, 1, "Submitted", "{\"field\":\"two\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(102, 20, "create", "Submitted", "{\"field\":\"two\"}", minutesAgo(60));
     task(PRELOAD_EVENTS, 1000, 10).runMigration();
 
-    // A direct SQL fix that changes data without version or last_modified is not picked up.
-    // Documented as a limitation: no direct fixes to migrated cases during the migration window.
+    // A direct SQL fix in the source changes data without touching version or last_modified.
     jdbc.getJdbcTemplate().execute("""
         update source.case_data set data = '{"field":"direct-sql"}'::jsonb where id = 10
         """);
 
     CcdDataMigrationRunResult cutover = task(CUTOVER, 1000, 10).runMigration();
 
+    assertThat(cutover.casesProcessed()).isEqualTo(1);
+    assertThat(progressStatus()).isEqualTo("COMPLETE");
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"direct-sql\"}");
+    assertThat(targetCaseData(20)).isEqualTo("{\"field\": \"two\"}");
+    assertThat(caseRevision(10)).isEqualTo(CASE_REVISION_OFFSET + 1);
+  }
+
+  @Test
+  void syncRecopiesCaseWhenOnlyAnUnmigratedColumnChanges() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    // Logstash marks a case as indexed by updating a column the migration does not copy. The row
+    // version still changes, so the case is re-read; the target row is left as it was.
+    jdbc.getJdbcTemplate().execute("update source.case_data set marked_by_logstash = true where id = 10");
+
+    CcdDataMigrationRunResult preload = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+    CcdDataMigrationRunResult cutover = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(preload.casesProcessed()).isZero();
+    assertThat(sourceXminRecorded(10)).isEqualTo(sourceXmin(10));
     assertThat(cutover.casesProcessed()).isZero();
     assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"one\"}");
+  }
+
+  @Test
+  void syncRecopiesCasesPreloadedBeforeSourceVersionsWereRecorded() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(preloadWithoutCaseDataSync(1000, 10)).runMigration();
+    jdbc.getJdbcTemplate().execute("update source.case_data set data = '{\"field\":\"later\"}'::jsonb where id = 10");
+
+    assertThat(sourceXminRecorded(10)).isNull();
+
+    CcdDataMigrationRunResult cutover = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(cutover.casesProcessed()).isEqualTo(1);
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"later\"}");
+    assertThat(sourceXminRecorded(10)).isEqualTo(sourceXmin(10));
+  }
+
+  @Test
+  void cutoverRemovesRecordedSourceVersionsOfDeletedCases() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+    assertThat(sourceXminRecorded(10)).isNotNull();
+
+    jdbc.getJdbcTemplate().execute("delete from source.case_event where case_data_id = 10");
+    jdbc.getJdbcTemplate().execute("delete from source.case_data where id = 10");
+    task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(countRows("ccd.case_data")).isZero();
+    assertThat(sourceXminRecorded(10)).isNull();
   }
 
   @Test
@@ -485,6 +540,7 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(fdwTableExists("case_data")).isTrue();
     assertThat(fdwTableExists("case_event")).isTrue();
     assertThat(fdwTableExists("case_event_significant_items")).isTrue();
+    assertThat(fdwTableExists("case_data_xmin")).isTrue();
   }
 
   @Test
@@ -921,7 +977,8 @@ class CcdDataMigrationTaskIntegrationTest {
           state varchar(255) not null,
           data jsonb not null,
           supplementary_data jsonb,
-          id bigint not null unique
+          id bigint not null unique,
+          marked_by_logstash boolean default false
         )
         """);
     jdbc.getJdbcTemplate().execute("""
@@ -1601,6 +1658,22 @@ class CcdDataMigrationTaskIntegrationTest {
         "select supplementary_data::text from ccd.case_data where id = :id",
         Map.of("id", id),
         String.class
+    );
+  }
+
+  private Long sourceXminRecorded(long id) {
+    return jdbc.query(
+        "select source_xmin from ccd_data_migration.case_data_source_xmin where case_data_id = :id",
+        Map.of("id", id),
+        rs -> rs.next() ? rs.getLong(1) : null
+    );
+  }
+
+  private long sourceXmin(long id) {
+    return jdbc.queryForObject(
+        "select xmin::text::bigint from source.case_data where id = :id",
+        Map.of("id", id),
+        Long.class
     );
   }
 
