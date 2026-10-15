@@ -9,7 +9,8 @@ set -euo pipefail
 #   - postgres_fdw and pgcrypto extensions
 #   - FDW staging schema
 #   - FDW server and user mapping
-#   - foreign tables for source case_data, case_event and case_event_significant_items
+#   - foreign tables for source case_data, case_event and case_event_significant_items, and
+#     case_data_versioned (case_data plus its row version, xmin, for the Java task's case_data sync)
 #
 # This script is intended to be run once by the team with database privileges.
 # ------------------------------------------------------------------------------
@@ -168,6 +169,7 @@ setup_fdw() {
   psql_dst <<'SQL'
 create schema if not exists :"fdw_schema";
 
+drop foreign table if exists :"fdw_schema".case_data_versioned;
 drop foreign table if exists :"fdw_schema".case_event_significant_items;
 drop foreign table if exists :"fdw_schema".case_event;
 drop foreign table if exists :"fdw_schema".case_data;
@@ -268,6 +270,31 @@ options (
   table_name 'case_event_significant_items',
   fetch_size '10000'
 );
+
+-- case_data with the source row version (the xmin system column), read by the Java task's
+-- case_data sync to tell which cases changed since they were copied.
+create foreign table :"fdw_schema".case_data_versioned (
+  reference bigint,
+  version integer,
+  created_date timestamp without time zone,
+  security_classification :"dst_schema".securityclassification,
+  last_state_modified_date timestamp without time zone,
+  resolved_ttl date,
+  last_modified timestamp without time zone,
+  jurisdiction varchar(255),
+  case_type_id varchar(255),
+  state varchar(255),
+  data jsonb,
+  supplementary_data jsonb,
+  id bigint,
+  row_xmin xid options (column_name 'xmin')
+)
+server :"fdw_server"
+options (
+  schema_name :'src_schema',
+  table_name 'case_data',
+  fetch_size '10000'
+);
 SQL
 }
 
@@ -280,7 +307,8 @@ grant usage on schema :"fdw_schema" to :local_user_sql;
 grant select on
   :"fdw_schema".case_data,
   :"fdw_schema".case_event,
-  :"fdw_schema".case_event_significant_items
+  :"fdw_schema".case_event_significant_items,
+  :"fdw_schema".case_data_versioned
 to :local_user_sql;
 
 select case
@@ -306,7 +334,8 @@ end as extra_schema_grant_sql
 select case
   when :'fdw_additional_grantee' <> ''
     then format(
-      'grant select on %I.case_data, %I.case_event, %I.case_event_significant_items to %I',
+      'grant select on %I.case_data, %I.case_event, %I.case_event_significant_items, %I.case_data_versioned to %I',
+      :'fdw_schema',
       :'fdw_schema',
       :'fdw_schema',
       :'fdw_schema',
@@ -325,6 +354,8 @@ select 'fdw case_data table' as check_name, to_regclass(:'fdw_schema' || '.case_
 select 'fdw case_event table' as check_name, to_regclass(:'fdw_schema' || '.case_event') as relation;
 select 'fdw case_event_significant_items table' as check_name,
   to_regclass(:'fdw_schema' || '.case_event_significant_items') as relation;
+select 'fdw case_data_versioned table' as check_name,
+  to_regclass(:'fdw_schema' || '.case_data_versioned') as relation;
 
 select 'source case_data reachable' as check_name, exists(
   select 1

@@ -18,7 +18,7 @@ the FDW server, user mapping, and at least one of the CCD source foreign tables.
 any missing `fdw_stage.case_data`, `fdw_stage.case_event`, or
 `fdw_stage.case_event_significant_items` foreign tables from the same existing FDW table options so
 environments that were set up before a table was added can self-heal, and creates
-`fdw_stage.case_data_xmin` for the [`case_data` sync](#case_data-sync). It also adds
+`fdw_stage.case_data_versioned` for the [`case_data` sync](#case_data-sync) when it can. It also adds
 `use_remote_estimate 'true'` to the FDW server when that option is absent, because without it each
 event window fetches the whole source `case_data` table and times out (see
 [`fdw-data-migration.md`](fdw-data-migration.md#phase-1-set-up-fdw-objects)). An explicitly
@@ -103,39 +103,55 @@ Re-reading every source case's `data` over the FDW is slow: on a Civil perftest 
 it took 36 minutes to read, before any writes. The sync re-reads `data` only for cases that have
 changed since they were copied.
 
-It detects changes with the source row's `xmin`, the Postgres system column holding the id of the
-transaction that wrote the row version. Postgres writes a new row version on every update, however
-it is made: a CCD case save, a supplementary data call, a Logstash index flag or a direct SQL fix.
-Maintenance such as `VACUUM FREEZE` or `VACUUM FULL` keeps the value. The task reads it through the
-foreign table `fdw_stage.case_data_xmin`, which it creates from the `fdw_stage.case_data` options,
-and records the source `xmin` of every case it copies in `ccd_data_migration.case_data_source_xmin`.
-Source and target `xmin` values are never compared with each other; only the source value now with
-the source value when the case was copied.
+It detects changes with `xmin`, the Postgres system column holding the id of the transaction that
+wrote a row version. Postgres writes a new row version on every update, however it is made: a CCD
+case save, a supplementary data call, a Logstash index flag or a direct SQL fix. Maintenance such as
+`VACUUM FREEZE` or `VACUUM FULL` keeps the value. For every case it copies, the task records in
+`ccd_data_migration.case_data_copy_versions`:
 
-Each run, inside one transaction:
+* the `xmin` of the source row it read, through the foreign table `fdw_stage.case_data_versioned`
+  (`case_data` plus a `row_xmin` column mapped to `xmin`);
+* the `xmin` of the target row it wrote.
 
-1. One FDW scan reads the source id and `xmin` of every migrated case. It reads no `data`.
-2. Cases with no target row, no recorded `xmin`, or a recorded `xmin` different from the source are
-   re-read in full in batches of `case-data-sync-batch-size` ids, and their source `xmin` is recorded.
-   The id list is sent to the source, which reads those rows by primary key.
-3. At cutover only, target cases that are no longer in the source are deleted, along with their
-   recorded `xmin`.
+A case is copied again when either no longer matches, so a change on either side since the last copy
+is overwritten from the source. That includes a direct fix in the source database and an edit to the
+target, for example by the service during a cutover rehearsal before going back to preload. Source
+and target values are only compared with their own earlier values, never with each other.
 
-postgres_fdw reads the source through one repeatable read transaction per local transaction, so the
-recorded `xmin` and the copied data always come from the same row version. A row whose `xmin`
-changed without any copied column changing, for example a Logstash index flag, is re-read but left
-as it is, and only its recorded `xmin` moves on.
+Each run:
+
+1. A short transaction scans the source id and `xmin` of every migrated case, with no `data`, and
+   lists the cases with no target row, no recorded versions, or a source or target `xmin` that has
+   changed. At cutover it also deletes target cases that are no longer in the source.
+2. Each batch of `case-data-sync-batch-size` ids (at most 10,000) is copied and committed in its own
+   transaction. One remote query reads the data and `xmin` of the batch's rows by primary key, with the
+   ids sent as one array, so the recorded `xmin` always matches the data copied. Only rows that query
+   returns are written and recorded. A row whose copied columns have not changed, for example after a
+   Logstash index flag update, is left as it is and only its recorded versions move on.
+
+No transaction holds a snapshot open on the source database for longer than the scan or one batch, so
+the sync does not hold back vacuum on the shared source database. The time limit is checked before the
+scan and before each batch.
 
 During `PRELOAD_EVENTS` the sync runs after events have caught up and stops at `max-run-time`; the
-next run picks up where it left off, because it compares again rather than storing a position. Set
-`preload-case-data-sync: false` to leave preloaded `case_data` provisional until cutover, for example
-to keep load off the source database during working hours. `CUTOVER` always runs the sync to
-completion, so it takes as long as preload left it: if preload has kept up, cutover re-reads only the
-cases changed since the last preload run.
+next run finds the remaining cases again. Set `preload-case-data-sync: false` to leave preloaded
+`case_data` provisional until cutover, for example to keep load off the source database during
+working hours. During `CUTOVER` the sync also stops at `max-run-time`; the cutover stays in `CUTOVER`
+and the next `CUTOVER` run carries on. Batches already committed stay. The cutover is only marked
+`COMPLETE` after the final revision update, which also records the new target `xmin` of every row it
+changes. If preload has kept up, cutover re-reads only the cases changed since the last preload run.
 
-Cases preloaded by an earlier SDK version have no recorded `xmin`, so the first sync after upgrading
+Cases preloaded by an earlier SDK version have no recorded versions, so the first sync after upgrading
 re-reads every one of them. Let preload do that before cutover; with `max-run-time` set it spreads
 over several runs.
+
+### When `fdw_stage.case_data_versioned` is missing
+
+The FDW setup script creates `fdw_stage.case_data_versioned`. For an environment set up before it
+existed, the task creates it from the `fdw_stage.case_data` options, which needs `CREATE` on the FDW
+schema and `USAGE` on the FDW server. If the task's role cannot create it, `PRELOAD_EVENTS` keeps
+copying events, skips the `case_data` sync and logs the `create foreign table` statement for the
+schema owner to run. `CUTOVER` fails before changing anything, with the same statement in the error.
 
 ## Progress
 
