@@ -44,6 +44,13 @@ public class EventModel {
    */
   boolean postStateFromCallback;
 
+  /**
+   * The raw {@code PostConditionState} when it is conditional or lists alternatives
+   * ({@code stateA(cond):2;stateB}), else null. {@link #postState} holds only its first state, which
+   * is where the generated event always ends.
+   */
+  String conditionalPostState;
+
   Integer displayOrder;
 
   /** EventEnablingCondition / show condition on the event. */

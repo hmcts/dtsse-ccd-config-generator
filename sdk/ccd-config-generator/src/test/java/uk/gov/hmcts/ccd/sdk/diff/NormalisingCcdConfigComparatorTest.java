@@ -887,6 +887,7 @@ public class NormalisingCcdConfigComparatorTest {
             rows(row("ID", "Child", "CaseEventID", "childDetails", "CaseFieldID", "children",
                 "ListElementCode", "firstName", "DisplayContext", "OPTIONAL")));
 
+        placeComplex(expected, actual, "childDetails", "children");
         ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
 
         assertThat(result.matches()).as(result.report()).isTrue();
@@ -906,6 +907,7 @@ public class NormalisingCcdConfigComparatorTest {
             rows(row("ID", "Child", "CaseEventID", "childDetails", "CaseFieldID", "children",
                 "ListElementCode", "firstName", "DisplayContext", "OPTIONAL")));
 
+        placeComplex(expected, actual, "childDetails", "children");
         ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
 
         assertThat(result.matches()).isFalse();
@@ -927,6 +929,7 @@ public class NormalisingCcdConfigComparatorTest {
             rows(row("CaseEventID", "childDetails", "CaseFieldID", "children",
                 "ListElementCode", "firstName", "DisplayContext", "OPTIONAL")));
 
+        placeComplex(expected, actual, "childDetails", "children");
         ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
 
         assertThat(result.matches()).as(result.report()).isTrue();
@@ -945,6 +948,7 @@ public class NormalisingCcdConfigComparatorTest {
             rows(row("CaseEventID", "childDetails", "CaseFieldID", "children",
                 "ListElementCode", "firstName", "DisplayContext", "MANDATORY")));
 
+        placeComplex(expected, actual, "childDetails", "children");
         ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
 
         assertThat(result.matches()).isFalse();
@@ -984,6 +988,7 @@ public class NormalisingCcdConfigComparatorTest {
                 row("CaseEventID", "childDetails", "CaseFieldID", "children",
                     "ListElementCode", "firstName", "DisplayContext", "OPTIONAL")));
 
+        placeComplex(expected, actual, "childDetails", "children");
         assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
     }
 
@@ -1004,9 +1009,97 @@ public class NormalisingCcdConfigComparatorTest {
                 row("CaseEventID", "childDetails", "CaseFieldID", "children",
                     "ListElementCode", "firstName", "DisplayContext", "MANDATORY")));
 
+        placeComplex(expected, actual, "childDetails", "children");
         ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
 
         assertThat(result.matches()).as(result.report()).isTrue();
+    }
+
+    // ---- EVENT_COMPLEX_TYPE_UNREAD ----
+
+    @Test
+    public void eventToComplexTypesRowsForAFieldNotPlacedComplexAreDroppedFromBothSides() {
+        // EventParser.parseCaseEventComplexTypes attaches a (CaseEventID, CaseFieldID) group only to a
+        // CaseEventToFields placement with DisplayContext COMPLEX. Bail's lastModifiedDirection rows on
+        // sendBailDirection name a field that event does not place at all, and a READONLY placement is
+        // no better, so neither group is ever read.
+        Map<String, List<Map<String, Object>>> expected = new LinkedHashMap<>();
+        expected.put("CaseEventToFields", rows(
+            row("CaseEventID", "updateParty", "CaseFieldID", "appeal", "DisplayContext", "READONLY")));
+        expected.put("EventToComplexTypes", rows(
+            row("ID", "Direction", "CaseEventID", "sendBailDirection",
+                "CaseFieldID", "lastModifiedDirection", "ListElementCode", "dateDue",
+                "DisplayContext", "READONLY", "publish", "N"),
+            row("ID", "Appeal", "CaseEventID", "updateParty", "CaseFieldID", "appeal",
+                "ListElementCode", "benefitType", "DisplayContext", "MANDATORY")));
+        Map<String, List<Map<String, Object>>> actual = new LinkedHashMap<>();
+        actual.put("CaseEventToFields", rows(
+            row("CaseEventID", "updateParty", "CaseFieldID", "appeal", "DisplayContext", "READONLY")));
+        actual.put("EventToComplexTypes", rows(
+            row("CaseEventID", "updateParty", "CaseFieldID", "appeal",
+                "ListElementCode", "benefitType", "DisplayContext", "OPTIONAL")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+        assertThat(result.getAppliedRules())
+            .anySatisfy(rule -> assertThat(rule).startsWith("EVENT_COMPLEX_TYPE_UNREAD: dropped 2 expected"
+                + " / 1 actual"));
+    }
+
+    @Test
+    public void eventToComplexTypesRowsForAComplexPlacementStillCompare() {
+        // The same rows under a COMPLEX placement are read, so a member difference still fails.
+        // DisplayContext is matched the way the importer reads it, case-insensitively.
+        Map<String, List<Map<String, Object>>> expected = new LinkedHashMap<>();
+        expected.put("CaseEventToFields", rows(
+            row("CaseEventID", "updateParty", "CaseFieldID", "appeal", "DisplayContext", "Complex")));
+        expected.put("EventToComplexTypes", rows(
+            row("CaseEventID", "updateParty", "CaseFieldID", "appeal",
+                "ListElementCode", "benefitType", "DisplayContext", "MANDATORY")));
+        Map<String, List<Map<String, Object>>> actual = new LinkedHashMap<>();
+        actual.put("CaseEventToFields", rows(
+            row("CaseEventID", "updateParty", "CaseFieldID", "appeal", "DisplayContext", "Complex")));
+        actual.put("EventToComplexTypes", rows(
+            row("CaseEventID", "updateParty", "CaseFieldID", "appeal",
+                "ListElementCode", "benefitType", "DisplayContext", "OPTIONAL")));
+
+        assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
+    }
+
+    @Test
+    public void eachSideIsJudgedAgainstItsOwnPlacements() {
+        // A generated side that lost the COMPLEX placement must not have the input's member rows
+        // forgiven: they are still read on the expected side, so they stay and fail.
+        Map<String, List<Map<String, Object>>> expected = new LinkedHashMap<>();
+        expected.put("CaseEventToFields", rows(
+            row("CaseEventID", "updateParty", "CaseFieldID", "appeal", "DisplayContext", "COMPLEX")));
+        expected.put("EventToComplexTypes", rows(
+            row("CaseEventID", "updateParty", "CaseFieldID", "appeal",
+                "ListElementCode", "benefitType", "DisplayContext", "MANDATORY")));
+        Map<String, List<Map<String, Object>>> actual = new LinkedHashMap<>();
+        actual.put("CaseEventToFields", rows(
+            row("CaseEventID", "updateParty", "CaseFieldID", "appeal", "DisplayContext", "READONLY")));
+        actual.put("EventToComplexTypes", rows(
+            row("CaseEventID", "updateParty", "CaseFieldID", "appeal",
+                "ListElementCode", "benefitType", "DisplayContext", "MANDATORY")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).isFalse();
+        assertThat(result.getFailures())
+            .anySatisfy(failure -> assertThat(failure).startsWith("Sheet 'EventToComplexTypes'"));
+    }
+
+    @Test
+    public void eventToComplexTypesRowNamingNoEventIsLeftToCompare() {
+        // A row with no CaseEventID/CaseFieldID is malformed rather than unread for a placement reason;
+        // it is left in place so it still shows up.
+        Map<String, List<Map<String, Object>>> expected = sheets("EventToComplexTypes",
+            rows(row("ListElementCode", "colleagues", "FieldType", "Collection")));
+
+        assertThat(NormalisingCcdConfigComparator.compare(expected, new LinkedHashMap<>()).matches())
+            .isFalse();
     }
 
     // ---- EVENT_COMPLEX_TYPE_INERT_COLUMNS ----
@@ -1025,6 +1118,7 @@ public class NormalisingCcdConfigComparatorTest {
             rows(row("CaseEventID", "caseUpdated", "CaseFieldID", "appeal",
                 "ListElementCode", "appellant", "DisplayContext", "OPTIONAL")));
 
+        placeComplex(expected, actual, "caseUpdated", "appeal");
         ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
 
         assertThat(result.matches()).as(result.report()).isTrue();
@@ -1047,6 +1141,7 @@ public class NormalisingCcdConfigComparatorTest {
             rows(row("CaseEventID", "writeFinalDecision", "CaseFieldID", "otherPartyAttendedQuestions",
                 "ListElementCode", "otherPartyName", "DisplayContext", "OPTIONAL")));
 
+        placeComplex(expected, actual, "writeFinalDecision", "otherPartyAttendedQuestions");
         ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
 
         assertThat(result.matches()).as(result.report()).isTrue();
@@ -2152,6 +2247,7 @@ public class NormalisingCcdConfigComparatorTest {
             rows(row("CaseEventID", "e", "CaseFieldID", "f", "ListElementCode", "m",
                 "FieldShowCondition", "f.m=\"Yes\"", "FieldDisplayOrder", 1)));
 
+        placeComplex(expected, actual, "e", "f");
         ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
 
         assertThat(result.matches()).as(result.report()).isTrue();
@@ -2577,6 +2673,19 @@ public class NormalisingCcdConfigComparatorTest {
         ac.put("UserRoles", roles);
         ac.put("CRUD", crud);
         return ac;
+    }
+
+    /**
+     * Places {@code field} on {@code event} as COMPLEX on both sides, so the EventToComplexTypes rows
+     * for that pair are ones the definition store reads.
+     */
+    private static void placeComplex(Map<String, List<Map<String, Object>>> expected,
+                                     Map<String, List<Map<String, Object>>> actual,
+                                     String event, String field) {
+        for (Map<String, List<Map<String, Object>>> side : List.of(expected, actual)) {
+            side.computeIfAbsent("CaseEventToFields", k -> new ArrayList<>())
+                .add(row("CaseEventID", event, "CaseFieldID", field, "DisplayContext", "COMPLEX"));
+        }
     }
 
     private static Map<String, List<Map<String, Object>>> sheets(String name, List<Map<String, Object>> rows) {

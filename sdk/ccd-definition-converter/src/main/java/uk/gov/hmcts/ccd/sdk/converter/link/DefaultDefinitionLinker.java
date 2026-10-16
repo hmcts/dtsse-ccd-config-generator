@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -1141,6 +1142,8 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
           // postStateFromCallback() so the generator omits the column rather than writing '*'.
           .postStateFromCallback(
               row.getString(Columns.POST_CONDITION_STATE).map(String::isBlank).orElse(true))
+          .conditionalPostState(row.getString(Columns.POST_CONDITION_STATE)
+              .filter(DefaultDefinitionLinker::isConditionalPostState).orElse(null))
           .displayOrder(row.getInteger(Columns.DISPLAY_ORDER).orElse(null))
           .showCondition(row.getString(Columns.EVENT_ENABLING_CONDITION).orElse(null))
           .showSummary(row.getYesNo(Columns.SHOW_SUMMARY).orElse(null))
@@ -1281,7 +1284,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
    * definition transitions only to the primary state; the data store's runtime first-match-wins
    * evaluation of the conditional alternatives (CasePostStateService) is lost, so a team relying on
    * it must reimplement the transition in an aboutToSubmit callback. The loss is recorded as a
-   * {@code CONDITIONAL_CODE} gap (the migrating team must add the callback) and forgiven on the
+   * {@code MANUAL_CALLBACK} gap (the migrating team must change the callback) and forgiven on the
    * round-trip by the {@code CONDITIONAL_POST_STATE} comparator rule.
    *
    * @param raw the raw PostConditionState value
@@ -1298,23 +1301,34 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     }
     String[] tokens = raw.split(";");
     String primary = stripStateDecorations(tokens[0]);
-    boolean conditional = tokens[0].contains("(") || tokens.length > 1;
-    if (conditional) {
+    if (isConditionalPostState(raw)) {
+      String endState = "*".equals(primary) ? "its current state (*)" : "'" + primary + "'";
       gaps.add(GapEntry.builder()
           .sheet("CaseEvent")
           .rowKey(eventId)
           .column(Columns.POST_CONDITION_STATE)
           .value(raw)
           .category(GapCategory.UNSUPPORTED_VALUE)
-          .action(GapAction.CONDITIONAL_CODE)
-          .detail("Conditional/multiple post-condition states are not expressible via the SDK's "
-              + "single post-state builder; the event ends in the primary state '" + primary
-              + "' and the conditional alternatives are dropped (an accepted semantic difference). "
-              + "Reimplement the runtime transition in an aboutToSubmit callback that returns "
-              + ".state(<computed state>).")
+          .action(GapAction.MANUAL_CALLBACK)
+          .detail("Event '" + eventId + "' has the conditional PostConditionState '" + raw
+              + "'. The SDK sets a single end state, so the generated event always ends in "
+              + endState + ". Its aboutToSubmit callback must set the state by hand"
+              + " (return .state(<computed state>)) to keep the original behaviour.")
           .build());
     }
     return primary;
+  }
+
+  /**
+   * Whether a {@code PostConditionState} value carries a condition or lists alternatives, which the
+   * SDK's single end state cannot express.
+   */
+  static boolean isConditionalPostState(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return false;
+    }
+    String[] tokens = raw.split(";");
+    return tokens[0].contains("(") || tokens.length > 1;
   }
 
   /**
@@ -2114,14 +2128,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     for (FieldModel field : caseFields) {
       fieldsById.put(field.getId(), field);
     }
-    // The events this case type declares. Membership is the ONLY placement-shaped requirement left:
-    // the old DisplayContext=COMPLEX placement gate is gone, because the scope is now opened by a
-    // NON-REGISTERING opener (.complexScope, or the element-typed .complex(getter, Element.class))
-    // that adds no CaseEventToFields row of its own. So it no longer matters which context the event
-    // places the field in, whether any page places it, or even whether the event places anything at
-    // all — EventBuilder.fields() hands back the event's collection builder without registering
-    // anything, so a page-less event can carry a scope too (probate's
-    // boFindMatchedCaseGrantRegistrarEscalation/caseMatches).
+    // The events this case type declares.
     // A field the team's model reaches only through a @JsonUnwrapped holder is no longer excluded
     // either: the scope opens the holder first with a further NON-REGISTERING .complex(holderGetter)
     // hop, and the hop chain comes from the same placement decision the page field uses (see
@@ -2130,6 +2137,15 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     Set<String> declaredEvents = new LinkedHashSet<>();
     for (EventModel event : events) {
       declaredEvents.add(event.getId());
+    }
+    // Every DisplayContext each (event, field) is placed with, across all overlays. Only a COMPLEX
+    // placement makes a group's rows reach CCD (see unreadEtoctGroup).
+    Map<String, Set<String>> placementContexts = new LinkedHashMap<>();
+    for (SheetRow row : ir.rowsForCaseType(SheetName.CASE_EVENT_TO_FIELDS, caseTypeId)) {
+      String eventId = row.getString(Columns.CASE_EVENT_ID).orElse("");
+      String fieldId = row.getString(Columns.CASE_FIELD_ID).orElse("");
+      placementContexts.computeIfAbsent(eventId + "\u001f" + fieldId, k -> new LinkedHashSet<>())
+          .add(row.getString(Columns.DISPLAY_CONTEXT).orElse("").trim().toUpperCase(Locale.ROOT));
     }
 
     // Key by (overlay suffix, event, field) so each lands in the right per-event/per-field file, as
@@ -2163,6 +2179,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     List<PassthroughSheet> sheets = new ArrayList<>();
     int derivedRows = 0;
     int fallbackRows = 0;
+    int unreadRows = 0;
     // Fallback rows tallied by generalised cause, with one worked example each, so the gap report
     // says WHY the residual passthrough exists and which cause is worth attacking next.
     Map<String, Integer> fallbackCauseRows = new LinkedHashMap<>();
@@ -2173,6 +2190,13 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       String fieldId = parts[2];
       String suffix = suffixByTarget.get(entry.getKey());
       List<SheetRow> groupRows = entry.getValue();
+      Set<String> contexts = placementContexts.getOrDefault(
+          eventId + "\u001f" + fieldId, Set.of());
+      if (!contexts.contains("COMPLEX")) {
+        unreadRows += groupRows.size();
+        gaps.add(unreadEtoctGroup(eventId, fieldId, suffix, groupRows.size(), contexts));
+        continue;
+      }
       // The first reason recorded for this group — why it could not be derived. Kept per group so the
       // gap report can tally CAUSES rather than only counting fallback rows: without this a fallback
       // is just a number and reducing it is guesswork.
@@ -2199,10 +2223,8 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       }
 
       // Any base (non-overlay) group whose field is a plain (non-clustered, non-overlay-gated)
-      // CaseData member is a candidate, WHATEVER DisplayContext the event places the field in — or
-      // even if the event does not place it at all. The member scope is opened by a NON-REGISTERING
-      // opener, so it neither adds a CaseEventToFields row nor forces an existing one to COMPLEX. The
-      // remaining exclusions are structural rather than contextual: an overlay-suffixed group would
+      // CaseData member and is placed COMPLEX on the event is a candidate. The remaining exclusions
+      // are structural: an overlay-suffixed group would
       // need a per-environment scope the emitter does not gate, an overlay-gated field is not a
       // CaseData member at all so there is no getter to open the scope on, and a group naming an event
       // no CaseEvent row declares has no event to place a scope on.
@@ -2287,7 +2309,8 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
         .sheet("EventToComplexTypes")
         .rowKey(caseTypeId)
         .column(null)
-        .value(derivedRows + " derived / " + fallbackRows + " passthrough")
+        .value(derivedRows + " derived / " + fallbackRows + " passthrough"
+            + (unreadRows == 0 ? "" : " / " + unreadRows + " unread"))
         .category(GapCategory.UNSUPPORTED_SHEET)
         .action(fallbackRows == 0 ? GapAction.CONDITIONAL_CODE : GapAction.PASSTHROUGH_ROW)
         .detail("EventToComplexTypes per-member event overrides: " + derivedRows + " row(s) emitted"
@@ -2309,13 +2332,9 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
             + " member @CCD(hint) the input row does not carry is now derived too (the tri-state"
             + " .hintText/.noHintText setters override the cascade), as is a member DefaultValue (the"
             + " raw-string .defaultValue(String) setter, so a case-role literal is emitted verbatim)."
-            + " The DisplayContext the event"
-            + " places the root field in is no longer a fallback cause at all — the member scope is"
-            + " opened by a non-registering opener (.complexScope, or the element-typed"
-            + " .complex(getter, Element.class)), so a root placed OPTIONAL/READONLY/MANDATORY, or not"
-            + " placed by any page, derives just the same — and neither is having any placement at all,"
-            + " since EventBuilder.fields() yields a scope-able builder on a page-less event too. The"
-            + " remaining fallback causes are:"
+            + " " + unreadRows + " row(s) belong to a field the event does not place with"
+            + " DisplayContext COMPLEX; CCD never reads those, so they are dropped (one ADVISORY entry"
+            + " per group). The remaining fallback causes are:"
             + " a group naming an event no CaseEvent row declares, a dotted ListElementCode that does not"
             + " resolve through the typed complex-type graph (unknown member, scalar intermediate, or a"
             + " hop into a type the converter neither generated nor can reflect), a member DisplayContext"
@@ -2325,6 +2344,35 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
             + formatEtoctCauses(fallbackCauseRows, fallbackExamples))
         .build());
     return new EventComplexTypeResult(groups, sheets);
+  }
+
+  /**
+   * The advisory for a {@code CaseEventToComplexTypes} group CCD never reads, which the converter
+   * drops instead of emitting or passing through.
+   *
+   * <p>ccd-definition-store-api's {@code EventParser.parseCaseEventComplexTypes} walks each event's
+   * {@code CaseEventToFields} placements and attaches the rows for {@code (event, field)} only when
+   * that placement's {@code DisplayContext} is {@code COMPLEX}. Rows for a field the event places in
+   * any other context, or does not place at all, never reach the event, so emitting them would only
+   * add Java (and, for a scalar root, the unpublished {@code complexScope} SDK call) for no effect.
+   * The {@code EVENT_COMPLEX_TYPE_UNREAD} comparator rule drops the same rows from both sides.</p>
+   */
+  private GapEntry unreadEtoctGroup(String eventId, String fieldId, String suffix, int rowCount,
+                                    Set<String> contexts) {
+    String placement = contexts.isEmpty()
+        ? "the event does not place the field"
+        : "the event places the field as " + String.join("/", contexts) + ", not COMPLEX";
+    return GapEntry.builder()
+        .sheet("EventToComplexTypes")
+        .rowKey(eventId + "/" + fieldId + (suffix == null ? "" : " (overlay " + suffix + ")"))
+        .column(Columns.CASE_FIELD_ID)
+        .value(rowCount + " row(s)")
+        .category(GapCategory.UNSUPPORTED_VALUE)
+        .action(GapAction.ADVISORY)
+        .detail("Unread by CCD: " + placement + ", and the definition store only applies"
+            + " CaseEventToComplexTypes rows to a COMPLEX placement. Dropped (not emitted, not passed"
+            + " through); safe to delete from the source definition")
+        .build();
   }
 
   /**
@@ -2429,6 +2477,22 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       Columns.CASE_TYPE_ID, Columns.CASE_TYPE_ID_LOWER,
       Columns.PAGE_LABEL, Columns.PAGE_DISPLAY_ORDER, Columns.PAGE_FIELD_DISPLAY_ORDER,
       Columns.SECURITY_CLASSIFICATION);
+
+  /**
+   * {@link #ETOCT_DERIVED_COLUMNS} lower-cased, so a derived column authored in the wrong case is not
+   * mistaken for an exotic tail column.
+   *
+   * <p>The reader keeps such a key, because {@code ColumnVocabulary} matches column names
+   * case-insensitively, but every derivation reads the column by its exact spelling, so the
+   * mis-cased key was never derived and was grafted instead. ia's Bail definition writes
+   * {@code "publish": "N"} on ten {@code lastModifiedDirection} member rows (its other six rows spell
+   * it {@code Publish}); grafting it left two passthrough files for a value json2xlsx never writes
+   * ({@code headers.map(key => record[key])} is an exact lookup against the template's
+   * {@code Publish} header) and that would be the column's default anyway.</p>
+   */
+  private static final Set<String> ETOCT_DERIVED_COLUMNS_LOWER = ETOCT_DERIVED_COLUMNS.stream()
+      .map(c -> c.toLowerCase(Locale.ROOT))
+      .collect(Collectors.toUnmodifiableSet());
 
   /**
    * The merge key for a DERIVED group's companion tail-graft: the columns the SDK generator itself
@@ -2741,7 +2805,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
   private Map<String, Object> etoctGraftRow(SheetRow row) {
     Map<String, Object> tail = new LinkedHashMap<>();
     for (Map.Entry<String, Object> column : row.getColumns().entrySet()) {
-      if (ETOCT_DERIVED_COLUMNS.contains(column.getKey())) {
+      if (ETOCT_DERIVED_COLUMNS_LOWER.contains(column.getKey().toLowerCase(Locale.ROOT))) {
         continue;
       }
       // A blank/absent exotic column carries nothing the generator failed to write (the comparator

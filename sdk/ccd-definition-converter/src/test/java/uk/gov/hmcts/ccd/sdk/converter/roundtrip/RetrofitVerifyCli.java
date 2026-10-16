@@ -172,8 +172,12 @@ public final class RetrofitVerifyCli {
         + " (" + rowCount(expected) + " rows)");
     System.out.println("  actual sheets   : " + actual.size()
         + " (" + rowCount(actual) + " rows)");
+    List<String> manual = manualStateTransitions(expected, actual);
+    System.out.println("  manual follow-up: " + manual.size()
+        + " event(s) with a conditional PostConditionState");
     if (result.matches()) {
       System.out.println("  RESULT          : SEMANTICALLY EQUIVALENT (0 residual diffs)");
+      printManualFollowUp(manual);
       return;
     }
     List<String> failures = result.getFailures();
@@ -187,6 +191,50 @@ public final class RetrofitVerifyCli {
     for (String failure : failures) {
       System.out.println("  - " + failure);
     }
+    printManualFollowUp(manual);
+  }
+
+  private static void printManualFollowUp(List<String> manual) {
+    if (manual.isEmpty()) {
+      return;
+    }
+    System.out.println();
+    System.out.println("Manual follow-up (" + manual.size() + "): the SDK sets one end state, so each"
+        + " event's aboutToSubmit callback must set the state the definition's condition chose:");
+    for (String line : manual) {
+      System.out.println("  - " + line);
+    }
+  }
+
+  /**
+   * One line per expected {@code CaseEvent} row whose {@code PostConditionState} is conditional or
+   * lists alternatives, with the state the generated row ends in. The comparator forgives these
+   * (CONDITIONAL_POST_STATE) because the generated output cannot carry them, so they are listed
+   * separately here rather than counted as residuals.
+   */
+  static List<String> manualStateTransitions(
+      Map<String, List<Map<String, Object>>> expected,
+      Map<String, List<Map<String, Object>>> actual) {
+    Map<String, Object> generated = new LinkedHashMap<>();
+    for (Map<String, Object> row : actual.getOrDefault("CaseEvent", List.of())) {
+      generated.put(String.valueOf(row.get("ID")), row.get("PostConditionState"));
+    }
+    List<String> lines = new ArrayList<>();
+    for (Map<String, Object> row : expected.getOrDefault("CaseEvent", List.of())) {
+      Object value = row.get("PostConditionState");
+      if (!(value instanceof String raw)) {
+        continue;
+      }
+      String[] tokens = raw.trim().split(";");
+      if (!tokens[0].contains("(") && tokens.length < 2) {
+        continue;
+      }
+      String id = String.valueOf(row.get("ID"));
+      Object end = generated.get(id);
+      lines.add(id + ": definition '" + raw + "', generated ends in "
+          + (end == null ? "<no PostConditionState>" : "'" + end + "'"));
+    }
+    return lines;
   }
 
   private static long rowCount(Map<String, List<Map<String, Object>>> sheets) {

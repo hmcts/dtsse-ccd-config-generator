@@ -291,6 +291,14 @@ public class EventsConfigEmitter implements SourceEmitter {
     // builder.event(CONSTANT) chain, up to and including .explicitGrants() and the varargs grants.
     CodeBlock.Builder headerBuilder = CodeBlock.builder();
     headerBuilder.add("builder.event($L)", screamingSnake(event.getId()));
+    if (event.getConditionalPostState() != null) {
+      String endState = event.getPostState() == null || "*".equals(event.getPostState())
+          ? "its current state" : event.getPostState();
+      headerBuilder.add("\n    // Definition PostConditionState: $L",
+          event.getConditionalPostState().replaceAll("\\s+", " "));
+      headerBuilder.add("\n    // The SDK sets one end state ($L); the aboutToSubmit callback must set"
+          + " the state.", endState);
+    }
     headerBuilder.add("\n    .").add(buildStateTargeting(event, state, context));
     headerBuilder.add("\n    .name($S)", event.getName());
     // A present-but-empty/blank Description (as distinct from an absent one) must still be
@@ -384,23 +392,9 @@ public class EventsConfigEmitter implements SourceEmitter {
     boolean hasPages = pages != null && !pages.isEmpty();
 
     if (!hasPages) {
-      // A page-less event may still carry derived CaseEventToComplexTypes member overrides (probate's
-      // boFindMatchedCaseGrantRegistrarEscalation/caseMatches, et's importFile/caseImporterFile). Those
-      // need a `fields` builder to open a scope on, and EventBuilder.fields() supplies one without
-      // registering anything: it just returns the collection builder the event was constructed with, so
-      // a bare `.fields()` on an event with no placements adds no CaseEventToFields row. Emit the
-      // header-plus-fields form only when there is a scope to hang off it, so an event that genuinely
-      // places nothing keeps its terminating-statement shape byte-for-byte.
-      if (hasOrphanScopes(event, model)) {
-        cb.add("var fields = $L", header);
-        cb.add("\n    .fields()");
-        cb.addStatement("");
-        emitOrphanScopes(cb, event, model, caseData, state, userRole, context, pagePkg,
-            eventClassName, pageClasses, usedPageNames);
-      } else {
-        cb.add("$L", header);
-        cb.addStatement("");
-      }
+      // A page-less event places no field COMPLEX, so the linker derives no member group for it.
+      cb.add("$L", header);
+      cb.addStatement("");
       return cb.build();
     }
 
@@ -444,12 +438,12 @@ public class EventsConfigEmitter implements SourceEmitter {
   }
 
   /**
-   * Emits a member scope for every derived group on this event whose root field <em>no page places at
-   * all</em> — the orphan case, and the largest single chunk of the residual
-   * {@code CaseEventToComplexTypes} passthrough (52 of sscs's 60 rows: {@code dwpUploadResponse} and
-   * {@code otherParties}, which carry member overrides while the event's pages never place the field).
+   * Emits a member scope for every derived group on this event whose COMPLEX placement does not emit
+   * the scope itself — the orphan case. The linker derives a group only for a field the event places
+   * COMPLEX, so this is a retrofit field placed through a {@code @JsonUnwrapped} holder (see
+   * {@link #orphanScopes}).
    *
-   * <p>Nothing anchors these to a placement, so they are emitted last, after every page has been
+   * <p>These are emitted last, after every page has been
    * applied. That is sound because a non-registering scope contributes no {@code CaseEventToFields}
    * row, so it cannot disturb the page/field display ordering the placements above established — the
    * only thing it feeds is {@code CaseEventToComplexTypesGenerator}, whose row order is per
@@ -459,9 +453,7 @@ public class EventsConfigEmitter implements SourceEmitter {
    * input's own {@code PageID}).
    *
    * <p>Emitted inline on the event's {@code fields} builder rather than into a page class: an orphan
-   * group belongs to no page, and page classes are keyed on pages. On an event with no pages at all
-   * (probate's {@code boFindMatchedCaseGrantRegistrarEscalation}) the caller emits a bare
-   * {@code .fields()} to obtain that builder, which registers nothing.
+   * group belongs to no page, and page classes are keyed on pages.
    */
   private void emitOrphanScopes(
       CodeBlock.Builder cb, EventModel event, CaseTypeModel model, ClassName caseData,
@@ -536,15 +528,6 @@ public class EventsConfigEmitter implements SourceEmitter {
       groups.add(current);
     }
     return groups;
-  }
-
-  /**
-   * Whether this event has any group whose root no page places — i.e. whether
-   * {@link #emitOrphanScopes} would emit anything. Consulted on the page-less path, where the
-   * {@code var fields = ….fields()} preamble is worth emitting only if a scope will follow it.
-   */
-  private boolean hasOrphanScopes(EventModel event, CaseTypeModel model) {
-    return !orphanScopes(event, model).isEmpty();
   }
 
   /**
@@ -781,10 +764,8 @@ public class EventsConfigEmitter implements SourceEmitter {
    * complex-member count when the field carries {@code CaseEventToComplexTypes} member overrides (each
    * member emits its own serializable getter lambda inside the scope).
    *
-   * <p>The member count is added regardless of the placement's {@code DisplayContext}: a group is now
-   * emitted beside a non-{@code COMPLEX} placement too, via a separate {@code .complexScope(getter)}
-   * statement, and those lambdas land in the same method as the placement, so they must be budgeted
-   * for either way.
+   * <p>The linker derives a group only for a {@code COMPLEX} placement, so only such a field ever
+   * carries the extra weight.
    */
   private int fieldWeight(PageModel.PageField field, CaseTypeModel model, EventModel event) {
     EventComplexTypeGroup group = groupFor(model, event, field.getCaseFieldId());
@@ -1138,17 +1119,6 @@ public class EventsConfigEmitter implements SourceEmitter {
       stmt.add(fieldMetadataChain(field));
       stmt.add(publishChain(field, event));
       cb.addStatement("$L", stmt.build());
-      // The field is placed in a NON-COMPLEX context (sscs's updateOtherPartyData places `appeal` as
-      // READONLY) yet still carries derived CaseEventToComplexTypes member overrides. Its own row must
-      // stay in the context above — a .complex(getter) block would force it to COMPLEX — so the members
-      // go in a SEPARATE statement opening a non-registering scope, exactly as the collection-rooted
-      // COMPLEX case above does. That decoupling is the whole point: the placement emits the
-      // CaseEventToFields row, the scope emits the CaseEventToComplexTypes rows, and neither implies
-      // the other.
-      EventComplexTypeGroup placedGroup = groupFor(model, event, field.getCaseFieldId());
-      if (placedGroup != null) {
-        emitMemberScope(cb, placedGroup, caseData, emitContext);
-      }
     }
     if (openParent != null) {
       cb.addStatement("$L", cluster.add(".done()").build());
@@ -1185,10 +1155,8 @@ public class EventsConfigEmitter implements SourceEmitter {
    *   is generated from opens {@code .complexScope(getter, Type.class)}, typed on the generated one.</li>
    * </ul>
    *
-   * <p>Because none registers a field, the group's root keeps whatever {@code CaseEventToFields} row
-   * the input gave it — {@code COMPLEX}, {@code READONLY}, {@code OPTIONAL}, or none at all — and the
-   * caller is free to emit that row separately (or not at all, for an orphan group; see
-   * {@link #emitOrphanScopes}).
+   * <p>Because none registers a field, the caller emits the root's {@code COMPLEX} placement
+   * separately (for an orphan group, through the holder; see {@link #emitOrphanScopes}).
    *
    * <p>A retrofit group whose root field the team's model declares on a {@code @JsonUnwrapped}
    * member's class rather than on the root case-data class opens that member first, one

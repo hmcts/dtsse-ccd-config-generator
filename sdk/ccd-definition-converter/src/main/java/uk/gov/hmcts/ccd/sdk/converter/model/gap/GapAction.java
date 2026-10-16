@@ -15,6 +15,12 @@ public enum GapAction {
    */
   MANUAL_PLACEMENT,
   /**
+   * The generated code does something different from the definition and only hand-written callback
+   * logic can close the gap: a conditional {@code PostConditionState} the SDK's single end state
+   * cannot express, which the event's about-to-submit callback must set instead.
+   */
+  MANUAL_CALLBACK,
+  /**
    * Purely informational: a divergence that produces no generated output and is neither passed
    * through nor separately reproduced — the comparator forgives it as an accepted semantic
    * difference. Two shapes occur:

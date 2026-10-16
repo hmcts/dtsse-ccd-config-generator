@@ -837,52 +837,6 @@ class EventsConfigEmitterTest {
   }
 
   @Test
-  void scalarRootedGroupOnANonComplexPlacementOpensAScopeWithoutChangingTheFieldRow() {
-    // sscs updateOtherPartyData/appeal: the complex field is placed READONLY yet still carries
-    // per-member CaseEventToComplexTypes overrides. Its own CaseEventToFields row must stay READONLY,
-    // so the members hang off a SEPARATE non-registering .complexScope(getter) statement rather than a
-    // .complex(getter) block, which would force the row to COMPLEX.
-    EventComplexTypeGroup.TypeRef appeal =
-        EventComplexTypeGroup.TypeRef.builder().simpleName("Appeal").build();
-    EventComplexTypeGroup group = EventComplexTypeGroup.builder()
-        .eventId("createCase")
-        .caseFieldId("appeal")
-        .rootGetter("getAppeal")
-        .members(List.of(EventComplexTypeGroup.Member.builder()
-            .hops(List.of())
-            .leafType(appeal)
-            .leafGetter("getBenefitType")
-            .contextMethod("mandatory")
-            .build()))
-        .build();
-
-    PageModel.PageField field = PageModel.PageField.builder()
-        .caseFieldId("appeal")
-        .displayContext("READONLY")
-        .build();
-    PageModel page = PageModel.builder().pageId("1").fields(List.of(field)).build();
-    EventModel event = EventModel.builder()
-        .id("createCase").javaName("createCase").name("Create Case")
-        .preStates(List.of()).postState("Open").grants(Map.of()).pages(List.of(page))
-        .build();
-    FieldModel appealField = FieldModel.builder()
-        .id("appeal").javaName("appeal").fieldType("Appeal")
-        .build();
-    CaseTypeModel model = modelWithEvents(List.of(event), List.of(appealField)).toBuilder()
-        .eventComplexTypeGroups(Map.of("createCaseappeal", group))
-        .build();
-
-    String src = allSrc(new EventsConfigEmitter().emit(model, contextWith(40)));
-
-    // The placement keeps its own context — no .complex(getter) block anywhere.
-    assertThat(src).contains("fields.readonly(CaseData::getAppeal)");
-    assertThat(src).doesNotContain("fields.complex(CaseData::getAppeal)");
-    // The members hang off the non-registering scalar scope.
-    assertThat(src).contains("fields.complexScope(CaseData::getAppeal)");
-    assertThat(src).contains(".mandatory(Appeal::getBenefitType)");
-  }
-
-  @Test
   void aClusteredLeafPlacedComplexKeepsThatContext() {
     // sscs caseUpdated/jointPartyAddress: the field is reached through a prefix-less @JsonUnwrapped
     // holder, so it is placed inside the holder's member scope — and the input places it COMPLEX. The
@@ -1021,10 +975,10 @@ class EventsConfigEmitterTest {
 
   @Test
   void groupOnAFieldNoPagePlacesAtAllEmitsAnOrphanScope() {
-    // sscs dwpUploadResponse/otherParties (52 of its 60 residual rows): the event carries member
-    // overrides for a field none of its pages place. There is no placement to anchor the scope to, so
-    // it is emitted standalone after every page has been applied. A non-registering scope adds no
-    // CaseEventToFields row, so it cannot disturb the placements above it.
+    // A group whose field no top-level page placement emits the scope for (in practice a retrofit
+    // field placed through a @JsonUnwrapped holder) is emitted standalone after every page has been
+    // applied. A non-registering scope adds no CaseEventToFields row, so it cannot disturb the
+    // placements above it.
     EventComplexTypeGroup.TypeRef party =
         EventComplexTypeGroup.TypeRef.builder().simpleName("Party").build();
     EventComplexTypeGroup group = EventComplexTypeGroup.builder()
@@ -1071,10 +1025,9 @@ class EventsConfigEmitterTest {
 
   @Test
   void manyOrphanScopesAreSplitOutOfConfigureIntoScopesClasses() {
-    // prl's editAndApproveAnOrder: 39 orphan groups, ~700 member lambdas, all previously inlined into
-    // configure(), which the javac emitted as "code too large" (the 64 KB per-method cap, the same one
-    // the page path already splits for). Each scope registers nothing, so hoisting the runs into
-    // <Event>ScopesN.apply(fields) cannot change the generated definition.
+    // Enough orphan member lambdas to overflow configure()'s 64 KB per-method cap ("code too large",
+    // the same one the page path already splits for). Each scope registers nothing, so hoisting the
+    // runs into <Event>ScopesN.apply(fields) cannot change the generated definition.
     List<EventComplexTypeGroup> groups = new ArrayList<>();
     List<FieldModel> fields = new ArrayList<>();
     Map<String, EventComplexTypeGroup> byKey = new java.util.LinkedHashMap<>();
@@ -1192,51 +1145,26 @@ class EventsConfigEmitterTest {
   }
 
   @Test
-  void groupOnAPageLessEventOpensABareFieldsScope() {
-    // probate boFindMatchedCaseGrantRegistrarEscalation/caseMatches: the event places NO pages at all,
-    // yet carries member overrides. EventBuilder.fields() returns the event's collection builder
-    // without registering anything, so the emitter opens a bare .fields() purely to hang the
-    // non-registering scope off — and only when there IS a scope to hang, so an event that genuinely
-    // places nothing keeps its old terminating-statement shape.
-    EventComplexTypeGroup.TypeRef caseMatch =
-        EventComplexTypeGroup.TypeRef.builder().simpleName("CaseMatch").build();
-    EventComplexTypeGroup group = EventComplexTypeGroup.builder()
-        .eventId("escalate")
-        .caseFieldId("caseMatches")
-        .rootGetter("getCaseMatches")
-        .rootElementType(caseMatch)
-        .members(List.of(EventComplexTypeGroup.Member.builder()
-            .hops(List.of())
-            .leafType(caseMatch)
-            .leafGetter("getCaseLink")
-            .contextMethod("readonly")
-            .build()))
-        .build();
-
-    EventModel escalate = EventModel.builder()
-        .id("escalate").javaName("escalate").name("Escalate")
+  void conditionalPostStateIsNotedAtTheStateCall() {
+    // The SDK keeps only the first state of a conditional PostConditionState, so the generated event
+    // says so where its state is set, quoting the definition value.
+    EventModel event = EventModel.builder()
+        .id("startApplication").javaName("startApplication").name("Start")
         .preStates(List.of()).postState("Open").grants(Map.of()).pages(List.of())
+        .conditionalPostState("Open(isLegalRep=\"Yes\"):2;Closed")
         .build();
-    // A second page-less event with NO group, to prove the bare .fields() is not emitted gratuitously.
-    EventModel quiet = EventModel.builder()
-        .id("quiet").javaName("quiet").name("Quiet")
-        .preStates(List.of()).postState("Open").grants(Map.of()).pages(List.of())
-        .build();
-    FieldModel caseMatches = FieldModel.builder()
-        .id("caseMatches").javaName("caseMatches").fieldType("Collection")
-        .fieldTypeParameter("CaseMatch").build();
-    CaseTypeModel model =
-        modelWithEvents(List.of(escalate, quiet), List.of(caseMatches)).toBuilder()
-            .eventComplexTypeGroups(Map.of("escalate\u001fcaseMatches", group))
-            .build();
 
-    String src = allSrc(new EventsConfigEmitter().emit(model, contextWith(40)));
+    String src = classNamed(new EventsConfigEmitter()
+        .emit(modelWithEvents(List.of(event, simpleEvent("plain"))), contextWith(40)),
+        "StartApplication");
 
-    assertThat(src).contains("fields.complex(CaseData::getCaseMatches, CaseMatch.class)");
-    assertThat(src).contains(".readonly(CaseMatch::getCaseLink)");
-    // No placement is invented for the root, and the group's own event is the only one that gains a
-    // fields builder.
-    assertThat(src).doesNotContain("fields.readonly(CaseData::getCaseMatches)");
-    assertThat(src).containsOnlyOnce("var fields = ");
+    assertThat(src).contains("builder.event(START_APPLICATION)\n"
+        + "            // Definition PostConditionState: Open(isLegalRep=\"Yes\"):2;Closed\n"
+        + "            // The SDK sets one end state (Open); the aboutToSubmit callback must set the"
+        + " state.\n"
+        + "            .initialState(State.Open)");
+    assertThat(classNamed(new EventsConfigEmitter()
+        .emit(modelWithEvents(List.of(simpleEvent("plain"))), contextWith(40)), "Plain"))
+        .doesNotContain("PostConditionState");
   }
 }

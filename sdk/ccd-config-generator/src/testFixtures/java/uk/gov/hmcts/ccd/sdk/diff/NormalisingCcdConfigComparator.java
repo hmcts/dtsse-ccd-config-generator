@@ -43,6 +43,7 @@ public final class NormalisingCcdConfigComparator {
         new OrphanComplexTypeRule(),
         new OrphanFixedListRule(),
         new PredefinedComplexTypeRedeclarationRule(),
+        new EventComplexTypeUnreadRule(),
         new IdentifierWhitespaceRule(),
         // Canonicalises show-condition whitespace before anything reads those columns: it is part of
         // the EventToComplexTypes row key AND part of the key EVENT_COMPLEX_TYPE_ID_IGNORED uses to
