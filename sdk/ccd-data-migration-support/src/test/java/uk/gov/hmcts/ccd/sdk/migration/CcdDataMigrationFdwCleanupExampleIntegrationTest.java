@@ -38,6 +38,7 @@ class CcdDataMigrationFdwCleanupExampleIntegrationTest {
     createForeignTable("case_data");
     createForeignTable("case_event");
     createForeignTable("case_event_significant_items");
+    createForeignTable("case_data_versioned");
   }
 
   @Test

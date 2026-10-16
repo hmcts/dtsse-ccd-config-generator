@@ -4,6 +4,7 @@ import static uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationMode.CUTOVER;
 import static uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationMode.PRELOAD_EVENTS;
 import static uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationMode.VALIDATE_ONLY;
 
+import java.sql.Array;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Clock;
@@ -18,6 +19,7 @@ import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.env.Environment;
 import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -35,6 +37,51 @@ public class CcdDataMigrationTask implements Runnable {
   private static final String STATUS_PRELOAD = "PRELOAD";
   private static final String STATUS_CUTOVER = "CUTOVER";
   private static final String STATUS_COMPLETE = "COMPLETE";
+  private static final String CASE_DATA_VERSIONED_TABLE = "case_data_versioned";
+  // Builds the create statement for fdw_stage.case_data_versioned from fdw_stage.case_data: the
+  // same columns (with any column options), server and table options, plus row_xmin mapped to the
+  // source xmin system column. scripts/setup-ccd-data-fdw.sh runs the same query.
+  private static final String CREATE_CASE_DATA_VERSIONED_SQL = """
+      select format(
+        'create foreign table fdw_stage.case_data_versioned (%s, row_xmin xid options (column_name %L)) '
+          || 'server %I%s',
+        (
+          select string_agg(
+            format('%I %s', a.attname, format_type(a.atttypid, a.atttypmod))
+              || coalesce(
+                ' options (' || (
+                  select string_agg(
+                    format('%I %L', split_part(o, '=', 1), substr(o, strpos(o, '=') + 1)),
+                    ', '
+                  )
+                  from unnest(a.attfdwoptions) o
+                ) || ')',
+                ''
+              ),
+            ', ' order by a.attnum
+          )
+          from pg_attribute a
+          where a.attrelid = ft.ftrelid
+            and a.attnum > 0
+            and not a.attisdropped
+        ),
+        'xmin',
+        s.srvname,
+        coalesce(
+          ' options (' || (
+            select string_agg(format('%I %L', split_part(o, '=', 1), substr(o, strpos(o, '=') + 1)), ', ')
+            from unnest(ft.ftoptions) o
+          ) || ')',
+          ''
+        )
+      )
+      from pg_foreign_table ft
+      join pg_class c on c.oid = ft.ftrelid
+      join pg_namespace n on n.oid = c.relnamespace
+      join pg_foreign_server s on s.oid = ft.ftserver
+      where n.nspname = 'fdw_stage'
+        and c.relname = 'case_data'
+      """;
 
   private final NamedParameterJdbcTemplate db;
   private final TransactionOperations transaction;
@@ -158,27 +205,36 @@ public class CcdDataMigrationTask implements Runnable {
 
     prepareElasticsearchQueueForMigration();
     long targetEventHwm = preloadSourceEventHighWaterMark();
-    CopyTotals totals = copyEventBatches(targetEventHwm, calculateStopAt());
+    LocalDateTime stopAt = calculateStopAt();
+    CopyTotals totals = copyEventBatches(targetEventHwm, stopAt);
     long sourceEventHwm = sourceEventProgressHighWaterMark();
-    boolean caughtUp = sourceEventHwm >= targetEventHwm;
+    boolean eventsCaughtUp = sourceEventHwm >= targetEventHwm;
+    // Keep case_data current during preload so cutover only re-copies the cases that change
+    // after the last preload run. Events go first: the sync only runs once they have caught up.
+    CaseDataSyncTotals caseDataTotals = options.preloadCaseDataSync() && eventsCaughtUp
+        && !totals.stoppedByTimeLimit()
+        ? syncCaseData(stopAt, false)
+        : CaseDataSyncTotals.notRun();
+    boolean caughtUp = eventsCaughtUp && !caseDataTotals.stoppedByTimeLimit();
+    boolean stoppedByTimeLimit = totals.stoppedByTimeLimit() || caseDataTotals.stoppedByTimeLimit();
     log.info(
         "Completed CCD data migration preload taskName={} targetEventHwm={} batches={} cases={} events={} "
             + "caughtUp={} stoppedByTimeLimit={}",
         options.taskName(),
         targetEventHwm,
         totals.batches(),
-        0,
+        caseDataTotals.casesProcessed(),
         totals.events(),
         caughtUp,
-        totals.stoppedByTimeLimit()
+        stoppedByTimeLimit
     );
     return new CcdDataMigrationRunResult(
         true,
         totals.batches(),
-        0,
+        caseDataTotals.casesProcessed(),
         totals.events(),
         caughtUp,
-        totals.stoppedByTimeLimit()
+        stoppedByTimeLimit
     );
   }
 
@@ -236,7 +292,18 @@ public class CcdDataMigrationTask implements Runnable {
           significantItemTotals.stoppedByTimeLimit()
       );
     }
-    final int refreshedCases = refreshCutoverCaseData();
+    CaseDataSyncTotals caseDataTotals = refreshCutoverCaseData(stopAt);
+    final long refreshedCases = caseDataTotals.casesProcessed();
+    if (caseDataTotals.stoppedByTimeLimit()) {
+      log.info(
+          "CCD data migration cutover paused during the case_data sync taskName={} cutoverEventHwm={} "
+              + "copiedCases={}",
+          options.taskName(),
+          cutoverEventHwm,
+          refreshedCases
+      );
+      return new CcdDataMigrationRunResult(true, totals.batches(), refreshedCases, totals.events(), false, true);
+    }
     resetSequences();
     completeCutover();
 
@@ -336,13 +403,18 @@ public class CcdDataMigrationTask implements Runnable {
     return totals;
   }
 
+  /**
+   * Copies one window of events, inserting any parent case_data rows missing from the target. The
+   * parent rows are read through fdw_stage.case_data_versioned and their versions recorded, so the
+   * case_data sync does not read their data again.
+   */
   private int copyNextEventBatch(long batchStartEventId, long batchEndEventHwm) {
     return db.update(
         """
         with events_to_insert as materialized (
           select ce.*
           from fdw_stage.case_event ce
-          join fdw_stage.case_data cd on cd.id = ce.case_data_id
+          join fdw_stage.case_data_versioned cd on cd.id = ce.case_data_id
           where cd.jurisdiction = :sourceJurisdiction
             and cd.case_type_id in (:caseTypeIds)
             and ce.case_type_id in (:caseTypeIds)
@@ -359,8 +431,8 @@ public class CcdDataMigrationTask implements Runnable {
           )
         ),
         source_cases as materialized (
-          select cd.*
-          from fdw_stage.case_data cd
+          select cd.*, cd.row_xmin::text::bigint as source_xmin
+          from fdw_stage.case_data_versioned cd
           join missing_case_ids ids on ids.case_data_id = cd.id
         ),
         inserted_cases as (
@@ -397,7 +469,16 @@ public class CcdDataMigrationTask implements Runnable {
             0
           from source_cases cd
           on conflict do nothing
-          returning id
+          returning id, xmin::text::bigint as target_xmin
+        ),
+        recorded_cases as (
+          insert into ccd_data_migration.case_data_copy_versions (case_data_id, source_xmin, target_xmin)
+          select inserted.id, source.source_xmin, inserted.target_xmin
+          from inserted_cases inserted
+          join source_cases source on source.id = inserted.id
+          on conflict (case_data_id) do update
+          set source_xmin = excluded.source_xmin,
+              target_xmin = excluded.target_xmin
         ),
         affected_cases as (
           select distinct case_data_id
@@ -550,124 +631,334 @@ public class CcdDataMigrationTask implements Runnable {
     );
   }
 
-  private int refreshCutoverCaseData() {
-    return transaction.execute(status -> {
+  private CaseDataSyncTotals refreshCutoverCaseData(LocalDateTime stopAt) {
+    CaseDataSyncTotals totals = syncCaseData(stopAt, true);
+    if (totals.stoppedByTimeLimit()) {
+      return totals;
+    }
+    transaction.execute(status -> {
       applyMigrationStatementTimeout();
       disableCaseDataRevisionTrigger();
-      try {
-        int refreshedCases = syncCaseDataForCutover();
-        deleteCasesRemovedFromSource();
-        updateCaseRevisionsForCutover();
-        return refreshedCases;
-      } finally {
-        enableCaseDataRevisionTrigger();
+      updateCaseRevisionsForCutover();
+      enableCaseDataRevisionTrigger();
+      return null;
+    });
+    return totals;
+  }
+
+  /**
+   * Brings target case_data into line with the source without re-reading every case's data.
+   *
+   * <p>Postgres writes a new row version, with a new xmin, on every update to a row, whether it
+   * comes from CCD, a supplementary data call or a direct SQL fix, and maintenance such as VACUUM
+   * FREEZE or VACUUM FULL keeps it. For each case it copies, the task records the xmin of the
+   * source row it read and of the target row it wrote. A case is copied again when either no
+   * longer matches, so a change on either side since the last copy is overwritten from the source.
+   *
+   * <p>A short transaction scans the source id and xmin of every migrated case and queues the
+   * changed cases in ccd_data_migration.case_data_sync_queue under this task's name, so tasks for
+   * other case types in the same database keep their own queues. Each batch is then read from the
+   * queue, copied, and removed from the queue in its own transaction, reading the data and xmin of
+   * each case in one remote query, so no transaction holds a snapshot open on the source database
+   * for longer than the scan or one batch, and only one batch of ids is held in memory.
+   *
+   * <p>The time limit is checked before each scan and before each batch, except the first batch
+   * after a scan, so every scan makes progress even when it takes longer than the time left. A run
+   * that finds cases still queued by an earlier run copies them before scanning again, and then
+   * scans once more to pick up cases that changed since; the sync is only finished after a scan
+   * whose queue has been emptied.
+   */
+  private CaseDataSyncTotals syncCaseData(LocalDateTime stopAt, boolean deleteRemovedCases) {
+    long copied = 0;
+    long batches = 0;
+    long queued = 0;
+    int deleted = 0;
+    boolean scanned = false;
+    boolean mustCopyBatch = false;
+    boolean stoppedByTimeLimit = false;
+    while (true) {
+      List<Long> caseIds = nextQueuedCaseIds();
+      if (caseIds.isEmpty()) {
+        if (scanned) {
+          break;
+        }
+        if (isTimeLimitReached(stopAt)) {
+          stoppedByTimeLimit = true;
+          break;
+        }
+        QueuedCases scan = queueChangedCases(deleteRemovedCases);
+        queued += scan.queued();
+        deleted += scan.deleted();
+        scanned = true;
+        mustCopyBatch = true;
+        continue;
       }
+      if (!mustCopyBatch && isTimeLimitReached(stopAt)) {
+        stoppedByTimeLimit = true;
+        break;
+      }
+      copied += copyCaseDataBatch(caseIds);
+      batches++;
+      mustCopyBatch = false;
+    }
+
+    log.info(
+        "CCD data migration case_data sync taskName={} mode={} queuedCases={} copied={} batches={} deleted={} "
+            + "stoppedByTimeLimit={}",
+        options.taskName(),
+        options.mode(),
+        queued,
+        copied,
+        batches,
+        deleted,
+        stoppedByTimeLimit
+    );
+    return new CaseDataSyncTotals(copied, stoppedByTimeLimit);
+  }
+
+  private QueuedCases queueChangedCases(boolean deleteRemovedCases) {
+    return transaction.execute(status -> {
+      applyMigrationStatementTimeout();
+      db.getJdbcTemplate().execute(
+          "create temp table migration_source_case_versions (id bigint primary key, source_xmin bigint not null) "
+              + "on commit drop"
+      );
+      db.update(
+          """
+          insert into migration_source_case_versions (id, source_xmin)
+          select source.id, source.row_xmin::text::bigint
+          from fdw_stage.case_data_versioned source
+          where source.jurisdiction = :sourceJurisdiction
+            and source.case_type_id in (:caseTypeIds)
+          """,
+          baseParams()
+      );
+      db.getJdbcTemplate().execute("analyze migration_source_case_versions");
+      int deleted = deleteRemovedCases ? deleteCasesRemovedFromSource() : 0;
+      db.update(
+          "delete from ccd_data_migration.case_data_sync_queue where task_name = :taskName",
+          Map.of("taskName", options.taskName())
+      );
+      int queued = db.update(
+          """
+          insert into ccd_data_migration.case_data_sync_queue (task_name, case_data_id)
+          select :taskName, source.id
+          from migration_source_case_versions source
+          left join ccd.case_data target on target.id = source.id
+          left join ccd_data_migration.case_data_copy_versions copied on copied.case_data_id = source.id
+          where target.id is null
+             or copied.case_data_id is null
+             or copied.source_xmin <> source.source_xmin
+             or copied.target_xmin <> target.xmin::text::bigint
+          """,
+          Map.of("taskName", options.taskName())
+      );
+      return new QueuedCases(queued, deleted);
     });
   }
 
-  private int syncCaseDataForCutover() {
-    return db.update(
+  private List<Long> nextQueuedCaseIds() {
+    return db.queryForList(
         """
-        insert into ccd.case_data as target (
-          reference,
-          version,
-          created_date,
-          security_classification,
-          last_state_modified_date,
-          resolved_ttl,
-          last_modified,
-          jurisdiction,
-          case_type_id,
-          state,
-          data,
-          supplementary_data,
-          id,
-          case_revision
-        )
-        select
-          source.reference,
-          source.version,
-          source.created_date,
-          source.security_classification,
-          source.last_state_modified_date,
-          source.resolved_ttl,
-          source.last_modified,
-          source.jurisdiction,
-          source.case_type_id,
-          source.state,
-          source.data,
-          coalesce(source.supplementary_data, jsonb_build_object()),
-          source.id,
-          0
-        from fdw_stage.case_data source
-        where source.jurisdiction = :sourceJurisdiction
-          and source.case_type_id in (:caseTypeIds)
-        on conflict (id) do update
-        set reference = excluded.reference,
-            version = excluded.version,
-            created_date = excluded.created_date,
-            security_classification = excluded.security_classification,
-            last_state_modified_date = excluded.last_state_modified_date,
-            resolved_ttl = excluded.resolved_ttl,
-            last_modified = excluded.last_modified,
-            jurisdiction = excluded.jurisdiction,
-            case_type_id = excluded.case_type_id,
-            state = excluded.state,
-            data = excluded.data,
-            supplementary_data = excluded.supplementary_data
-        where (
-          target.reference,
-          target.version,
-          target.created_date,
-          target.security_classification,
-          target.last_state_modified_date,
-          target.resolved_ttl,
-          target.last_modified,
-          target.jurisdiction,
-          target.case_type_id,
-          target.state,
-          target.data,
-          target.supplementary_data
-        ) is distinct from (
-          excluded.reference,
-          excluded.version,
-          excluded.created_date,
-          excluded.security_classification,
-          excluded.last_state_modified_date,
-          excluded.resolved_ttl,
-          excluded.last_modified,
-          excluded.jurisdiction,
-          excluded.case_type_id,
-          excluded.state,
-          excluded.data,
-          excluded.supplementary_data
-        )
+        select case_data_id
+        from ccd_data_migration.case_data_sync_queue
+        where task_name = :taskName
+        order by case_data_id
+        limit :batchSize
         """,
-        baseParams()
+        Map.of("taskName", options.taskName(), "batchSize", options.caseDataSyncBatchSize()),
+        Long.class
     );
   }
 
-  private int deleteCasesRemovedFromSource() {
-    int deletedCases = db.update(
+  private long copyCaseDataBatch(List<Long> caseIds) {
+    Integer copied = transaction.execute(status -> {
+      applyMigrationStatementTimeout();
+      Array caseIdArray = bigintArray(caseIds);
+      // Cutover sets the final revisions, so copying must not bump them.
+      disableCaseDataRevisionTrigger();
+      int copiedCases = copyCaseData(caseIdArray);
+      enableCaseDataRevisionTrigger();
+      // Every queued id leaves the queue, including one the source no longer returns: a later scan
+      // queues it again if it is still migrated and still differs.
+      db.update(
+          "delete from ccd_data_migration.case_data_sync_queue "
+              + "where task_name = :taskName and case_data_id = any(:caseIds)",
+          new MapSqlParameterSource("taskName", options.taskName()).addValue("caseIds", caseIdArray)
+      );
+      return copiedCases;
+    });
+    return copied == null ? 0 : copied;
+  }
+
+  private Array bigintArray(List<Long> ids) {
+    return db.getJdbcTemplate().execute(
+        (ConnectionCallback<Array>) connection -> connection.createArrayOf("bigint", ids.toArray())
+    );
+  }
+
+  /**
+   * Upserts the batch's source rows and records the xmin of each source row read and target row
+   * left behind. Only rows the source query returned are recorded, so a case that has left the
+   * migrated jurisdiction or case types since the scan is neither copied nor recorded. A row whose
+   * copied columns are unchanged (for example a Logstash index flag update) is not rewritten, but
+   * its new source xmin is still recorded so it is not read again.
+   *
+   * <p>The ids are bound as one bigint array, which postgres_fdw sends to the source as
+   * id = any($1), so the source reads only these rows by primary key.
+   */
+  private int copyCaseData(Array caseIdArray) {
+    Integer copied = db.queryForObject(
         """
-        delete from ccd.case_data target
-        where target.jurisdiction = :sourceJurisdiction
-          and target.case_type_id in (:caseTypeIds)
-          and target.id not in (
-            select source.id
-            from fdw_stage.case_data source
-            where source.jurisdiction = :sourceJurisdiction
-              and source.case_type_id in (:caseTypeIds)
+        with fetched as materialized (
+          select source.reference,
+                 source.version,
+                 source.created_date,
+                 source.security_classification,
+                 source.last_state_modified_date,
+                 source.resolved_ttl,
+                 source.last_modified,
+                 source.jurisdiction,
+                 source.case_type_id,
+                 source.state,
+                 source.data,
+                 coalesce(source.supplementary_data, jsonb_build_object()) as supplementary_data,
+                 source.id,
+                 source.row_xmin::text::bigint as source_xmin
+          from fdw_stage.case_data_versioned source
+          where source.jurisdiction = :sourceJurisdiction
+            and source.case_type_id in (:caseTypeIds)
+            and source.id = any(:caseIds)
+        ),
+        written as (
+          insert into ccd.case_data as target (
+            reference,
+            version,
+            created_date,
+            security_classification,
+            last_state_modified_date,
+            resolved_ttl,
+            last_modified,
+            jurisdiction,
+            case_type_id,
+            state,
+            data,
+            supplementary_data,
+            id,
+            case_revision
           )
+          select reference,
+                 version,
+                 created_date,
+                 security_classification,
+                 last_state_modified_date,
+                 resolved_ttl,
+                 last_modified,
+                 jurisdiction,
+                 case_type_id,
+                 state,
+                 data,
+                 supplementary_data,
+                 id,
+                 0
+          from fetched
+          on conflict (id) do update
+          set reference = excluded.reference,
+              version = excluded.version,
+              created_date = excluded.created_date,
+              security_classification = excluded.security_classification,
+              last_state_modified_date = excluded.last_state_modified_date,
+              resolved_ttl = excluded.resolved_ttl,
+              last_modified = excluded.last_modified,
+              jurisdiction = excluded.jurisdiction,
+              case_type_id = excluded.case_type_id,
+              state = excluded.state,
+              data = excluded.data,
+              supplementary_data = excluded.supplementary_data
+          where (
+            target.reference,
+            target.version,
+            target.created_date,
+            target.security_classification,
+            target.last_state_modified_date,
+            target.resolved_ttl,
+            target.last_modified,
+            target.jurisdiction,
+            target.case_type_id,
+            target.state,
+            target.data,
+            target.supplementary_data
+          ) is distinct from (
+            excluded.reference,
+            excluded.version,
+            excluded.created_date,
+            excluded.security_classification,
+            excluded.last_state_modified_date,
+            excluded.resolved_ttl,
+            excluded.last_modified,
+            excluded.jurisdiction,
+            excluded.case_type_id,
+            excluded.state,
+            excluded.data,
+            excluded.supplementary_data
+          )
+          returning target.id, target.xmin::text::bigint as target_xmin
+        ),
+        recorded as (
+          insert into ccd_data_migration.case_data_copy_versions (case_data_id, source_xmin, target_xmin)
+          select fetched.id,
+                 fetched.source_xmin,
+                 coalesce(written.target_xmin, unchanged.xmin::text::bigint)
+          from fetched
+          left join written on written.id = fetched.id
+          left join ccd.case_data unchanged on unchanged.id = fetched.id
+          on conflict (case_data_id) do update
+          set source_xmin = excluded.source_xmin,
+              target_xmin = excluded.target_xmin
+        )
+        select count(*) from written
         """,
-        baseParams()
+        baseParams().addValue("caseIds", caseIdArray),
+        Integer.class
     );
-    log.info("Deleted CCD cases removed from source taskName={} cases={}", options.taskName(), deletedCases);
-    return deletedCases;
+    return copied == null ? 0 : copied;
   }
 
-  private int updateCaseRevisionsForCutover() {
-    return db.update(
+  // Forgets the recorded versions of the deleted cases in the same statement, so the versions
+  // table never needs a separate scan for orphans.
+  private int deleteCasesRemovedFromSource() {
+    Integer deletedCases = db.queryForObject(
+        """
+        with deleted as (
+          delete from ccd.case_data target
+          where target.jurisdiction = :sourceJurisdiction
+            and target.case_type_id in (:caseTypeIds)
+            and not exists (
+              select 1
+              from migration_source_case_versions source
+              where source.id = target.id
+            )
+          returning target.id
+        ),
+        forgotten as (
+          delete from ccd_data_migration.case_data_copy_versions copied
+          using deleted
+          where copied.case_data_id = deleted.id
+        )
+        select count(*) from deleted
+        """,
+        baseParams(),
+        Integer.class
+    );
+    int deleted = deletedCases == null ? 0 : deletedCases;
+    log.info("Deleted CCD cases removed from source taskName={} cases={}", options.taskName(), deleted);
+    return deleted;
+  }
+
+  // Records the new target xmin of every row it updates, so the revision update itself is not
+  // mistaken for a change to the target on a later run.
+  private void updateCaseRevisionsForCutover() {
+    db.update(
         """
         with event_counts as (
           select ce.case_data_id, max(ce.case_revision)::bigint as max_revision
@@ -677,13 +968,21 @@ public class CcdDataMigrationTask implements Runnable {
             and cd.case_type_id in (:caseTypeIds)
             and ce.case_type_id in (:caseTypeIds)
           group by ce.case_data_id
+        ),
+        updated as (
+          update ccd.case_data target
+          set case_revision = event_counts.max_revision + :caseRevisionOffset
+          from event_counts
+          where target.id = event_counts.case_data_id
+            and target.jurisdiction = :sourceJurisdiction
+            and target.case_type_id in (:caseTypeIds)
+            and target.case_revision is distinct from event_counts.max_revision + :caseRevisionOffset
+          returning target.id, target.xmin::text::bigint as target_xmin
         )
-        update ccd.case_data target
-        set case_revision = event_counts.max_revision + :caseRevisionOffset
-        from event_counts
-        where target.id = event_counts.case_data_id
-          and target.jurisdiction = :sourceJurisdiction
-          and target.case_type_id in (:caseTypeIds)
+        update ccd_data_migration.case_data_copy_versions copied
+        set target_xmin = updated.target_xmin
+        from updated
+        where copied.case_data_id = updated.id
         """,
         baseParams().addValue("caseRevisionOffset", options.caseRevisionOffset())
     );
@@ -990,6 +1289,9 @@ public class CcdDataMigrationTask implements Runnable {
     return Boolean.TRUE.equals(rowsExist);
   }
 
+  // ALTER TABLE is transactional, so a failure before the matching enable rolls the disable back
+  // with the rest of the transaction. Re-enabling in a finally block would instead run in the
+  // aborted transaction and replace the original error with "current transaction is aborted".
   private void disableCaseDataRevisionTrigger() {
     db.getJdbcTemplate().execute("alter table ccd.case_data disable trigger trigger_increment_case_revision");
   }
@@ -1106,7 +1408,58 @@ public class CcdDataMigrationTask implements Runnable {
     }
 
     ensureFdwRemoteEstimate();
+    ensureCaseDataVersionedTable();
     grantAdditionalFdwSelectAccess();
+  }
+
+  /**
+   * fdw_stage.case_data_versioned is case_data plus the source row version (the xmin system
+   * column), read by the event copy and the case_data sync. The FDW setup script creates it;
+   * environments set up before it existed get it here, defined from fdw_stage.case_data's own
+   * columns, server and options so the two cannot drift apart. Creating it needs CREATE on the FDW
+   * schema and USAGE on the server. If the task's role cannot create or read it, the task stops
+   * before copying anything and names the statement for the owner of the FDW schema to run.
+   */
+  private void ensureCaseDataVersionedTable() {
+    String qualifiedName = FDW_SCHEMA + "." + CASE_DATA_VERSIONED_TABLE;
+    if (!fdwTableExists(CASE_DATA_VERSIONED_TABLE)) {
+      String createSql = db.getJdbcTemplate().queryForObject(CREATE_CASE_DATA_VERSIONED_SQL, String.class);
+      try {
+        db.getJdbcTemplate().execute(createSql);
+        log.info("Created CCD data migration foreign table {}", qualifiedName);
+      } catch (DataAccessException ex) {
+        throw new CcdDataMigrationException(
+            "The foreign table " + qualifiedName + " is missing and could not be created ("
+                + ex.getMostSpecificCause().getMessage() + "). Ask the owner of the FDW schema to run: "
+                + createSql + "; grant select on " + qualifiedName + " to " + currentUserIdentifier() + ";"
+        );
+      }
+    }
+    Boolean readable = db.queryForObject(
+        "select has_table_privilege(:qualifiedName, 'SELECT')",
+        Map.of("qualifiedName", qualifiedName),
+        Boolean.class
+    );
+    if (!Boolean.TRUE.equals(readable)) {
+      throw new CcdDataMigrationException(
+          "The CCD data migration role cannot read the foreign table " + qualifiedName
+              + ". Ask the owner of the FDW schema to run: grant select on " + qualifiedName + " to "
+              + currentUserIdentifier() + ";"
+      );
+    }
+  }
+
+  private String currentUserIdentifier() {
+    return db.getJdbcTemplate().queryForObject("select quote_ident(current_user)", String.class);
+  }
+
+  private boolean fdwTableExists(String tableName) {
+    Boolean exists = db.queryForObject(
+        "select to_regclass(:qualifiedName) is not null",
+        Map.of("qualifiedName", FDW_SCHEMA + "." + tableName),
+        Boolean.class
+    );
+    return Boolean.TRUE.equals(exists);
   }
 
   /**
@@ -1185,12 +1538,12 @@ public class CcdDataMigrationTask implements Runnable {
 
           select s.srvname,
                  coalesce((
-                   select split_part(option, '=', 2)
+                   select substr(option, strpos(option, '=') + 1)
                    from unnest(ft.ftoptions) option
                    where split_part(option, '=', 1) = 'schema_name'
                  ), 'public'),
                  (
-                   select split_part(option, '=', 2)
+                   select substr(option, strpos(option, '=') + 1)
                    from unnest(ft.ftoptions) option
                    where split_part(option, '=', 1) = 'fetch_size'
                  )
@@ -1309,7 +1662,8 @@ public class CcdDataMigrationTask implements Runnable {
         grant select on
           fdw_stage.case_data,
           fdw_stage.case_event,
-          fdw_stage.case_event_significant_items
+          fdw_stage.case_event_significant_items,
+          fdw_stage.case_data_versioned
         to """ + granteeIdentifier);
   }
 
@@ -1428,6 +1782,15 @@ public class CcdDataMigrationTask implements Runnable {
 
     private CopyTotals markStoppedByTimeLimit() {
       return new CopyTotals(batches, events, caughtUp, true);
+    }
+  }
+
+  private record QueuedCases(int queued, int deleted) {
+  }
+
+  private record CaseDataSyncTotals(long casesProcessed, boolean stoppedByTimeLimit) {
+    private static CaseDataSyncTotals notRun() {
+      return new CaseDataSyncTotals(0, false);
     }
   }
 

@@ -9,7 +9,8 @@ set -euo pipefail
 #   - postgres_fdw and pgcrypto extensions
 #   - FDW staging schema
 #   - FDW server and user mapping
-#   - foreign tables for source case_data, case_event and case_event_significant_items
+#   - foreign tables for source case_data, case_event and case_event_significant_items, and
+#     case_data_versioned (case_data plus its row version, xmin, for the Java task's case_data sync)
 #
 # This script is intended to be run once by the team with database privileges.
 # ------------------------------------------------------------------------------
@@ -168,6 +169,7 @@ setup_fdw() {
   psql_dst <<'SQL'
 create schema if not exists :"fdw_schema";
 
+drop foreign table if exists :"fdw_schema".case_data_versioned;
 drop foreign table if exists :"fdw_schema".case_event_significant_items;
 drop foreign table if exists :"fdw_schema".case_event;
 drop foreign table if exists :"fdw_schema".case_data;
@@ -268,6 +270,51 @@ options (
   table_name 'case_event_significant_items',
   fetch_size '10000'
 );
+
+-- case_data with the source row version (the xmin system column), read by the Java task's event
+-- copy and case_data sync to tell which cases changed since they were copied. Defined from the
+-- case_data foreign table above, so the two cannot drift apart. CcdDataMigrationTask runs the same
+-- query (CREATE_CASE_DATA_VERSIONED_SQL) for environments set up before this table existed.
+select format(
+  'create foreign table %I.case_data_versioned (%s, row_xmin xid options (column_name %L)) server %I%s',
+  n.nspname,
+  (
+    select string_agg(
+      format('%I %s', a.attname, format_type(a.atttypid, a.atttypmod))
+        || coalesce(
+          ' options (' || (
+            select string_agg(
+              format('%I %L', split_part(o, '=', 1), substr(o, strpos(o, '=') + 1)),
+              ', '
+            )
+            from unnest(a.attfdwoptions) o
+          ) || ')',
+          ''
+        ),
+      ', ' order by a.attnum
+    )
+    from pg_attribute a
+    where a.attrelid = ft.ftrelid
+      and a.attnum > 0
+      and not a.attisdropped
+  ),
+  'xmin',
+  s.srvname,
+  coalesce(
+    ' options (' || (
+      select string_agg(format('%I %L', split_part(o, '=', 1), substr(o, strpos(o, '=') + 1)), ', ')
+      from unnest(ft.ftoptions) o
+    ) || ')',
+    ''
+  )
+)
+from pg_foreign_table ft
+join pg_class c on c.oid = ft.ftrelid
+join pg_namespace n on n.oid = c.relnamespace
+join pg_foreign_server s on s.oid = ft.ftserver
+where n.nspname = :'fdw_schema'
+  and c.relname = 'case_data'
+\gexec
 SQL
 }
 
@@ -280,7 +327,8 @@ grant usage on schema :"fdw_schema" to :local_user_sql;
 grant select on
   :"fdw_schema".case_data,
   :"fdw_schema".case_event,
-  :"fdw_schema".case_event_significant_items
+  :"fdw_schema".case_event_significant_items,
+  :"fdw_schema".case_data_versioned
 to :local_user_sql;
 
 select case
@@ -306,7 +354,8 @@ end as extra_schema_grant_sql
 select case
   when :'fdw_additional_grantee' <> ''
     then format(
-      'grant select on %I.case_data, %I.case_event, %I.case_event_significant_items to %I',
+      'grant select on %I.case_data, %I.case_event, %I.case_event_significant_items, %I.case_data_versioned to %I',
+      :'fdw_schema',
       :'fdw_schema',
       :'fdw_schema',
       :'fdw_schema',
@@ -325,6 +374,8 @@ select 'fdw case_data table' as check_name, to_regclass(:'fdw_schema' || '.case_
 select 'fdw case_event table' as check_name, to_regclass(:'fdw_schema' || '.case_event') as relation;
 select 'fdw case_event_significant_items table' as check_name,
   to_regclass(:'fdw_schema' || '.case_event_significant_items') as relation;
+select 'fdw case_data_versioned table' as check_name,
+  to_regclass(:'fdw_schema' || '.case_data_versioned') as relation;
 
 select 'source case_data reachable' as check_name, exists(
   select 1
