@@ -1,0 +1,72 @@
+[
+  {
+    "ID": "InternationalElement",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "issuesReason"
+  },
+  {
+    "ID": "InternationalElement",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "possibleCarerReason"
+  },
+  {
+    "ID": "InternationalElement",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "proceedingsReason"
+  },
+  {
+    "ID": "InternationalElement",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "possibleCarer"
+  },
+  {
+    "ID": "InternationalElement",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "significantEvents"
+  },
+  {
+    "ID": "InternationalElement",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "internationalAuthorityInvolvementDetails"
+  },
+  {
+    "ID": "InternationalElement",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "issues"
+  },
+  {
+    "ID": "InternationalElement",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "internationalAuthorityInvolvement"
+  },
+  {
+    "ID": "InternationalElement",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "significantEventsReason"
+  },
+  {
+    "ID": "InternationalElement",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "proceedings"
+  }
+]

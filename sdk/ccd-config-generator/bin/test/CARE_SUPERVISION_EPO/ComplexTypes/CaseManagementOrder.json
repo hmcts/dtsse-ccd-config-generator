@@ -1,0 +1,75 @@
+[
+  {
+    "ID": "CaseManagementOrder",
+    "FieldType": "Schedule",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "schedule"
+  },
+  {
+    "ID": "CaseManagementOrder",
+    "FieldType": "NextHearing",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "nextHearing"
+  },
+  {
+    "ID": "CaseManagementOrder",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "hearingDate"
+  },
+  {
+    "ID": "CaseManagementOrder",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Recitals",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "recitals"
+  },
+  {
+    "ID": "CaseManagementOrder",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Direction",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "directions"
+  },
+  {
+    "ID": "CaseManagementOrder",
+    "FieldType": "Document",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "orderDoc"
+  },
+  {
+    "ID": "CaseManagementOrder",
+    "FieldType": "UUID",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "id"
+  },
+  {
+    "ID": "CaseManagementOrder",
+    "FieldType": "OrderAction",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "action"
+  },
+  {
+    "ID": "CaseManagementOrder",
+    "FieldType": "FixedRadioList",
+    "FieldTypeParameter": "CMOStatus",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "status"
+  },
+  {
+    "ID": "CaseManagementOrder",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "dateOfIssue"
+  }
+]

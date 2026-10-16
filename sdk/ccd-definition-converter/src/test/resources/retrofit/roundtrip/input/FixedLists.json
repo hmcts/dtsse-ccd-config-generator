@@ -1,0 +1,14 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "ID": "ClaimType",
+    "ListElementCode": "possession",
+    "ListElement": "Possession claim"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "ID": "ClaimType",
+    "ListElementCode": "money",
+    "ListElement": "Money claim"
+  }
+]

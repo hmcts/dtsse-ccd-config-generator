@@ -1,0 +1,42 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "ID": "createCase",
+    "Name": "Create case",
+    "Description": "Create a new case",
+    "DisplayOrder": 1,
+    "PreConditionState(s)": "",
+    "PostConditionState": "Open",
+    "SecurityClassification": "Public",
+    "ShowSummary": "Y",
+    "CallBackURLAboutToSubmitEvent": "${CCD_DEF_BASE_URL}/create/about-to-submit",
+    "CallBackURLSubmittedEvent": "${CCD_DEF_BASE_URL}/create/submitted"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "ID": "addNotes",
+    "Name": "Add notes",
+    "Description": "Add case notes",
+    "DisplayOrder": 2,
+    "PreConditionState(s)": "Open",
+    "PostConditionState": "*",
+    "SecurityClassification": "Public",
+    "ShowSummary": "N",
+    "ShowEventNotes": "Y"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "ID": "closeCase",
+    "Name": "Close case",
+    "Description": "Close the case",
+    "DisplayOrder": 3,
+    "PreConditionState(s)": "Open",
+    "PostConditionState": "Closed",
+    "SecurityClassification": "Public",
+    "ShowSummary": "Y",
+    "CallBackURLAboutToStartEvent": "${CCD_DEF_BASE_URL}/close/about-to-start"
+  }
+]

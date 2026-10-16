@@ -1,0 +1,79 @@
+[
+  {
+    "ID": "Proceeding",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "ended"
+  },
+  {
+    "ID": "Proceeding",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "started"
+  },
+  {
+    "ID": "Proceeding",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "judge"
+  },
+  {
+    "ID": "Proceeding",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "guardian"
+  },
+  {
+    "ID": "Proceeding",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "onGoingProceeding"
+  },
+  {
+    "ID": "Proceeding",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "proceedingStatus"
+  },
+  {
+    "ID": "Proceeding",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "sameGuardianNeeded"
+  },
+  {
+    "ID": "Proceeding",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "sameGuardianDetails"
+  },
+  {
+    "ID": "Proceeding",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "children"
+  },
+  {
+    "ID": "Proceeding",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "caseNumber"
+  },
+  {
+    "ID": "Proceeding",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "ordersMade"
+  }
+]

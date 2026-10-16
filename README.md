@@ -285,6 +285,71 @@ public class Application {
 
 `LocalDateTime` classes are mapped to the CCD `DateTime` type so the complex type `Application` will have a single `DateTime` field.
 
+### Naming a type no field declares
+
+`typeParameterOverride` only writes the `FieldTypeParameter` column; the `FixedLists`/`ComplexTypes`
+**rows** come from the types reflection reaches from the case-data class. So a field that names a list
+without declaring it — the shape reference data really takes, where the codes are loaded at runtime and
+the field stays a `String` — references a list nothing generates. `typeParameterClass` names the class
+supplying those rows, making it reachable exactly as a declared field type is:
+
+```java
+  @CCD(
+    label = "Hearing venue",
+    typeOverride = FixedList,
+    typeParameterOverride = "FL_hearingVenues",
+    typeParameterClass = HearingVenues.class
+  )
+  private String hearingVenue;
+```
+
+`HearingVenues` is an ordinary `HasLabel` enum carrying `@ComplexType(name = "FL_hearingVenues")`, so
+its rows are emitted under the ID the field references. The field keeps its declared type, so no caller
+or serialised payload changes. It has no effect on a field the definition excludes (`ignore` or a
+non-matching `gate`) — an omitted field reaches nothing.
+
+### Generation-time environment gates
+
+`@CCD(gate = "[!]ENV_VAR:value")` makes a field part of the generated definition only when an
+environment predicate matches at the moment `generateCCDConfig` runs. It is the SDK counterpart of
+the per-environment overlay files hand-written definitions activate by glob inclusion/exclusion: instead of
+shipping a field in a `CaseField-prod.json` fragment, the field is annotated and the generator emits — or
+omits — every row it owns according to whether the gate matches. The predicate grammar is identical to the
+ccd-definition-converter's overlay condition, so a converted overlay suffix maps to the same expression:
+
+```java
+  @CCD(label = "A Judgments-Online field", gate = "CCD_DEF_JO:true")
+  private String judgmentsOnlineField;
+```
+
+- `CCD_DEF_JO:true` — active when `CCD_DEF_JO` resolves to `true` (case-insensitively).
+- `!CCD_DEF_ENV:prod` — active when `CCD_DEF_ENV` does *not* resolve to `prod`.
+
+The variable is resolved from a system property first, then the process environment. When the gate is
+inactive the gated field is dropped exactly like `@CCD(ignore = true)`: every row it owns — CaseField,
+AuthorisationCaseField, CaseEventToFields placements, CaseTypeTab, WorkBasket/Search — vanishes, while
+ungated fields regenerate byte-identically.
+
+The same gate works on a **member of a complex type**, for members that exist only in a per-environment
+overlay and so cannot be expressed by a field-level gate on the CaseData class:
+
+```java
+  @ComplexType(name = "GatedMemberComplex", generate = true)
+  public class GatedMemberComplex {
+    @CCD(label = "An always-present member")
+    private String alwaysMember;
+
+    @CCD(label = "A Judgments-Online member", gate = "CCD_DEF_JO:true")
+    private GatedMemberNested gatedMember;
+  }
+```
+
+When the gate is inactive the gated member vanishes from that type's `ComplexTypes` rows, and any nested
+complex type reachable only through the gated member disappears from the definition entirely.
+
+A gate on a `@JsonUnwrapped` container applies to every member it flattens into `CaseData`: when it is
+inactive, all of them are dropped, whatever their own gates.
+
 ### Setting up case states
 
 The case states are implemented by an enum:
@@ -314,6 +379,37 @@ public enum State {
   Holding;
 }
 ```
+
+By default the CCD state ID is the enum constant name. A constant may override this with
+`@JsonProperty`, exactly as case fields do — the annotated value then becomes the state ID
+**everywhere** a state is written (the `State` sheet, each event's `PreConditionState(s)` /
+`PostConditionState`, and the `AuthorisationCaseState` `CaseStateID` rows):
+
+```java
+public enum State {
+  @JsonProperty("PREPARE_FOR_HEARING")
+  CASE_MANAGEMENT,   // → state ID "PREPARE_FOR_HEARING"
+  Open;              // → state ID "Open" (no @JsonProperty, unchanged)
+}
+```
+
+This matters for three reasons:
+
+- **Consistency.** `FieldUtils.getFieldId` already honours `@JsonProperty` for case fields; states
+  were the one place the SDK ignored it.
+- **Correctness.** At runtime the case state value is serialised by Jackson, which *does* honour
+  `@JsonProperty` — so a service whose state enum carried `@JsonProperty` was previously generating
+  definition state IDs that could never match the state values it actually writes. The old
+  behaviour was a latent bug, not a contract.
+- **Retrofit.** It lets services migrating from hand-written definitions (e.g. FPL, whose enum
+  reconciles `CASE_MANAGEMENT → @JsonProperty("PREPARE_FOR_HEARING")`) reuse their existing `State`
+  enum instead of maintaining a parallel one.
+
+An enum without `@JsonProperty` on its constants behaves exactly as before, so existing definitions
+regenerate byte-for-byte identically. Enums whose `toString()` is overridden (e.g. an `@JsonValue`
+`toString()` returning a lowercase id) are also supported: the ID falls back to `toString()`, and
+the SDK reads any `@CCD` annotation via `Enum.name()` so such enums no longer throw during
+generation.
 
 ### Setting up user roles
 
@@ -442,6 +538,37 @@ Members carry their per-event label and hint fluently with `.eventLabel(...)` an
 `.eventLabel`/`.eventHint` are the fluent equivalents of the trailing label/hint arguments on the positional `.optional`/`.mandatory` overloads, reachable without also threading a show condition or default value — and, unlike those overloads, available on `.readonly` too. `RetainHiddenValue` is carried through from the member's `retainHiddenValue` flag.
 
 `.pageId(...)` sets the member row's `PageID`. The definition-store `EventToComplexTypes` parser does not read `PageID`, so this value does not change how CCD renders the member — it exists purely so a hand-authored definition carrying `PageID` on member rows round-trips through the SDK byte-for-byte. Rarely used columns not read by that parser (`SecurityClassification`, `Publish`, `ShowSummaryChangeOption` — each under ~1.5% of observed member rows) are intentionally left as raw passthrough rather than given SDK setters.
+
+##### Opening a member scope without placing the field
+
+`.complex(getter)` does two things: it registers a `CaseEventToFields` row for the field with `DisplayContext=COMPLEX`, *and* it opens the member scope. When you want only the second — because the event places the field in a different context, or does not place it at all — use `.complexScope(getter)`, which opens the scope and registers nothing:
+
+```java
+  builder.event("updateOtherPartyData")
+    ...
+    .fields()
+      // The field's own row keeps the context you asked for...
+      .readonly(CaseData::getAppeal)
+      // ...and the member overrides go in a separate, non-registering scope.
+      .complexScope(CaseData::getAppeal)
+        .mandatory(Appeal::getBenefitType)
+        .optional(Appeal::getReference)
+      .done()
+    ;
+```
+
+For a `List<ListValue<X>>` field the equivalent is the element-typed `.complex(getter, X.class)`, which likewise registers nothing and types the scope on the element rather than the list.
+
+`.complexMember(getter)` places a member with `DisplayContext=COMPLEX` *without* opening a nested scope — for an intermediate that carries a `COMPLEX` row of its own alongside dotted rows for its leaves. The two compose on the same member:
+
+```java
+      .complexScope(CaseData::getPoDetails)
+        .complexMember(PoDetails::getContact)      // the intermediate's own COMPLEX row
+        .complex(PoDetails::getContact)            // ...and descend into it
+          .optional(Contact::getPhone)
+        .done()
+      .done()
+```
 
 #### Per-field defaults and hidden-value retention
 
@@ -598,6 +725,12 @@ Permissions can be added manually to individual fields:
   )
   private YesOrNo agreedToReceiveEmails;
 ```
+
+Multiple access classes on a field compose **additively**: a field's effective grant for a role is
+the union of the permissions from every class in the `access` array (see
+`AuthorisationCaseFieldGenerator`). This lets a field start from a broad base and widen specific
+roles — e.g. `access = {DefaultAccess.class, Applicant2Access.class}` grants everyone the defaults
+plus Applicant 2 their own edit rights.
 
 ### States
 
@@ -856,6 +989,473 @@ To see a full working implementation of a CCD service using the CCD config gener
 
 - https://github.com/hmcts/nfdiv-case-api
 - https://github.com/hmcts/adoption-cos-api
+
+## Migrating a JSON definition to Java (ccd-definition-converter)
+
+Teams that already maintain a hand-written JSON CCD definition (the per-sheet format consumed
+by `ccd-definition-processor`'s `json2xlsx`) can bootstrap the equivalent config-generator Java
+with the `ccd-definition-converter` SDK subproject. It runs in **two modes**:
+
+- **Generate mode** (the default, below) reads the JSON sheets and emits a brand-new
+  `@CCD`-annotated `CaseData`, `State`/`UserRole`/`FixedList` enums, `@ComplexType` classes,
+  access classes and `CCDConfig` classes. This is the path for **map-based** services whose model
+  is a `HashMap` subclass with no fields to annotate (e.g. IA's `AsylumCase`).
+- **Retrofit mode** (`--retrofit`, further below) does *not* generate a fresh model. Instead it
+  resolves each definition field against the team's **existing** Java model using the SDK's own
+  Jackson-faithful rules. `--report-only` reports how well the two line up (phase 1); without it,
+  the converter additionally emits a `git apply`-able **annotation patch** against the model plus the
+  still-generated companion config/enum/access sources (phase 2). This is the path for the
+  **team-owned-POJO** services (FPL, Civil, ET, SSCS) that already maintain a rich domain model.
+
+### Generate mode
+
+```bash
+./gradlew -p sdk :ccd-definition-converter:run --args='
+  --input        /path/to/definitions/appeal/json
+  --case-type    Asylum
+  --output-src   /path/to/service/src/main/java
+  --model-package  uk.gov.hmcts.ia.model
+  --overlay-suffix prod=CCD_DEF_ENV:prod --overlay-suffix nonprod=!CCD_DEF_ENV:prod
+  --report-dir   build/ccd-conversion'
+```
+
+#### Generated package layout
+
+Generated code goes into the service's **main source tree** and is laid out to mirror the mature
+hand-written services (nfdiv/sptribs), so a team owns and edits it directly. The **root config
+package** is derived from `--model-package` by cutting it at its first `model`, `models` or `domain`
+segment, then appending `.ccd` unless the cut result already ends with `.ccd`:
+
+| `--model-package` | derived root package |
+|---|---|
+| `uk.gov.hmcts.probate.model.ccd.raw` | `uk.gov.hmcts.probate.ccd` |
+| `uk.gov.hmcts.reform.fpl.model` | `uk.gov.hmcts.reform.fpl.ccd` |
+| `uk.gov.hmcts.reform.sscs.ccd.domain` | `uk.gov.hmcts.reform.sscs.ccd` |
+| `uk.gov.hmcts.reform.prl.models.dto.ccd` | `uk.gov.hmcts.reform.prl.ccd` |
+| `uk.gov.hmcts.foo.bar` (no marker segment) | `uk.gov.hmcts.foo.bar.ccd` |
+
+Override it with `--root-package <pkg>` (or the equivalent legacy `--config-package <pkg>`) when a
+team wants a specific home. Under `<root>` the converter emits:
+
+```
+<root>/                       config beans, one per concern (finding #6):
+  ├─ <Prefix>CaseType.java      case type + jurisdiction identity, flags, banner
+  ├─ <Prefix>Grants.java        state + complex-type grants
+  ├─ <Prefix>Tabs.java          tabs
+  ├─ <Prefix>WorkBasket.java    work-basket input/result fields
+  ├─ <Prefix>Search.java        search input/result, search-cases, criteria, parties
+  ├─ <Prefix>NoticeOfChange.java, <Prefix>RoleToAccessProfiles.java, <Prefix>Categories.java
+  ├─ event/                     one @Component CCDConfig per event (finding #1):
+  │    ├─ AddNotes.java            PascalCase of the event ID; ID as a `static final String` constant
+  │    └─ createcase/             a MULTI-page event, with one class per wizard page (finding #2):
+  │         ├─ CreateCase.java
+  │         ├─ CreateCasePage1.java   `public static void apply(fields)` called by the event class
+  │         └─ ApplicantDetailsPage.java
+  └─ access/                    HasAccessControl classes referenced by @CCD(access = {…})
+```
+
+Model classes stay under `--model-package`: `CaseData`, `State`, `UserRole`, `EnvironmentFlags` and
+any synthesised `@JsonUnwrapped` classes in the package itself, fixed-list enums in
+`<model>.enums` and complex types in `<model>.complex` (retrofit mode emits its companion types into
+the model package itself). Each config bean is emitted only when its concern carries content
+(`CaseType` always). A **single-page event** carries no page class and stays in `event/`: its one
+page's header (`page(id)`, optional page label / show condition) and field chain are inlined
+directly into the event class's `configure()` method — a page class would be pure indirection for
+one page. A **multi-page** event moves, with its page classes, into its own package
+`event/<eventclassname-lowercased>` (suffixed `2`, `3`, … when two event class names differ only by
+case; a Java keyword gets a trailing `_`). A page class is named from its CCD page ID with the event
+name dropped, since the package already carries it (`applyForFTPAAppellant`'s
+`ftpaAppellantSubmissionPage` → `FtpaAppellantSubmissionPage`, `selectHearing` →
+`SelectHearingPage`); a page ID that would be left with only a number, or nothing, keeps the event
+name so numbered pages stay unique in a type search (`1` → `CreateCasePage1`; IA's
+`allocateTheCase`, `allocateTheCase2` → `AllocateTheCasePage`, `AllocateTheCasePage2`). A single
+wizard page large enough to overflow the JVM method-size limit on its own splits into documented
+`<Page>FieldsN` fragments within the event's package; this applies even to an oversized single
+page, which still gets no page class.
+
+Fixed lists whose ID is a word plus a number and that hold a single option (IA's `checklist1` …
+`checklist7`, each one tick-box) are named after that option instead (`checklist1` = `isAdult` →
+`IsAdult`); the CCD ID still round-trips through `@ComplexType(name = …)`. A list keeps its
+ID-derived name when the option name is unusable, already taken by another generated type, or
+derived by more than one such list.
+
+`--group-case-data N` (generate mode, default `0` = off) splits a large `CaseData` into
+`@JsonUnwrapped` sub-objects of at least `N` fields, so the root class reads as an outline. Fields
+sharing a leading camelCase word (`appellantGivenNames`, `appellantFamilyName`, …) become members of
+an `Appellant` class held as `@JsonUnwrapped(prefix = "appellant") Appellant appellant` and named for
+the remainder (`givenNames`); the prefix extends while every member shares the next word
+(`homeOffice…` → `HomeOffice`). The group class carries
+`@JsonNaming(PropertyNamingStrategies.UpperCamelCaseStrategy.class)` so Jackson's flat key matches the
+`prefix + capitalize(member)` ID the SDK derives. Underscore-separated IDs (`progress_caseOfficer_…`)
+group by their leading segments under a bare `@JsonUnwrapped`, keeping their full IDs. Leading
+predicate/action words (`is`, `has`, `add`, `case`, …) never form a group; a field stays flat when a
+typed SDK reference to it accepts only a `CaseData` getter (an `AuthorisationComplexType` grant, a tab
+row with a `DisplayContextParameter`, `CaseEventToComplexTypes` overrides or a `COMPLEX` placement), or
+when its remainder starts with an acronym (`hearingHMCId`, which Jackson would read back as `hmcid`).
+Group classes live in the model package, and `CaseData` declares their containers first, by member
+name, initialised so a getter chain never meets `null`.
+
+Every generated source file is written through `GeneratedSourceFormatter`, which puts an annotation
+on one line when it fits 120 columns (`@JsonUnwrapped(prefix = "legal")`) and leaves a longer one
+with one member per line.
+
+Key behaviours:
+
+- **Callbacks** — each callback is emitted as a URL callback pointing at the endpoint the definition
+  names: `.aboutToStartCallback(url, retries...)`, `.aboutToSubmitCallback(url, retries...)` and
+  `.submittedCallback(url, retries...)` on the event, `fields.page(id, url, retries...)` for a
+  page's mid-event. The generator writes the URL verbatim, `${CCD_DEF_*}` placeholders and all, so
+  the regenerated definition points at the migrated service's original endpoints unchanged. Retries
+  that are not a plain comma-separated int list are emitted through `.retries(Webhook, String)` as
+  authored. A page's mid-event callback is read, as the definition store reads it, from the page's
+  first row carrying a `CallBackURLMidEvent`; rows that disagree are reported. Retry values the
+  definition store never reads — about-to-start retries under `RetriesTimeoutURLAboutToStartEvent`
+  (it reads `RetriesTimeoutAboutToStartEvent`), or retries on a hook with no URL — are dropped with an
+  `ADVISORY` gap. Moving an event to an in-process handler is a per-event step: replace the URL
+  overload with a handler (`.aboutToSubmitCallback(this::aboutToSubmit)`, `page(id, this::midEvent)`,
+  …); the SDK rejects a handler and a URL on the same hook.
+- **Per-environment overlays** — files such as `CaseEvent-prod.json` / `CaseEvent-nonprod.json`
+  become environment-guarded Java (an `EnvironmentFlags.flag(...)` check), configured via
+  repeatable `--overlay-suffix suffix=[!]ENV_VAR:value` (defaults ship for `prod`/`nonprod`). A
+  `CaseField` that exists only in an overlay fragment with a configured predicate becomes a real
+  model member carrying `@CCD(gate = "[!]ENV_VAR:value")` (see
+  [Generation-time environment gates](#generation-time-environment-gates)), in both modes.
+- **Gaps and passthrough** — anything the SDK cannot express in code (unsupported sheets like
+  `UserProfile`, unsupported columns, non-derivable authorisations) is written to a
+  gap report (`gap-report.json`/`.md`) and, where safe, passed through as raw JSON to be merged
+  into the generated definition after `generateCCDConfig` runs. Nothing is silently dropped.
+- **`UserProfile`** is a deliberate exception: the converter does **not** pass it through, so a
+  definition carrying the sheet fails conversion with an `OMITTED_FAIL` gap unless `--allow-gaps` is
+  set. Its rows are per-user, per-environment workbasket-filter defaults keyed on real IDAM emails —
+  environment/deployment config, not case-type model — and that one user-visible effect (the
+  case-list default filter) does not appear to be consumed by current XUI code, which computes the
+  default a different way (maintainer decision 2026-07-16). Migrating teams
+  should either **drop the sheet** or **hand-manage `UserProfile.json` per environment** outside the
+  generated definition. The importer only needs the `UserProfile` sheet/tab to be present, which
+  `ccd-definition-processor`'s `json2xlsx` already creates empty when the file is omitted —
+  `ccd-definition-processor`'s own README already treats `UserProfile.json` as an excludable,
+  environment-varying file (`-e 'UserProfile.json, *-nonprod.json'`) for non-prod builds.
+
+Correctness is proven by the `roundTripTest` task: it converts a definition to Java, compiles
+it, runs the generator, and semantically diffs the regenerated JSON against the input, tolerating
+only an explicit, documented set of superficial config-generator differences.
+
+### Access-class emission policy (both modes)
+
+The converter reproduces a definition's `AuthorisationCaseField` grants as `@CCD(access = {…})` on
+each field, on top of the grants the SDK injects automatically (event grants, `caseHistory`,
+tab/search read). Every role the injected baseline leaves short of its definition grant is part of
+the field's **residual** grant map, carrying the role's **full** definition CRUD (not just the
+missing permissions): the SDK unions class grants with what it injects, so the result is the same,
+and two fields granting a role the same CRUD share one class whatever the SDK injects on each. The
+converter expresses every residual as a **union of named access-group classes**, as a hand-written
+HMCTS model does (e.g. `@CCD(access = {CaseworkerCruAccess.class, CitizenRAccess.class})`). This
+exploits the SDK's proven additive composition — a field's effective grant for a role is the union
+of the permissions from every class it names (see
+`AuthorisationCaseFieldGenerator.addPermissionsFromFields`). Class names never appear in the emitted
+`AuthorisationCaseField`, only the resolved grants, so any decomposition whose classes' grants union
+back to the residual round-trips byte-for-byte. The decomposition is deterministic (identical in
+generate and retrofit mode — `AccessClassComputer`):
+
+1. **Atoms.** The finest grain is one class per distinct `(role → CRUD)` pair that occurs — small and
+   semantic (`CaseworkerCruAccess`, `CitizenRAccess`). A residual with distinct roles decomposes into
+   one atom per role.
+2. **Groups.** Frequently co-occurring atom-sets that grant **one CRUD level to all their roles** are
+   mined into named bundles by a greedy frequent-itemset pass — the bundle covering the most residual
+   across the case type is carved out first, then the pass repeats on what remains. A group must be
+   used by **≥ 3 fields**, bundle **≥ 2 atoms** and have a semantic name (see below) to be mined.
+3. **Per-field cover.** Each residual is covered by the groups that carved it plus any leftover
+   atoms.
+4. **Combined classes.** A field lists at most **5 classes**
+   (`AccessClassComputer.MAX_CLASSES_PER_FIELD`). Over-cap covers are shortened in two steps. First,
+   classes that several over-cap fields already list in common are folded into one **combined
+   class** they all share (any mix of CRUD levels, mined greedily, most-shared first, and only when
+   the combination has a readable name). Then each field still over the cap keeps its 4 widest
+   classes and folds the rest into one combined class, shared by every field folding the same tail.
+
+Every class is named from its content, collision-suffixed and stable across re-runs. A role ID is
+split into lower-case tokens on every non-alphanumeric character, and the case type's role namespace
+is elided: up to three passes each drop one leading token shared by at least 40 % (and at least 3) of
+the non-case roles that have something after it — IA's `caseworker-ia-legalrep-solicitor` names as
+`LegalrepSolicitor`. A multi-role name lists roles widest CRUD first, writes each CRUD token once
+after its run (`{judge=CRU, legalrep=CRU}` → `JudgeLegalrepCruAccess`), factors roles sharing leading
+tokens (`specific-access-admin`, `specific-access-judge` → `SpecificAccessAdminJudge`) and collapses
+one-letter case-role series (`[CHILDSOLICITORA]`…`[CHILDSOLICITORO]` → `ChildsolicitorAToO`). A name
+over 70 characters is truncated to the first role's token, a role count and a short stable digest;
+groups and shared combined classes are never mined under such a name, so only a field's folded tail
+can carry one.
+
+With `--group-case-data N`, each `@JsonUnwrapped` group container carries a **base access**: its
+`@CCD(access = {…})` lists the grants every member's definition has (at the same CRUD) that at least
+two members would otherwise list, and each member lists only the rest of its residual. The SDK gives
+every member the container's classes plus its own, so a member whose residual is all base has no
+`access` of its own; a group whose members share no grant gets no container `access`. The group
+class's Javadoc names the container's classes. The classes are derived over the members' remaining
+grants, the container bases and every other field's residual.
+
+Only classes actually referenced by some field's cover are emitted. The outcome is recorded per case
+type in `CaseTypeModel.accessSummaryNote` (and the gap report's *Access emission* section): the total
+class count broken into groups/atoms/combined classes, the per-field array distribution (avg/max),
+the mined-group and combined-class tables, and how many group containers carry a base.
+
+### Retrofit mode (`--retrofit --report-only`)
+
+Phase 1 of retrofit is a **report-only matcher**. Given a definition and the team's existing
+model source, it resolves every data-bearing `CaseField` ID against that model using the exact
+resolution the SDK applies at generation time (`FieldUtils.getFieldId`,
+`CaseFieldGenerator.appendUnwrapped`, the `ReflectionUtils.doWithFields` superclass walk,
+`FieldUtils.isFieldIgnored`), classifies each field, and writes a match report. **No source is
+mutated and no annotation patch is emitted — that is phase 2.**
+
+```bash
+./gradlew -p sdk :ccd-definition-converter:run --args='
+  --retrofit --report-only
+  --input             /path/to/civil-ccd-definition/ccd-definition/civil
+  --case-type         CIVIL
+  --model-source-root /path/to/civil-service/src/main/java
+  --model-package     uk.gov.hmcts.reform.civil.model
+  --model-class       CaseData
+  --report-dir        build/retrofit'
+```
+
+The resolver mirrors the SDK rule-for-rule: field name → ID, `@JsonProperty("id")` override,
+recursive `@JsonUnwrapped` prefix composition (`prefix + capitalize(child)`, and prefix-less
+unwraps verbatim), superclass fields, and `@JsonIgnore` / `@CCD(ignore = true)` exclusion. It maps
+each resolved field's Java type through the SDK's own inference (`String`→`Text`, `LocalDate`→`Date`,
+enum→`FixedRadioList`, `Collection` with generic-wrapper descent) and detects concrete
+`value`-bearing collection wrappers the SDK's `hasGenerics()` descent mis-resolves (which need a
+per-field `@CCD(typeParameterOverride = …)`, decision 8). Every data-bearing field lands in exactly
+one bucket:
+
+| Bucket | Meaning | Action |
+|---|---|---|
+| `EXACT_MATCH` | Resolves; Java type infers to the definition's FieldType | annotate only (`@CCD` for label/hint/access) |
+| `TYPE_CONFLICT` | Resolves; type infers differently | `@CCD(typeOverride=…)` — or `typeParameterOverride` for a concrete wrapper |
+| `UNMATCHED_DEFINITION_FIELD` | No Java property resolves | synthesise a typed `@CCD` field on the model class (decision 4) |
+
+plus the reverse `UNMATCHED_JAVA_FIELD` list (model fields with no definition ID → `@CCD(ignore=true)`),
+a state-enum verdict (state ID = constant `@JsonProperty` else `toString()`, decision 3), a
+collection-wrapper survey (generic vs concrete counts), the `@JsonUnwrapped`/`@JsonIgnore`/superclass
+counts, and a map-based-model check that reports *"retrofit not applicable — use generate mode"* for a
+`HashMap` subclass. Output is `retrofit-report.md` (human-readable) + `retrofit-report.json`
+(structured) under `--report-dir`. Sample:
+
+```markdown
+# CCD Retrofit Match Report
+- **Case type:** Benefit
+- **Model class:** `uk.gov.hmcts.reform.sscs.ccd.domain.SscsCaseData`
+
+## Summary
+| Bucket | Count | % of data-bearing |
+|---|---|---|
+| EXACT_MATCH | 147 | 26.9% |
+| TYPE_CONFLICT | 365 | 66.7% |
+| UNMATCHED_DEFINITION_FIELD | 35 | 6.4% |
+
+**Resolved (exact + type-conflict): 93.6%. Exact: 26.9%.**
+```
+
+Measured resolved rates (name resolution) against the four POJO archetypes: **FPL 73.4 %, ET 97.9 %,
+Civil 94.7 %, SSCS 93.6 %** — see the proposal for the per-fixture breakdown and how the FPL figure
+lifts far above the proposal's 28 % top-level-name-only hand floor once `@JsonUnwrapped` and
+superclasses are walked.
+
+### Retrofit mode phase 2 (`--retrofit`, patch emission)
+
+Dropping `--report-only` graduates retrofit to **phase 2**: the same matcher runs, and then the
+converter additionally emits (1) an annotation **patch** against the team's model and (2) the
+still-generated **companion sources** (config/enum/access), targeted at that model.
+
+```bash
+./gradlew -p sdk :ccd-definition-converter:run --args='
+  --retrofit
+  --input             /path/to/civil-ccd-definition/ccd-definition/civil
+  --case-type         CIVIL
+  --model-source-root /path/to/civil-service/src/main/java
+  --model-package     uk.gov.hmcts.reform.civil.model
+  --model-class       CaseData
+  --output-src        /path/to/civil-service/src/main/java
+  --report-dir        build/retrofit'
+```
+
+`--output-src` is **required** in phase 2 (it receives the companion sources); `--report-only`
+short-circuits back to phase 1 and needs neither. The root package for the companions follows the
+same rule as generate mode — derived from `--model-package` (here `uk.gov.hmcts.reform.civil.model`
+→ `uk.gov.hmcts.reform.civil.ccd`) unless `--root-package`/`--config-package` overrides it — so the
+companions land in the service's main source tree beside the model, laid out as documented under
+[Generated package layout](#generated-package-layout) (events in `<root>.event`, a multi-page event and
+its page classes in `<root>.event.<event class name, lower-cased>`, access classes in `<root>.access`,
+config beans split by concern in `<root>`).
+The retrofit clone-regeneration script writes exactly this tree (untracked in the clone's git
+status). Invalid combinations are rejected with a clear error.
+
+**Wiring — no generated application class.** The converter does **not** emit a
+`@SpringBootApplication` into the service's tree (that option, `--emit-application`, exists only for
+ad-hoc standalone runs and the converter's own test harnesses — see below). The generated
+`CCDConfig`/access/event `@Component` classes live under the service's own base package, so the
+service's **existing** `@SpringBootApplication` discovers them through its normal component scan —
+nothing extra to wire, in the common case. This matters because `generateCCDConfig` (`Main`) scans
+`ccd.rootPackage` for **exactly one** `@SpringBootApplication` class; a second one alongside the
+service's real application class breaks that lookup, which is exactly the failure mode this design
+avoids.
+
+The one thing worth checking per service: if a service's own application class narrows
+`scanBasePackages`/`@ComponentScan` to something that does **not** cover the derived companion root
+package (see the table above), add that package to the existing scan. Of the six pilot services,
+five already scan a package broad enough to cover their derived `.ccd` companion root
+(probate-back-office, sscs-common, civil-service, prl-cos-api, fpl-ccd-configuration all scan a
+common ancestor of their model package, e.g. `uk.gov.hmcts.reform.fpl`). **`et-ccd-callbacks` is the
+exception**: its `DocmosisApplication` lists explicit `scanBasePackages` (`uk.gov.hmcts.ethos`,
+`uk.gov.hmcts.ecm.common`, `uk.gov.hmcts.reform.document`, `uk.gov.hmcts.reform.authorisation`,
+`uk.gov.hmcts.reform.ccd.document`, `uk.gov.hmcts.reform.et.syaapi`, `uk.gov.hmcts.ccd.sdk`) that
+cover neither the model package (`uk.gov.hmcts.et.common.model.ccd`) nor the derived companion root
+(`uk.gov.hmcts.et.common.ccd`) — adopting the retrofit output there needs `uk.gov.hmcts.et.common`
+added to that list.
+
+**What the patch (`build/retrofit/retrofit.patch`) contains** — a unified diff, `git apply`-able from
+the model repo root, produced with JavaParser's `LexicalPreservingPrinter` (minimal churn — untouched
+lines are byte-preserved) and java-diff-utils:
+
+- **matched fields** gain `@CCD(...)` carrying the definition metadata the SDK reads — label, hint,
+  showCondition, regex, categoryID, `searchable=false`, retainHiddenValue, min/max and the
+  `access = {…}` classes — sourced from the same `FieldModel` the linker computes for generate mode,
+  and emitted only when `@CCD` carries something (mirroring `FieldEmitHelper`'s `hasAny` rule);
+- **type-conflict fields** additionally gain `typeOverride`/`typeParameterOverride`; a concrete
+  value-wrapper collection (`List<DocItem>`) gets `@CCD(typeOverride = FieldType.Collection,
+  typeParameterOverride = "<element>")` (decision 8);
+- **unmatched Java fields** (not already `@JsonIgnore`/`@CCD(ignore=true)`) gain
+  `@CCD(ignore = true)` — required for fidelity, so the SDK does not reflect them into CaseField rows
+  the definition has no counterpart for;
+- **unmatched definition fields** (decision 4) are **synthesised** as new typed private fields on
+  `--model-class`, each with `@CCD(...)` (and a `@JsonProperty` when the ID is not a legal bean name),
+  grouped in one clearly-delimited block at the end of the class body. Three placement guards apply:
+  - a synthesised field whose Java name **collides with an existing member** (a `@JsonUnwrapped`
+    parent, or a `@JsonProperty`-renamed field the definition also lists) is **skipped** and reported
+    as a gap rather than re-declared (which would not compile);
+  - when synthesising every field would push the class's Lombok all-args constructor past the JVM's
+    ~254-slot limit, the fields are moved into a new **`CaseDataExtra`** class (added by the patch)
+    and the root class gains one prefix-less `@JsonUnwrapped private CaseDataExtra caseDataExtra;`
+    member — prefix-less unwrapping flattens the member IDs verbatim, so the CCD field IDs are
+    unchanged (threshold overridable with `--type-package-hint`'s sibling option in code; the borderline
+    "even one member tips it" case is flagged);
+  - a class using a hand-written single-arg `@JsonCreator` + `@Builder` idiom is **not** synthesised
+    into (appending a field breaks the builder's constructor binding); its members route to the gap
+    report for manual placement;
+- **complex-type members** get the same annotate/ignore/synthesise treatment (including the
+  `typeParameterOverride` reconciliation for nested collection members) on each model class the
+  definition's `ComplexTypes` rows resolve to;
+- **imports** the synthesised fields need are added once per file; a simple name already bound to a
+  *different* type in that compilation unit is written **fully-qualified** instead of adding a
+  clashing import;
+- the patch is **idempotent**: phase 2 targets unannotated models, so a field already carrying
+  `@CCD` is skipped (a re-run produces no-op hunks for it).
+
+**Disambiguating type names** (`--type-package-hint`). When the definition references a simple type
+name declared in more than one model sub-package with nothing in the `ComplexTypes` JSON to choose
+between them (Civil's `HearingLength`, `CaseLocationCivil`), the resolver refuses to guess and the
+reference fails to resolve. Supply `--type-package-hint TypeName=fully.qualified.package` (repeatable)
+to pin it; an unknown hint (no such type in that package) errors clearly. For example:
+
+```bash
+  --type-package-hint HearingLength=uk.gov.hmcts.reform.civil.enums.dq
+  --type-package-hint CaseLocationCivil=uk.gov.hmcts.reform.civil.model.defaultjudgment
+```
+
+**Companion sources** (under `--output-src`, in `--config-package`) reuse generate mode's emitters,
+retargeted at the team's model: the `CCDConfig` classes' typed getters reference the team's
+`CaseData` and resolved member names (fields reached through `@JsonUnwrapped` are placed via the
+clustered `.complex(CaseData::getParent).x(Parent::getMember)` form); access classes as generate
+mode; the team's `State` enum is reused when every state ID resolves (proposal decision 3) else a
+fresh one is generated; `UserRole` is generated fresh; a `FixedList` is generated only where the
+model has no matching enum type; and passthrough + gap report are as generate mode.
+
+**Apply-then-verify workflow.** Review the patch, apply it, then prove it:
+
+```bash
+cd /path/to/civil-service
+git apply /path/to/build/retrofit/retrofit.patch      # annotate the model in place
+# the companion config/enum/access sources are already under src/main/java
+./gradlew generateCCDConfig                            # regenerate the definition from the annotated model
+```
+
+Then diff the regenerated definition against the original JSON (the round-trip host is the service's
+own build — proposal decision 5/9). This end-to-end apply-then-regenerate loop is exercised in the
+converter's own `roundTripTest` by `RetrofitRoundTripTest`, which applies the emitted patch in-memory,
+compiles the patched model plus the companion sources, runs the generator, and asserts
+`NormalisingCcdConfigComparator` finds zero unexplained diffs.
+
+### Retrofit mode phase 3 (`bin/retrofit-verify`, end-to-end pipeline)
+
+Phase 3 automates the apply-then-verify loop above against a **real service checkout**, running the
+round-trip inside the service's *own* Gradle build (proposal decisions 5 & 9). It never mutates the
+model or definition checkouts — it copies the model repo to a work dir and patches only the copy, so
+git submodules used as fixtures stay pristine.
+
+```bash
+sdk/ccd-definition-converter/bin/retrofit-verify \
+  --model-repo   /path/to/civil-service \
+  --definition   /path/to/civil-ccd-definition/ccd-definition/civil \
+  --case-type    CIVIL \
+  --model-class  uk.gov.hmcts.reform.civil.model.CaseData \
+  --env          CCD_DEF_ENV=nonprod
+```
+
+The script prints each stage and a final residual-diff summary. The five stages:
+
+1. **convert** — runs `--retrofit` (phase 2) to emit `retrofit.patch` + companion sources;
+2. **copy** — `rsync`/`cp` the model repo to `<build>/retrofit-verify/<case-type>/model-copy`
+   (excluding `.git`/`build`/`.gradle`) — the original is read-only;
+3. **apply** — `git apply` the patch to the copy (no `--recount`: the emitted hunk counts are exact,
+   and `--recount` mis-parses the many concatenated single-file diffs);
+4. **publish + generate** — `./gradlew -p sdk publishToMavenLocal`, then run `generateCCDConfig` in
+   the copy wired via a Gradle **init script** (adds `mavenLocal`, applies `hmcts.ccd.sdk`, adds the
+   companion sources as an extra `srcDir`, points `ccd { rootPackage }` at the companion config
+   package). The init script keeps the service's own `build.gradle` byte-for-byte untouched; quality
+   gates (`test`/`checkstyle*`/`spotless*`/`spotbugs*`) that the project actually declares are excluded
+   so only the compile + generate runs;
+5. **verify** — `RetrofitVerifyCli` aggregates the definition repo (reusing the converter's reader +
+   `ExpectedDefinitionBuilder`'s overlay/env handling) and diffs it against the generated output with
+   `NormalisingCcdConfigComparator`, printing residual diffs bucketed by sheet.
+
+Useful flags: `--model-source-root` (default `<model-repo>/src/main/java`), `--config-package`
+(default `<modelPackage>.ccd.generated`), `--work-dir`, repeatable `--env KEY=VALUE` and
+`--overlay-suffix suffix=[!]ENV:val`, `--gradle-arg` (extra args for the service's `gCC`),
+`--skip-publish` (reuse an already-published mavenLocal SDK), and `--stop-after
+convert|copy|patch|publish|generate` for debugging. Exit code: 0 = zero residual diffs, 1 = residual
+diffs, >1 = a pipeline stage failed. The comparator entry point is also runnable directly as
+`./gradlew -p sdk :ccd-definition-converter:retrofitVerify --args='…'`.
+
+### Fidelity
+
+See [`docs/json-conversion-fidelity.md`](docs/json-conversion-fidelity.md) for the full picture.
+In short: every construct the SDK can express round-trips byte-identically, modulo an enumerated
+set of cosmetic normalisation rules (column aliases, defaults, ordering, and similar
+spelling-only differences). State authorisation is reproduced exactly (via
+`ConfigBuilder.explicitStateGrants()`), field authorisation is reproduced exactly (the converter
+emits `Event.explicitGrants()` on every event so event grants do not cascade onto their fields,
+and derives each field's `@CCD(access = …)` classes to match the input's `AuthorisationCaseField`
+rows), role-scoped search/workbasket fields round-trip through the SDK's role-scoped
+`SearchBuilder.field(id, label, role)` overload, and `AuthorisationComplexType` rows emit as
+`grantComplexType(...)` (a row with an unresolvable field or role, or from an overlay fragment, is
+carried by verbatim passthrough). The array shorthands (`UserRoles[]` and `AccessControl[]`) that
+definitions use to grant many roles in one row — which `ccd-definition-processor` flattens at build
+time — are expanded on both sides across every `Authorisation*` sheet, so grants encoded that
+way round-trip exactly. Genuine semantic differences are accepted only where the SDK's generation model
+makes them structural, each absorbed by a narrowly-scoped comparator rule so the round-trip tests pass
+while the difference stays visible in the gap report — the largest being that the SDK grants `CR` on
+immutable Label/READONLY display fields to any role that holds a grant on the event where the field is
+read-only, regardless of the input's narrower per-field grants (`IMMUTABLE_FIELD_CR`). Per-field
+`Publish` is expressed through the SDK's `publish(boolean)`/`publishAs(String)` API. Callbacks are emitted as
+URL callbacks the generator writes verbatim, so callback URLs (including per-page mid-event URLs, with
+their `${CCD_DEF_*}` placeholders) round-trip byte-for-byte and are compared exactly.
+Eight real-service fixture tests (ia/sscs/fpl/ET/civil/prl/probate/finrem) convert in generate mode,
+compile and round-trip end-to-end and are all **enabled**, each gating its residuals against a
+checked-in baseline under `src/test/resources/roundtrip-baselines/` (ia 1, probate 6, fpl 7, ET 10,
+sscs 11, prl 43, civil 89, finrem 98 — 265 lines total). The baseline file *is* the enumerated list of that
+fixture's open gaps; the test fails on a new diff and on a vanished one, so the ratchet only tightens.
+Retrofit mode is measured separately by `bin/retrofit-verify` and is further from zero — see the
+fidelity doc's retrofit-lane section, and [`STATUS.md`](sdk/ccd-definition-converter/STATUS.md) for
+each lane's resolved rate, generate-mode residual and passthrough rows.
 
 ## Where to get help
 

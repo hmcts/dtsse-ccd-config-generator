@@ -1,0 +1,14 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Clustered",
+    "ID": "createCase",
+    "Name": "Create case",
+    "Description": "Create a new case",
+    "DisplayOrder": 1,
+    "PreConditionState(s)": "",
+    "PostConditionState": "Open",
+    "SecurityClassification": "Public",
+    "ShowSummary": "Y"
+  }
+]

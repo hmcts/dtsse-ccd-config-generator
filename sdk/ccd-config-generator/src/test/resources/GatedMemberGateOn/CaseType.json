@@ -1,0 +1,10 @@
+[
+  {
+    "Description": "Env-gated complex-type member case type",
+    "ID": "GatedMember",
+    "JurisdictionID": "",
+    "LiveFrom": "01/01/2017",
+    "Name": "Gated member",
+    "SecurityClassification": "Public"
+  }
+]

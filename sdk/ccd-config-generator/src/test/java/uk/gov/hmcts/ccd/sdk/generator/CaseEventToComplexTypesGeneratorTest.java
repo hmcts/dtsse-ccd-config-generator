@@ -141,6 +141,34 @@ public class CaseEventToComplexTypesGeneratorTest {
     }
 
     /**
+     * A scope opened with {@code complexScope(getter, Type.class)} takes its member getters from
+     * {@code Type} rather than from the field's declared class, and registers no
+     * {@code CaseEventToFields} row of its own — for a field whose {@code @CCD(typeParameterClass)}
+     * names the class its complex type is generated from.
+     */
+    @Test
+    public void writesMembersOfAScopeTypedOnANamedClass() {
+        ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> builder =
+            newBuilder();
+        builder.event("create")
+            .forState(EventComplexMemberState.Open)
+            .name("Create")
+            .grant(CRU, LOCAL_AUTHORITY)
+            .fields()
+            .complexScope(EventComplexMemberCaseData::getContact, EventComplexMemberNested.class)
+            .readonly(EventComplexMemberNested::getPostcode)
+            .done();
+
+        assertThat(memberRows(builder, "create", "contact"))
+            .singleElement()
+            .satisfies(row -> {
+                assertThat(row).containsEntry("CaseFieldID", "contact");
+                assertThat(row).containsEntry("ListElementCode", "postcode");
+                assertThat(row).containsEntry("DisplayContext", "READONLY");
+            });
+    }
+
+    /**
      * A nested {@code .complex(...)} scope registers no field in the enclosing member scope, so a
      * fluent setter chained after its {@code .done()} has nothing to apply to. It must fail rather than
      * silently relabel whichever member was placed before the scope.

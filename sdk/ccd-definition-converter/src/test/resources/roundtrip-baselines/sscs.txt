@@ -1,0 +1,11 @@
+Sheet 'CaseField' row [adjournCaseAdditionalDirections] column 'FieldTypeParameter': expected <TextArea> but was <Text>
+Sheet 'CaseField' row [adjournCaseReasons] column 'FieldTypeParameter': expected <TextArea> but was <Text>
+Sheet 'CaseField' row [writeFinalDecisionReasons] column 'FieldTypeParameter': expected <TextArea> but was <Text>
+Sheet 'ComplexTypes' row [appellant|confidentialityRequiredChangedDate]: expected row has no match in actual: {ID=appellant, ListElementCode=confidentialityRequiredChangedDate, FieldType=Text, ElementLabel=Confidentiality Confirmed, SecurityClassification=PUBLIC}
+Sheet 'ComplexTypes' row [judicialUserPanel|panelMembers] column 'FieldTypeParameter': expected <JudicialUser> but was <Text>
+Sheet 'ComplexTypes' row [otherParty|confidentialityRequiredChangedDate]: expected row has no match in actual: {ID=otherParty, ListElementCode=confidentialityRequiredChangedDate, FieldType=Text, ElementLabel=Confidentiality Confirmed, SecurityClassification=PUBLIC}
+Sheet 'ComplexTypes' row [panelMemberExclusions|excludedPanelMembers] column 'FieldTypeParameter': expected <JudicialUser> but was <Text>
+Sheet 'ComplexTypes' row [panelMemberExclusions|reservedPanelMembers] column 'FieldTypeParameter': expected <JudicialUser> but was <Text>
+Sheet 'FixedLists' row [FL_selectWhoReviewsCase|postponementRequestInterlocSendToTcw]: expected row has no match in actual: {ID=FL_selectWhoReviewsCase, ListElementCode=postponementRequestInterlocSendToTcw, ListElement=Postponement request for interloc - send to TCW}
+Sheet 'FixedLists' row [FL_selectWhoReviewsCase|reviewByJudge]: expected row has no match in actual: {ID=FL_selectWhoReviewsCase, ListElementCode=reviewByJudge, ListElement=Review by Judge}
+Sheet 'FixedLists' row [FL_selectWhoReviewsCase|reviewByTcw]: expected row has no match in actual: {ID=FL_selectWhoReviewsCase, ListElementCode=reviewByTcw, ListElement=Review by TCW}

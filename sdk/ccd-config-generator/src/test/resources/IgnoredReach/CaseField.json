@@ -1,0 +1,26 @@
+[
+  {
+    "CaseTypeID": "IgnoredReach",
+    "FieldType": "Text",
+    "ID": "baseField",
+    "Label": "A base field",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "IgnoredReach",
+    "FieldType": "CaseHistoryViewer",
+    "ID": "caseHistory",
+    "Label": " ",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "IgnoredReach",
+    "FieldType": "IgnoredReachShared",
+    "ID": "sharedField",
+    "Label": "A live complex field",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  }
+]

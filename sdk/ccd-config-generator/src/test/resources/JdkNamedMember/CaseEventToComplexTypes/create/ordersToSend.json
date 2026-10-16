@@ -1,0 +1,10 @@
+[
+  {
+    "CaseEventID": "create",
+    "CaseFieldID": "ordersToSend",
+    "DisplayContext": "MANDATORY",
+    "FieldDisplayOrder": 2,
+    "ListElementCode": "value.documentName",
+    "LiveFrom": "01/01/2017"
+  }
+]

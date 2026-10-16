@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk.api;
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.springframework.util.StringUtils.capitalize;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.unwrappedFieldOfType;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import java.util.ArrayList;
@@ -271,6 +272,94 @@ public class FieldCollection {
 
     public FieldCollectionBuilder<Type, StateType, Parent> readonlyNoSummary(TypedPropertyGetter<Type, ?> getter) {
       return field(getter, DisplayContext.ReadOnly, false);
+    }
+
+    /**
+     * Places a complex-type member with {@code DisplayContext=COMPLEX} — the member-row analogue of
+     * {@link #optional}/{@link #mandatory}/{@link #readonly}, for a member the author wants rendered
+     * as a complex container in its own right rather than as an editable leaf.
+     *
+     * <p>Distinct from {@link #complex(TypedPropertyGetter)}: that opens a nested member scope and
+     * registers no row of its own, so a member reached only by descending through it produces no
+     * {@code CaseEventToComplexTypes} row for the intermediate itself. This registers the member as a
+     * placed field, so {@code CaseEventToComplexTypesGenerator} writes its row with
+     * {@code DisplayContext=COMPLEX} (it emits {@code field.getContext()} verbatim, and
+     * {@link DisplayContext#Complex} is a legal member context to the definition-store importer —
+     * sscs's {@code confirmPoAttendance/presentingOfficersDetails} ships {@code contact.phone} and
+     * {@code contact.mobile} exactly this way). The two compose: descend with {@code complex(...)},
+     * then place the intermediate itself with this when the input carries a row for it.
+     *
+     * <p>Only meaningful inside a {@code complex(...)} member scope. At the top level a field's
+     * {@code CaseEventToFields} {@code DisplayContext} already defaults to {@code COMPLEX} when no
+     * context is set (see {@code CaseEventToFieldsGenerator.resolveDisplayContext}), and a top-level
+     * complex placement is spelled {@code complex(getter)}.
+     *
+     * @param getter the member getter
+     * @return this builder, so the fluent per-member metadata setters apply to the member just placed
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> complexMember(
+        TypedPropertyGetter<Type, ?> getter) {
+      return field(getter, DisplayContext.Complex, true);
+    }
+
+    /**
+     * {@link #complexMember} with {@code ShowSummaryChangeOption=N} — the {@code *NoSummary} sibling
+     * every other placement method has, so a caller selecting the variant by name for any context
+     * reaches one for {@code COMPLEX} too.
+     *
+     * @param getter the member getter
+     * @return this builder, so the fluent per-member metadata setters apply to the member just placed
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> complexMemberNoSummary(
+        TypedPropertyGetter<Type, ?> getter) {
+      return field(getter, DisplayContext.Complex, false);
+    }
+
+    /**
+     * Opens a member scope on a scalar complex field <em>without</em> registering the field itself —
+     * the scalar analogue of {@link #complex(TypedPropertyGetter, Class)}, whose javadoc explains the
+     * mechanism in full for collections.
+     *
+     * <p>{@link #complex(TypedPropertyGetter)} does both jobs at once: it registers a root
+     * {@code field(...)} with {@code DisplayContext=COMPLEX} <em>and</em> opens the scope. That is the
+     * right default, but it makes the two inseparable, so a field the definition places as
+     * {@code READONLY}/{@code MANDATORY}/{@code OPTIONAL} on an event while still carrying per-member
+     * {@code CaseEventToComplexTypes} overrides is inexpressible: {@code complex(getter)} would
+     * manufacture a {@code COMPLEX} {@code CaseEventToFields} row the definition does not have, and
+     * placing it with {@code readonly(getter)} alone leaves nowhere to hang the members. Splitting the
+     * scope out lets the author place the field with the context the definition asks for and open the
+     * member scope separately (sscs's {@code updateOtherPartyData/appeal} is {@code READONLY} on the
+     * event yet carries {@code benefitType} member rows).
+     *
+     * <p>Deliberately a distinct name rather than an overload: a
+     * {@code complex(TypedPropertyGetter<Type, U>, Class<U>)} signature would erase to the same
+     * descriptor as the existing collection overload.
+     *
+     * @param getter the scalar complex field's getter
+     * @param <U> the complex field's type, which the returned member scope is typed on
+     * @return the member-scope builder for the field's type
+     */
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complexScope(
+        TypedPropertyGetter<Type, U> getter) {
+      Class<U> c = propertyUtils.getPropertyType(dataClass, getter);
+      return complex(propertyUtils.getPropertyName(dataClass, getter), c);
+    }
+
+    /**
+     * {@link #complexScope(TypedPropertyGetter)} with the member scope typed on {@code scopeType}
+     * instead of the field's declared class — for a field whose {@code @CCD(typeParameterClass)} names
+     * the class its complex type is generated from while the field keeps a different declared type.
+     * The {@code ComplexTypes} rows, and so the members a {@code CaseEventToComplexTypes} row can
+     * address, come from {@code scopeType}, so that is the class the member getters must be taken from.
+     *
+     * @param getter the scalar complex field's getter
+     * @param scopeType the class the field's complex type is generated from
+     * @param <U> the type the returned member scope is typed on
+     * @return the member-scope builder for {@code scopeType}
+     */
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complexScope(
+        TypedPropertyGetter<Type, ?> getter, Class<U> scopeType) {
+      return complex(propertyUtils.getPropertyName(dataClass, getter), scopeType);
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> list(
@@ -669,18 +758,9 @@ public class FieldCollection {
       }
 
       if (isUnwrapped.isPresent()) {
-        String prefix = isUnwrapped.get().prefix();
-        builder.unwrappedParentPrefix = isNullOrEmpty(unwrappedParentPrefix)
-            ? prefix
-            : unwrappedParentPrefix.concat(capitalize(prefix));
-        builder.fields = fields;
-        builder.explicitFields = explicitFields;
-        builder.complexFields = complexFields;
-        builder.rootFieldname = null;
-        builder.order = order;
-        builder.pageDisplayOrder = pageDisplayOrder;
-        builder.fieldDisplayOrder = fieldDisplayOrder;
-        complexFields.remove(builder);
+        // Root-level container: its members ARE case-data fields, so the scope carries no root field
+        // name at all and CaseEventToComplexTypes emits nothing for them.
+        spliceUnwrapped(builder, isUnwrapped.get().prefix(), null);
       }
 
       return builder;
@@ -706,6 +786,70 @@ public class FieldCollection {
         result.fieldDisplayOrder = this.fieldDisplayOrder;
       }
       return result;
+    }
+
+    /**
+     * Merges an {@code @JsonUnwrapped} container's scope into this one, so the container contributes
+     * no segment to any member path below it — the builder shares this scope's field lists and drops
+     * out of {@code complexFields} entirely, leaving nothing for
+     * {@code CaseEventToComplexTypesGenerator.expand} to append a locator segment for. That mirrors
+     * Jackson, which flattens the container's members into the parent's namespace.
+     *
+     * <p>{@code rootFieldname} is the caller's choice because the two callers need opposite things.
+     * A root-level container passes null: its members are case-data fields in their own right, and
+     * {@code CaseEventToComplexTypes} emits no row for them. A container nested inside a complex
+     * scope must instead INHERIT the enclosing scope's name — the members it splices in land in that
+     * scope's field list, and {@code expand} reads {@code getParent().getRootFieldname()} for every
+     * one of them, so a null there is dereferenced rather than skipped.
+     *
+     * @param builder the container's scope, already created against this one
+     * @param prefix the container's {@code @JsonUnwrapped} prefix, accumulated onto any outer one
+     * @param rootFieldname the name the spliced scope reports, or null for a root-level container
+     */
+    private <U> void spliceUnwrapped(
+        FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> builder,
+        String prefix, String rootFieldname) {
+      builder.unwrappedParentPrefix = isNullOrEmpty(unwrappedParentPrefix)
+          ? prefix
+          : unwrappedParentPrefix.concat(capitalize(prefix));
+      builder.fields = fields;
+      builder.explicitFields = explicitFields;
+      builder.complexFields = complexFields;
+      builder.rootFieldname = rootFieldname;
+      builder.order = order;
+      builder.pageDisplayOrder = pageDisplayOrder;
+      builder.fieldDisplayOrder = fieldDisplayOrder;
+      complexFields.remove(builder);
+    }
+
+    /**
+     * Opens a transparent member scope on a nested {@code @JsonUnwrapped} container, addressed by its
+     * declared TYPE.
+     *
+     * <p>{@link #complex(TypedPropertyGetter)} already splices an unwrapped container away when the
+     * getter's derived member name carries {@code @JsonUnwrapped} — but that needs a getter whose
+     * name maps to the member, and an unwrapped container is exactly where one is most often absent
+     * ({@code @Getter(AccessLevel.NONE)}, or a differently-named hand-written accessor). Without this
+     * overload such a member is unreachable: opening the scope through the accessor that does exist
+     * names a member that does not, so the scope stays opaque and every path below it gains a segment
+     * the definition never had.
+     *
+     * @param unwrappedType the container's declared type; the owner must declare exactly one
+     *                      {@code @JsonUnwrapped} member of it
+     * @param <U> the container type the returned member scope is typed on
+     * @return the member-scope builder for the container's type
+     * @throws IllegalArgumentException when the owner declares no single such member
+     */
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> unwrappedScope(
+        Class<U> unwrappedType) {
+      java.lang.reflect.Field member = unwrappedFieldOfType(dataClass, unwrappedType)
+          .orElseThrow(() -> new IllegalArgumentException(
+              dataClass.getName() + " declares no single @JsonUnwrapped member of type "
+                  + unwrappedType.getName()));
+      FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> builder =
+          complex(member.getName(), unwrappedType);
+      spliceUnwrapped(builder, member.getAnnotation(JsonUnwrapped.class).prefix(), this.rootFieldname);
+      return builder;
     }
 
     public FieldCollectionBuilder<Type, StateType, Parent> label(String id, String value) {
