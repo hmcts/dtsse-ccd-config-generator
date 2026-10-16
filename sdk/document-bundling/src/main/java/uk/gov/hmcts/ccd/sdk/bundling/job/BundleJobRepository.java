@@ -164,7 +164,7 @@ public class BundleJobRepository {
                 Optional.empty(), Optional.empty()),
             rs.getInt("request_version"), rs.getString("request"),
             rs.getString("selector_parameters"), rs.getString("execution_context"),
-            rs.getString("transient_history")));
+            rs.getString("transient_history"), leaseOwner));
   }
 
   List<UUID> failExhaustedStaleJobs(int maxAttempts) {

@@ -641,7 +641,8 @@ public final class DefaultBundleRenderer implements BundleRenderer {
         if (missingDocument != null) {
           missingDocuments.add(new MissingDocument(origin.id(), origin.reference(),
               missingDocument.reason(), missingDocument.code(),
-              missingDocument.detail(), result.items().get(i).startPage()));
+              missingDocument.detail(), result.items().get(i).startPage(), origin.title(),
+              assembly.origins().get(i).sectionPath()));
           continue;
         }
         Converted convertedDocument = converted.get(origin.id());

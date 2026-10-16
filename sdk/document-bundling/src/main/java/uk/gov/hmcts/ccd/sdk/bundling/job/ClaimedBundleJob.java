@@ -7,5 +7,6 @@ record ClaimedBundleJob(
     String requestJson,
     String selectorParametersJson,
     String executionContextJson,
-    String transientHistoryJson) {
+    String transientHistoryJson,
+    String leaseOwner) {
 }
