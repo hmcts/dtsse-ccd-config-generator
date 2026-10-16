@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.EventMetadata;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CaseSubmissionService {
@@ -55,6 +57,8 @@ public class CaseSubmissionService {
           );
 
       if (transactionResult.replayed()) {
+        caseDataRepository.clientContextAtEvent(transactionResult.eventId())
+            .ifPresent(ClientContextPassthrough::replayed);
         return replayIdempotentRequest(
             event.getCaseDetails().getReference(),
             transactionResult.eventId()
@@ -62,7 +66,11 @@ public class CaseSubmissionService {
       }
 
       var created = transactionResult.created().orElseThrow();
-      return buildSuccessResponse(new SubmissionOutcome(created.savedCase(), created.result()));
+      var response = buildSuccessResponse(new SubmissionOutcome(created.savedCase(), created.result()));
+      // The submitted callback has run, so the context is final. Keep it for a replay of this submission.
+      ClientContextPassthrough.returned()
+          .ifPresent(clientContext -> saveClientContext(transactionResult.eventId(), clientContext));
+      return response;
 
     } catch (CallbackValidationException e) {
       var response = new DecentralisedSubmitEventResponse();
@@ -107,6 +115,15 @@ public class CaseSubmissionService {
     response.getCaseDetails().getCaseDetails().setAfterSubmitCallbackResponseEntity(entity);
 
     return response;
+  }
+
+  private void saveClientContext(long eventId, String clientContext) {
+    try {
+      caseDataRepository.saveClientContext(eventId, clientContext);
+    } catch (RuntimeException e) {
+      // The event is committed; failing now would only make CCD retry it. A replay then returns no context.
+      log.error("Could not save the Client-Context of case event {}", eventId, e);
+    }
   }
 
   /**
