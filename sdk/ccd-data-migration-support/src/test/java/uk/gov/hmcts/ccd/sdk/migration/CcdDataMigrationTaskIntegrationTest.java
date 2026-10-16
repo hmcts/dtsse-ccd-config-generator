@@ -581,6 +581,51 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void anotherTaskSyncingOtherCaseTypesDoesNotClearThisTasksQueue() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCase(20, 1000000000000020L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCase(30, 1000000000000030L, 1, "Submitted", "{\"field\":\"other\"}", "TEST", "OtherCase");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(102, 20, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(103, 30, "create", "Submitted", "{\"field\":\"other\"}", "OtherCase", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+    updateSourceCase(10, 2, "Updated", "{\"field\":\"two\"}");
+    updateSourceCase(20, 2, "Updated", "{\"field\":\"two\"}");
+    CcdDataMigrationRunResult paused = new CcdDataMigrationTask(
+        jdbc,
+        new TransactionTemplate(transactionManager),
+        optionsBuilder(List.of("TestCase"))
+            .mode(CUTOVER)
+            .caseDataSyncBatchSize(1)
+            .maxRunTime(Duration.ofMinutes(1))
+            .build(),
+        // Reads: the deadline, the check before the scan, then the check before the second batch.
+        new DeadlineClock(2),
+        () -> false
+    ).runMigration();
+    assertThat(paused.stoppedByTimeLimit()).isTrue();
+    assertThat(queuedCaseIds()).containsExactly(20L);
+
+    // A second task migrating other case types into the same database scans and empties its own
+    // queue. It must leave this task's queued case for this task to copy.
+    CcdDataMigrationRunResult otherTask = task(optionsBuilder(List.of("OtherCase"))
+        .taskName("other-case-migration")
+        .mode(PRELOAD_EVENTS)
+        .build()).runMigration();
+
+    assertThat(otherTask.stoppedByTimeLimit()).isFalse();
+    assertThat(queuedCaseIds()).containsExactly(20L);
+    assertThat(targetCaseData(20)).isEqualTo("{\"field\": \"one\"}");
+
+    CcdDataMigrationRunResult resumed = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(resumed.caughtUp()).isTrue();
+    assertThat(targetCaseData(20)).isEqualTo("{\"field\": \"two\"}");
+    assertThat(queuedCaseIds()).isEmpty();
+    assertThat(progressStatus()).isEqualTo("COMPLETE");
+  }
+
+  @Test
   void syncKeepsTheSourceLastStateModifiedDateWhenTheStateChanges() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));

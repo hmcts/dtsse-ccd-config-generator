@@ -656,10 +656,11 @@ public class CcdDataMigrationTask implements Runnable {
    * longer matches, so a change on either side since the last copy is overwritten from the source.
    *
    * <p>A short transaction scans the source id and xmin of every migrated case and queues the
-   * changed cases in ccd_data_migration.case_data_sync_queue. Each batch is then read from the queue,
-   * copied, and removed from the queue in its own transaction, reading the data and xmin of each case
-   * in one remote query, so no transaction holds a snapshot open on the source database for longer
-   * than the scan or one batch, and only one batch of ids is held in memory.
+   * changed cases in ccd_data_migration.case_data_sync_queue under this task's name, so tasks for
+   * other case types in the same database keep their own queues. Each batch is then read from the
+   * queue, copied, and removed from the queue in its own transaction, reading the data and xmin of
+   * each case in one remote query, so no transaction holds a snapshot open on the source database
+   * for longer than the scan or one batch, and only one batch of ids is held in memory.
    *
    * <p>The time limit is checked before each scan and before each batch, except the first batch
    * after a scan, so every scan makes progress even when it takes longer than the time left. A run
@@ -734,11 +735,14 @@ public class CcdDataMigrationTask implements Runnable {
       );
       db.getJdbcTemplate().execute("analyze migration_source_case_versions");
       int deleted = deleteRemovedCases ? deleteCasesRemovedFromSource() : 0;
-      db.getJdbcTemplate().execute("delete from ccd_data_migration.case_data_sync_queue");
-      int queued = db.getJdbcTemplate().update(
+      db.update(
+          "delete from ccd_data_migration.case_data_sync_queue where task_name = :taskName",
+          Map.of("taskName", options.taskName())
+      );
+      int queued = db.update(
           """
-          insert into ccd_data_migration.case_data_sync_queue (case_data_id)
-          select source.id
+          insert into ccd_data_migration.case_data_sync_queue (task_name, case_data_id)
+          select :taskName, source.id
           from migration_source_case_versions source
           left join ccd.case_data target on target.id = source.id
           left join ccd_data_migration.case_data_copy_versions copied on copied.case_data_id = source.id
@@ -746,7 +750,8 @@ public class CcdDataMigrationTask implements Runnable {
              or copied.case_data_id is null
              or copied.source_xmin <> source.source_xmin
              or copied.target_xmin <> target.xmin::text::bigint
-          """
+          """,
+          Map.of("taskName", options.taskName())
       );
       return new QueuedCases(queued, deleted);
     });
@@ -757,10 +762,11 @@ public class CcdDataMigrationTask implements Runnable {
         """
         select case_data_id
         from ccd_data_migration.case_data_sync_queue
+        where task_name = :taskName
         order by case_data_id
         limit :batchSize
         """,
-        Map.of("batchSize", options.caseDataSyncBatchSize()),
+        Map.of("taskName", options.taskName(), "batchSize", options.caseDataSyncBatchSize()),
         Long.class
     );
   }
@@ -776,8 +782,9 @@ public class CcdDataMigrationTask implements Runnable {
       // Every queued id leaves the queue, including one the source no longer returns: a later scan
       // queues it again if it is still migrated and still differs.
       db.update(
-          "delete from ccd_data_migration.case_data_sync_queue where case_data_id = any(:caseIds)",
-          new MapSqlParameterSource("caseIds", caseIdArray)
+          "delete from ccd_data_migration.case_data_sync_queue "
+              + "where task_name = :taskName and case_data_id = any(:caseIds)",
+          new MapSqlParameterSource("taskName", options.taskName()).addValue("caseIds", caseIdArray)
       );
       return copiedCases;
     });

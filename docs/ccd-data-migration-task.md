@@ -139,7 +139,8 @@ Each run:
 1. A short transaction scans the source id and `xmin` of every migrated case, with no `data`, and
    queues, in `ccd_data_migration.case_data_sync_queue`, the cases with no target row, no recorded
    versions, or a source or target `xmin` that has changed. At cutover it also deletes target cases
-   that are no longer in the source, and their recorded versions.
+   that are no longer in the source, and their recorded versions. The queue is kept per `task-name`,
+   so a task migrating other case types into the same database never clears or takes from it.
 2. Each batch of `case-data-sync-batch-size` ids (at most 10,000) is taken from the queue, copied, and
    removed from the queue in its own transaction. One remote query reads the data and `xmin` of the batch's rows by primary key, with the
    ids sent as one array, so the recorded `xmin` always matches the data copied. Only rows that query
