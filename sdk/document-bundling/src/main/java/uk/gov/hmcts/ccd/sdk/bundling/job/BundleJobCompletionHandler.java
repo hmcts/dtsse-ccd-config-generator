@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.bundling.job;
 
+import java.util.Optional;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleResult;
 
@@ -13,6 +14,16 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleResult;
  */
 @FunctionalInterface
 public interface BundleJobCompletionHandler {
+
+  /** Optional recovery of an already uploaded artifact, before selecting or rendering again. */
+  default Optional<CompletedBundleJob> resume(BundleJob job, BundleJobContext context) throws Exception {
+    return Optional.empty();
+  }
+
+  /** Existing callbacks remain terminal on failure; durable adapters can opt into bounded retry. */
+  default boolean retryable(Exception failure) {
+    return false;
+  }
 
   Object onCompleted(BundleJob job, BundleJobContext context, BundleRequest request,
       BundleResult result) throws Exception;

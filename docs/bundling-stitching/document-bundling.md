@@ -72,9 +72,25 @@ it in the service's own case model.
 If a document cannot be fetched or converted, the render fails with a `BundleGenerationException`
 carrying a stable `code()`, the `stage()`, one `DocumentFailure` per document at fault, and a hint
 on what to do. The message on its own says what failed, on which document, at which stage.
-Nothing is left on disk. A later change will add an opt-in policy that renders a placeholder page
-for a document that could not be fetched and lists it on the result instead of failing, so a
-caseworker can still get a bundle and see what is missing (see the scope document).
+Nothing is left on disk.
+
+To get a bundle anyway, set `.missingDocuments(MissingDocumentPolicy.PLACEHOLDER)` on the request.
+A document that cannot be fetched, converted or opened is then replaced by a one-page placeholder
+in its place, titled "<title> (missing)" in the contents and bookmarks, with a plain-English
+reason printed on it. The result lists it in `missingDocuments()`: the document id, a
+`MissingDocumentReason` (`NOT_FOUND`, `ACCESS_DENIED`, `UNAVAILABLE`, `UNSUPPORTED_FORMAT`,
+`CONVERSION_FAILED`, `UNREADABLE`, `TOO_LARGE`) whose `message()` is safe to show users, the
+technical `code` and `detail`, and the placeholder's start page. The outcome is
+`COMPLETED_WITH_WARNINGS` with a `DOCUMENT_MISSING` warning per document. Request-level problems
+(limits, an unregistered provider, an invalid request, an office document with no Docmosis
+configured) still fail the render.
+
+A source that is only temporarily unavailable (a timeout, a 5xx, a Docmosis outage) should not
+end up as a placeholder if a retry would fetch it. `render(request, context, RenderAttempt.RETRYABLE)`
+fails such a render instead; the durable worker passes `RETRYABLE` while the job has retries left
+and `FINAL` on its last attempt. A plain `render(request, context)` is a final attempt. A
+document still unavailable on the final attempt, including one Docmosis could not convert because
+it was down, gets the `UNAVAILABLE` reason.
 
 ## What you get by default
 
@@ -187,17 +203,35 @@ a retried job can finish after a newer one. Among completed jobs, the one with t
 every change submitted before it. Break ties by `externalId`, and fall back to `submittedAt` for a
 job claimed before `claimed_at` existed. `findLatest(key)` returns the job that reflects the newest
 state, for a "regenerating..." status: the waiting job if there is one, otherwise the most recently
-claimed. The completion handler receives the job's `BundleJobContext` (selector parameters and
+claimed. A delayed re-run for unavailable documents counts as waiting only once it is due. The completion handler receives the job's `BundleJobContext` (selector parameters and
 execution context), so it knows which case the bundle is for. Rows are never deleted by the
 module; an always-current bundle adds one per burst of changes, so purge old terminal rows on your
 own schedule if the table grows.
 
-pcs-api's `CaseBundleTrigger` is a worked example: a Hibernate listener that submits from the
-before-commit hook, so every path that adds, amends or removes a document is covered.
+When a job completes, the worker records a `BundleJobReport` with it, from the same render the
+handler stored: the request that was rendered (for a selector-driven job, the documents it
+selected), where each document landed, the missing documents and why, the warnings, and the PDF's
+file name, size, checksum and page count. Missing-document entries also carry the selected
+document `title` and `sectionPath` (outermost to innermost, excluding the request root), so
+consumers can display snapshot metadata without searching the request or live source data.
+Older stored entries fall back to the document ID and an empty path. `findReport(externalId)` returns it, so a service can
+keep just the job id beside the stored PDF and describe the bundle from the job: "pages 40 to 52",
+"two documents are missing", without a table of its own. Rows that back a stored bundle are then
+the bundle's record, so purge only those no stored bundle points at.
+
+A coalesced bundle completed with placeholders for `UNAVAILABLE` documents is re-run later, so it
+fills in once the source is back: the worker queues a job under the same key that is not claimable
+for `requeue.delay`. A change to the case in the meantime joins it and makes it immediate. A bundle
+is re-run at most `requeue.max-attempts` times in a row for unavailable documents (counted in the
+execution context attribute `bundling.unavailableRequeues`).
+
+For managed case bundles, applications call `CaseBundles.invalidate` explicitly from
+their document-change hook in the source transaction (see the managed API below).
 
 Properties under `ccd.bundling.job.*`: `enabled` (default `false`), `worker.enabled` (`true`), `worker.poll-delay` (`1s`), `worker.batch-size` (`5`),
 `worker.max-concurrent-renders` (`2`), `worker.lease-duration` (`5m`), `retry.max-attempts` (`3`),
-`retry.initial-delay` (`5s`), `retry.multiplier` (`2.0`), `retry.max-delay` (`5m`).
+`retry.initial-delay` (`5s`), `retry.multiplier` (`2.0`), `retry.max-delay` (`5m`),
+`requeue.enabled` (`true`), `requeue.delay` (`15m`), `requeue.max-attempts` (`3`).
 
 ## Extending it
 
@@ -336,3 +370,57 @@ your event handlers can fake it.
 the feature matrix and the one-click bundle requirements coverage. Every rendering feature the
 microservice offers is now in the module; built-in CDAM adapters and the items in the scope
 document's section 4 come later.
+
+## Managed case bundles
+
+For a case bundle that should follow document changes, opt into the managed lifecycle:
+
+```yaml
+ccd.bundling.managed.enabled: true
+ccd.bundling.job.enabled: true
+```
+
+Register a `CaseBundleDefinition` bean. Its `name()` identifies the bundle, and
+`select(caseKey, jobId)` returns a `SelectedCaseBundle`: case reference, case type,
+jurisdiction and an ordered `BundleRequest`. The library calls selection inside a
+short repeatable-read transaction. Selection and visibility rules remain application code.
+Multiple definitions can share the managed service.
+
+Call `CaseBundles.invalidate(definition, caseKey)` in the transaction changing the
+sources. Repeated calls for that key in the transaction coalesce; rollback cancels
+both the revision and job. The SDK does not observe entities, install listeners or
+detect changes. Application JPA callbacks may call this method, including for
+cascaded writes. Native SQL changes must call it explicitly too.
+`refresh(definition, caseKey)` starts a transaction and forces fresh selection.
+
+The standard CDAM adapter uses the application's `CaseDocumentClientApi`,
+`AuthTokenGenerator` and a `BundleSystemUser` bean supplying its cached system token.
+The deployed CDAM configuration must grant that service CREATE, ATTACH and DELETE
+for the destination case type. A different store can implement `BundleDocumentStore`.
+
+`CaseBundles.view(definition, caseKey)` returns the current publication and update
+status together. The publication includes the document and rendering report.
+**This is sensitive data, and these Java methods do not authorise readers.** There
+is no SDK HTTP endpoint. Expose the reference and report only through an authorised
+application projection with restrictive CCD field permissions. Do not add the
+bundle to a general document collection: CDAM checks references anywhere in a
+caller's permission-filtered case data when authorising a download.
+
+The library stores its current pointer in `bundling.case_bundle`, outside the
+application's document table. Source revisions order snapshots; live attempt
+checks prevent expired workers from publishing. Uploads are journalled before
+attachment. Transient publication failures resume the uploaded artifact rather
+than render again. Pointer changes, cleanup requests and local CCD history commit
+through `SystemEventExecutor`, using the job ID for idempotency. This requires the
+runtime's configured system identity and the same datasource as the application.
+
+Cleanup retries independently after publication commits. Artifact metadata is kept
+for recovery; retention of job and artifact records is not implemented. Uploads
+cannot be exactly once: a crash before journalling leaves an unattached upload for
+CDAM's TTL to remove. PDF uploads may be buffered by the client's multipart encoder.
+Existing renderer and outbox APIs remain available without the managed layer.
+
+Managed mode owns the outbox worker's selector and completion handler; do not
+register another selector/handler or submit low-level jobs to that worker. The
+renderer remains usable directly. If supplying your own `cdam` resolver, set
+`ccd.bundling.managed.cdam-resolver.enabled=false` to disable the default resolver.

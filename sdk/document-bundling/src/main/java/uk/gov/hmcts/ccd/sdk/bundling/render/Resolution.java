@@ -42,15 +42,34 @@ final class Resolution {
       Optional<String> providerChecksum) {
   }
 
+  /** The spooled sources, and the references that could not be fetched when that is tolerated. */
+  record Resolved(Map<DocumentReference, Spooled> spooled, Map<DocumentReference, Failure> failures) {
+  }
+
+  /** Why a reference could not be fetched. */
+  record Failure(BundleErrorCode code, String detail) {
+  }
+
+  /** Which unfetchable references the caller will replace with placeholders. */
+  enum Tolerance {
+    /** None: any failure fails the render. */
+    NONE,
+    /** Permanent failures only: a temporarily unavailable source fails the render. */
+    PERMANENT,
+    /** Every failure. */
+    ALL
+  }
+
   private Resolution() {
   }
 
-  static Map<DocumentReference, Spooled> resolveAndSpool(
+  static Resolved resolveAndSpool(
       List<BundleDocument> documents,
       Map<String, DocumentResolver> resolvers,
       BundleExecutionContext context,
       Path jobDirectory,
-      BundleLimits limits) {
+      BundleLimits limits,
+      Tolerance tolerance) {
     List<BundleDocument> fetched = documents.stream()
         .filter(document -> document.media().isEmpty())
         .toList();
@@ -60,7 +79,7 @@ final class Resolution {
     failOnUnknownProviders(fetched, resolvers);
 
     Map<DocumentReference, Spooled> spooled = new LinkedHashMap<>();
-    Map<DocumentReference, ResolutionOutcome> failures = new LinkedHashMap<>();
+    Map<DocumentReference, Failure> failures = new LinkedHashMap<>();
     Map<String, List<DocumentReference>> byProvider = new LinkedHashMap<>();
     for (DocumentReference reference : unique) {
       byProvider.computeIfAbsent(reference.provider(), provider -> new ArrayList<>())
@@ -72,13 +91,19 @@ final class Resolution {
       resolveBatch(resolver, batch.getValue(), context, jobDirectory, limits, spooled, failures);
     }
 
-    if (!failures.isEmpty()) {
+    if (!failures.isEmpty() && !tolerates(tolerance, failures)) {
       throw aggregateFailure(fetched, failures, unique.size());
     }
-    return spooled;
+    return new Resolved(spooled, failures);
   }
 
-  private record ResolutionOutcome(BundleErrorCode code, String detail) {
+  private static boolean tolerates(Tolerance tolerance, Map<DocumentReference, Failure> failures) {
+    return switch (tolerance) {
+      case NONE -> false;
+      case ALL -> true;
+      case PERMANENT -> failures.values().stream()
+          .noneMatch(failure -> TransientFailures.isTransient(failure.code(), null));
+    };
   }
 
   private static void failOnUnknownProviders(
@@ -110,7 +135,7 @@ final class Resolution {
       Path jobDirectory,
       BundleLimits limits,
       Map<DocumentReference, Spooled> spooled,
-      Map<DocumentReference, ResolutionOutcome> failures) {
+      Map<DocumentReference, Failure> failures) {
     ResolvedDocuments outcomes;
     try {
       outcomes = resolver.resolveAll(List.copyOf(references), context);
@@ -118,7 +143,7 @@ final class Resolution {
       log.warn("Resolver for provider '{}' threw {} for its whole batch",
           resolver.provider(), e.getClass().getSimpleName());
       for (DocumentReference reference : references) {
-        failures.put(reference, new ResolutionOutcome(
+        failures.put(reference, new Failure(
             BundleErrorCode.DOCUMENT_RESOLUTION_FAILED,
             "The resolver threw " + e.getClass().getSimpleName() + " for the whole batch"));
       }
@@ -132,9 +157,9 @@ final class Resolution {
           spoolOne(reference, resolved, jobDirectory, limits, spooled, failures);
         } else if (failure != null) {
           failures.put(reference,
-              new ResolutionOutcome(map(failure.reason()), failure.detail()));
+              new Failure(map(failure.reason()), failure.detail()));
         } else {
-          failures.put(reference, new ResolutionOutcome(
+          failures.put(reference, new Failure(
               BundleErrorCode.DOCUMENT_RESOLUTION_FAILED,
               "The resolver returned no outcome for the reference"));
         }
@@ -150,10 +175,10 @@ final class Resolution {
       Path jobDirectory,
       BundleLimits limits,
       Map<DocumentReference, Spooled> spooled,
-      Map<DocumentReference, ResolutionOutcome> failures) {
+      Map<DocumentReference, Failure> failures) {
     long limit = limits.maxSourceBytesPerDocument();
     if (resolved.contentLength().isPresent() && resolved.contentLength().getAsLong() > limit) {
-      failures.put(reference, new ResolutionOutcome(BundleErrorCode.LIMIT_EXCEEDED,
+      failures.put(reference, new Failure(BundleErrorCode.LIMIT_EXCEEDED,
           "The source declares " + resolved.contentLength().getAsLong() + " bytes, which "
               + "exceeds the configured maximum of " + limit + " bytes per document"));
       return;
@@ -170,7 +195,7 @@ final class Resolution {
         while ((read = in.read(buffer)) >= 0) {
           copied += read;
           if (copied > limit) {
-            failures.put(reference, new ResolutionOutcome(BundleErrorCode.LIMIT_EXCEEDED,
+            failures.put(reference, new Failure(BundleErrorCode.LIMIT_EXCEEDED,
                 "The source exceeded the configured maximum of " + limit + " bytes per "
                     + "document during transfer (it declared "
                     + (resolved.contentLength().isPresent()
@@ -190,7 +215,7 @@ final class Resolution {
           resolved.checksum()));
       file = null;
     } catch (IOException | RuntimeException e) {
-      failures.put(reference, new ResolutionOutcome(
+      failures.put(reference, new Failure(
           BundleErrorCode.DOCUMENT_RESOLUTION_FAILED,
           "The source content could not be spooled to disk: " + e.getClass().getSimpleName()));
     } finally {
@@ -202,11 +227,11 @@ final class Resolution {
 
   private static BundleGenerationException aggregateFailure(
       List<BundleDocument> fetched,
-      Map<DocumentReference, ResolutionOutcome> failures,
+      Map<DocumentReference, Failure> failures,
       int uniqueCount) {
     List<DocumentFailure> documentFailures = new ArrayList<>();
     for (BundleDocument document : fetched) {
-      ResolutionOutcome outcome = failures.get(document.reference());
+      Failure outcome = failures.get(document.reference());
       if (outcome != null) {
         documentFailures.add(new DocumentFailure(
             document.id(), document.reference(), outcome.code(), outcome.detail()));
