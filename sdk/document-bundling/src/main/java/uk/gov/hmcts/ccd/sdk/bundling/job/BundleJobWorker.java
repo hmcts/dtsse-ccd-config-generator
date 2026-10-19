@@ -13,6 +13,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.scheduling.annotation.Scheduled;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleErrorCode;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleExecutionContext;
@@ -110,7 +111,9 @@ public class BundleJobWorker implements AutoCloseable {
           exhausted, retryPolicy.maxAttempts());
       emit(exhausted, BundleJobState.FAILED, 0, 0);
     }
-    for (ClaimedBundleJob claimed : repository.claim(toClaim, workerId, leaseDuration,
+    // A lease owner per poll: a job this worker reclaims after its lease expired gets a new one.
+    String leaseOwner = workerId + "/" + UUID.randomUUID();
+    for (ClaimedBundleJob claimed : repository.claim(toClaim, leaseOwner, leaseDuration,
         retryPolicy.maxAttempts())) {
       inFlight.incrementAndGet();
       try {
@@ -160,7 +163,7 @@ public class BundleJobWorker implements AutoCloseable {
       request = selector.select(jobContext);
     } catch (BundleJobJson.Unreadable e) {
       log.error("Bundle job {} is unreadable by this worker: {}", id, e.getMessage(), e);
-      failTerminally(id, BundleErrorCode.JOB_REQUEST_UNREADABLE, "Bundle job " + id
+      failTerminally(claimed, BundleErrorCode.JOB_REQUEST_UNREADABLE, "Bundle job " + id
           + " could not be read by this worker: " + e.getMessage()
           + ". Re-submit the bundle under a new external id.", List.of(), 0);
       return;
@@ -169,7 +172,7 @@ public class BundleJobWorker implements AutoCloseable {
       return;
     } catch (RuntimeException e) {
       log.error("Bundle job {} request could not be compiled for execution", id, e);
-      failTerminally(id, BundleErrorCode.JOB_REQUEST_UNREADABLE, "The bundle request could not be "
+      failTerminally(claimed, BundleErrorCode.JOB_REQUEST_UNREADABLE, "The bundle request could not be "
           + "compiled for execution; the selector threw " + e.getClass().getName() + LOG_ONLY,
           List.of(), 0);
       return;
@@ -182,42 +185,72 @@ public class BundleJobWorker implements AutoCloseable {
     RenderAttempt attempt = retryPolicy.nextAttemptAt(job.attempts(), Instant.now()).isPresent()
         ? RenderAttempt.RETRYABLE : RenderAttempt.FINAL;
     try (BundleResult result = renderer.render(request, context, attempt)) {
-      String summary;
+      Object value;
       try {
-        Object value = completionHandler.onCompleted(job, jobContext, request, result);
-        summary = value == null ? null : json.write(value);
+        value = completionHandler.onCompleted(job, jobContext, request, result);
       } catch (Exception e) {
-        log.error("Bundle job {} rendered but its completion handler failed", id, e);
-        failTerminally(id, BundleErrorCode.COMPLETION_FAILED, "The bundle rendered but the "
-            + "completion handler threw " + e.getClass().getName() + LOG_ONLY, List.of(), total);
+        completionFailed(claimed, e, total);
         return;
       }
       BundleJobState terminal = result.outcome() == BundleOutcome.COMPLETED_WITH_WARNINGS
           ? BundleJobState.COMPLETED_WITH_WARNINGS : BundleJobState.COMPLETED;
       log.info("Bundle job {} completed as {} after {} attempt(s)", id, terminal, job.attempts());
-      boolean completed = repository.markCompleted(id, terminal, summary,
-          bundleRecord(request, result), workerId);
+      boolean completed = repository.markCompleted(id, terminal,
+          value == null ? null : json.write(value), bundleRecord(request, result, value),
+          claimed.leaseOwner());
       record(completed, id, terminal, total, total, "completion");
       if (completed) {
         requeueIfUnavailable(claimed, context, result);
+      } else {
+        discard(job, value);
       }
     } catch (BundleGenerationException e) {
       handleGenerationFailure(claimed, e, total);
+    } catch (DataAccessException e) {
+      // The completion may or may not have committed; the lease expires and the job is reclaimed.
+      log.error("Bundle job {} rendered but its completion could not be recorded", id, e);
     } catch (RuntimeException e) {
       log.error("Bundle job {} failed with an untyped renderer error", id, e);
-      failTerminally(id, BundleErrorCode.ASSEMBLY_FAILED,
+      failTerminally(claimed, BundleErrorCode.ASSEMBLY_FAILED,
           "Unexpected renderer failure of type " + e.getClass().getName() + LOG_ONLY,
           List.of(), total);
     }
   }
 
   /** The rendered bundle as recorded in bundling.bundle, with the job's completed state. */
-  private BundleJobRepository.BundleRecord bundleRecord(BundleRequest request, BundleResult result) {
+  private BundleJobRepository.BundleRecord bundleRecord(BundleRequest request, BundleResult result,
+      Object completion) {
     return new BundleJobRepository.BundleRecord(result.outcome().name(),
         result.artifact().fileName(), result.artifact().mediaType(), result.artifact().size(),
         result.artifact().sha256(), result.pageCount(), json.write(request),
         json.write(result.documents()), json.write(result.missingDocuments()),
-        json.write(result.warnings()));
+        json.write(result.warnings()),
+        completion instanceof StoredBundleDocument stored ? stored : null);
+  }
+
+  private void completionFailed(ClaimedBundleJob claimed, Exception failure, int total) {
+    UUID id = claimed.job().externalId();
+    Optional<Instant> next = retryPolicy.nextAttemptAt(claimed.job().attempts(), Instant.now());
+    if (completionHandler.retryable(failure) && next.isPresent()) {
+      log.warn("Bundle job {} rendered but its completion handler failed; retrying at {}", id,
+          next.get(), failure);
+      record(repository.requeueForRetry(id, next.get(), claimed.transientHistoryJson(),
+          claimed.leaseOwner()),
+          id, BundleJobState.QUEUED, 0, total, "completion retry");
+      return;
+    }
+    log.error("Bundle job {} rendered but its completion handler failed", id, failure);
+    failTerminally(claimed, BundleErrorCode.COMPLETION_FAILED, "The bundle rendered but the "
+        + "completion handler threw " + failure.getClass().getName() + LOG_ONLY, List.of(), total);
+  }
+
+  private void discard(BundleJob job, Object completion) {
+    try {
+      completionHandler.discarded(job, completion);
+    } catch (Exception e) {
+      log.warn("Bundle job {} could not discard what its completion handler stored", job.externalId(),
+          e);
+    }
   }
 
   /**
@@ -273,7 +306,8 @@ public class BundleJobWorker implements AutoCloseable {
     if (!retryPolicy.isTransient(failure)) {
       log.error("Bundle job {} failed with non-retryable {}: {}", id, failure.code(),
           failure.getMessage());
-      failTerminally(id, failure.code(), failure.getMessage(), failure.documentFailures(), total);
+      failTerminally(claimed, failure.code(), failure.getMessage(), failure.documentFailures(),
+          total);
       return;
     }
     List<BundleJobTransientFailure> history =
@@ -284,7 +318,8 @@ public class BundleJobWorker implements AutoCloseable {
     if (nextAttemptAt.isPresent()) {
       log.warn("Bundle job {} failed transiently with {} on attempt {} of {}; retrying at {}",
           id, failure.code(), attempts, retryPolicy.maxAttempts(), nextAttemptAt.get());
-      record(repository.requeueForRetry(id, nextAttemptAt.get(), json.write(history), workerId),
+      record(repository.requeueForRetry(id, nextAttemptAt.get(), json.write(history),
+          claimed.leaseOwner()),
           id, BundleJobState.QUEUED, 0, total, "transient retry");
       return;
     }
@@ -295,14 +330,15 @@ public class BundleJobWorker implements AutoCloseable {
     log.error("Bundle job {} failed with {} and exhausted its {} attempt(s)", id, failure.code(),
         attempts);
     record(repository.markFailed(id, failure.code(), message,
-        json.write(failure.documentFailures()), json.write(history), workerId),
+        json.write(failure.documentFailures()), json.write(history), claimed.leaseOwner()),
         id, BundleJobState.FAILED, 0, total, "exhausted failure");
   }
 
-  private void failTerminally(UUID id, BundleErrorCode code, String message,
+  private void failTerminally(ClaimedBundleJob claimed, BundleErrorCode code, String message,
       List<DocumentFailure> documentFailures, int total) {
-    record(repository.markFailed(id, code, message, json.write(documentFailures), null, workerId),
-        id, BundleJobState.FAILED, 0, total, "failure");
+    UUID id = claimed.job().externalId();
+    record(repository.markFailed(id, code, message, json.write(documentFailures), null,
+        claimed.leaseOwner()), id, BundleJobState.FAILED, 0, total, "failure");
   }
 
   private void record(boolean written, UUID id, BundleJobState state, int completed, int total,

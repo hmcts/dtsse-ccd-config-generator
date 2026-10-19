@@ -261,6 +261,51 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
+  void aJobReclaimedByTheSameWorkerFencesOutItsEarlierAttempt() throws Exception {
+    UUID id = UUID.randomUUID();
+    service.submit(simpleRequest(id), CONTEXT);
+    Map<Integer, CountDownLatch> started = Map.of(1, new CountDownLatch(1), 2, new CountDownLatch(1));
+    Map<Integer, CountDownLatch> release = Map.of(1, new CountDownLatch(1), 2, new CountDownLatch(1));
+    List<Object> discarded = new CopyOnWriteArrayList<>();
+    BundleJobCompletionHandler handler = new BundleJobCompletionHandler() {
+      @Override
+      public Object onCompleted(BundleJob job, BundleJobContext context, BundleRequest request,
+          BundleResult result) {
+        started.get(job.attempts()).countDown();
+        awaitQuietly(release.get(job.attempts()));
+        return Map.of("attempt", job.attempts());
+      }
+
+      @Override
+      public void discarded(BundleJob job, Object summary) {
+        discarded.add(summary);
+      }
+    };
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    try {
+      BundleJobWorker worker = new BundleJobWorker(repository, new FakeRenderer(tempDir),
+          BundleDocumentSelector.asSubmitted(), handler, quickRetries(3), List.of(), pool, 5, 2,
+          Duration.ofMinutes(5));
+      worker.poll();
+      assertThat(started.get(1).await(10, TimeUnit.SECONDS)).isTrue();
+      jdbc.update("update bundling.bundle_job set lease_expires_at = now() - interval '1 second' "
+          + "where external_id = :id", Map.of("id", id));
+      worker.poll();
+      assertThat(started.get(2).await(10, TimeUnit.SECONDS)).isTrue();
+      // The earlier attempt finishes first, but the same worker's later claim holds the lease.
+      release.get(1).countDown();
+      await().atMost(Duration.ofSeconds(10)).until(() -> discarded.size() == 1);
+      assertThat(job(id).state()).isEqualTo(BundleJobState.IN_PROGRESS);
+      release.get(2).countDown();
+      await().atMost(Duration.ofSeconds(10)).until(() -> job(id).state().terminal());
+    } finally {
+      pool.shutdownNow();
+    }
+    assertThat(discarded).containsExactly(Map.of("attempt", 1));
+    assertThat(job(id).result()).contains("{\"attempt\": 2}");
+  }
+
+  @Test
   void transientFailureRequeuesWithBackoffThenBoundedRetryFailsCarryingTheHistory()
       throws Exception {
     UUID id = service.submit(simpleRequest(UUID.randomUUID()), CONTEXT).externalId();
@@ -442,16 +487,8 @@ class BundleJobOutboxIntegrationTest {
       assertThat(missing.startPage()).isEqualTo(2);
     });
     assertThat(bundle.warnings()).isEqualTo(handed.get(0).warnings());
-    assertThat(service.findBundle(bundle.id()).map(BundleMetadata::jobId))
-        .contains(submitted.externalId());
     assertThat(service.findLatestBundle("case-1:bundle").map(BundleMetadata::id))
         .contains(bundle.id());
-    // The job report is now a view of the recorded bundle.
-    BundleJobReport report = service.findReport(submitted.externalId()).orElseThrow();
-    assertThat(report.request().title()).isEqualTo("Selected at execution");
-    assertThat(report.pageCount()).isEqualTo(1);
-    assertThat(report.missingDocuments()).isEqualTo(bundle.missingDocuments());
-    assertThat(column(submitted.externalId(), "report")).isNull();
     // Only an unavailable document is worth re-running for.
     assertThat(service.findLatest("case-1:bundle").orElseThrow().externalId())
         .isEqualTo(submitted.externalId());
@@ -817,7 +854,7 @@ class BundleJobOutboxIntegrationTest {
   private static BundleJobRepository.BundleRecord bundleRecord(String name) {
     BundleRequest request = simpleRequest(UUID.randomUUID());
     return new BundleJobRepository.BundleRecord("COMPLETED", name + ".pdf", "application/pdf", 10,
-        "sha-" + name, 1, new BundleJobJson().write(request), "[]", "[]", "[]");
+        "sha-" + name, 1, new BundleJobJson().write(request), "[]", "[]", "[]", null);
   }
 
   private static BundleJobCompletionHandler summaryHandler() {
@@ -956,7 +993,7 @@ class BundleJobOutboxIntegrationTest {
             missing.add(new MissingDocument(document.id(), document.reference(),
                 temporary ? MissingDocumentReason.UNAVAILABLE : MissingDocumentReason.NOT_FOUND,
                 temporary ? BundleErrorCode.DOCUMENT_RESOLUTION_FAILED : BundleErrorCode.DOCUMENT_NOT_FOUND,
-                "test", page));
+                "test", page, document.title(), List.of()));
           } else {
             documents.add(new DocumentResult(document.id(), document.reference(), "application/pdf",
                 "sha-" + document.id(), 1, page));

@@ -34,6 +34,7 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
  * @param documents where each included document landed
  * @param missingDocuments the documents replaced by placeholder pages, and why
  * @param warnings non-fatal notes from the render
+ * @param stored where the completion handler stored the PDF, if it said
  */
 public record BundleMetadata(
     UUID id,
@@ -51,7 +52,8 @@ public record BundleMetadata(
     int pageCount,
     List<DocumentResult> documents,
     List<MissingDocument> missingDocuments,
-    List<BundleWarning> warnings) {
+    List<BundleWarning> warnings,
+    Optional<StoredBundleDocument> stored) {
 
   public BundleMetadata {
     Objects.requireNonNull(id, "BundleMetadata.id");
@@ -65,14 +67,9 @@ public record BundleMetadata(
     Objects.requireNonNull(fileName, "BundleMetadata.fileName");
     Objects.requireNonNull(mediaType, "BundleMetadata.mediaType");
     Objects.requireNonNull(sha256, "BundleMetadata.sha256");
+    Objects.requireNonNull(stored, "BundleMetadata.stored");
     documents = List.copyOf(documents);
     missingDocuments = List.copyOf(missingDocuments);
     warnings = List.copyOf(warnings);
-  }
-
-  /** The bundle in the shape of the job report it replaces. */
-  public BundleJobReport report() {
-    return new BundleJobReport(request, outcome, fileName, size, sha256, pageCount, documents,
-        missingDocuments, warnings);
   }
 }

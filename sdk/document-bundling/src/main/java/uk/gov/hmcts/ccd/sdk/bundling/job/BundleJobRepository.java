@@ -40,7 +40,7 @@ public class BundleJobRepository {
       select id, job_id, bundle_key, case_reference, selected_at, created_at, outcome, file_name,
              media_type, size_bytes, sha256, page_count, request::text as request,
              documents::text as documents, missing_documents::text as missing_documents,
-             warnings::text as warnings
+             warnings::text as warnings, document_id, document_url, binary_url
       from bundling.bundle
       """;
   private static final TypeReference<List<DocumentResult>> DOCUMENT_RESULTS =
@@ -180,7 +180,7 @@ public class BundleJobRepository {
                 Optional.empty(), Optional.empty()),
             rs.getInt("request_version"), rs.getString("request"),
             rs.getString("selector_parameters"), rs.getString("execution_context"),
-            rs.getString("transient_history")));
+            rs.getString("transient_history"), leaseOwner));
   }
 
   List<UUID> failExhaustedStaleJobs(int maxAttempts) {
@@ -217,11 +217,11 @@ public class BundleJobRepository {
         )
         insert into bundling.bundle (job_id, bundle_key, case_reference, selected_at, outcome,
           file_name, media_type, size_bytes, sha256, page_count, request, documents,
-          missing_documents, warnings)
+          missing_documents, warnings, document_id, document_url, binary_url)
         select external_id, coalesce_key, execution_context ->> 'caseReference',
           coalesce(claimed_at, created_at), :outcome, :fileName, :mediaType, :size, :sha256,
           :pageCount, :request::jsonb, :documents::jsonb, :missingDocuments::jsonb,
-          :warnings::jsonb
+          :warnings::jsonb, :documentId, :documentUrl, :binaryUrl
         from completed
         """,
         params("externalId", externalId, "state", state.name(), "result", resultJson,
@@ -230,18 +230,16 @@ public class BundleJobRepository {
             "mediaType", bundle.mediaType(), "size", bundle.size(), "sha256", bundle.sha256(),
             "pageCount", bundle.pageCount(), "request", bundle.requestJson(),
             "documents", bundle.documentsJson(), "missingDocuments", bundle.missingDocumentsJson(),
-            "warnings", bundle.warningsJson())) == 1;
+            "warnings", bundle.warningsJson(),
+            "documentId", bundle.stored() == null ? null : bundle.stored().id(),
+            "documentUrl", bundle.stored() == null ? null : bundle.stored().url(),
+            "binaryUrl", bundle.stored() == null ? null : bundle.stored().binaryUrl())) == 1;
   }
 
   /** A rendered bundle, serialised for bundling.bundle. */
   record BundleRecord(String outcome, String fileName, String mediaType, long size, String sha256,
       int pageCount, String requestJson, String documentsJson, String missingDocumentsJson,
-      String warningsJson) {
-  }
-
-  Optional<BundleMetadata> findBundle(UUID id) {
-    return jdbc.query(BUNDLE_COLUMNS + " where id = :id", params("id", id),
-        (rs, n) -> mapBundle(rs)).stream().findFirst();
+      String warningsJson, StoredBundleDocument stored) {
   }
 
   Optional<BundleMetadata> findBundleForJob(UUID jobId) {
@@ -256,6 +254,29 @@ public class BundleJobRepository {
          order by selected_at desc, created_at desc, id
          limit 1
         """, params("bundleKey", bundleKey), (rs, n) -> mapBundle(rs)).stream().findFirst();
+  }
+
+  /**
+   * Stored PDFs of bundles that a bundle selected later under the same key replaced at least
+   * {@code replacedFor} ago.
+   */
+  List<UUID> findReplacedDocuments(Duration replacedFor, int limit) {
+    return jdbc.query("""
+        select document_id from bundling.bundle old
+        where document_id is not null and deleted_at is null
+          and exists (select 1 from bundling.bundle newer
+                      where newer.bundle_key = old.bundle_key
+                        and (newer.selected_at, newer.created_at) > (old.selected_at, old.created_at)
+                        and newer.created_at <= now() - (:replacedMillis * interval '1 millisecond'))
+        order by created_at
+        limit :limit
+        """, params("limit", limit, "replacedMillis", replacedFor.toMillis()),
+        (rs, n) -> rs.getObject("document_id", UUID.class));
+  }
+
+  void markDocumentDeleted(UUID documentId) {
+    jdbc.update("update bundling.bundle set deleted_at = now() where document_id = :documentId",
+        params("documentId", documentId));
   }
 
   boolean markFailed(UUID externalId, BundleErrorCode code, String message,
@@ -302,6 +323,10 @@ public class BundleJobRepository {
   }
 
   private BundleMetadata mapBundle(ResultSet rs) throws SQLException {
+    UUID documentId = rs.getObject("document_id", UUID.class);
+    Optional<StoredBundleDocument> stored = documentId == null ? Optional.empty()
+        : Optional.of(new StoredBundleDocument(documentId, rs.getString("document_url"),
+            rs.getString("binary_url")));
     return new BundleMetadata(rs.getObject("id", UUID.class), rs.getObject("job_id", UUID.class),
         Optional.ofNullable(rs.getString("bundle_key")),
         Optional.ofNullable(rs.getString("case_reference")), instant(rs, "selected_at"),
@@ -312,7 +337,7 @@ public class BundleJobRepository {
         rs.getInt("page_count"),
         json.read(rs.getString("documents"), DOCUMENT_RESULTS, "bundle documents"),
         json.read(rs.getString("missing_documents"), MISSING_DOCUMENTS, "missing documents"),
-        json.read(rs.getString("warnings"), WARNINGS, "bundle warnings"));
+        json.read(rs.getString("warnings"), WARNINGS, "bundle warnings"), stored);
   }
 
   private BundleJob map(ResultSet rs) throws SQLException {

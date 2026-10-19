@@ -1,5 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.bundling.api;
 
+import java.util.List;
+
 /**
  * A request document that was replaced by a placeholder page, under
  * {@link MissingDocumentPolicy#PLACEHOLDER}.
@@ -10,6 +12,8 @@ package uk.gov.hmcts.ccd.sdk.bundling.api;
  * @param code the technical error code
  * @param detail a log-safe technical detail, not for users
  * @param startPage the bundle page its placeholder starts on
+ * @param title the document title selected for this bundle, before adding any missing-page suffix
+ * @param sectionPath outermost to innermost rendered section titles; empty for root documents
  */
 public record MissingDocument(
     String documentId,
@@ -17,10 +21,14 @@ public record MissingDocument(
     MissingDocumentReason reason,
     BundleErrorCode code,
     String detail,
-    int startPage) {
+    int startPage,
+    String title,
+    List<String> sectionPath) {
 
   public MissingDocument {
     Validate.requireNonBlank(documentId, "MissingDocument.documentId");
+    Validate.requireNonBlank(title, "MissingDocument.title");
+    sectionPath = List.copyOf(sectionPath);
     Validate.requireNonNull(reason, "MissingDocument.reason");
     Validate.requireNonNull(code, "MissingDocument.code");
     Validate.requireNonNull(detail, "MissingDocument.detail");
