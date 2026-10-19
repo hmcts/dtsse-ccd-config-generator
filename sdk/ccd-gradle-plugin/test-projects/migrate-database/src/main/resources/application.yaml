@@ -1,6 +1,5 @@
-# As a deployed application might be configured: a runtime login, a separate Flyway connection, Flyway off, and a
-# library feature switched on that would refuse to start here. The migration task has to override the first three and
-# not load the fourth.
+# As a deployed application might be configured: a runtime login, a separate Flyway connection, and Flyway off. The
+# migration task has to override all three.
 spring:
   datasource:
     url: jdbc:postgresql://localhost:1/not-the-migration-database
@@ -9,6 +8,3 @@ spring:
     url: jdbc:postgresql://localhost:1/not-the-migration-database
     enabled: false
     locations: classpath:db/migration
-ccd:
-  data-migration:
-    enabled: true

@@ -8,10 +8,20 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
+import uk.gov.hmcts.ccd.sdk.config.SdkFlywayMigration;
 
 @AutoConfiguration
 @EnableConfigurationProperties(CcdDataMigrationProperties.class)
 public class CcdDataMigrationAutoConfiguration {
+
+  @Bean
+  SdkFlywayMigration ccdDataMigrationSupportMigration() {
+    return new SdkFlywayMigration(
+        CcdDataMigrationAutoConfiguration.class,
+        "ccd_data_migration",
+        "classpath:ccd-data-migration-db/migration"
+    );
+  }
 
   @Bean
   @ConditionalOnMissingBean(CcdDataMigrationTask.class)

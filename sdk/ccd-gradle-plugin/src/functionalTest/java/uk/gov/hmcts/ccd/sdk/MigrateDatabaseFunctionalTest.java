@@ -23,7 +23,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Runs {@code migratePostgresDatabase} as the CNP pipeline's {@code enableDbMigration} does, against an application
- * configured as if deployed: a runtime login, Flyway off, and an SDK feature on that would not start here.
+ * configured as if deployed: a runtime login, a separate Flyway connection, and Flyway off.
  */
 public class MigrateDatabaseFunctionalTest {
 

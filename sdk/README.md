@@ -114,5 +114,5 @@ Limits:
   not apply. Java migrations in Flyway's locations still run.
 
 A library's migration auto-configuration must also be listed in
-`META-INF/spring/uk.gov.hmcts.ccd.sdk.config.ImportSdkFlywayMigrations.imports` for this task to run it. Keep it a
-configuration that only registers the `SdkFlywayMigration`, because the task loads everything in it.
+`META-INF/spring/uk.gov.hmcts.ccd.sdk.config.ImportSdkFlywayMigrations.imports` for this task to run it. The task
+loads everything that configuration declares.

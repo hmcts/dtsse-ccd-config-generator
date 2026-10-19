@@ -7,6 +7,8 @@ import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration;
 import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
+import org.springframework.boot.jdbc.autoconfigure.DataSourceTransactionManagerAutoConfiguration;
+import org.springframework.boot.jdbc.autoconfigure.JdbcTemplateAutoConfiguration;
 import org.springframework.context.annotation.Configuration;
 
 /**
@@ -18,7 +20,14 @@ import org.springframework.context.annotation.Configuration;
  * loaded: the application's own beans and the rest of the SDK are not.
  */
 @Configuration(proxyBeanMethods = false)
-@ImportAutoConfiguration({DataSourceAutoConfiguration.class, FlywayAutoConfiguration.class})
+// JDBC template and transaction manager, because a library's migration configuration may also declare beans that need
+// them, as ccd-data-migration-support's does.
+@ImportAutoConfiguration({
+    DataSourceAutoConfiguration.class,
+    DataSourceTransactionManagerAutoConfiguration.class,
+    JdbcTemplateAutoConfiguration.class,
+    FlywayAutoConfiguration.class
+})
 @ImportSdkFlywayMigrations
 public class SdkDatabaseMigration {
 
