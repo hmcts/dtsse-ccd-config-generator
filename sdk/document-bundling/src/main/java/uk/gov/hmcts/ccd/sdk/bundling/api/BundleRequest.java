@@ -40,6 +40,9 @@ public final class BundleRequest {
   @JsonProperty
   private final CoverPage coverPage;
 
+  @JsonProperty
+  private final MissingDocumentPolicy missingDocuments;
+
   private BundleRequest(Builder builder) {
     this.externalId = builder.externalId;
     this.title = builder.title;
@@ -47,6 +50,7 @@ public final class BundleRequest {
     this.root = builder.root;
     this.presentation = builder.presentation;
     this.coverPage = builder.coverPage;
+    this.missingDocuments = builder.missingDocuments;
   }
 
   /** Starts building a bundle request. */
@@ -87,6 +91,11 @@ public final class BundleRequest {
     return Optional.ofNullable(coverPage);
   }
 
+  /** What the render does with a document it cannot include. */
+  public MissingDocumentPolicy missingDocuments() {
+    return missingDocuments;
+  }
+
   /** All documents in the tree, in deterministic render order. */
   public List<BundleDocument> allDocuments() {
     List<BundleDocument> documents = new ArrayList<>();
@@ -121,6 +130,7 @@ public final class BundleRequest {
     private BundleSection root;
     private BundlePresentation presentation = BundlePresentation.courtDefault();
     private CoverPage coverPage;
+    private MissingDocumentPolicy missingDocuments = MissingDocumentPolicy.FAIL;
 
     private Builder() {
     }
@@ -166,6 +176,15 @@ public final class BundleRequest {
      */
     public Builder coverPage(CoverPage coverPage) {
       this.coverPage = coverPage;
+      return this;
+    }
+
+    /**
+     * Sets what the render does with a document it cannot include. Defaults to
+     * {@link MissingDocumentPolicy#FAIL}.
+     */
+    public Builder missingDocuments(MissingDocumentPolicy policy) {
+      this.missingDocuments = Validate.requireNonNull(policy, "BundleRequest.missingDocuments");
       return this;
     }
 
