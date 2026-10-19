@@ -120,8 +120,9 @@ public class CcdSdkPlugin implements Plugin<Project> {
             t.getEnvironment().put("CCD_SDK_DECENTRALISED", "true");
           }
         });
-        registerDatabaseMigration(project, ssc);
       }
+
+      registerDatabaseMigration(project, ssc);
 
       if (config.caseEventServiceBus) {
         project.getDependencies().add("implementation", "com.github.hmcts:ccd-servicebus-support:"
