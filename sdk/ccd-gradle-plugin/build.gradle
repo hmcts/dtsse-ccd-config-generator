@@ -80,6 +80,8 @@ functionalTest.dependsOn(
     project(':ccd-config-generator').tasks.named('publishToMavenLocal'),
     project(':decentralised-runtime').tasks.named('publishToMavenLocal'),
     project(':ccd-data-migration-support').tasks.named('publishToMavenLocal'),
+    project(':document-bundling').tasks.named('publishToMavenLocal'),
+    project(':docweave').tasks.named('publishToMavenLocal'),
     project(':ccd-servicebus-support').tasks.named('publishToMavenLocal')
 )
 

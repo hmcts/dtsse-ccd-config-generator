@@ -62,6 +62,8 @@ public class MigrateDatabaseFunctionalTest {
     try (Connection connection = DriverManager.getConnection(POSTGRES.getJdbcUrl(), "owner", "owner-password")) {
       assertTrue(exists(connection, "ccd.flyway_schema_history"));
       assertTrue(exists(connection, "ccd_data_migration.flyway_schema_history"));
+      assertTrue(exists(connection, "bundling.flyway_schema_history"));
+      assertTrue(exists(connection, "docweave.flyway_schema_history"));
       // The application's migration reads ccd.case_data, so it ran after the SDK's.
       assertTrue(exists(connection, "public.case_references"));
     }

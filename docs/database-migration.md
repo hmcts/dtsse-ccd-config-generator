@@ -11,8 +11,8 @@ To have the service connect as a login without DDL rights instead, migrate in th
 2. Put the schema owner's credentials in the `<vault name>-<env>` vault, or the vault your terraform outputs as
    `vaultName`. The step reads `<component>-POSTGRES-HOST`, `-PORT`,
    `-DATABASE`, `-USER` and `-PASS` ([`GradleBuilder.dbMigrate`](https://github.com/hmcts/cnp-jenkins-library/blob/master/src/uk/gov/hmcts/contino/GradleBuilder.groovy)).
-3. Deploy the service with `spring.flyway.enabled=false` and a runtime login that has DML rights on the application's
-   and the SDK's schemas.
+3. Deploy the service with `spring.flyway.enabled=false` and a runtime login that has the privileges it needs on the
+   application's and the SDK's schemas, but no ownership or DDL.
 
 The step runs `./gradlew migratePostgresDatabase`. The CCD SDK Gradle plugin provides that task, so the SDK
 libraries' migrations run first, as they would at startup. An application that defines its own

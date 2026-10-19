@@ -110,6 +110,8 @@ Limits:
 
 - The task is added after the build script is evaluated. An application that already defines a
   `migratePostgresDatabase` task keeps its own.
+- The application's configuration is loaded, so its `spring.config.import` entries and active profiles must work where
+  the task runs.
 - The application's own beans are not loaded. Flyway callbacks, `JavaMigration` beans and a custom `DataSource` bean do
   not apply. Java migrations in Flyway's locations still run.
 

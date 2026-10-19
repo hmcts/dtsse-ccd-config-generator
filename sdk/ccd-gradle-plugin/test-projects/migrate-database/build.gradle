@@ -18,6 +18,8 @@ repositories {
 dependencies {
     implementation 'com.github.hmcts:decentralised-runtime'
     implementation 'com.github.hmcts:ccd-data-migration-support'
+    implementation 'com.github.hmcts:document-bundling'
+    implementation 'com.github.hmcts:docweave'
 }
 
 if (providers.gradleProperty('ownTask').isPresent()) {
