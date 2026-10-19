@@ -18,6 +18,3 @@ The step runs `./gradlew migratePostgresDatabase`. The CCD SDK Gradle plugin pro
 libraries' migrations run first, as they would at startup. An application that defines its own
 `migratePostgresDatabase` task keeps it. See the [SDK README](../sdk/README.md#migrating-outside-the-application) for
 what the task does and doesn't load.
-
-If the deployed service can read the owner's credentials, for example from the same vault, a compromised pod can
-still change the schema. Keep the owner's credentials where only the pipeline can read them.
