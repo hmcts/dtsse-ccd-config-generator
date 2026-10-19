@@ -50,7 +50,6 @@ class SdkFlywayMigrationIntegrationTest {
 
     configuration.orderedFlywayMigrationStrategy(
         new DefaultResourceLoader(),
-        dataSource,
         migrations.getBeanProvider(SdkFlywayMigration.class),
         properties
     ).migrate(appFlyway);

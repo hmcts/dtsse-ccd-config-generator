@@ -34,15 +34,18 @@ public class DecentralisedFlywayAutoConfiguration {
 
   /**
    * Run library migrations in dependency order, followed by the application's migrations.
+   *
+   * <p>Library migrations use the application Flyway's DataSource, so {@code spring.flyway.user} and
+   * {@code spring.flyway.url} apply to them too. That lets an application connect at runtime as a role without DDL.
    */
   @Bean
   @ConditionalOnMissingBean(FlywayMigrationStrategy.class)
   public FlywayMigrationStrategy orderedFlywayMigrationStrategy(
       ResourceLoader resourceLoader,
-      DataSource dataSource,
       ObjectProvider<SdkFlywayMigration> migrations,
       SdkFlywayProperties properties) {
     return (Flyway appFlyway) -> {
+      DataSource dataSource = appFlyway.getConfiguration().getDataSource();
       Properties flywayProperties = new Properties();
       // We want to build indexes concurrently
       // https://documentation.red-gate.com/fd/flyway-postgresql-transactional-lock-setting-277579114
