@@ -1,1 +1,2 @@
 uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationAutoConfiguration
+uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationFlywayAutoConfiguration

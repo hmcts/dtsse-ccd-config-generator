@@ -1,0 +1,12 @@
+# As a deployed application might be configured: a runtime login, Flyway off, and a library feature switched on that
+# would refuse to start here. The migration task has to override the first two and not load the third.
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:1/not-the-migration-database
+    username: runtime
+  flyway:
+    enabled: false
+    locations: classpath:db/migration
+ccd:
+  data-migration:
+    enabled: true

@@ -2273,6 +2273,7 @@ class CcdDataMigrationTaskIntegrationTest {
   @ImportAutoConfiguration({
       DecentralisedFlywayAutoConfiguration.class,
       CcdDataMigrationAutoConfiguration.class,
+      CcdDataMigrationFlywayAutoConfiguration.class,
       DataSourceAutoConfiguration.class,
       DataSourceTransactionManagerAutoConfiguration.class,
       JdbcTemplateAutoConfiguration.class,

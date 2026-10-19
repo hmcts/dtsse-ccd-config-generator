@@ -94,3 +94,18 @@ ccd:
     flyway:
       # reader-role: DTS JIT Access et DB Reader ST
 ```
+
+## Migrating outside the application
+
+With `decentralised-runtime` on the classpath, the CCD SDK Gradle plugin adds a `migratePostgresDatabase` task. It runs
+the same library-then-application migrations in a process of its own, and then exits. Only the datasource, Flyway and
+the libraries' migration registrations are loaded. The CNP pipeline's `enableDbMigration` runs this task, passing
+`-Pdburl`, `-Pflyway.user` and `-Pflyway.password`. Without them, the application's own datasource configuration
+applies.
+
+So the pipeline can migrate as the schema owner, while the deployed application connects as a role without DDL and sets
+`spring.flyway.enabled=false`. An application that already defines a `migratePostgresDatabase` task keeps its own.
+
+A library's migration auto-configuration must also be listed in
+`META-INF/spring/uk.gov.hmcts.ccd.sdk.config.ImportSdkFlywayMigrations.imports` for this task to run it. Keep it a
+configuration that only registers the `SdkFlywayMigration`, because the task loads everything in it.
