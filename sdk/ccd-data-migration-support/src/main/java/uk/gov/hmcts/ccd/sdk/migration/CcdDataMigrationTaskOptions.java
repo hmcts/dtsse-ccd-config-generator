@@ -21,11 +21,15 @@ public record CcdDataMigrationTaskOptions(
     Duration maxRunTime,
     Duration statementTimeout,
     String sourceJurisdiction,
-    String fdwAdditionalSelectGrantee
+    String fdwAdditionalSelectGrantee,
+    boolean preloadCaseDataSync,
+    int caseDataSyncBatchSize
 ) {
   private static final String TARGET_SCHEMA = "ccd";
   private static final String FDW_SCHEMA = "fdw_stage";
   private static final Duration DEFAULT_STATEMENT_TIMEOUT = Duration.ofMinutes(10);
+  // Each batch is one source query and one target transaction; larger batches hold both for longer.
+  static final int MAX_CASE_DATA_SYNC_BATCH_SIZE = 10_000;
 
   public CcdDataMigrationTaskOptions {
     taskName = requireText(taskName, "taskName");
@@ -36,6 +40,11 @@ public record CcdDataMigrationTaskOptions(
 
     if (eventIdWindowSize < 1) {
       throw new IllegalArgumentException("eventIdWindowSize must be greater than zero");
+    }
+    if (caseDataSyncBatchSize < 1 || caseDataSyncBatchSize > MAX_CASE_DATA_SYNC_BATCH_SIZE) {
+      throw new IllegalArgumentException(
+          "caseDataSyncBatchSize must be between 1 and " + MAX_CASE_DATA_SYNC_BATCH_SIZE
+      );
     }
     if (significantItemIdWindowSize < 1) {
       throw new IllegalArgumentException("significantItemIdWindowSize must be greater than zero");
@@ -133,6 +142,8 @@ public record CcdDataMigrationTaskOptions(
     private Duration statementTimeout = DEFAULT_STATEMENT_TIMEOUT;
     private String sourceJurisdiction;
     private String fdwAdditionalSelectGrantee;
+    private boolean preloadCaseDataSync = true;
+    private int caseDataSyncBatchSize = 1_000;
 
     private Builder(List<String> caseTypeIds) {
       this.caseTypeIds = caseTypeIds;
@@ -188,6 +199,16 @@ public record CcdDataMigrationTaskOptions(
       return this;
     }
 
+    public Builder preloadCaseDataSync(boolean preloadCaseDataSync) {
+      this.preloadCaseDataSync = preloadCaseDataSync;
+      return this;
+    }
+
+    public Builder caseDataSyncBatchSize(int caseDataSyncBatchSize) {
+      this.caseDataSyncBatchSize = caseDataSyncBatchSize;
+      return this;
+    }
+
     public CcdDataMigrationTaskOptions build() {
       return new CcdDataMigrationTaskOptions(
           taskName,
@@ -200,7 +221,9 @@ public record CcdDataMigrationTaskOptions(
           maxRunTime,
           statementTimeout,
           sourceJurisdiction,
-          fdwAdditionalSelectGrantee
+          fdwAdditionalSelectGrantee,
+          preloadCaseDataSync,
+          caseDataSyncBatchSize
       );
     }
   }

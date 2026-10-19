@@ -5,13 +5,19 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationMode.CUTOVER;
 import static uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationMode.PRELOAD_EVENTS;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,7 +32,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import uk.gov.hmcts.ccd.sdk.config.DecentralisedFlywayAutoConfiguration;
 
 @SpringBootTest(classes = CcdDataMigrationTaskIntegrationTest.TestConfig.class, properties = {
@@ -53,6 +62,8 @@ class CcdDataMigrationTaskIntegrationTest {
     jdbc.getJdbcTemplate().execute("drop schema if exists source cascade");
     jdbc.getJdbcTemplate().execute("drop server if exists ccd_migration_test_server cascade");
     jdbc.getJdbcTemplate().execute("delete from ccd_data_migration.ccd_data_migration_progress");
+    jdbc.getJdbcTemplate().execute("delete from ccd_data_migration.case_data_copy_versions");
+    jdbc.getJdbcTemplate().execute("delete from ccd_data_migration.case_data_sync_queue");
     jdbc.getJdbcTemplate().execute("truncate table ccd.case_event, ccd.case_data restart identity cascade");
     restoreTargetSchemaState();
     createSourceTables();
@@ -178,6 +189,503 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(countRows("ccd.case_event")).isZero();
     assertThat(targetCaseState(20)).isEqualTo("Submitted");
     assertThat(targetCaseState(30)).isEqualTo("Submitted");
+  }
+
+  @Test
+  void preloadSyncsChangedCaseDataSoCutoverDoesNotRecopyIt() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCase(20, 1000000000000020L, 1, "Submitted", "{\"field\":\"other\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(102, 20, "create", "Submitted", "{\"field\":\"other\"}", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    updateSourceCase(10, 2, "Updated", "{\"field\":\"two\"}");
+    CcdDataMigrationRunResult preload = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    assertThat(preload.caughtUp()).isTrue();
+    assertThat(preload.casesProcessed()).isEqualTo(1);
+    assertThat(targetCaseState(10)).isEqualTo("Updated");
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"two\"}");
+    assertThat(caseRevision(10)).isZero();
+    assertThat(caseDataTriggerEnabled("trigger_increment_case_revision")).isTrue();
+
+    CcdDataMigrationRunResult cutover = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(cutover.caughtUp()).isTrue();
+    assertThat(cutover.casesProcessed()).isZero();
+    assertThat(progressStatus()).isEqualTo("COMPLETE");
+    assertThat(caseRevision(10)).isEqualTo(CASE_REVISION_OFFSET + 1);
+    assertThat(caseRevision(20)).isEqualTo(CASE_REVISION_OFFSET + 1);
+  }
+
+  @Test
+  void preloadSyncInsertsSourceCasesThatHaveNoEventsYet() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+
+    CcdDataMigrationRunResult preload = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    assertThat(preload.casesProcessed()).isEqualTo(1);
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"one\"}");
+    assertThat(caseRevision(10)).isZero();
+  }
+
+  @Test
+  void cutoverSyncsSupplementaryDataChangedWithoutVersionOrLastModified() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    // CCD's supplementary data endpoints update the column without touching version or last_modified.
+    jdbc.getJdbcTemplate().execute("""
+        update source.case_data
+        set supplementary_data = '{"orgs_assigned_users": {"ORG1": 2}}'::jsonb
+        where id = 10
+        """);
+
+    CcdDataMigrationRunResult cutover = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(cutover.casesProcessed()).isEqualTo(1);
+    assertThat(targetSupplementaryData(10)).isEqualTo("{\"orgs_assigned_users\": {\"ORG1\": 2}}");
+    assertThat(caseRevision(10)).isEqualTo(CASE_REVISION_OFFSET + 1);
+  }
+
+  @Test
+  void cutoverTreatsNullSourceSupplementaryDataAsEmpty() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    jdbc.getJdbcTemplate().execute("update source.case_data set supplementary_data = null where id = 10");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    CcdDataMigrationRunResult cutover = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(cutover.casesProcessed()).isZero();
+    assertThat(targetSupplementaryData(10)).isEqualTo("{}");
+  }
+
+  @Test
+  void cutoverRefreshesDataWhenEitherVersionOrLastModifiedChanges() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCase(20, 1000000000000020L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(102, 20, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    jdbc.getJdbcTemplate().execute("""
+        update source.case_data set data = '{"field":"version-only"}'::jsonb, version = 2 where id = 10
+        """);
+    jdbc.getJdbcTemplate().execute("""
+        update source.case_data
+        set data = '{"field":"last-modified-only"}'::jsonb,
+            last_modified = timestamp '2024-06-01 00:00:00'
+        where id = 20
+        """);
+
+    CcdDataMigrationRunResult cutover = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(cutover.casesProcessed()).isEqualTo(2);
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"version-only\"}");
+    assertThat(targetCaseData(20)).isEqualTo("{\"field\": \"last-modified-only\"}");
+  }
+
+  @Test
+  void cutoverRecopiesDataChangedDirectlyInTheSource() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCase(20, 1000000000000020L, 1, "Submitted", "{\"field\":\"two\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(102, 20, "create", "Submitted", "{\"field\":\"two\"}", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    // A direct SQL fix in the source changes data without touching version or last_modified.
+    jdbc.getJdbcTemplate().execute("""
+        update source.case_data set data = '{"field":"direct-sql"}'::jsonb where id = 10
+        """);
+
+    CcdDataMigrationRunResult cutover = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(cutover.casesProcessed()).isEqualTo(1);
+    assertThat(progressStatus()).isEqualTo("COMPLETE");
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"direct-sql\"}");
+    assertThat(targetCaseData(20)).isEqualTo("{\"field\": \"two\"}");
+    assertThat(caseRevision(10)).isEqualTo(CASE_REVISION_OFFSET + 1);
+  }
+
+  @Test
+  void syncRecopiesCaseWhenOnlyAnUnmigratedColumnChanges() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    // Logstash marks a case as indexed by updating a column the migration does not copy. The row
+    // version still changes, so the case is re-read; the target row is left as it was.
+    jdbc.getJdbcTemplate().execute("update source.case_data set marked_by_logstash = true where id = 10");
+
+    CcdDataMigrationRunResult preload = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+    CcdDataMigrationRunResult cutover = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(preload.casesProcessed()).isZero();
+    assertThat(recordedSourceXmin(10)).isEqualTo(sourceXmin(10));
+    assertThat(cutover.casesProcessed()).isZero();
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"one\"}");
+  }
+
+  @Test
+  void syncRecopiesCasesPreloadedBeforeSourceVersionsWereRecorded() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(preloadWithoutCaseDataSync(1000, 10)).runMigration();
+    // Earlier SDK versions inserted parent cases without recording their versions.
+    jdbc.getJdbcTemplate().execute("delete from ccd_data_migration.case_data_copy_versions");
+    jdbc.getJdbcTemplate().execute("update source.case_data set data = '{\"field\":\"later\"}'::jsonb where id = 10");
+
+    assertThat(recordedSourceXmin(10)).isNull();
+
+    CcdDataMigrationRunResult cutover = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(cutover.casesProcessed()).isEqualTo(1);
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"later\"}");
+    assertThat(recordedSourceXmin(10)).isEqualTo(sourceXmin(10));
+  }
+
+  @Test
+  void cutoverRemovesRecordedSourceVersionsOfDeletedCases() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+    assertThat(recordedSourceXmin(10)).isNotNull();
+
+    jdbc.getJdbcTemplate().execute("delete from source.case_event where case_data_id = 10");
+    jdbc.getJdbcTemplate().execute("delete from source.case_data where id = 10");
+    task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(countRows("ccd.case_data")).isZero();
+    assertThat(recordedSourceXmin(10)).isNull();
+  }
+
+  @Test
+  void cutoverOverwritesTargetRowEditedAfterItWasCopied() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    jdbc.getJdbcTemplate().execute("update ccd.case_data set data = '{\"field\":\"edited\"}'::jsonb where id = 10");
+
+    CcdDataMigrationRunResult cutover = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(cutover.casesProcessed()).isEqualTo(1);
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"one\"}");
+    assertThat(caseRevision(10)).isEqualTo(CASE_REVISION_OFFSET + 1);
+  }
+
+  @Test
+  void repeatCutoverRestoresTargetChangedSinceTheLastCutover() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(CUTOVER, 1000, 10).runMigration();
+
+    // The cutover's own revision update must not look like a change on the next run.
+    CcdDataMigrationRunResult unchanged = task(CUTOVER, 1000, 10).runMigration();
+    assertThat(unchanged.casesProcessed()).isZero();
+
+    // For example the service wrote to the target during a rehearsal before going back to preload.
+    jdbc.getJdbcTemplate().execute("update ccd.case_data set state = 'ChangedInRehearsal' where id = 10");
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+    CcdDataMigrationRunResult cutover = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(targetCaseState(10)).isEqualTo("Submitted");
+    assertThat(cutover.casesProcessed()).isZero();
+    assertThat(progressStatus()).isEqualTo("COMPLETE");
+  }
+
+  @Test
+  void preloadSyncStopsBeforeScanningWhenTheTimeLimitHasPassed() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+    updateSourceCase(10, 2, "Updated", "{\"field\":\"two\"}");
+
+    CcdDataMigrationRunResult preload = new CcdDataMigrationTask(
+        jdbc,
+        new TransactionTemplate(transactionManager),
+        optionsBuilder(List.of("TestCase")).mode(PRELOAD_EVENTS).maxRunTime(Duration.ofMinutes(1)).build(),
+        // Reads: the run's deadline, then the check before the scan, which is already past it.
+        new DeadlineClock(1),
+        () -> false
+    ).runMigration();
+
+    assertThat(preload.stoppedByTimeLimit()).isTrue();
+    assertThat(preload.caughtUp()).isFalse();
+    assertThat(preload.casesProcessed()).isZero();
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"one\"}");
+  }
+
+  @Test
+  void preloadAndCutoverFailBeforeCopyingWhenTheVersionedForeignTableCannotBeCreated() {
+    // Stands in for a task role without CREATE on the FDW schema: the name is taken by a type, so
+    // creating the foreign table fails while to_regclass still reports it missing.
+    jdbc.getJdbcTemplate().execute("create type fdw_stage.case_data_versioned as enum ('blocked')");
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+
+    for (CcdDataMigrationMode mode : List.of(PRELOAD_EVENTS, CUTOVER)) {
+      assertThatThrownBy(() -> task(mode, 1000, 10).runMigration())
+          .isInstanceOf(CcdDataMigrationException.class)
+          .hasMessageContaining("create foreign table fdw_stage.case_data_versioned")
+          .hasMessageContaining("column_name 'xmin'")
+          .hasMessageContaining("grant select on fdw_stage.case_data_versioned");
+    }
+    assertThat(countRows("ccd.case_event")).isZero();
+    assertThat(countRows("ccd.case_data")).isZero();
+  }
+
+  @Test
+  void failsBeforeCopyingWhenTheTaskRoleCannotReadTheVersionedForeignTable() throws SQLException {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+    // The test database user is a superuser, which can read every table, so run as another role.
+    createRole("migration_task_without_read");
+    jdbc.getJdbcTemplate().execute("grant usage on schema fdw_stage to migration_task_without_read");
+
+    try (Connection connection = dataSource.getConnection()) {
+      connection.createStatement().execute("set role migration_task_without_read");
+      try {
+        var roleDataSource = new SingleConnectionDataSource(connection, true);
+        var roleTask = new CcdDataMigrationTask(
+            new NamedParameterJdbcTemplate(roleDataSource),
+            new TransactionTemplate(new DataSourceTransactionManager(roleDataSource)),
+            optionsBuilder(List.of("TestCase")).mode(PRELOAD_EVENTS).build(),
+            Clock.systemUTC(),
+            () -> false
+        );
+
+        assertThatThrownBy(roleTask::runMigration)
+            .isInstanceOf(CcdDataMigrationException.class)
+            .hasMessageContaining("cannot read the foreign table fdw_stage.case_data_versioned")
+            .hasMessageContaining("grant select on fdw_stage.case_data_versioned to migration_task_without_read");
+      } finally {
+        connection.createStatement().execute("reset role");
+      }
+    }
+  }
+
+  @Test
+  void createsVersionedForeignTableWithTheColumnsServerAndOptionsOfCaseData() {
+    jdbc.getJdbcTemplate().execute("drop foreign table if exists fdw_stage.case_data_versioned");
+    jdbc.getJdbcTemplate().execute("alter foreign table fdw_stage.case_data options (add use_remote_estimate 'true')");
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    assertThat(foreignTableColumns("case_data_versioned"))
+        .containsExactlyElementsOf(
+            Stream.concat(
+                foreignTableColumns("case_data").stream(),
+                Stream.of("row_xmin xid [column_name=xmin]")
+            ).toList()
+        );
+    assertThat(foreignTableOptions("case_data_versioned")).isEqualTo(foreignTableOptions("case_data"));
+    assertThat(recordedSourceXmin(10)).isEqualTo(sourceXmin(10));
+  }
+
+  @Test
+  void preloadCaseDataSyncStopsAtTimeLimitAndResumesOnNextRun() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCase(20, 1000000000000020L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(102, 20, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    updateSourceCase(10, 2, "Updated", "{\"field\":\"two\"}");
+    updateSourceCase(20, 2, "Updated", "{\"field\":\"two\"}");
+    var timeLimited = optionsBuilder(List.of("TestCase"))
+        .mode(PRELOAD_EVENTS)
+        .caseDataSyncBatchSize(1)
+        .maxRunTime(Duration.ofMinutes(1))
+        .build();
+
+    CcdDataMigrationRunResult first = new CcdDataMigrationTask(
+        jdbc,
+        new TransactionTemplate(transactionManager),
+        timeLimited,
+        // Reads: the run's deadline, then the check before the scan. The deadline passes during the
+        // scan, but the first batch after a scan is always copied; the check before the second stops.
+        new DeadlineClock(2),
+        () -> false
+    ).runMigration();
+
+    assertThat(first.caughtUp()).isFalse();
+    assertThat(first.stoppedByTimeLimit()).isTrue();
+    assertThat(first.casesProcessed()).isEqualTo(1);
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"two\"}");
+    assertThat(targetCaseData(20)).isEqualTo("{\"field\": \"one\"}");
+    assertThat(queuedCaseIds()).containsExactly(20L);
+
+    CcdDataMigrationRunResult second = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    assertThat(second.caughtUp()).isTrue();
+    assertThat(second.casesProcessed()).isEqualTo(1);
+    assertThat(targetCaseData(20)).isEqualTo("{\"field\": \"two\"}");
+    assertThat(queuedCaseIds()).isEmpty();
+  }
+
+  @Test
+  void resumedCutoverCopiesQueuedCasesBeforeScanningTheSourceAgain() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCase(20, 1000000000000020L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(102, 20, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+    updateSourceCase(10, 2, "Updated", "{\"field\":\"two\"}");
+    updateSourceCase(20, 2, "Updated", "{\"field\":\"two\"}");
+    var timeLimitedCutover = optionsBuilder(List.of("TestCase"))
+        .mode(CUTOVER)
+        .caseDataSyncBatchSize(1)
+        .maxRunTime(Duration.ofMinutes(1))
+        .build();
+
+    CcdDataMigrationRunResult first = new CcdDataMigrationTask(
+        jdbc,
+        new TransactionTemplate(transactionManager),
+        timeLimitedCutover,
+        // Reads: the deadline, the check before the scan, then the check before the second batch.
+        new DeadlineClock(2),
+        () -> false
+    ).runMigration();
+
+    assertThat(first.stoppedByTimeLimit()).isTrue();
+    assertThat(progressStatus()).isEqualTo("CUTOVER");
+    assertThat(queuedCaseIds()).containsExactly(20L);
+
+    CcdDataMigrationRunResult second = new CcdDataMigrationTask(
+        jdbc,
+        new TransactionTemplate(transactionManager),
+        timeLimitedCutover,
+        // Reads: the deadline, then the check before the queued batch. The limit is reached before
+        // the rescan, so the queued case is copied without scanning the source first.
+        new DeadlineClock(2),
+        () -> false
+    ).runMigration();
+
+    assertThat(second.stoppedByTimeLimit()).isTrue();
+    assertThat(second.casesProcessed()).isEqualTo(1);
+    assertThat(targetCaseData(20)).isEqualTo("{\"field\": \"two\"}");
+    assertThat(queuedCaseIds()).isEmpty();
+    assertThat(progressStatus()).isEqualTo("CUTOVER");
+
+    CcdDataMigrationRunResult third = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(third.caughtUp()).isTrue();
+    assertThat(third.casesProcessed()).isZero();
+    assertThat(progressStatus()).isEqualTo("COMPLETE");
+  }
+
+  @Test
+  void anotherTaskSyncingOtherCaseTypesDoesNotClearThisTasksQueue() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCase(20, 1000000000000020L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCase(30, 1000000000000030L, 1, "Submitted", "{\"field\":\"other\"}", "TEST", "OtherCase");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(102, 20, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(103, 30, "create", "Submitted", "{\"field\":\"other\"}", "OtherCase", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+    updateSourceCase(10, 2, "Updated", "{\"field\":\"two\"}");
+    updateSourceCase(20, 2, "Updated", "{\"field\":\"two\"}");
+    CcdDataMigrationRunResult paused = new CcdDataMigrationTask(
+        jdbc,
+        new TransactionTemplate(transactionManager),
+        optionsBuilder(List.of("TestCase"))
+            .mode(CUTOVER)
+            .caseDataSyncBatchSize(1)
+            .maxRunTime(Duration.ofMinutes(1))
+            .build(),
+        // Reads: the deadline, the check before the scan, then the check before the second batch.
+        new DeadlineClock(2),
+        () -> false
+    ).runMigration();
+    assertThat(paused.stoppedByTimeLimit()).isTrue();
+    assertThat(queuedCaseIds()).containsExactly(20L);
+
+    // A second task migrating other case types into the same database scans and empties its own
+    // queue. It must leave this task's queued case for this task to copy.
+    CcdDataMigrationRunResult otherTask = task(optionsBuilder(List.of("OtherCase"))
+        .taskName("other-case-migration")
+        .mode(PRELOAD_EVENTS)
+        .build()).runMigration();
+
+    assertThat(otherTask.stoppedByTimeLimit()).isFalse();
+    assertThat(queuedCaseIds()).containsExactly(20L);
+    assertThat(targetCaseData(20)).isEqualTo("{\"field\": \"one\"}");
+
+    CcdDataMigrationRunResult resumed = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(resumed.caughtUp()).isTrue();
+    assertThat(targetCaseData(20)).isEqualTo("{\"field\": \"two\"}");
+    assertThat(queuedCaseIds()).isEmpty();
+    assertThat(progressStatus()).isEqualTo("COMPLETE");
+  }
+
+  @Test
+  void syncKeepsTheSourceLastStateModifiedDateWhenTheStateChanges() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+    jdbc.getJdbcTemplate().execute(
+        "update source.case_data set state = 'Closed', last_state_modified_date = '2020-02-02 02:02:02' where id = 10"
+    );
+
+    task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(targetCaseState(10)).isEqualTo("Closed");
+    assertThat(jdbc.queryForObject(
+        "select last_state_modified_date::text from ccd.case_data where id = 10",
+        Map.of(),
+        String.class
+    )).isEqualTo("2020-02-02 02:02:02");
+  }
+
+  @Test
+  void preloadRecordsVersionsOfParentCasesInsertedWithEventsSoTheSyncDoesNotReadThemAgain() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+
+    task(preloadWithoutCaseDataSync(1000, 10)).runMigration();
+
+    assertThat(recordedSourceXmin(10)).isEqualTo(sourceXmin(10));
+    assertThat(recordedTargetXmin(10)).isEqualTo(targetXmin(10));
+
+    jdbc.getJdbcTemplate().execute("update source.case_data set data = '{\"field\":\"later\"}'::jsonb where id = 10");
+    CcdDataMigrationRunResult preload = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    assertThat(preload.casesProcessed()).isEqualTo(1);
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"later\"}");
+  }
+
+  @Test
+  void caseDataSyncBatchFailureReportsItsOwnErrorAndLeavesTheRevisionTriggerEnabled() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    // A different target case already holds the source case's reference, so the upsert fails.
+    insertTargetCase(99, 1000000000000010L, 1, "Submitted", "{\"field\":\"clash\"}", 0);
+
+    assertThatThrownBy(() -> task(PRELOAD_EVENTS, 1000, 10).runMigration())
+        .hasStackTraceContaining("duplicate key value")
+        .satisfies(ex -> assertThat(stackTrace(ex)).doesNotContain("current transaction is aborted"));
+
+    assertThat(caseDataTriggerEnabled("trigger_increment_case_revision")).isTrue();
+    assertThat(recordedSourceXmin(10)).isNull();
+  }
+
+  @Test
+  void preloadSkipsCaseDataSyncWhenDisabled() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(preloadWithoutCaseDataSync(1000, 10)).runMigration();
+
+    updateSourceCase(10, 2, "Updated", "{\"field\":\"two\"}");
+    CcdDataMigrationRunResult preload = task(preloadWithoutCaseDataSync(1000, 10)).runMigration();
+
+    assertThat(preload.casesProcessed()).isZero();
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"one\"}");
   }
 
   @Test
@@ -317,6 +825,7 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(fdwTableExists("case_data")).isTrue();
     assertThat(fdwTableExists("case_event")).isTrue();
     assertThat(fdwTableExists("case_event_significant_items")).isTrue();
+    assertThat(fdwTableExists("case_data_versioned")).isTrue();
   }
 
   @Test
@@ -365,6 +874,7 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(countFdwRowsAsRole(FDW_READER_ROLE, "case_data")).isEqualTo(1);
     assertThat(countFdwRowsAsRole(FDW_READER_ROLE, "case_event")).isEqualTo(1);
     assertThat(countFdwRowsAsRole(FDW_READER_ROLE, "case_event_significant_items")).isEqualTo(1);
+    assertThat(countFdwRowsAsRole(FDW_READER_ROLE, "case_data_versioned")).isEqualTo(1);
   }
 
   @Test
@@ -462,13 +972,13 @@ class CcdDataMigrationTaskIntegrationTest {
     insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", minutesAgo(60));
     insertSourceCaseEvent(103, 20, "create", "Submitted", "{\"field\":\"other\"}", minutesAgo(60));
 
-    task(PRELOAD_EVENTS, 100, 2).runMigration();
+    task(preloadWithoutCaseDataSync(100, 2)).runMigration();
     assertThat(countRows("ccd.case_data")).isEqualTo(2);
     assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"one\"}");
 
     updateSourceCase(10, 2, "Closed", "{\"field\":\"three\"}");
     insertSourceCaseEvent(201, 10, "close", "Closed", "{\"field\":\"three\"}", minutesAgo(60));
-    CcdDataMigrationRunResult result = task(PRELOAD_EVENTS, 100, 10).runMigration();
+    CcdDataMigrationRunResult result = task(preloadWithoutCaseDataSync(100, 10)).runMigration();
 
     assertThat(result.caughtUp()).isTrue();
     assertThat(countRows("ccd.case_event")).isEqualTo(4);
@@ -753,7 +1263,8 @@ class CcdDataMigrationTaskIntegrationTest {
           state varchar(255) not null,
           data jsonb not null,
           supplementary_data jsonb,
-          id bigint not null unique
+          id bigint not null unique,
+          marked_by_logstash boolean default false
         )
         """);
     jdbc.getJdbcTemplate().execute("""
@@ -1257,6 +1768,19 @@ class CcdDataMigrationTaskIntegrationTest {
     );
   }
 
+  private CcdDataMigrationTaskOptions preloadWithoutCaseDataSync(int eventIdWindowSize, int maxBatchesPerRun) {
+    return optionsBuilder(List.of("TestCase"))
+        .mode(PRELOAD_EVENTS)
+        .eventIdWindowSize(eventIdWindowSize)
+        .maxBatchesPerRun(maxBatchesPerRun)
+        .preloadCaseDataSync(false)
+        .build();
+  }
+
+  private CcdDataMigrationTask task(CcdDataMigrationTaskOptions options) {
+    return new CcdDataMigrationTask(jdbc, transactionManager, options);
+  }
+
   private CcdDataMigrationTaskOptions.Builder optionsBuilder(List<String> caseTypeIds) {
     return CcdDataMigrationTaskOptions.builder(caseTypeIds)
         .sourceJurisdiction("TEST");
@@ -1413,6 +1937,88 @@ class CcdDataMigrationTaskIntegrationTest {
 
   private String targetCaseData(long id) {
     return jdbc.queryForObject("select data::text from ccd.case_data where id = :id", Map.of("id", id), String.class);
+  }
+
+  private String targetSupplementaryData(long id) {
+    return jdbc.queryForObject(
+        "select supplementary_data::text from ccd.case_data where id = :id",
+        Map.of("id", id),
+        String.class
+    );
+  }
+
+  private Long recordedSourceXmin(long id) {
+    return jdbc.query(
+        "select source_xmin from ccd_data_migration.case_data_copy_versions where case_data_id = :id",
+        Map.of("id", id),
+        rs -> rs.next() ? rs.getLong(1) : null
+    );
+  }
+
+  private List<Long> queuedCaseIds() {
+    return jdbc.getJdbcTemplate().queryForList(
+        "select case_data_id from ccd_data_migration.case_data_sync_queue order by case_data_id",
+        Long.class
+    );
+  }
+
+  private List<String> foreignTableColumns(String tableName) {
+    return jdbc.getJdbcTemplate().queryForList(
+        """
+        select a.attname || ' ' || format_type(a.atttypid, a.atttypmod)
+          || coalesce(' [' || array_to_string(a.attfdwoptions, ',') || ']', '')
+        from pg_attribute a
+        where a.attrelid = ('fdw_stage.' || ?)::regclass
+          and a.attnum > 0
+          and not a.attisdropped
+        order by a.attnum
+        """,
+        String.class,
+        tableName
+    );
+  }
+
+  private String foreignTableOptions(String tableName) {
+    return jdbc.getJdbcTemplate().queryForObject(
+        """
+        select s.srvname || ' ' || array_to_string(ft.ftoptions, ',')
+        from pg_foreign_table ft
+        join pg_foreign_server s on s.oid = ft.ftserver
+        where ft.ftrelid = ('fdw_stage.' || ?)::regclass
+        """,
+        String.class,
+        tableName
+    );
+  }
+
+  private Long recordedTargetXmin(long id) {
+    return jdbc.query(
+        "select target_xmin from ccd_data_migration.case_data_copy_versions where case_data_id = :id",
+        Map.of("id", id),
+        rs -> rs.next() ? rs.getLong(1) : null
+    );
+  }
+
+  private long targetXmin(long id) {
+    return jdbc.queryForObject(
+        "select xmin::text::bigint from ccd.case_data where id = :id",
+        Map.of("id", id),
+        Long.class
+    );
+  }
+
+  private static String stackTrace(Throwable throwable) {
+    StringWriter writer = new StringWriter();
+    throwable.printStackTrace(new PrintWriter(writer));
+    return writer.toString();
+  }
+
+  private long sourceXmin(long id) {
+    return jdbc.queryForObject(
+        "select xmin::text::bigint from source.case_data where id = :id",
+        Map.of("id", id),
+        Long.class
+    );
   }
 
   private String progressStatus() {
@@ -1586,7 +2192,8 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   private long countFdwRowsAsRole(String roleName, String tableName) {
-    if (!List.of("case_data", "case_event", "case_event_significant_items").contains(tableName)) {
+    if (!List.of("case_data", "case_event", "case_event_significant_items", "case_data_versioned")
+        .contains(tableName)) {
       throw new IllegalArgumentException("Unexpected FDW table name: " + tableName);
     }
 
@@ -1673,5 +2280,35 @@ class CcdDataMigrationTaskIntegrationTest {
       FlywayAutoConfiguration.class
   })
   static class TestConfig {
+  }
+
+  // Returns the same instant for the first reads, then an hour later, so a run's time limit
+  // (taken from the first read) is reached at a chosen check.
+  private static final class DeadlineClock extends Clock {
+    private static final Instant START = Instant.parse("2026-01-01T00:00:00Z");
+    private int readsBeforeDeadline;
+
+    private DeadlineClock(int readsBeforeDeadline) {
+      this.readsBeforeDeadline = readsBeforeDeadline;
+    }
+
+    @Override
+    public ZoneId getZone() {
+      return ZoneOffset.UTC;
+    }
+
+    @Override
+    public Clock withZone(ZoneId zone) {
+      return this;
+    }
+
+    @Override
+    public Instant instant() {
+      if (readsBeforeDeadline > 0) {
+        readsBeforeDeadline--;
+        return START;
+      }
+      return START.plus(Duration.ofHours(1));
+    }
   }
 }

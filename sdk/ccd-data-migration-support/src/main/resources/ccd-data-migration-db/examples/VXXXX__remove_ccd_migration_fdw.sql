@@ -40,7 +40,7 @@ BEGIN
     WHERE n.nspname = fdw_schema
       AND NOT (
           c.relkind = 'f'
-          AND c.relname IN ('case_data', 'case_event', 'case_event_significant_items')
+          AND c.relname IN ('case_data', 'case_event', 'case_event_significant_items', 'case_data_versioned')
       );
 
     IF unexpected_relations IS NOT NULL THEN

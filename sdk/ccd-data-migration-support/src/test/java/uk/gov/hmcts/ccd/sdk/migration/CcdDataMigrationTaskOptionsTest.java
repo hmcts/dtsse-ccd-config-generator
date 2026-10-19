@@ -118,6 +118,20 @@ class CcdDataMigrationTaskOptionsTest {
   }
 
   @Test
+  void rejectsCaseDataSyncBatchSizeOutsideItsRange() {
+    assertThatThrownBy(() -> builder(List.of("TestCase"))
+        .caseDataSyncBatchSize(0)
+        .build())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("caseDataSyncBatchSize");
+    assertThatThrownBy(() -> builder(List.of("TestCase"))
+        .caseDataSyncBatchSize(CcdDataMigrationTaskOptions.MAX_CASE_DATA_SYNC_BATCH_SIZE + 1)
+        .build())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("caseDataSyncBatchSize");
+  }
+
+  @Test
   void rejectsNonPositiveStatementTimeout() {
     assertThatThrownBy(() -> builder(List.of("TestCase"))
         .statementTimeout(Duration.ZERO)
