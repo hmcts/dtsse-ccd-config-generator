@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.bundling.job;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Duration;
@@ -12,9 +13,15 @@ import java.util.UUID;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleErrorCode;
+import uk.gov.hmcts.ccd.sdk.bundling.api.BundleOutcome;
+import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
+import uk.gov.hmcts.ccd.sdk.bundling.api.BundleWarning;
+import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResult;
+import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
 
 /**
- * JDBC access to the bundling.bundle_job outbox table. Every method is a single statement, so the
+ * JDBC access to the bundling.bundle_job outbox table, and to bundling.bundle, which describes the
+ * bundles completed jobs rendered. Every method is a single statement, so the
  * insert joins the caller's transaction while worker writes are statement-atomic. Claiming uses
  * FOR UPDATE SKIP LOCKED plus a lease; every worker-side write is guarded by the lease owner, so a
  * worker that lost its lease gets false back and the lease holder's state stands.
@@ -28,6 +35,22 @@ public class BundleJobRepository {
              failure_documents::text as failure_documents
       from bundling.bundle_job
       """;
+
+  private static final String BUNDLE_COLUMNS = """
+      select id, job_id, bundle_key, case_reference, selected_at, created_at, outcome, file_name,
+             media_type, size_bytes, sha256, page_count, request::text as request,
+             documents::text as documents, missing_documents::text as missing_documents,
+             warnings::text as warnings, document_id, document_url, binary_url
+      from bundling.bundle
+      """;
+  private static final TypeReference<List<DocumentResult>> DOCUMENT_RESULTS =
+      new TypeReference<>() {
+      };
+  private static final TypeReference<List<MissingDocument>> MISSING_DOCUMENTS =
+      new TypeReference<>() {
+      };
+  private static final TypeReference<List<BundleWarning>> WARNINGS = new TypeReference<>() {
+  };
 
   private final NamedParameterJdbcTemplate jdbc;
   private final BundleJobJson json = new BundleJobJson();
@@ -103,13 +126,6 @@ public class BundleJobRepository {
         params("externalId", externalId), (rs, n) -> map(rs)).stream().findFirst();
   }
 
-  /** The stored report of a completed job, as JSON. */
-  Optional<String> findReport(UUID externalId) {
-    return jdbc.query("select report::text as report from bundling.bundle_job "
-            + "where external_id = :externalId and report is not null",
-        params("externalId", externalId), (rs, n) -> rs.getString("report")).stream().findFirst();
-  }
-
   /**
    * The key's job reflecting the newest state: the one still waiting if there is one, otherwise
    * the most recently claimed, otherwise the most recently submitted. A delayed re-run is not
@@ -164,7 +180,7 @@ public class BundleJobRepository {
                 Optional.empty(), Optional.empty()),
             rs.getInt("request_version"), rs.getString("request"),
             rs.getString("selector_parameters"), rs.getString("execution_context"),
-            rs.getString("transient_history")));
+            rs.getString("transient_history"), leaseOwner));
   }
 
   List<UUID> failExhaustedStaleJobs(int maxAttempts) {
@@ -183,18 +199,84 @@ public class BundleJobRepository {
         (rs, n) -> rs.getObject("external_id", UUID.class));
   }
 
+  /**
+   * Marks the job completed and records the bundle it rendered, in one statement: the bundle row
+   * exists exactly when the job completed, and neither is written by a worker that lost its lease.
+   */
   boolean markCompleted(UUID externalId, BundleJobState state, String resultJson,
-      String reportJson, String leaseOwner) {
+      BundleRecord bundle, String leaseOwner) {
     return jdbc.update("""
-        update bundling.bundle_job
-        set state = :state, result = :result::jsonb, report = :report::jsonb,
-            failure_code = null, failure_message = null,
-            failure_documents = null, lease_owner = null, lease_expires_at = null,
-            next_attempt_at = null, updated_at = now()
-        where external_id = :externalId and lease_owner = :leaseOwner and state = :inProgress
+        with completed as (
+          update bundling.bundle_job
+          set state = :state, result = :result::jsonb,
+              failure_code = null, failure_message = null,
+              failure_documents = null, lease_owner = null, lease_expires_at = null,
+              next_attempt_at = null, updated_at = now()
+          where external_id = :externalId and lease_owner = :leaseOwner and state = :inProgress
+          returning external_id, coalesce_key, claimed_at, created_at, execution_context
+        )
+        insert into bundling.bundle (job_id, bundle_key, case_reference, selected_at, outcome,
+          file_name, media_type, size_bytes, sha256, page_count, request, documents,
+          missing_documents, warnings, document_id, document_url, binary_url)
+        select external_id, coalesce_key, execution_context ->> 'caseReference',
+          coalesce(claimed_at, created_at), :outcome, :fileName, :mediaType, :size, :sha256,
+          :pageCount, :request::jsonb, :documents::jsonb, :missingDocuments::jsonb,
+          :warnings::jsonb, :documentId, :documentUrl, :binaryUrl
+        from completed
         """,
         params("externalId", externalId, "state", state.name(), "result", resultJson,
-            "report", reportJson, "leaseOwner", leaseOwner, "inProgress", IN_PROGRESS)) == 1;
+            "leaseOwner", leaseOwner, "inProgress", IN_PROGRESS,
+            "outcome", bundle.outcome(), "fileName", bundle.fileName(),
+            "mediaType", bundle.mediaType(), "size", bundle.size(), "sha256", bundle.sha256(),
+            "pageCount", bundle.pageCount(), "request", bundle.requestJson(),
+            "documents", bundle.documentsJson(), "missingDocuments", bundle.missingDocumentsJson(),
+            "warnings", bundle.warningsJson(),
+            "documentId", bundle.stored() == null ? null : bundle.stored().id(),
+            "documentUrl", bundle.stored() == null ? null : bundle.stored().url(),
+            "binaryUrl", bundle.stored() == null ? null : bundle.stored().binaryUrl())) == 1;
+  }
+
+  /** A rendered bundle, serialised for bundling.bundle. */
+  record BundleRecord(String outcome, String fileName, String mediaType, long size, String sha256,
+      int pageCount, String requestJson, String documentsJson, String missingDocumentsJson,
+      String warningsJson, StoredBundleDocument stored) {
+  }
+
+  Optional<BundleMetadata> findBundleForJob(UUID jobId) {
+    return jdbc.query(BUNDLE_COLUMNS + " where job_id = :jobId", params("jobId", jobId),
+        (rs, n) -> mapBundle(rs)).stream().findFirst();
+  }
+
+  /** The key's bundle whose documents were selected last. */
+  Optional<BundleMetadata> findLatestBundle(String bundleKey) {
+    return jdbc.query(BUNDLE_COLUMNS + """
+         where bundle_key = :bundleKey
+         order by selected_at desc, created_at desc, id
+         limit 1
+        """, params("bundleKey", bundleKey), (rs, n) -> mapBundle(rs)).stream().findFirst();
+  }
+
+  /**
+   * Stored PDFs of bundles that a bundle selected later under the same key replaced at least
+   * {@code replacedFor} ago.
+   */
+  List<UUID> findReplacedDocuments(Duration replacedFor, int limit) {
+    return jdbc.query("""
+        select document_id from bundling.bundle old
+        where document_id is not null and deleted_at is null
+          and exists (select 1 from bundling.bundle newer
+                      where newer.bundle_key = old.bundle_key
+                        and (newer.selected_at, newer.created_at) > (old.selected_at, old.created_at)
+                        and newer.created_at <= now() - (:replacedMillis * interval '1 millisecond'))
+        order by created_at
+        limit :limit
+        """, params("limit", limit, "replacedMillis", replacedFor.toMillis()),
+        (rs, n) -> rs.getObject("document_id", UUID.class));
+  }
+
+  void markDocumentDeleted(UUID documentId) {
+    jdbc.update("update bundling.bundle set deleted_at = now() where document_id = :documentId",
+        params("documentId", documentId));
   }
 
   boolean markFailed(UUID externalId, BundleErrorCode code, String message,
@@ -238,6 +320,24 @@ public class BundleJobRepository {
 
   private static Instant instant(ResultSet rs, String column) throws SQLException {
     return rs.getObject(column, OffsetDateTime.class).toInstant();
+  }
+
+  private BundleMetadata mapBundle(ResultSet rs) throws SQLException {
+    UUID documentId = rs.getObject("document_id", UUID.class);
+    Optional<StoredBundleDocument> stored = documentId == null ? Optional.empty()
+        : Optional.of(new StoredBundleDocument(documentId, rs.getString("document_url"),
+            rs.getString("binary_url")));
+    return new BundleMetadata(rs.getObject("id", UUID.class), rs.getObject("job_id", UUID.class),
+        Optional.ofNullable(rs.getString("bundle_key")),
+        Optional.ofNullable(rs.getString("case_reference")), instant(rs, "selected_at"),
+        instant(rs, "created_at"),
+        json.read(rs.getString("request"), BundleRequest.class, "bundle request"),
+        BundleOutcome.valueOf(rs.getString("outcome")), rs.getString("file_name"),
+        rs.getString("media_type"), rs.getLong("size_bytes"), rs.getString("sha256"),
+        rs.getInt("page_count"),
+        json.read(rs.getString("documents"), DOCUMENT_RESULTS, "bundle documents"),
+        json.read(rs.getString("missing_documents"), MISSING_DOCUMENTS, "missing documents"),
+        json.read(rs.getString("warnings"), WARNINGS, "bundle warnings"), stored);
   }
 
   private BundleJob map(ResultSet rs) throws SQLException {
