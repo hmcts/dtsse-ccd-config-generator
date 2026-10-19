@@ -208,13 +208,30 @@ execution context), so it knows which case the bundle is for. Rows are never del
 module; an always-current bundle adds one per burst of changes, so purge old terminal rows on your
 own schedule if the table grows.
 
-When a job completes, the worker records a `BundleJobReport` with it, from the same render the
-handler stored: the request that was rendered (for a selector-driven job, the documents it
-selected), where each document landed, the missing documents and why, the warnings, and the PDF's
-file name, size, checksum and page count. `findReport(externalId)` returns it, so a service can
-keep just the job id beside the stored PDF and describe the bundle from the job: "pages 40 to 52",
-"two documents are missing", without a table of its own. Rows that back a stored bundle are then
-the bundle's record, so purge only those no stored bundle points at.
+When a job completes, the worker records the bundle it rendered in `bundling.bundle`, in the same
+statement that marks the job completed, so a row exists exactly when its job completed and never
+for a worker that lost its lease. The row holds everything about the bundle except the PDF: the
+request that was rendered (for a selector-driven job, the documents it selected), where each
+document landed, the missing documents and why, the warnings, the PDF's file name, media type,
+size, checksum and page count, the job's coalesce key and case reference, and when its documents
+were selected. The completion handler still receives the full `BundleResult`, so the service
+stores the PDF wherever it keeps documents, as an ordinary document carrying the job id, and reads
+everything else back through `OutboxBundleJobService`:
+
+- `findBundleForJob(jobId)`: the bundle a job rendered, for describing a stored PDF ("pages 40 to
+  52", "two documents are missing"). Empty until the job completes, and for a job whose handler
+  failed.
+- `findBundle(bundleId)`: a bundle by its own id.
+- `findLatestBundle(key)`: of the bundles rendered under a coalesce key, the one whose documents
+  were selected last. A waiting or in-progress job (`findLatest(key)`) may be about to replace it.
+
+`findReport(externalId)` still works but is deprecated: it is now a view of the bundle row. The
+bundle table has no foreign key to `bundle_job`, so job rows can be purged without losing the
+description of a bundle still in use; bundle rows for bundles the service no longer holds can be
+purged on its own schedule. The bundle is recorded for every service that runs the job worker,
+since the worker needs the service's own database (a decentralised service's) for its outbox
+anyway; a service rendering directly with `BundleRenderer` records nothing and gets only the
+`BundleResult`.
 
 A coalesced bundle completed with placeholders for `UNAVAILABLE` documents is re-run later, so it
 fills in once the source is back: the worker queues a job under the same key that is not claimable

@@ -28,7 +28,9 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.RenderAttempt;
 /**
  * The scheduled worker: each poll fails stale jobs that exhausted their attempts, claims a batch
  * of executable rows under a lease, and for each one runs the document selector, renders, hands
- * the open result to the completion handler and records the terminal state. Terminal writes are
+ * the open result to the completion handler and records the terminal state. A completed job's
+ * bundle is recorded in bundling.bundle with that state, so the consuming service stores only the
+ * PDF and reads everything else about the bundle back through OutboxBundleJobService. Terminal writes are
  * lease-guarded, so a render that outlives its lease can never overwrite the reclaimer's state.
  * Only transient resolution and conversion failures are retried; untyped exception detail is
  * logged, never persisted. The consuming service enables scheduling for the poll to fire.
@@ -194,7 +196,7 @@ public class BundleJobWorker implements AutoCloseable {
           ? BundleJobState.COMPLETED_WITH_WARNINGS : BundleJobState.COMPLETED;
       log.info("Bundle job {} completed as {} after {} attempt(s)", id, terminal, job.attempts());
       boolean completed = repository.markCompleted(id, terminal, summary,
-          json.write(BundleJobReport.of(request, result)), workerId);
+          bundleRecord(request, result), workerId);
       record(completed, id, terminal, total, total, "completion");
       if (completed) {
         requeueIfUnavailable(claimed, context, result);
@@ -207,6 +209,15 @@ public class BundleJobWorker implements AutoCloseable {
           "Unexpected renderer failure of type " + e.getClass().getName() + LOG_ONLY,
           List.of(), total);
     }
+  }
+
+  /** The rendered bundle as recorded in bundling.bundle, with the job's completed state. */
+  private BundleJobRepository.BundleRecord bundleRecord(BundleRequest request, BundleResult result) {
+    return new BundleJobRepository.BundleRecord(result.outcome().name(),
+        result.artifact().fileName(), result.artifact().mediaType(), result.artifact().size(),
+        result.artifact().sha256(), result.pageCount(), json.write(request),
+        json.write(result.documents()), json.write(result.missingDocuments()),
+        json.write(result.warnings()));
   }
 
   /**
