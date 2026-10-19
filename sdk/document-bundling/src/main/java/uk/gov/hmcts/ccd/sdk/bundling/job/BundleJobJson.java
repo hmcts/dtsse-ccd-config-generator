@@ -53,6 +53,14 @@ final class BundleJobJson {
     }
   }
 
+  <T> T read(String json, TypeReference<T> type, String what) {
+    try {
+      return mapper.readValue(json, type);
+    } catch (Exception e) {
+      throw new Unreadable("the stored " + what + " could not be read", e);
+    }
+  }
+
   Map<String, String> readParameters(String json) {
     try {
       return mapper.readValue(json, STRING_MAP);

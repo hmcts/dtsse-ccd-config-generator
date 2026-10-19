@@ -94,6 +94,7 @@ class BundleJobOutboxIntegrationTest {
   @BeforeEach
   void cleanTable() {
     jdbc.update("delete from bundling.bundle_job", Map.of());
+    jdbc.update("delete from bundling.bundle", Map.of());
   }
 
   @Test
@@ -242,15 +243,21 @@ class BundleJobOutboxIntegrationTest {
     assertThat(column(id, "lease_owner")).isEqualTo("worker-b");
 
     // The stale worker's completion, failure and requeue are all rejected; B's outcome stands.
-    assertThat(repository.markCompleted(id, BundleJobState.COMPLETED, "{}", null, "worker-a")).isFalse();
+    assertThat(repository.markCompleted(id, BundleJobState.COMPLETED, "{}", bundleRecord("a"),
+        "worker-a")).isFalse();
+    assertThat(service.findBundleForJob(id)).isEmpty();
     assertThat(repository.markFailed(id, BundleErrorCode.ASSEMBLY_FAILED, "late", "[]", null,
         "worker-a")).isFalse();
     assertThat(repository.requeueForRetry(id, java.time.Instant.now(), "[]", "worker-a"))
         .isFalse();
     assertThat(job(id).state()).isEqualTo(BundleJobState.IN_PROGRESS);
-    assertThat(repository.markCompleted(id, BundleJobState.COMPLETED, "{\"by\":\"b\"}", null, "worker-b"))
-        .isTrue();
+    assertThat(repository.markCompleted(id, BundleJobState.COMPLETED, "{\"by\":\"b\"}",
+        bundleRecord("b"), "worker-b")).isTrue();
     assertThat(job(id).result()).contains("{\"by\": \"b\"}");
+    // Only the lease holder's bundle is recorded.
+    assertThat(service.findBundleForJob(id).orElseThrow().sha256()).isEqualTo("sha-b");
+    assertThat(jdbc.queryForObject("select count(*) from bundling.bundle", Map.of(), Integer.class))
+        .isEqualTo(1);
   }
 
   @Test
@@ -393,32 +400,96 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
-  void aCompletedJobRecordsWhatItRenderedFromTheRequestTheSelectorCompiled() {
+  void aCompletedJobRecordsTheBundleItRenderedFromTheRequestTheSelectorCompiled() {
     BundleJob submitted = service.submitCoalesced("case-1:bundle", Map.of(), CONTEXT);
-    assertThat(service.findReport(submitted.externalId())).isEmpty();
+    assertThat(service.findBundleForJob(submitted.externalId())).isEmpty();
+    assertThat(service.findLatestBundle("case-1:bundle")).isEmpty();
     FakeRenderer renderer = new FakeRenderer(tempDir).onNextRender(request ->
         renderer(tempDir).success(request, List.of(), List.of("doc-gone")));
+    List<BundleResult> handed = new CopyOnWriteArrayList<>();
+    BundleJobCompletionHandler handler = (job, jobContext, request, result) -> {
+      // The consumer still receives the full result, to store the PDF where it keeps documents.
+      handed.add(result);
+      assertThat(service.findBundleForJob(job.externalId())).isEmpty();
+      return Map.of("stored", true);
+    };
 
-    new BundleJobWorker(repository, renderer, twoDocumentSelector(), summaryHandler(), quickRetries(3),
+    new BundleJobWorker(repository, renderer, twoDocumentSelector(), handler, quickRetries(3),
         List.of(), Runnable::run, 5, 5, Duration.ofMinutes(5)).poll();
 
-    BundleJobReport report = service.findReport(submitted.externalId()).orElseThrow();
-    assertThat(report.request().title()).isEqualTo("Selected at execution");
-    assertThat(report.request().allDocuments()).extracting(BundleDocument::id)
+    assertThat(handed).singleElement().satisfies(result -> {
+      assertThat(result.pageCount()).isEqualTo(1);
+      assertThat(result.missingDocuments()).extracting(MissingDocument::documentId)
+          .containsExactly("doc-gone");
+    });
+    BundleMetadata bundle = service.findBundleForJob(submitted.externalId()).orElseThrow();
+    assertThat(bundle.jobId()).isEqualTo(submitted.externalId());
+    assertThat(bundle.bundleKey()).contains("case-1:bundle");
+    assertThat(bundle.caseReference()).contains("1234567890123456");
+    assertThat(bundle.selectedAt()).isEqualTo(job(submitted.externalId()).claimedAt().orElseThrow());
+    assertThat(bundle.request().title()).isEqualTo("Selected at execution");
+    assertThat(bundle.request().allDocuments()).extracting(BundleDocument::id)
         .containsExactly("doc-kept", "doc-gone");
-    assertThat(report.outcome()).isEqualTo(uk.gov.hmcts.ccd.sdk.bundling.api.BundleOutcome.COMPLETED_WITH_WARNINGS);
-    assertThat(report.fileName()).isEqualTo("selected.pdf");
-    assertThat(report.sha256()).isEqualTo("sha-bundle");
-    assertThat(report.pageCount()).isEqualTo(1);
-    assertThat(report.documents()).extracting(DocumentResult::documentId).containsExactly("doc-kept");
-    assertThat(report.missingDocuments()).singleElement().satisfies(missing -> {
+    assertThat(bundle.outcome()).isEqualTo(uk.gov.hmcts.ccd.sdk.bundling.api.BundleOutcome.COMPLETED_WITH_WARNINGS);
+    assertThat(bundle.fileName()).isEqualTo("selected.pdf");
+    assertThat(bundle.mediaType()).isEqualTo("application/pdf");
+    assertThat(bundle.sha256()).isEqualTo("sha-bundle");
+    assertThat(bundle.pageCount()).isEqualTo(1);
+    assertThat(bundle.documents()).extracting(DocumentResult::documentId).containsExactly("doc-kept");
+    assertThat(bundle.missingDocuments()).singleElement().satisfies(missing -> {
       assertThat(missing.documentId()).isEqualTo("doc-gone");
       assertThat(missing.reason()).isEqualTo(MissingDocumentReason.NOT_FOUND);
       assertThat(missing.startPage()).isEqualTo(2);
     });
+    assertThat(bundle.warnings()).isEqualTo(handed.get(0).warnings());
+    assertThat(service.findBundle(bundle.id()).map(BundleMetadata::jobId))
+        .contains(submitted.externalId());
+    assertThat(service.findLatestBundle("case-1:bundle").map(BundleMetadata::id))
+        .contains(bundle.id());
+    // The job report is now a view of the recorded bundle.
+    BundleJobReport report = service.findReport(submitted.externalId()).orElseThrow();
+    assertThat(report.request().title()).isEqualTo("Selected at execution");
+    assertThat(report.pageCount()).isEqualTo(1);
+    assertThat(report.missingDocuments()).isEqualTo(bundle.missingDocuments());
+    assertThat(column(submitted.externalId(), "report")).isNull();
     // Only an unavailable document is worth re-running for.
     assertThat(service.findLatest("case-1:bundle").orElseThrow().externalId())
         .isEqualTo(submitted.externalId());
+  }
+
+  @Test
+  void noBundleIsRecordedForAJobWhoseCompletionHandlerFailed() {
+    BundleJob submitted = service.submitCoalesced("case-1:bundle", Map.of(), CONTEXT);
+    BundleJobCompletionHandler failing = (job, jobContext, request, result) -> {
+      throw new IllegalStateException("document store down");
+    };
+
+    new BundleJobWorker(repository, new FakeRenderer(tempDir), twoDocumentSelector(), failing,
+        quickRetries(3), List.of(), Runnable::run, 5, 5, Duration.ofMinutes(5)).poll();
+
+    assertThat(job(submitted.externalId()).state()).isEqualTo(BundleJobState.FAILED);
+    assertThat(service.findBundleForJob(submitted.externalId())).isEmpty();
+    assertThat(service.findLatestBundle("case-1:bundle")).isEmpty();
+  }
+
+  @Test
+  void theLatestBundleForAKeyIsTheOneWhoseDocumentsWereSelectedLastWhateverOrderTheyFinished() {
+    UUID older = service.submitCoalesced("case-1:bundle", Map.of(), CONTEXT).externalId();
+    List<ClaimedBundleJob> olderClaim = repository.claim(1, "worker-a", Duration.ofMinutes(5), 3);
+    UUID newer = service.submitCoalesced("case-1:bundle", Map.of(), CONTEXT).externalId();
+    List<ClaimedBundleJob> newerClaim = repository.claim(1, "worker-b", Duration.ofMinutes(5), 3);
+    assertThat(olderClaim).extracting(claimed -> claimed.job().externalId()).containsExactly(older);
+    assertThat(newerClaim).extracting(claimed -> claimed.job().externalId()).containsExactly(newer);
+
+    // The newer selection finishes first; the older one finishing later does not displace it.
+    assertThat(repository.markCompleted(newer, BundleJobState.COMPLETED, null, bundleRecord("newer"),
+        "worker-b")).isTrue();
+    assertThat(repository.markCompleted(older, BundleJobState.COMPLETED, null, bundleRecord("older"),
+        "worker-a")).isTrue();
+
+    assertThat(service.findLatestBundle("case-1:bundle").orElseThrow().jobId()).isEqualTo(newer);
+    assertThat(service.findBundleForJob(older).orElseThrow().sha256()).isEqualTo("sha-older");
+    assertThat(service.findLatestBundle("case-2:bundle")).isEmpty();
   }
 
   @Test
@@ -704,7 +775,7 @@ class BundleJobOutboxIntegrationTest {
 
     // The outbox lives in its own schema with its own history; the runtime's ccd schema came
     // with it, and the application's history and tables in public are exactly as they were.
-    assertThat(tables(consumer, "bundling")).containsExactly("bundle_job", "flyway_schema_history");
+    assertThat(tables(consumer, "bundling")).containsExactly("bundle", "bundle_job", "flyway_schema_history");
     assertThat(history(consumer, "bundling")).extracting(row -> row.get("version"))
         .contains("0001", "0002");
     assertThat(consumer.queryForList("select schema_name from information_schema.schemata "
@@ -741,6 +812,12 @@ class BundleJobOutboxIntegrationTest {
 
   private static BundleJobRetryPolicy quickRetries(int maxAttempts) {
     return new BundleJobRetryPolicy(maxAttempts, Duration.ofMillis(1), 2.0, Duration.ofMillis(2));
+  }
+
+  private static BundleJobRepository.BundleRecord bundleRecord(String name) {
+    BundleRequest request = simpleRequest(UUID.randomUUID());
+    return new BundleJobRepository.BundleRecord("COMPLETED", name + ".pdf", "application/pdf", 10,
+        "sha-" + name, 1, new BundleJobJson().write(request), "[]", "[]", "[]");
   }
 
   private static BundleJobCompletionHandler summaryHandler() {
