@@ -37,9 +37,15 @@ public class CcdEventTestConfiguration {
     return new TestActors();
   }
 
+  @Bean
+  TestDocuments ccdSdkTestDocuments() {
+    return new TestDocuments();
+  }
+
   /**
    * Answers the application's own Feign calls to IDAM, S2S and role assignment from the actors
-   * test support registers, when the application uses Spring Cloud OpenFeign.
+   * test support registers, and to CDAM from the documents it stores, when the application uses
+   * Spring Cloud OpenFeign.
    */
   @Configuration(proxyBeanMethods = false)
   @ConditionalOnClass(name = "feign.Capability")
@@ -48,6 +54,12 @@ public class CcdEventTestConfiguration {
     @Bean
     feign.Capability ccdSdkTestIdentity(TestActors actors) {
       return new TestIdentityCapability(actors);
+    }
+
+    /** Answers the application's CDAM calls for the documents a test stored. */
+    @Bean
+    feign.Capability ccdSdkTestCaseDocuments(TestDocuments documents) {
+      return new TestCaseDocumentCapability(documents);
     }
   }
 
@@ -94,7 +106,8 @@ public class CcdEventTestConfiguration {
       ApplicationContext context,
       JdbcTemplate jdbc,
       @Qualifier(CcdCaseDataMapperConfiguration.CCD_CASE_DATA_OBJECT_MAPPER) ObjectMapper mapper,
-      TestActors actors) {
+      TestActors actors,
+      TestDocuments documents) {
     ResolvableType type = injectionPoint.getField() == null
         ? ResolvableType.forMethodParameter(injectionPoint.getMethodParameter())
         : ResolvableType.forField(injectionPoint.getField());
@@ -110,7 +123,8 @@ public class CcdEventTestConfiguration {
         mockMvc(context),
         jdbc,
         mapper,
-        actors
+        actors,
+        documents
     );
   }
 

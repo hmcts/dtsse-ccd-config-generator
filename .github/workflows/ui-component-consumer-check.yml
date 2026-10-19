@@ -22,6 +22,10 @@ on:
       - 'settings.gradle'
       - 'test-projects/pcs-frontend'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 

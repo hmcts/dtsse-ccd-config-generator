@@ -109,7 +109,7 @@ join pg_class c
 join pg_namespace n
   on n.oid = c.relnamespace
 where n.nspname = '${FDW_SCHEMA}'
-  and c.relname in ('case_data', 'case_event', 'case_event_significant_items');
+  and c.relname in ('case_data', 'case_event', 'case_event_significant_items', 'case_data_versioned');
 SQL
 )"
   source_case_count="$(psql_dst --quiet -tA <<SQL
@@ -141,7 +141,7 @@ reset role;
 SQL
 )"
 
-  if [[ "$extension_count" != "2" || "$foreign_server_count" != "1" || "$foreign_table_count" != "3" \
+  if [[ "$extension_count" != "2" || "$foreign_server_count" != "1" || "$foreign_table_count" != "4" \
       || "$source_case_count" != "2" || "$additional_mapping_count" != "1" || "$additional_role_case_count" != "2" ]]; then
     echo "FDW setup validation failed:" \
       "extensions=${extension_count}, server=${foreign_server_count}," \
