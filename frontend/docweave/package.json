@@ -76,7 +76,7 @@
     "govuk-frontend": "6.5.1",
     "jsdom": "28.1.0",
     "nunjucks": "3.2.4",
-    "sass-embedded": "1.105.1",
+    "sass-embedded": "1.105.2",
     "supertest": "7.3.1",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
