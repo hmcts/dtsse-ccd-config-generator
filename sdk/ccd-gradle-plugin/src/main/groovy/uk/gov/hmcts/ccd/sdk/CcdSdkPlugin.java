@@ -151,10 +151,13 @@ public class CcdSdkPlugin implements Plugin<Project> {
       task.setDescription("Runs the CCD SDK libraries' Flyway migrations, then the application's");
       task.getMainClass().set("uk.gov.hmcts.ccd.sdk.config.SdkDatabaseMigration");
       task.setClasspath(sourceSets.getByName("main").getRuntimeClasspath());
-      // Environment rather than arguments, so the password is not on the command line. Flyway's own credentials are
-      // set too, so an application with separate Flyway credentials does not migrate as those instead.
+      // Environment rather than arguments, so the password is not on the command line. Flyway's own settings are
+      // set too, so an application with a separate Flyway connection does not migrate through that instead.
+      // SPRING_APPLICATION_JSON would outrank them all.
+      task.getEnvironment().remove("SPRING_APPLICATION_JSON");
       if (url.isPresent()) {
         task.environment("SPRING_DATASOURCE_URL", "jdbc:postgresql://" + url.get());
+        task.environment("SPRING_FLYWAY_URL", "jdbc:postgresql://" + url.get());
       }
       if (user.isPresent()) {
         task.environment("SPRING_DATASOURCE_USERNAME", user.get());
