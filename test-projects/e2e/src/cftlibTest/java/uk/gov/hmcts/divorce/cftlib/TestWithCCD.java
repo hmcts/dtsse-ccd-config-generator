@@ -4147,6 +4147,40 @@ public class TestWithCCD extends CftlibTest {
     }
 
     @SneakyThrows
+    @Order(219)
+    @Test
+    void carriesClientContextThroughJsonDefinitionCallbacksAndBackToTheFrontend() {
+        // As ExUI sends it, and as data-store merges a callback's context into it.
+        String frontend = Base64.getEncoder().encodeToString("{\"selectedPartyId\":\"party-1\"}".getBytes());
+        var merged = mapper.readTree(
+            "{\"selectedPartyId\":\"party-1\",\"client_context\":{\"user_task\":{\"complete_task\":true}}}");
+        BaseJsonLegacyController.reset();
+
+        var request = prepareEventRequestForCase(
+            jsonLegacyCaseRef(JsonLegacyCcdConfig.CASE_TYPE_A),
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            JSON_LEGACY_EVENT_ID,
+            Map.of("note", BaseJsonLegacyController.CLIENT_CONTEXT_NOTE)
+        );
+        request.addHeader("Client-Context", frontend);
+        try (var response = HttpClientBuilder.create().build().execute(request)) {
+            assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+            assertThat("about-to-submit is sent the frontend's context",
+                BaseJsonLegacyController.aboutToSubmitClientContext, equalTo(frontend));
+            assertThat("submitted is sent the context merged with what about-to-submit returned",
+                decodedContext(BaseJsonLegacyController.submittedClientContext), equalTo(merged));
+            assertThat("the frontend gets the merged context back",
+                decodedContext(response.getFirstHeader("Client-Context").getValue()), equalTo(merged));
+        }
+    }
+
+    @SneakyThrows
+    private JsonNode decodedContext(String context) {
+        String unbracketed = context.replaceAll("^\\[|\\]$", "");
+        return mapper.readTree(Base64.getDecoder().decode(unbracketed));
+    }
+
+    @SneakyThrows
     @Order(211)
     @Test
     void aboutToSubmitErrorsRollbackJsonLegacySubmission() {
