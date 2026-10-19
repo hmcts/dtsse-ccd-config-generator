@@ -234,6 +234,8 @@ The setup script creates:
   * `fdw_stage.case_data`
   * `fdw_stage.case_event`
   * `fdw_stage.case_event_significant_items`
+  * `fdw_stage.case_data_versioned`: `case_data` plus `row_xmin`, mapped to the source `xmin` system
+    column, for the Java task's `case_data` sync
 * grants for `LOCAL_USER_SQL`
 * when `FDW_ADDITIONAL_GRANTEE` is set, grants for that additional role
 
@@ -260,10 +262,15 @@ do not request a password.
 ## Phase 2: Run the migration
 
 The migration script only reads from the FDW foreign tables. It does not create or write to
-`fdw_stage`. The Java `CcdDataMigrationTask` is a little more forgiving: if the FDW server and at
+`fdw_stage`. The Java `CcdDataMigrationTask` does create foreign tables in `fdw_stage` when they are
+missing, so its role needs `CREATE` on the schema unless they already exist: if the FDW server and at
 least one of the expected source foreign tables already exist, it creates any missing
 `fdw_stage.case_data`, `fdw_stage.case_event`, or `fdw_stage.case_event_significant_items` foreign
-tables from the same server, source schema, and fetch size options.
+tables from the same server, source schema, and fetch size options. It also creates
+`fdw_stage.case_data_versioned`, `case_data` with the source row version (`xmin`), for the `case_data`
+sync, and fails before copying anything if it cannot create or read it (see
+[`ccd-data-migration-task.md`](ccd-data-migration-task.md#case_data-sync)). The setup script creates
+it too.
 
 For services using the Java task, set `ccd.data-migration.fdw-additional-select-grantee` or
 `CCD_DATA_MIGRATION_FDW_ADDITIONAL_SELECT_GRANTEE` to grant an additional team-specific reader role

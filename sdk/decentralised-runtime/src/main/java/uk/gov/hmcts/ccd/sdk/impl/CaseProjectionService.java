@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ResolvableType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.ClassUtils;
+import org.springframework.util.function.SingletonSupplier;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.domain.service.common.DefaultObjectMapperService;
 import uk.gov.hmcts.ccd.domain.service.processor.GlobalSearchProcessorService;
@@ -34,7 +35,9 @@ class CaseProjectionService {
 
   private final CaseDataRepository caseDataRepository;
   private final ObjectMapper mapper;
-  private final Map<String, CaseViewBinding> bindings;
+  // Built on first use: the registry's configs come from every case type, and a case type's config may
+  // depend on a service that runs system events, which project cases through this service.
+  private final SingletonSupplier<Map<String, CaseViewBinding>> bindings;
   private final DefinitionRegistry definitionRegistry;
   private final GlobalSearchProcessorService globalSearchProcessorService;
 
@@ -48,7 +51,7 @@ class CaseProjectionService {
     this.mapper = mapper;
     this.definitionRegistry = definitionRegistry;
     this.globalSearchProcessorService = new GlobalSearchProcessorService(new DefaultObjectMapperService(mapper));
-    this.bindings = buildBindings(caseViews, configRegistry.asMap());
+    this.bindings = SingletonSupplier.of(() -> buildBindings(caseViews, configRegistry.asMap()));
   }
 
   DecentralisedCaseDetails load(long caseRef) {
@@ -68,7 +71,7 @@ class CaseProjectionService {
     String caseTypeId = caseDetails.getCaseTypeId();
     String state = caseDetails.getState();
 
-    CaseViewBinding binding = bindings.get(caseTypeId);
+    CaseViewBinding binding = bindings.obtain().get(caseTypeId);
     if (binding == null) {
       throw new IllegalStateException(
           "No CaseView registered for decentralised case type %s".formatted(caseTypeId));

@@ -76,6 +76,7 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
   private final JdbcTemplate jdbc;
   private final ObjectMapper mapper;
   private final TestActors actors;
+  private final TestDocuments documents;
 
   CcdEventTestSupport(Class<Case> caseClass,
                       Class<State> stateClass,
@@ -83,7 +84,8 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
                       MockMvc mvc,
                       JdbcTemplate jdbc,
                       ObjectMapper mapper,
-                      TestActors actors) {
+                      TestActors actors,
+                      TestDocuments documents) {
     this.caseClass = caseClass;
     this.stateClass = stateClass;
     this.registry = registry;
@@ -91,6 +93,7 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
     this.jdbc = jdbc;
     this.mapper = mapper;
     this.actors = actors;
+    this.documents = documents;
   }
 
   public CaseType forCaseType(String caseTypeId) {
@@ -123,6 +126,11 @@ public final class CcdEventTestSupport<Case, State extends Enum<State>> {
 
   public Actor registerActor(String givenName, String familyName, String... roles) {
     return registerActor(ActorDetails.of(givenName, familyName, roles));
+  }
+
+  /** The documents CDAM holds, which the application's own CDAM client reads. */
+  public TestDocuments documents() {
+    return documents;
   }
 
   public long seed(State state, Case data) {

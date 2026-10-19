@@ -9,14 +9,20 @@ data.
 
 - the migration FDW server, normally `src_ccd_server`;
 - every user mapping on that server, including stored source CCD credentials;
-- the three migration foreign tables;
+- the migration foreign tables: `case_data`, `case_event`, `case_event_significant_items` and
+  `case_data_versioned`;
 - the `fdw_stage` schema.
 
 These are local database catalogue objects. Foreign tables do not store the central CCD rows, and
 dropping them does not execute a drop against the source database.
 
-The migration retains migrated data under the target `ccd` schema and the `postgres_fdw` and
-`pgcrypto` extensions, which may be shared by other database features.
+The migration retains migrated data under the target `ccd` schema, the migration bookkeeping tables
+in the `ccd_data_migration` schema, and the `postgres_fdw` and `pgcrypto` extensions, which may be
+shared by other database features.
+
+A service that copied an earlier version of the example before `case_data_versioned` was added must
+add it to the allowed foreign tables in its copy. Otherwise the migration stops with
+`FDW schema contains unexpected relations`.
 
 ## Preconditions
 

@@ -204,6 +204,21 @@ public class E2EConfigGenerationTests {
 
     @SneakyThrows
     @Test
+    public void emitsCallbackUrlsVerbatim() {
+        // See uk.gov.hmcts.reform.CallbackUrlsCaseType: byUrl's URLs keep their placeholder and carry
+        // retries only where given, and a page's mid-event URL lands on that page's first row alone.
+        // byHandler pins the SDK-built URLs of the same hooks.
+        for (String file : new String[] {
+            "CaseEvent/byUrl.json", "CaseEvent/byHandler.json",
+            "CaseEventToFields/byUrl.json", "CaseEventToFields/byHandler.json"}) {
+            File expected = resourceFile("CallbackUrls/" + file);
+            File actual = new File(tmp.getRoot(), "CallbackUrls/" + file);
+            CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+        }
+    }
+
+    @SneakyThrows
+    @Test
     public void emitsSmallColumns2Flags() {
         // See uk.gov.hmcts.reform.SmallColumns2CaseType: printableDocumentsUrl(), canSaveDraft(),
         // showSummaryContentOption() and nullifyByDefault() each pin a column-graft replacement

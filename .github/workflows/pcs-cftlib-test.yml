@@ -1,8 +1,19 @@
 name: PCS CFTLib Test
 
 on:
+  # Pushes to 7.x save the Gradle cache that pull requests and the merge queue restore.
+  push:
+    branches:
+      - 7.x
+    paths-ignore:
+      - '**/*.md'
+      - '*.md'
   pull_request:
   merge_group:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   pcs-cftlib-test:
@@ -53,6 +64,8 @@ jobs:
       - name: Set up Gradle
         if: steps.changes.outputs.docs_only != 'true'
         uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/7.x' }}
 
       - name: Az CLI login
         if: steps.changes.outputs.docs_only != 'true'
@@ -65,6 +78,19 @@ jobs:
       - name: ACR Login
         if: steps.changes.outputs.docs_only != 'true'
         run: az acr login --name hmctsprod
+
+      - name: Pull cftlib images in the background
+        if: steps.changes.outputs.docs_only != 'true'
+        # The images in rse-cft-lib's docker-compose.yml (pcs-api leaves POSTGRES_VERSION at its default), pulled while Gradle builds pcs-api.
+        run: |
+          for image in \
+            postgres:16 \
+            docker.elastic.co/elasticsearch/elasticsearch:9.2.4 \
+            hmctsprod.azurecr.io/xui/webapp:latest \
+            hmctsprod.azurecr.io/xui/mo-webapp:latest \
+            hmctsprod.azurecr.io/hmcts/rse/rse-idam-simulator:latest; do
+            nohup docker pull --quiet "$image" > /dev/null 2>&1 &
+          done
 
       - name: Run pcs:cftlibTest
         if: steps.changes.outputs.docs_only != 'true'

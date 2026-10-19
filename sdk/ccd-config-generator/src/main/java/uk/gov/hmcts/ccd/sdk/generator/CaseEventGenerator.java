@@ -121,11 +121,14 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
                                        Event<T, R, S> event,
                                        boolean enabled,
                                        CallbackMetadata metadata) {
-    if (!enabled) {
-      return;
+    String url = event.getCallbackUrls().get(metadata.webhook());
+    if (url == null) {
+      if (!enabled) {
+        return;
+      }
+      url = metadata.buildUrl(callbackHost, event.getId());
     }
-    target.put(metadata.callbackField(),
-        metadata.buildUrl(callbackHost, event.getId()));
+    target.put(metadata.callbackField(), url);
     String retry = event.getRetries().get(metadata.webhook());
     if (retry != null) {
       target.put(metadata.retriesField(), retry);
@@ -140,7 +143,7 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     private static final CallbackMetadata ABOUT_TO_START = new CallbackMetadata(
         Webhook.AboutToStart,
         "CallBackURLAboutToStartEvent",
-        "RetriesTimeoutURLAboutToStartEvent",
+        "RetriesTimeoutAboutToStartEvent",
         eventId -> "/callbacks/about-to-start?eventId=" + eventId
     );
 

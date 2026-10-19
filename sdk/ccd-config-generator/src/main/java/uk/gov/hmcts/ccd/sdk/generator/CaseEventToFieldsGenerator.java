@@ -148,18 +148,25 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
                                      Object pageId,
                                      Multimap<String, String> writtenCallbacks) {
     String pageKey = pageId.toString();
-    if (!collection.getPagesToMidEvent().containsKey(pageKey)) {
+    String url = collection.getPagesToMidEventUrl().get(pageKey);
+    if (!collection.getPagesToMidEvent().containsKey(pageKey) && url == null) {
       return;
     }
     if (writtenCallbacks.containsEntry(event.getId(), pageKey)) {
       return;
     }
 
-    String url = config.getCallbackHost() + "/callbacks/mid-event?page="
-        + URLEncoder.encode(pageKey, StandardCharsets.UTF_8)
-        + "&eventId="
-        + event.getId();
+    if (url == null) {
+      url = config.getCallbackHost() + "/callbacks/mid-event?page="
+          + URLEncoder.encode(pageKey, StandardCharsets.UTF_8)
+          + "&eventId="
+          + event.getId();
+    }
     row.put("CallBackURLMidEvent", url);
+    String retries = collection.getPagesToMidEventRetries().get(pageKey);
+    if (retries != null) {
+      row.put("RetriesTimeoutURLMidEvent", retries);
+    }
     writtenCallbacks.put(event.getId(), pageKey);
   }
 

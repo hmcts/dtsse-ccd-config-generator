@@ -1,12 +1,17 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import com.google.common.base.Supplier;
+import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 
@@ -19,18 +24,32 @@ public class ResolvedConfigRegistry {
 
   private static final String DOCUMENT_UPDATED_EVENT_ID = "DocumentUpdated";
 
-  private final ImmutableMap<String, ResolvedCCDConfig<?, ?, ?>> configsByCaseType;
+  private final Supplier<ImmutableMap<String, ResolvedCCDConfig<?, ?, ?>>> configsByCaseType;
 
-  public ResolvedConfigRegistry(java.util.List<ResolvedCCDConfig<?, ?, ?>> configs) {
-    this.configsByCaseType = Maps.uniqueIndex(configs, ResolvedCCDConfig::getCaseType);
+  /**
+   * Resolves the configs when first asked for them: they are built from every case type's config, and a
+   * config may depend on a runtime service that holds this registry, such as one running system events.
+   */
+  @Autowired
+  public ResolvedConfigRegistry(ObjectProvider<List<ResolvedCCDConfig<?, ?, ?>>> configs) {
+    this.configsByCaseType = Suppliers.memoize(() -> index(configs.getObject()));
+  }
+
+  public ResolvedConfigRegistry(List<ResolvedCCDConfig<?, ?, ?>> configs) {
+    ImmutableMap<String, ResolvedCCDConfig<?, ?, ?>> indexed = index(configs);
+    this.configsByCaseType = () -> indexed;
+  }
+
+  private static ImmutableMap<String, ResolvedCCDConfig<?, ?, ?>> index(List<ResolvedCCDConfig<?, ?, ?>> configs) {
+    return Maps.uniqueIndex(configs, ResolvedCCDConfig::getCaseType);
   }
 
   public Collection<ResolvedCCDConfig<?, ?, ?>> getAll() {
-    return configsByCaseType.values();
+    return configsByCaseType.get().values();
   }
 
   public Optional<ResolvedCCDConfig<?, ?, ?>> find(String caseType) {
-    return Optional.ofNullable(configsByCaseType.get(caseType));
+    return Optional.ofNullable(configsByCaseType.get().get(caseType));
   }
 
   public ResolvedCCDConfig<?, ?, ?> getRequired(String caseType) {
@@ -38,7 +57,7 @@ public class ResolvedConfigRegistry {
   }
 
   public Map<String, ResolvedCCDConfig<?, ?, ?>> asMap() {
-    return configsByCaseType;
+    return configsByCaseType.get();
   }
 
   public Map<String, Object> applyPreEventHooks(String caseType, Map<String, Object> data) {
@@ -64,7 +83,7 @@ public class ResolvedConfigRegistry {
   }
 
   public Optional<String> labelForState(String caseType, String stateId) {
-    ResolvedCCDConfig<?, ?, ?> config = configsByCaseType.get(caseType);
+    ResolvedCCDConfig<?, ?, ?> config = configsByCaseType.get().get(caseType);
     if (config == null || stateId == null) {
       return Optional.empty();
     }

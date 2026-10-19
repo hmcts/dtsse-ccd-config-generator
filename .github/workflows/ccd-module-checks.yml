@@ -1,8 +1,17 @@
 name: Semantic Diff Checks
 
 on:
+  # Pushes to 7.x build and test each module without a semantic diff, saving the Gradle cache that pull requests and
+  # the merge queue restore, so their jobs skip compiles and tests whose inputs haven't changed.
+  push:
+    branches:
+      - 7.x
   pull_request:
   merge_group:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   module:
@@ -19,6 +28,7 @@ jobs:
             gradleIntegration: adoption:integration
             definitionsDir: test-projects/adoption-cos-api/build/definitions
             runIntegration: false
+            compileTests: true
             runSemanticDiff: true
             changePath: test-projects/adoption-cos-api
           - checkName: Semantic Diff - NFDiv
@@ -27,8 +37,19 @@ jobs:
             gradleTestClasses: nfdiv:testClasses
             gradleIntegration: nfdiv:integration
             definitionsDir: test-projects/nfdiv-case-api/build/definitions
-            runIntegration: true
+            runIntegration: false
+            compileTests: false
             runSemanticDiff: true
+            changePath: test-projects/nfdiv-case-api
+          - checkName: NFDiv Integration
+            module: nfdiv
+            gradleGenerate: nfdiv:generateCCDConfig
+            gradleTestClasses: nfdiv:testClasses
+            gradleIntegration: nfdiv:integration
+            definitionsDir: test-projects/nfdiv-case-api/build/definitions
+            runIntegration: true
+            compileTests: true
+            runSemanticDiff: false
             changePath: test-projects/nfdiv-case-api
           - checkName: Semantic Diff - PCS
             module: pcs
@@ -36,8 +57,29 @@ jobs:
             gradleTestClasses: pcs:testClasses
             gradleIntegration: pcs:integration
             definitionsDir: test-projects/pcs-api/build/definitions
-            runIntegration: true
+            runIntegration: false
+            compileTests: false
             runSemanticDiff: true
+            changePath: test-projects/pcs-api
+          - checkName: PCS Integration 1
+            module: pcs
+            gradleGenerate: pcs:generateCCDConfig
+            gradleTestClasses: pcs:testClasses
+            gradleIntegration: pcs:integration -PintegrationShard=1/2
+            definitionsDir: test-projects/pcs-api/build/definitions
+            runIntegration: true
+            compileTests: true
+            runSemanticDiff: false
+            changePath: test-projects/pcs-api
+          - checkName: PCS Integration 2
+            module: pcs
+            gradleGenerate: pcs:generateCCDConfig
+            gradleTestClasses: pcs:testClasses
+            gradleIntegration: pcs:integration -PintegrationShard=2/2
+            definitionsDir: test-projects/pcs-api/build/definitions
+            runIntegration: true
+            compileTests: true
+            runSemanticDiff: false
             changePath: test-projects/pcs-api
           - checkName: Semantic Diff - SPTribs
             module: sptribs
@@ -45,8 +87,19 @@ jobs:
             gradleTestClasses: sptribs:testClasses
             gradleIntegration: sptribs:integration
             definitionsDir: test-projects/sptribs-case-api/build/definitions
-            runIntegration: true
+            runIntegration: false
+            compileTests: false
             runSemanticDiff: true
+            changePath: test-projects/sptribs-case-api
+          - checkName: SPTribs Integration
+            module: sptribs
+            gradleGenerate: sptribs:generateCCDConfig
+            gradleTestClasses: sptribs:testClasses
+            gradleIntegration: sptribs:integration
+            definitionsDir: test-projects/sptribs-case-api/build/definitions
+            runIntegration: true
+            compileTests: true
+            runSemanticDiff: false
             changePath: test-projects/sptribs-case-api
           - checkName: ET Integration
             module: et
@@ -55,6 +108,7 @@ jobs:
             gradleIntegration: et:integration
             definitionsDir: test-projects/et-ccd-callbacks/build/definitions
             runIntegration: true
+            compileTests: true
             runSemanticDiff: false
             changePath: test-projects/et-ccd-callbacks
           - checkName: Semantic Diff - IA
@@ -64,9 +118,9 @@ jobs:
             gradleIntegration: ia:integration
             definitionsDir: test-projects/ia-case-api/build/definitions
             runIntegration: true
+            compileTests: true
             runSemanticDiff: true
             changePath: test-projects/ia-case-api
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -79,6 +133,11 @@ jobs:
           BASE_SHA: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.merge_group.head_sha || github.event.pull_request.head.sha }}
         run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "module_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           git fetch --no-tags --prune origin "$BASE_SHA" "$HEAD_SHA"
           files=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
           if [ -z "$files" ]; then
@@ -114,9 +173,11 @@ jobs:
       - name: Set up Gradle
         if: steps.changes.outputs.docs_only != 'true'
         uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/7.x' }}
 
       - name: Compile ${{ matrix.module }} test classes
-        if: steps.changes.outputs.docs_only != 'true'
+        if: matrix.compileTests && steps.changes.outputs.docs_only != 'true'
         run: ./gradlew ${{ matrix.gradleTestClasses }} -i --stacktrace
 
       - name: Run ${{ matrix.module }}:integration
