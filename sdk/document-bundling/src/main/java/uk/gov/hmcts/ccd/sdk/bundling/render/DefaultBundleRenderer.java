@@ -117,6 +117,9 @@ public final class DefaultBundleRenderer implements BundleRenderer {
     if (request == null || context == null || attempt == null) {
       throw new IllegalArgumentException("request and context must be provided");
     }
+    if (request.externalId() == null) {
+      throw new IllegalArgumentException("BundleRequest.externalId must be provided");
+    }
     String previousExternalId = MDC.get(MDC_EXTERNAL_ID);
     String previousStage = MDC.get(MDC_STAGE);
     String previousDocumentId = MDC.get(MDC_DOCUMENT_ID);
@@ -641,7 +644,8 @@ public final class DefaultBundleRenderer implements BundleRenderer {
         if (missingDocument != null) {
           missingDocuments.add(new MissingDocument(origin.id(), origin.reference(),
               missingDocument.reason(), missingDocument.code(),
-              missingDocument.detail(), result.items().get(i).startPage()));
+              missingDocument.detail(), result.items().get(i).startPage(), origin.title(),
+              assembly.origins().get(i).sectionPath()));
           continue;
         }
         Converted convertedDocument = converted.get(origin.id());
