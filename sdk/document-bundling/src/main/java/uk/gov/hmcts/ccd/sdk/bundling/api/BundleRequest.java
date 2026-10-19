@@ -61,9 +61,23 @@ public final class BundleRequest {
   /**
    * The consumer-minted UUID identifying this bundle request. Whether a new bundle replaces,
    * versions, or coexists with a previous one is the service team's decision, expressed through the ids it mints.
+   * Required to submit or render the request; managed case bundles set it to the job's id.
    */
   public UUID externalId() {
     return externalId;
+  }
+
+  /** This request with a different external id. */
+  public BundleRequest withExternalId(UUID externalId) {
+    Builder builder = new Builder();
+    builder.externalId = externalId;
+    builder.title = title;
+    builder.fileName = fileName;
+    builder.root = root;
+    builder.presentation = presentation;
+    builder.coverPage = coverPage;
+    builder.missingDocuments = missingDocuments;
+    return builder.build();
   }
 
   /** The bundle title, rendered on the generated title page. */
@@ -135,7 +149,8 @@ public final class BundleRequest {
     private Builder() {
     }
 
-    /** Sets the consumer-minted UUID that identifies this bundle request. Required. */
+    /** Sets the consumer-minted UUID that identifies this bundle request. Required to submit or render the
+     * request; managed case bundles set it to the job id. */
     public Builder externalId(UUID externalId) {
       this.externalId = externalId;
       return this;
@@ -193,7 +208,6 @@ public final class BundleRequest {
      * uniqueness across the whole tree, and that the bundle has content.
      */
     public BundleRequest build() {
-      Validate.requireNonNull(externalId, "BundleRequest.externalId");
       Validate.requireNonBlank(title, "BundleRequest.title");
       validateFileName(fileName);
       Validate.requireNonNull(root, "BundleRequest.root");

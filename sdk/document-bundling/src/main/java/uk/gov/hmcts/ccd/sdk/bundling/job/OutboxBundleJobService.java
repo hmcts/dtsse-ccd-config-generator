@@ -33,6 +33,7 @@ public class OutboxBundleJobService {
   /** Submits a fully built request; generation is a snapshot at submission. */
   public BundleJob submit(BundleRequest request, BundleExecutionContext context) {
     Objects.requireNonNull(request, "request must not be null");
+    Objects.requireNonNull(request.externalId(), "request.externalId must not be null");
     return enqueue(request.externalId(), json.write(request), Map.of(), context);
   }
 
@@ -98,23 +99,6 @@ public class OutboxBundleJobService {
    */
   public Optional<BundleJob> findLatest(String coalesceKey) {
     return repository.findLatest(Objects.requireNonNull(coalesceKey, "coalesceKey"));
-  }
-
-  /**
-   * What a completed job rendered: its documents and where they landed, those replaced by
-   * placeholder pages and why, and the finished PDF's details. Empty until the job completes,
-   * and for jobs completed before reports were recorded.
-   *
-   * @deprecated the bundle is recorded in its own right; use {@link #findBundleForJob(UUID)}.
-   */
-  @Deprecated
-  public Optional<BundleJobReport> findReport(UUID externalId) {
-    return findBundleForJob(externalId).map(BundleMetadata::report);
-  }
-
-  /** A bundle recorded by the job worker, by its id. */
-  public Optional<BundleMetadata> findBundle(UUID bundleId) {
-    return repository.findBundle(Objects.requireNonNull(bundleId, "bundleId must not be null"));
   }
 
   /**
