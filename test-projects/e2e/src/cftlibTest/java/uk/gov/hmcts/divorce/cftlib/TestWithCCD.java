@@ -2520,7 +2520,8 @@ public class TestWithCCD extends CftlibTest {
             user,
             CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA,
             submissionData,
-            startEvent.getToken()
+            startEvent.getToken(),
+            reference
         );
         var response = HttpClientBuilder.create().build().execute(request);
         try {
