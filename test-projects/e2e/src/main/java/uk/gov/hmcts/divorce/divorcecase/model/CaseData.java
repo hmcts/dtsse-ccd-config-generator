@@ -59,6 +59,13 @@ public class CaseData {
     )
     private String aField;
 
+    @CCD(
+        label = "Rich text notes",
+        typeOverride = FieldType.RichTextArea,
+        access = {DefaultAccess.class}
+    )
+    private String richTextNotes;
+
     @JsonUnwrapped(prefix = "applicant1")
     @Builder.Default
     @CCD(access = {DefaultAccess.class})
