@@ -17,6 +17,7 @@ public class MessagingPropertiesAutoConfiguration {
     typeMappings.put("PhoneUK", "SimpleText");
     typeMappings.put("Email", "SimpleText");
     typeMappings.put("TextArea", "SimpleText");
+    typeMappings.put("RichTextArea", "SimpleText");
     typeMappings.put("BaseLocation", "SimpleText");
     typeMappings.put("Region", "SimpleText");
     typeMappings.put("Date", "SimpleDate");
