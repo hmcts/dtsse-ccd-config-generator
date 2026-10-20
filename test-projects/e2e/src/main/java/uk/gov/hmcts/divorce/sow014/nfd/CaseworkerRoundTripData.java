@@ -46,6 +46,7 @@ public class CaseworkerRoundTripData implements CCDConfig<CaseData, State, UserR
             .optional(CaseData::getApplicationType)
             .optional(CaseData::getDueDate)
             .optional(CaseData::getTestDocument)
+            .optional(CaseData::getRichTextNotes)
             .optional(CaseData::getSetInAboutToStart)
             .optional(CaseData::getSetInMidEvent)
             .optional(CaseData::getSetInAboutToSubmit)

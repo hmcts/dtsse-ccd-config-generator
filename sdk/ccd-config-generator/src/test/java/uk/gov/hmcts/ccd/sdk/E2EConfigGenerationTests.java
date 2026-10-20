@@ -274,8 +274,8 @@ public class E2EConfigGenerationTests {
     @SneakyThrows
     @Test
     public void emitsFieldTypeCompletionFields() {
-        // See uk.gov.hmcts.reform.FieldTypeCompletionCaseData: typeOverride = WaysToPay pins the
-        // new base FieldType constant, and the JudicialUser/CaseQueriesCollection fields pin the
+        // See uk.gov.hmcts.reform.FieldTypeCompletionCaseData: WaysToPay and RichTextArea pin the
+        // base FieldType overrides, and the JudicialUser/CaseQueriesCollection fields pin the
         // new predefined complex types resolving to their FieldType via class-level @ComplexType.
         File expected = resourceFile("FieldTypeCompletion/CaseField.json");
         File actual = new File(tmp.getRoot(), "FieldTypeCompletion/CaseField.json");

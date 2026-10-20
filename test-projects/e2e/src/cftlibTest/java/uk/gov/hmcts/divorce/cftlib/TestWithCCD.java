@@ -3505,6 +3505,37 @@ public class TestWithCCD extends CftlibTest {
     }
 
     @SneakyThrows
+    @Order(24)
+    @Test
+    void richTextAreaSurvivesCallbacksPersistenceAndUpdates() {
+        long reference = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+        String user = "TEST_CASE_WORKER_USER@mailinator.com";
+
+        for (String html : List.of(
+            "<p>Case notes with <strong>bold</strong> and <em>italic</em> text.</p>",
+            "<h2>Updated notes</h2><ul><li>First item</li><li>Second item</li></ul>"
+        )) {
+            Map<String, Object> payload = Map.of("richTextNotes", html);
+            Map<String, Object> callbackData = invokeRoundTripMidEvent(reference, user, payload);
+            assertThat("Mid-event callback should preserve rich text HTML",
+                callbackData.get("richTextNotes"), equalTo(html));
+
+            submitRoundTripEvent(reference, payload);
+
+            var caseDetails = ccdApi.getCase(getAuthorisation(user), getServiceAuth(), String.valueOf(reference));
+            var caseData = mapper.convertValue(caseDetails.getData(), CaseData.class);
+            assertThat("CCD case view should retain rich text HTML", caseData.getRichTextNotes(), equalTo(html));
+            assertThat("Datastore should retain rich text HTML",
+                readCaseDataFromDb(reference).get("richTextNotes"), equalTo(html));
+
+            var nextEvent = ccdApi.startEvent(getAuthorisation(user), getServiceAuth(), String.valueOf(reference),
+                CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA);
+            assertThat("About-to-start callback should preserve stored rich text HTML",
+                nextEvent.getCaseDetails().getData().get("richTextNotes"), equalTo(html));
+        }
+    }
+
+    @SneakyThrows
     @Order(25)
     @Test
     void simpleCaseCreationEventAddsMarkers() {
