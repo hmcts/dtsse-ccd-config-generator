@@ -109,7 +109,7 @@ function markClause(
     if (!wording.hasChildNodes()) wording.append(element.ownerDocument.createElement("br"));
     wording.prepend(description);
   }
-  clause.forEach((child, _offset, index) => {
-    if (isList(child)) markChildren(child, element.children[index]!, generatedClauses);
-  });
+  if (clause.lastChild && isList(clause.lastChild)) {
+    markChildren(clause.lastChild, element.lastElementChild!, generatedClauses);
+  }
 }

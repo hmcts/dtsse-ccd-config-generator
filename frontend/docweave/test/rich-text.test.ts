@@ -109,7 +109,7 @@ describe("inserting rich text", () => {
     }
   });
 
-  it("still loads a snapshot saved before bullets and paragraphs after subclauses", () => {
+  it("still loads a snapshot saved before bullet support", () => {
     const saved: DocWeaveSnapshot = {
       schema: "docweave-document",
       version: 1,

@@ -111,19 +111,16 @@ function addNestedList(
   if (!existing) {
     const parent = transaction.doc.nodeAt(parentPosition);
     if (!parent) throw new Error("Managed list item missing");
-    let itemEnd = parentPosition + parent.nodeSize;
+    let wordingEnd = parentPosition + parent.nodeSize - 1;
     const readerList = parent.lastChild!;
-    // An item holds one nested list, so bullets the reader gave it go on as
-    // a clause of their own after it.
+    // An item holds one nested list, so bullets the reader gave it go on as a
+    // clause of their own after it, split off in place so undo still finds them.
     if (isList(readerList)) {
-      transaction.insert(itemEnd, editorSchema.nodes.list_item!.create(null, [
-        editorSchema.nodes.paragraph!.create(),
-        readerList,
-      ]));
-      itemEnd -= readerList.nodeSize;
-      transaction.delete(itemEnd - 1, itemEnd - 1 + readerList.nodeSize);
+      wordingEnd -= readerList.nodeSize;
+      transaction.insert(wordingEnd, editorSchema.nodes.paragraph!.create());
+      transaction.split(wordingEnd, 1, [{ type: editorSchema.nodes.list_item!, attrs: { id: null } }]);
     }
-    transaction.insert(itemEnd - 1, target);
+    transaction.insert(wordingEnd, target);
     return;
   }
 

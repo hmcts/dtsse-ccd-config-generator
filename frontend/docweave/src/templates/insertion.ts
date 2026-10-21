@@ -117,7 +117,8 @@ function insertAfterClause(
  * Inserts the wording as the reader's own content straight after the managed
  * paragraph, clause or list with the id, as clauses of the same list when it is
  * a clause, and leaves the caret after it. A clause's subclauses can only end
- * its clause, so wording after them becomes its last subclauses.
+ * its clause, so wording after them becomes its last subclauses, and a list of
+ * the other kind it starts with goes under the last subclause.
  */
 export function insertAfterNode(
   document: ProseMirrorNode,
