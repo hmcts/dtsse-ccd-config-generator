@@ -100,7 +100,7 @@ function insertAfterClause(
   const split = children.findIndex((node) => !isList(node) || node.type === listType);
   const leading = split === -1 ? children : children.slice(0, split);
   transaction.insert(clauseEnd - 1, leading);
-  const end = transaction.mapping.map(clauseEnd);
+  const end = clauseEnd + Fragment.from(leading).size;
   insertAndSelect(transaction, end, end, listItems(Fragment.from(children.slice(leading.length)), listType));
 }
 

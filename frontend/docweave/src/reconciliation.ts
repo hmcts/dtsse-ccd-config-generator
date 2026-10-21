@@ -150,16 +150,16 @@ function removeNestedList(
 
   if (!hasUserAuthoredChildren) {
     const listEnd = liveList.position + liveList.node.nodeSize;
-    const $list = transaction.doc.resolve(liveList.position);
-    const itemEnd = $list.after();
     // Wording the reader wrote after the subclauses would otherwise join the
-    // generated wording, so it goes on as a clause of their own.
-    if (transaction.doc.nodeAt(listEnd)?.isTextblock) {
-      const own = transaction.doc.slice(listEnd, itemEnd - 1).content;
-      transaction.insert(itemEnd, editorSchema.nodes.list_item!.create(null, own));
-      transaction.delete(listEnd, itemEnd - 1);
+    // generated wording, so it goes on as a clause of their own. Splitting
+    // inside its first block, rather than before it, leaves an empty block
+    // behind that goes with the subclauses, so undoing the wording still finds
+    // it and joins the two clauses back up.
+    const tail = transaction.doc.nodeAt(listEnd)?.isTextblock;
+    if (tail) {
+      transaction.split(listEnd + 1, 2, [{ type: editorSchema.nodes.list_item!, attrs: { id: null } }]);
     }
-    transaction.delete(liveList.position, listEnd);
+    transaction.delete(liveList.position, listEnd + (tail ? 2 : 0));
     return;
   }
 

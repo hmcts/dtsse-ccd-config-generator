@@ -31,14 +31,18 @@ function snapshotManagedDocument(
       { id: string; node: ProseMirrorNode; wrappers: string }
     > = [];
 
+    // A fact after a list in its clause has left the clause's own wording,
+    // which reverting and rendering replace, so it counts as moved.
     function collect(node: ProseMirrorNode, wrappers: string): void {
+      let afterList = "";
       node.forEach((child) => {
         const id = managedId(child);
         if (id === undefined) {
-          collect(child, `${wrappers}/${child.type.name}`);
+          collect(child, `${wrappers}${afterList}/${child.type.name}`);
         } else {
           children.push({ id, node: child, wrappers });
         }
+        if (isList(child) && node.type.name === "list_item") afterList = "/after-list";
       });
     }
     collect(parent, "");

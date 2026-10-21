@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { Fragment, Slice } from "prosemirror-model";
+import { Fragment, type Node as ProseMirrorNode, Slice } from "prosemirror-model";
 import { EditorState } from "prosemirror-state";
 
 import {
@@ -11,6 +11,7 @@ import {
 import { createDocEditorController } from "../src/controller.js";
 import { restoreGeneratedNode } from "../src/diff-styling.js";
 import { describeChanges, renderHtml } from "../src/index.js";
+import { hasSameManagedStructure } from "../src/invariants.js";
 import { reconcileDocument } from "../src/reconciliation.js";
 import { editorSchema } from "../src/schema.js";
 
@@ -731,6 +732,24 @@ describe("document reconciliation", () => {
       revert(runtime);
 
       assert.deepEqual(describeChanges(runtime.controller.getSnapshot()), { inserted: 0, modified: 0 });
+    });
+
+    it("counts a fact moved past a list in its clause as breaking the generated structure", () => {
+      const generated = getDocumentNode(buildDocWeaveDocument((doc) => {
+        doc.orderedList("clauses", (list) => {
+          list.item("pay", (content) => content.text("Pay ").fact("amount", "£100"));
+        });
+      }));
+      const item = generated.child(0).child(0);
+      const fact = item.firstChild!.lastChild!;
+      const paragraph = (...content: ProseMirrorNode[]) => editorSchema.node("paragraph", null, content);
+      const moved = generated.replace(2, 2 + item.content.size, new Slice(Fragment.from([
+        paragraph(editorSchema.text("Pay now:")),
+        editorSchema.node("bullet_list", null, editorSchema.node("list_item", null, paragraph(editorSchema.text("send receipt")))),
+        paragraph(editorSchema.text("Amount: "), fact),
+      ]), 0, 0));
+
+      assert.equal(hasSameManagedStructure(generated, moved), false);
     });
 
     it("keeps one copy of a fact the reader moved into a paragraph of their own", () => {
