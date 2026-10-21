@@ -312,8 +312,10 @@ export function createDocEditorController(
         ownerDocument = globalThis.document,
       }: InsertHtmlOptions = {},
     ): boolean {
-      // ProseMirror parses DOM nodes rather than a string.
-      const container = ownerDocument.createElement("div");
+      // ProseMirror parses DOM nodes rather than a string. A document of its
+      // own, as ProseMirror's paste uses, runs no scripts or image handlers.
+      const container = ownerDocument.implementation
+        .createHTMLDocument("").body;
       container.innerHTML = html;
       const document = ProseMirrorDOMParser.fromSchema(editorSchema)
         .parse(container);
