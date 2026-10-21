@@ -22,29 +22,15 @@ export function validHeadingLevel(value: unknown): void {
 
 /**
  * What a list item holds, in the editor and in a final document: its wording,
- * then anything, so a clause may go on after its subclauses. It is what CCD's
- * RichTextArea editor allows (ccd-case-ui-toolkit's
- * write-rich-text-area-field.component.ts overrides ngx-editor's list_item),
- * so its HTML parses as it is.
+ * then its subclauses or bullets. Rich text that holds more, such as wording
+ * after a clause's subclauses, is fitted to it by ProseMirror's parser, which
+ * makes that wording the next clause.
  */
-export const LIST_ITEM_CONTENT = "(paragraph | heading) block*";
+export const LIST_ITEM_CONTENT = "paragraph+ (ordered_list | bullet_list)?";
 
 /** Whether a node is a list: numbered, whose items are clauses, or bulleted. */
 export function isList(node: ProseMirrorNode): boolean {
   return node.type.name === "ordered_list" || node.type.name === "bullet_list";
-}
-
-/**
- * A list item's own wording: the paragraphs before its first nested list,
- * which is all a generated item has besides that list. Anything after its
- * subclauses is the reader's, which change tracking, reverting and a new
- * render all leave alone.
- */
-export function leadingContent(
-  item: ProseMirrorNode,
-): readonly ProseMirrorNode[] {
-  const firstList = item.children.findIndex(isList);
-  return firstList === -1 ? item.children : item.children.slice(0, firstList);
 }
 
 const nodes = {
@@ -100,7 +86,6 @@ const nodes = {
     content: "list_item+",
     group: "block",
   },
-  // A clause starts with its wording, and may go on after its subclauses.
   list_item: {
     ...listItem,
     attrs: {

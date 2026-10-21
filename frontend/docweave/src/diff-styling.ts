@@ -22,7 +22,7 @@ import {
 import { isElement } from "./dom.js";
 import { createUndoIcon } from "./icons.js";
 import { hasSameManagedStructure } from "./invariants.js";
-import { isList, leadingContent } from "./schema.js";
+import { isList } from "./schema.js";
 
 type Announce = (message: string) => void;
 
@@ -90,14 +90,18 @@ export function restoreGeneratedNode(
     node.type.name === "list_item" &&
     generatedNode.type === node.type
   ) {
-    const ownContentSize = leadingContent(node)
+    const ownContentSize = node.children
+      .filter((child) => !isList(child))
       .reduce((size, child) => size + child.nodeSize, 0);
+    const generatedOwnContent = generatedNode.children.filter(
+      (child) => !isList(child),
+    );
 
     return state.tr
       .replaceWith(
         position + 1,
         position + 1 + ownContentSize,
-        leadingContent(generatedNode),
+        generatedOwnContent,
       )
       .scrollIntoView();
   }

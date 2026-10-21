@@ -1,6 +1,6 @@
 import { type Node as ProseMirrorNode } from "prosemirror-model";
 
-import { isList, leadingContent } from "./schema.js";
+import { isList } from "./schema.js";
 import { type DocWeaveSnapshot, readSnapshot } from "./snapshot.js";
 
 /**
@@ -32,12 +32,12 @@ export function clauseNodesById(
 }
 
 /**
- * A clause's own content: a list item's paragraphs before its nested lists,
+ * A clause's own content: a list item's paragraphs, leaving its nested list,
  * whose items are clauses of their own; any other clause is a single block.
  */
-export function ownContent(clause: ProseMirrorNode): readonly ProseMirrorNode[] {
+export function ownContent(clause: ProseMirrorNode): ProseMirrorNode[] {
   return clause.type.name === "list_item"
-    ? leadingContent(clause)
+    ? clause.children.filter((child) => !isList(child))
     : [clause];
 }
 

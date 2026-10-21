@@ -50,7 +50,7 @@ export function htmlCases(): HtmlCase[] {
       ] },
     ],
   }))) });
-  cases.push({ name: "bullets-and-wording-after-subclauses", snapshot: snapshot([
+  cases.push({ name: "bullets-and-line-breaks", snapshot: snapshot([
     { type: "ordered_list", attrs: { id: "clauses", order: 1 }, content: [
       { type: "list_item", attrs: { id: "pay" }, content: [
         paragraph(null, text("The defendant must pay:")),
@@ -62,6 +62,8 @@ export function htmlCases(): HtmlCase[] {
             ] },
           ] },
         ] },
+      ] },
+      { type: "list_item", attrs: { id: null }, content: [
         paragraph(null, text("and keep"), { type: "hard_break" }, text("to the tenancy.", ["em"])),
         { type: "ordered_list", attrs: { id: null, order: 1 }, content: [
           { type: "list_item", attrs: { id: null }, content: [paragraph(null, text("Subclause"))] },

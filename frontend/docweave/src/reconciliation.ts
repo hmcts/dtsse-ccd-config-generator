@@ -7,7 +7,7 @@ import {
   managedChildren,
   type NodeChange,
 } from "./reconciliation-plan.js";
-import { editorSchema, isList, leadingContent } from "./schema.js";
+import { editorSchema, isList } from "./schema.js";
 
 interface PositionedNode {
   node: ProseMirrorNode;
@@ -109,13 +109,21 @@ function addNestedList(
 ): void {
   const existing = findDirectNestedList(transaction, parentPosition, target.type);
   if (!existing) {
-    // Straight after the item's wording, ahead of any list of the other kind
-    // the reader gave it.
     const parent = transaction.doc.nodeAt(parentPosition);
     if (!parent) throw new Error("Managed list item missing");
-    const wordingSize = leadingContent(parent)
-      .reduce((size, child) => size + child.nodeSize, 0);
-    transaction.insert(parentPosition + 1 + wordingSize, target);
+    let itemEnd = parentPosition + parent.nodeSize;
+    const readerList = parent.lastChild!;
+    // An item holds one nested list, so bullets the reader gave it go on as
+    // a clause of their own after it.
+    if (isList(readerList)) {
+      transaction.insert(itemEnd, editorSchema.nodes.list_item!.create(null, [
+        editorSchema.nodes.paragraph!.create(),
+        readerList,
+      ]));
+      itemEnd -= readerList.nodeSize;
+      transaction.delete(itemEnd - 1, itemEnd - 1 + readerList.nodeSize);
+    }
+    transaction.insert(itemEnd - 1, target);
     return;
   }
 
@@ -149,14 +157,10 @@ function removeNestedList(
   );
 
   if (!hasUserAuthoredChildren) {
-    const listEnd = liveList.position + liveList.node.nodeSize;
-    // Wording the reader wrote after the subclauses would otherwise join the
-    // generated wording, so it goes on as a clause of their own. The split
-    // sits before it so undo can never join it back into the generated clause.
-    if (transaction.doc.nodeAt(listEnd)?.isTextblock) {
-      transaction.split(listEnd, 1, [{ type: editorSchema.nodes.list_item!, attrs: { id: null } }]);
-    }
-    transaction.delete(liveList.position, listEnd);
+    transaction.delete(
+      liveList.position,
+      liveList.position + liveList.node.nodeSize,
+    );
     return;
   }
 
@@ -190,7 +194,11 @@ function reconcileNestedModifications(
     reconcileModified(transaction, change);
   }
 }
-
+function directListItemContent(
+  node: ProseMirrorNode,
+): readonly ProseMirrorNode[] {
+  return node.children.filter((child) => !isList(child));
+}
 
 function referenceContentNodeEqual(
   left: ProseMirrorNode,
@@ -218,10 +226,10 @@ function referenceClauseContentEqual(
   target: ProseMirrorNode,
 ): boolean {
   const previousContent = previous.type.name === "list_item"
-    ? leadingContent(previous)
+    ? directListItemContent(previous)
     : previous.children;
   const targetContent = target.type.name === "list_item"
-    ? leadingContent(target)
+    ? directListItemContent(target)
     : target.children;
 
   return previousContent.length === targetContent.length &&
@@ -236,10 +244,8 @@ function reconcileListItemContent(
   previous: ProseMirrorNode,
   target: ProseMirrorNode,
 ): boolean {
-  // Paragraphs the reader wrote after the item's subclauses stay where they
-  // are; only the wording before them is the generated item's.
-  const liveContent = leadingContent(live.node);
-  const targetContent = leadingContent(target);
+  const liveContent = directListItemContent(live.node);
+  const targetContent = directListItemContent(target);
 
   if (referenceClauseContentEqual(previous, target)) return false;
 

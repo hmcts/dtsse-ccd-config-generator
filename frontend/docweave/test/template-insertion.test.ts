@@ -333,7 +333,7 @@ describe("template insertion", () => {
     );
   });
 
-  it("inserts a heading template into a personal clause as a clause led by the heading", () => {
+  it("inserts a heading template into a personal clause as a clause", () => {
     const personal = editorSchema.node(
       "list_item",
       null,
@@ -378,7 +378,7 @@ describe("template insertion", () => {
       ]),
       [
         ["item:first", "paragraph", "First child"],
-        [null, "heading", "Heading"],
+        [null, "paragraph", "Heading"],
         [null, "paragraph", "Template wording"],
         ["item:second", "paragraph", "Second child"],
       ],

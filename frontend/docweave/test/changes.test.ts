@@ -50,18 +50,4 @@ describe("describeChanges", () => {
 
     assert.deepEqual(describeChanges(snapshot), { inserted: 1, modified: 0 });
   });
-
-  it("leaves what the reader wrote after a generated clause's subclauses out of that clause's wording", () => {
-    const controller = createDocEditor();
-    controller.render(buildDoc((doc) => {
-      doc.orderedList("clauses", (list) => {
-        list.item("pay", "The defendant must:", (item) => {
-          item.orderedList("sums", (sums) => sums.item("rent", "pay the rent;"));
-        });
-      });
-    }));
-    controller.insert(["and keep to the tenancy."], { at: { after: "ordered-list:sums" } });
-
-    assert.deepEqual(describeChanges(controller.getSnapshot()), { inserted: 0, modified: 0 });
-  });
 });

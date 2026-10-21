@@ -257,67 +257,6 @@ describe("public editor API", () => {
     }
   });
 
-  it("keeps the reader's wording after subclauses a render removed as their own clause, whatever undo does", async () => {
-    const { createDocEditor, buildDoc, renderText } = await import("../src/index.js");
-    const pay = (wording: string, withSums: boolean) => buildDoc((doc) => {
-      doc.orderedList("clauses", (list) => list.item("pay", wording, (item) => {
-        if (withSums) item.orderedList("sums", (sums) => sums.item("rent", "pay the rent;"));
-      }));
-    });
-    const controller = createDocEditor({ mount: "#editor" });
-    const undo = () => dom.window.document.querySelector<HTMLButtonElement>('[aria-label="Undo"]')!.click();
-    const clauses = () => controller.getSnapshot().current as { content: Array<{ content: unknown[] }> };
-    controller.render(pay("The defendant must:", true));
-    controller.insert(["keep the tenancy"], { at: { after: "ordered-list:sums" } });
-    controller.insert(["send a receipt"], { at: { after: "ordered-list:sums" } });
-    controller.render(pay("The defendant must:", false));
-
-    undo();
-    assert.equal(renderText(controller.getSnapshot()), "The defendant must:\nkeep the tenancy");
-    assert.equal(clauses().content[0]!.content.length, 2, "not joined back into the generated clause");
-
-    controller.render(pay("The defendant must now:", false));
-    assert.equal(renderText(controller.getSnapshot()), "The defendant must now:\nkeep the tenancy");
-
-    undo();
-    assert.equal(renderText(controller.getSnapshot()), "The defendant must now:\nkeep the tenancy");
-    assert.equal(clauses().content[0]!.content.length, 2);
-    controller.destroy();
-  });
-
-  it("refuses a paste that would move a clause's fact past a list, so reverting and rendering keep one copy", async () => {
-    const { createDocEditor, buildDoc, renderHtml } = await import("../src/index.js");
-    const pay = (amount: string) => buildDoc((doc) => {
-      doc.orderedList("clauses", (list) => list.item("pay", (content) => content.text("Pay ").fact("amount", amount)));
-    });
-    const controller = createDocEditor({ mount: "#editor" });
-    controller.render(pay("£100"));
-    const surface = dom.window.document.querySelector<HTMLElement>("#editor .ProseMirror")!;
-    surface.focus();
-    const range = dom.window.document.createRange();
-    range.setStart(surface.querySelector("p")!.firstChild!, "Pay ".length);
-    range.collapse(true);
-    dom.window.getSelection()!.removeAllRanges();
-    dom.window.getSelection()!.addRange(range);
-    dom.window.document.dispatchEvent(new dom.window.Event("selectionchange"));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    const paste = new dom.window.Event("paste", { bubbles: true, cancelable: true });
-    Object.defineProperty(paste, "clipboardData", {
-      value: {
-        getData: (type: string) =>
-          type === "text/html" ? "<p>now:</p><ul><li><p>send receipt</p></li></ul><p>Amount:</p>" : "",
-      },
-    });
-
-    surface.dispatchEvent(paste);
-
-    assert.deepEqual(controller.getSnapshot().current, controller.getSnapshot().generated);
-    controller.render(pay("£200"));
-    assert.equal(renderHtml(controller.getSnapshot()).match(/£/g)?.length, 1);
-    assert.equal(surface.querySelectorAll("[data-generated-text]").length, 1);
-    controller.destroy();
-  });
-
   it("leaves focus where it was when there is nothing to insert", async () => {
     const { createDocEditor, buildDoc } = await import("../src/index.js");
     const host = dom.window.document.createElement("input");

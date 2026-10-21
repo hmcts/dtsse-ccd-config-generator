@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { Fragment, type Node as ProseMirrorNode, Slice } from "prosemirror-model";
+import { Fragment, Slice } from "prosemirror-model";
 import { EditorState } from "prosemirror-state";
 
 import {
@@ -11,7 +11,6 @@ import {
 import { createDocEditorController } from "../src/controller.js";
 import { restoreGeneratedNode } from "../src/diff-styling.js";
 import { describeChanges, renderHtml } from "../src/index.js";
-import { hasSameManagedStructure } from "../src/invariants.js";
 import { reconcileDocument } from "../src/reconciliation.js";
 import { editorSchema } from "../src/schema.js";
 
@@ -628,36 +627,7 @@ describe("document reconciliation", () => {
     assert.equal(reconciledItem.firstChild!.textContent, "Parent clause");
   });
 
-  it("keeps the reader's wording after a clause's subclauses when its own wording changes", () => {
-    const clause = (wording: string) => buildDoc((doc) => {
-      doc.orderedList("clauses", (list) => {
-        list.item("pay", wording, (item) => {
-          item.orderedList("sums", (sums) => sums.item("rent", "the rent;"));
-        });
-      });
-    });
-    const previousTarget = clause("The defendant must pay:");
-    const item = previousTarget.firstChild!.firstChild!;
-    const live = previousTarget.replace(
-      2 + item.nodeSize - 2,
-      2 + item.nodeSize - 2,
-      new Slice(Fragment.from(editorSchema.node(
-        "paragraph",
-        null,
-        editorSchema.text("and keep to the tenancy."),
-      )), 0, 0),
-    );
-    const transaction = EditorState.create({ schema: editorSchema, doc: live }).tr;
-
-    reconcileDocument(transaction, previousTarget, clause("The defendant must pay the claimant:"));
-
-    assert.deepEqual(
-      transaction.doc.firstChild!.firstChild!.children.map((child) => child.textContent),
-      ["The defendant must pay the claimant:", "the rent;", "and keep to the tenancy."],
-    );
-  });
-
-  it("adds a generated nested list beside the reader's bullets rather than turning them into it", () => {
+  it("moves the reader's bullets into a clause of their own when a generated subclause list arrives", () => {
     const clause = (withSums: boolean) => buildDoc((doc) => {
       doc.orderedList("clauses", (list) => {
         list.item("pay", "The defendant must pay:", (item) => {
@@ -678,12 +648,14 @@ describe("document reconciliation", () => {
 
     reconcileDocument(transaction, previousTarget, clause(true));
 
+    transaction.doc.check();
     assert.deepEqual(
-      transaction.doc.firstChild!.firstChild!.children.map((child) => [child.type.name, child.attrs.id, child.textContent]),
+      transaction.doc.firstChild!.children.map((item) =>
+        [item.attrs.id, item.children.map((child) => [child.type.name, child.attrs.id, child.textContent])]
+      ),
       [
-        ["paragraph", null, "The defendant must pay:"],
-        ["ordered_list", "ordered-list:sums", "the rent;"],
-        ["bullet_list", null, "reader bullet"],
+        ["item:pay", [["paragraph", null, "The defendant must pay:"], ["ordered_list", "ordered-list:sums", "the rent;"]]],
+        [null, [["paragraph", null, ""], ["bullet_list", null, "reader bullet"]]],
       ],
     );
   });
@@ -701,23 +673,6 @@ describe("document reconciliation", () => {
     const revert = (runtime: ReturnType<typeof createDocEditorController>) =>
       runtime.dispatch(restoreGeneratedNode(runtime.state, 1, runtime.generatedDocument.child(0).child(0))!);
 
-    it("goes on as a clause of the reader's own when a render removes the subclauses it followed", () => {
-      const runtime = createDocEditorController({});
-      runtime.controller.render(clauses("The defendant must:", true));
-      runtime.controller.insert(["and keep to the tenancy."], { at: { after: "ordered-list:sums" } });
-
-      runtime.controller.render(clauses("The defendant must:", false));
-      assert.deepEqual(items(runtime), [["item:pay", "The defendant must:"], [null, "and keep to the tenancy."]]);
-
-      runtime.controller.render(clauses("The defendant must now:", true));
-      revert(runtime);
-      assert.deepEqual(items(runtime), [
-        ["item:pay", "The defendant must now:pay the rent;"],
-        [null, "and keep to the tenancy."],
-      ]);
-      assert.doesNotThrow(() => renderHtml(runtime.controller.getSnapshot()));
-    });
-
     it("is all reverted, leaving the clause as generated", () => {
       const runtime = createDocEditorController({});
       runtime.controller.render(clauses("Costs in the case.", false));
@@ -732,24 +687,6 @@ describe("document reconciliation", () => {
       revert(runtime);
 
       assert.deepEqual(describeChanges(runtime.controller.getSnapshot()), { inserted: 0, modified: 0 });
-    });
-
-    it("counts a fact moved past a list in its clause as breaking the generated structure", () => {
-      const generated = getDocumentNode(buildDocWeaveDocument((doc) => {
-        doc.orderedList("clauses", (list) => {
-          list.item("pay", (content) => content.text("Pay ").fact("amount", "£100"));
-        });
-      }));
-      const item = generated.child(0).child(0);
-      const fact = item.firstChild!.lastChild!;
-      const paragraph = (...content: ProseMirrorNode[]) => editorSchema.node("paragraph", null, content);
-      const moved = generated.replace(2, 2 + item.content.size, new Slice(Fragment.from([
-        paragraph(editorSchema.text("Pay now:")),
-        editorSchema.node("bullet_list", null, editorSchema.node("list_item", null, paragraph(editorSchema.text("send receipt")))),
-        paragraph(editorSchema.text("Amount: "), fact),
-      ]), 0, 0));
-
-      assert.equal(hasSameManagedStructure(generated, moved), false);
     });
 
     it("keeps one copy of a fact the reader moved into a paragraph of their own", () => {

@@ -52,11 +52,10 @@ function insertAndSelect(
 }
 
 /**
- * The wording as items of a list of the type: each paragraph or heading an
- * item, with any lists after it as its subclauses or bullets, and the items of
- * a list of the same type items of their own. A list of the other type stays a
- * list, under the item before it, or under an empty one when nothing comes
- * before it.
+ * The wording as items of a list of the type: each paragraph an item, with a
+ * list after it as its subclauses or bullets, and the items of a list of the
+ * same type items of their own. A list of the other type stays a list, under
+ * the item before it when that has none, or else under an empty one.
  */
 function listItems(document: Fragment, listType: NodeType): Fragment {
   const items: ProseMirrorNode[] = [];
@@ -69,17 +68,24 @@ function listItems(document: Fragment, listType: NodeType): Fragment {
       continue;
     }
     if (isList(node)) {
-      const previous = items.pop();
-      items.push(previous
-        ? previous.copy(previous.content.addToEnd(node))
-        : listItem.create(null, [editorSchema.nodes.paragraph!.create(), node]));
+      const previous = items[items.length - 1];
+      if (previous?.canReplace(previous.childCount, previous.childCount, Fragment.from(node))) {
+        items[items.length - 1] = previous.copy(previous.content.addToEnd(node));
+      } else {
+        items.push(listItem.create(null, [editorSchema.nodes.paragraph!.create(), node]));
+      }
       continue;
     }
-    const content = [node];
-    while (document.maybeChild(index + 1) && isList(document.child(index + 1))) {
-      content.push(document.child(++index));
+    const paragraph = node.type === editorSchema.nodes.paragraph
+      ? node
+      : editorSchema.nodes.paragraph!.create(null, node.content);
+    const next = document.maybeChild(index + 1);
+    if (next && isList(next)) {
+      items.push(listItem.create(null, [paragraph, next]));
+      index++;
+    } else {
+      items.push(listItem.create(null, paragraph));
     }
-    items.push(listItem.create(null, content));
   }
 
   return Fragment.from(items);
@@ -87,8 +93,9 @@ function listItems(document: Fragment, listType: NodeType): Fragment {
 
 /**
  * Inserts the wording after the clause that ends at the position, as items of
- * its list. The clause takes any list of the other kind the wording starts
- * with, in place rather than replaced, so undo leaves the clause as it is.
+ * its list. The clause takes a list of the other kind the wording starts with,
+ * when it has none of its own, in place rather than replaced, so undo leaves
+ * the clause as it is.
  */
 function insertAfterClause(
   transaction: Transaction,
@@ -96,19 +103,21 @@ function insertAfterClause(
   document: ProseMirrorNode,
   listType: NodeType,
 ): void {
-  const { children } = document;
-  const split = children.findIndex((node) => !isList(node) || node.type === listType);
-  const leading = split === -1 ? children : children.slice(0, split);
-  transaction.insert(clauseEnd - 1, leading);
-  const end = clauseEnd + Fragment.from(leading).size;
-  insertAndSelect(transaction, end, end, listItems(Fragment.from(children.slice(leading.length)), listType));
+  const clause = transaction.doc.resolve(clauseEnd).nodeBefore!;
+  const first = document.firstChild!;
+  const attaches = isList(first) && first.type !== listType &&
+    clause.canReplace(clause.childCount, clause.childCount, Fragment.from(first));
+  if (attaches) transaction.insert(clauseEnd - 1, first);
+  const end = clauseEnd + (attaches ? first.nodeSize : 0);
+  const rest = attaches ? document.content.cut(first.nodeSize) : document.content;
+  insertAndSelect(transaction, end, end, listItems(rest, listType));
 }
 
 /**
  * Inserts the wording as the reader's own content straight after the managed
  * paragraph, clause or list with the id, as clauses of the same list when it is
- * a clause, and leaves the caret after it. After a clause's subclauses, a list
- * of their kind adds to them, and other wording goes on in that clause.
+ * a clause, and leaves the caret after it. A clause's subclauses can only end
+ * its clause, so wording after them becomes its last subclauses.
  */
 export function insertAfterNode(
   document: ProseMirrorNode,
@@ -131,16 +140,7 @@ export function insertAfterNode(
     const parent = transaction.doc.resolve(found.position).parent;
     const end = found.position + found.node.nodeSize;
     if (isList(found.node) && parent.type === editorSchema.nodes.list_item) {
-      const listType = found.node.type;
-      const addsToSubclauses = document.children.every((node) => node.type === listType);
-      insertAndSelect(
-        transaction,
-        addsToSubclauses ? end - 1 : end,
-        addsToSubclauses ? end - 1 : end,
-        addsToSubclauses
-          ? listItems(document.content, listType)
-          : document.content,
-      );
+      insertAfterClause(transaction, end - 1, document, found.node.type);
     } else if (isList(parent)) {
       insertAfterClause(transaction, end, document, parent.type);
     } else {
