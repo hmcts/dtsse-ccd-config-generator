@@ -20,9 +20,12 @@ export function validHeadingLevel(value: unknown): void {
   }
 }
 
-/** What a list item holds, in the editor and in a final document. */
-export const LIST_ITEM_CONTENT =
-  "paragraph (paragraph | ordered_list | bullet_list)*";
+/**
+ * What a list item holds, in the editor and in a final document: its wording,
+ * then anything, so a clause may go on after its subclauses. It is what CCD's
+ * RichTextArea editor allows, so its HTML parses as it is.
+ */
+export const LIST_ITEM_CONTENT = "(paragraph | heading) block*";
 
 /** Whether a node is a list: numbered, whose items are clauses, or bulleted. */
 export function isList(node: ProseMirrorNode): boolean {
@@ -31,7 +34,9 @@ export function isList(node: ProseMirrorNode): boolean {
 
 /**
  * A list item's own wording: the paragraphs before its first nested list,
- * which is all a generated item has besides that list.
+ * which is all a generated item has besides that list. Anything after its
+ * subclauses is the reader's, which change tracking, reverting and a new
+ * render all leave alone.
  */
 export function leadingContent(
   item: ProseMirrorNode,
@@ -53,6 +58,7 @@ const nodes = {
     attrs: { level: { default: 1, validate: validHeadingLevel } },
   },
   text: basicNodes.text,
+  hard_break: { ...basicNodes.hard_break, leafText: () => "\n" },
   generated_text: {
     inline: true,
     group: "inline",

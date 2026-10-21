@@ -1,6 +1,7 @@
 import {
   Fragment,
   type Node as ProseMirrorNode,
+  type NodeType,
   type ResolvedPos,
   Slice,
 } from "prosemirror-model";
@@ -50,18 +51,26 @@ function insertAndSelect(
 }
 
 /**
- * The wording as clauses of a list: each paragraph a clause, with any lists
- * after it as its subclauses or bullets, and a numbered list's items clauses
- * of their own. A bulleted list with no paragraph before it to belong to is
- * left as clauses too.
+ * The wording as items of a list of the type: each paragraph an item, with
+ * any lists after it as its subclauses or bullets, and the items of a list of
+ * the same type items of their own. A list of the other type stays a list,
+ * under the item before it, or under an empty one when it comes first.
  */
-function listItems(document: ProseMirrorNode): Fragment {
+function listItems(document: ProseMirrorNode, listType: NodeType): Fragment {
   const items: ProseMirrorNode[] = [];
+  const listItem = editorSchema.nodes.list_item!;
 
   for (let index = 0; index < document.childCount; index++) {
     const node = document.child(index);
-    if (isList(node)) {
+    if (node.type === listType) {
       items.push(...node.children);
+      continue;
+    }
+    if (isList(node)) {
+      const previous = items.pop();
+      items.push(previous
+        ? previous.copy(previous.content.addToEnd(node))
+        : listItem.create(null, [editorSchema.nodes.paragraph!.create(), node]));
       continue;
     }
     const content = [
@@ -72,7 +81,7 @@ function listItems(document: ProseMirrorNode): Fragment {
     while (document.maybeChild(index + 1) && isList(document.child(index + 1))) {
       content.push(document.child(++index));
     }
-    items.push(editorSchema.nodes.list_item!.create(null, content));
+    items.push(listItem.create(null, content));
   }
 
   return Fragment.from(items);
@@ -81,8 +90,8 @@ function listItems(document: ProseMirrorNode): Fragment {
 /**
  * Inserts the wording as the reader's own content straight after the managed
  * paragraph, clause or list with the id, as clauses of the same list when it is
- * a clause, and leaves the caret after it. A clause's subclauses can only end
- * its clause, so wording after them becomes its last subclauses.
+ * a clause, and leaves the caret after it. After a clause's subclauses, a list
+ * of their kind adds to them, and other wording goes on in that clause.
  */
 export function insertAfterNode(
   document: ProseMirrorNode,
@@ -103,17 +112,26 @@ export function insertAfterNode(
 
     const transaction = state.tr;
     const parent = transaction.doc.resolve(found.position).parent;
-    const subclauses = isList(found.node) &&
-      parent.type === editorSchema.nodes.list_item;
-    const end = found.position + found.node.nodeSize - (subclauses ? 1 : 0);
-    insertAndSelect(
-      transaction,
-      end,
-      end,
-      subclauses || isList(parent)
-        ? listItems(document)
-        : document.content,
-    );
+    const end = found.position + found.node.nodeSize;
+    if (isList(found.node) && parent.type === editorSchema.nodes.list_item) {
+      const listType = found.node.type;
+      const addsToSubclauses = document.children.every((node) => node.type === listType);
+      insertAndSelect(
+        transaction,
+        addsToSubclauses ? end - 1 : end,
+        addsToSubclauses ? end - 1 : end,
+        addsToSubclauses
+          ? listItems(document, listType)
+          : document.content,
+      );
+    } else {
+      insertAndSelect(
+        transaction,
+        end,
+        end,
+        isList(parent) ? listItems(document, parent.type) : document.content,
+      );
+    }
     dispatch(transaction.scrollIntoView());
     return true;
   };
@@ -161,7 +179,7 @@ export function insertTemplate(
           $to.pos,
           $to.pos,
           isList($to.parent)
-            ? listItems(document)
+            ? listItems(document, $to.parent.type)
             : document.content,
         );
       } else {
@@ -171,7 +189,7 @@ export function insertTemplate(
       const before = $to.before(clause.depth);
       const after = $to.after(clause.depth);
       const content = clause.node.type === editorSchema.nodes.list_item
-        ? listItems(document)
+        ? listItems(document, $to.node(clause.depth - 1).type)
         : document.content;
 
       if (isEmptyPersonalClause(clause.node)) {

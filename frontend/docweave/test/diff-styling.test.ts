@@ -737,7 +737,7 @@ describe("diff styling", () => {
     assert.equal(restoredItem.childCount, 2);
   });
 
-  it("restores a clause's wording and leaves its subclauses, removing what the reader wrote after them", () => {
+  it("restores a clause's wording and leaves its subclauses and what the reader wrote after them", () => {
     const paragraph = (text: string) => editorSchema.node("paragraph", null, editorSchema.text(text));
     const subclauses = editorSchema.node("ordered_list", null, [
       editorSchema.node("list_item", null, paragraph("pay the rent;")),
@@ -758,8 +758,11 @@ describe("diff styling", () => {
 
     const restored = restoreGeneratedNode(state, 1, generatedItem)!.doc.firstChild!.firstChild!;
 
-    assert.deepEqual(restored.children.map((child) => child.textContent), ["The defendant must:", "pay the rent;"]);
-    assert.ok(restored.lastChild!.eq(subclauses));
+    assert.deepEqual(
+      restored.children.map((child) => child.textContent),
+      ["The defendant must:", "pay the rent;", "and keep to the tenancy."],
+    );
+    assert.ok(restored.child(1).eq(subclauses));
   });
 
   it("does not decorate an unchanged generated clause", () => {

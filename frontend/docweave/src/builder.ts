@@ -39,11 +39,6 @@ export interface ListItemBuilder {
     id: string,
     define: (list: OrderedListBuilder) => void,
   ): void;
-  /** Bullets under the clause, which are clauses but take no number. */
-  bulletList(
-    id: string,
-    define: (list: OrderedListBuilder) => void,
-  ): void;
 }
 
 export interface DocBuilder {
@@ -55,11 +50,6 @@ export interface DocBuilder {
    */
   text(id: string, value: string, options?: FactOptions): void;
   orderedList(
-    id: string,
-    define: (list: OrderedListBuilder) => void,
-  ): void;
-  /** Bullets, which are clauses but take no number. */
-  bulletList(
     id: string,
     define: (list: OrderedListBuilder) => void,
   ): void;
@@ -227,8 +217,7 @@ export function buildDoc(
     return inlineNodes;
   }
 
-  function buildList(
-    type: "ordered_list" | "bullet_list",
+  function buildOrderedList(
     id: string,
     defineList: (list: OrderedListBuilder) => void,
   ): BuiltOrderedList | undefined {
@@ -251,29 +240,25 @@ export function buildDoc(
           ),
         ];
         let childClauses: readonly DocWeaveClause[] = [];
-        const nested = (nestedType: typeof type) =>
-        (
-          nestedListId: string,
-          defineNestedList: (list: OrderedListBuilder) => void,
-        ): void => {
-          if (children.length > 1) {
-            throw new Error(
-              `List item "${itemId}" may contain only one nested list`,
-            );
-          }
-          const nestedList = buildList(
-            nestedType,
-            nestedListId,
-            defineNestedList,
-          );
-          if (nestedList) {
-            children.push(nestedList.node);
-            childClauses = nestedList.clauses;
-          }
-        };
         const itemBuilder: ListItemBuilder = {
-          orderedList: nested("ordered_list"),
-          bulletList: nested("bullet_list"),
+          orderedList(
+            nestedListId: string,
+            defineNestedList: (list: OrderedListBuilder) => void,
+          ): void {
+            if (children.length > 1) {
+              throw new Error(
+                `List item "${itemId}" may contain only one nested ordered list`,
+              );
+            }
+            const nestedList = buildOrderedList(
+              nestedListId,
+              defineNestedList,
+            );
+            if (nestedList) {
+              children.push(nestedList.node);
+              childClauses = nestedList.clauses;
+            }
+          },
         };
 
         defineItem?.(itemBuilder);
@@ -299,8 +284,8 @@ export function buildDoc(
 
     return {
       node: editorSchema.node(
-        type,
-        { id: `${type === "ordered_list" ? "ordered" : "bullet"}-list:${id}` },
+        "ordered_list",
+        { id: `ordered-list:${id}` },
         items,
       ),
       clauses: Object.freeze(clauses),
@@ -341,27 +326,13 @@ export function buildDoc(
       id: string,
       defineList: (list: OrderedListBuilder) => void,
     ): void {
-      addList("ordered_list", id, defineList);
-    },
-    bulletList(
-      id: string,
-      defineList: (list: OrderedListBuilder) => void,
-    ): void {
-      addList("bullet_list", id, defineList);
+      const list = buildOrderedList(id, defineList);
+      if (list) {
+        nodes.push(list.node);
+        documentClauses.push(...list.clauses);
+      }
     },
   };
-
-  function addList(
-    type: "ordered_list" | "bullet_list",
-    id: string,
-    defineList: (list: OrderedListBuilder) => void,
-  ): void {
-    const list = buildList(type, id, defineList);
-    if (list) {
-      nodes.push(list.node);
-      documentClauses.push(...list.clauses);
-    }
-  }
 
   define(docBuilder);
   const document = editorSchema.node("doc", null, nodes);

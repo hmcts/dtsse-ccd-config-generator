@@ -84,27 +84,19 @@ function normalizeWordLists(container: HTMLElement): void {
   }
 }
 
-/**
- * Pasted or inserted HTML as the editor's parser expects it: Word's lists,
- * which come as a list for every item, become the nested lists they show.
- */
-export function normalizeHtml(html: string, ownerDocument: Document): string {
-  const container = ownerDocument.createElement("div");
-  container.innerHTML = html;
-
-  if (container.querySelector("li[data-listid][data-aria-level]")) {
-    trimTrailingNonBreakingSpaces(container);
-    normalizeWordLists(container);
-  }
-
-  return container.innerHTML;
-}
-
 export function createClipboardPlugin(): Plugin {
   return new Plugin({
     props: {
       transformPastedHTML(html, view) {
-        return normalizeHtml(html, view.dom.ownerDocument);
+        const container = view.dom.ownerDocument.createElement("div");
+        container.innerHTML = html;
+
+        if (container.querySelector("li[data-listid][data-aria-level]")) {
+          trimTrailingNonBreakingSpaces(container);
+          normalizeWordLists(container);
+        }
+
+        return container.innerHTML;
       },
     },
   });

@@ -15,7 +15,6 @@ import {
   type DocWeaveDocument,
   getDocumentNode,
 } from "./builder.js";
-import { normalizeHtml } from "./clipboard.js";
 import {
   assertCurrentDocumentMatchesGenerated,
   assertValidGeneratedDocument,
@@ -52,8 +51,9 @@ export interface DocEditorController {
   insert(paragraphs: readonly string[], options?: InsertOptions): boolean;
   /**
    * Adds rich text, such as a RichTextArea answer, to the document as the
-   * reader's own content, as insert does, read as pasting it would be: its
-   * headings, numbered and bulleted lists, and bold or italic text as they are.
+   * reader's own content, as insert does, parsed with the editor's schema as
+   * pasting it is: its headings, numbered and bulleted lists, line breaks, and
+   * bold or italic text as they are.
    * Nothing happens when it holds no text. Returns whether anything was
    * inserted.
    */
@@ -312,8 +312,9 @@ export function createDocEditorController(
         ownerDocument = globalThis.document,
       }: InsertHtmlOptions = {},
     ): boolean {
+      // ProseMirror parses DOM nodes rather than a string.
       const container = ownerDocument.createElement("div");
-      container.innerHTML = normalizeHtml(html, ownerDocument);
+      container.innerHTML = html;
       const document = ProseMirrorDOMParser.fromSchema(editorSchema)
         .parse(container);
       if (!document.textContent.trim()) return false;

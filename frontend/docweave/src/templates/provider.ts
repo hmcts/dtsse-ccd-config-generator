@@ -70,6 +70,7 @@ const allowedNodes = new Set([
   "bullet_list",
   "list_item",
   "text",
+  "hard_break",
   TEMPLATE_DATE_NODE,
 ]);
 const allowedMarks = new Set(["strong", "em"]);

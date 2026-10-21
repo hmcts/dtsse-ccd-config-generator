@@ -83,16 +83,18 @@ function isManagedContainer(node: ProseMirrorNode): boolean {
   return isList(node) || node.type.name === "list_item";
 }
 
+/** The item's first nested list of the type, which a generated one adopts. */
 function findDirectNestedList(
   transaction: Transaction,
   parentPosition: number,
+  type: ProseMirrorNode["type"],
 ): PositionedNode | undefined {
   const parent = transaction.doc.nodeAt(parentPosition);
   if (!parent) throw new Error("Managed list item missing");
 
   let offset = 0;
   for (const child of parent.children) {
-    if (isList(child)) {
+    if (child.type === type) {
       return { node: child, position: parentPosition + 1 + offset };
     }
     offset += child.nodeSize;
@@ -105,11 +107,15 @@ function addNestedList(
   parentPosition: number,
   target: ProseMirrorNode,
 ): void {
-  const existing = findDirectNestedList(transaction, parentPosition);
+  const existing = findDirectNestedList(transaction, parentPosition, target.type);
   if (!existing) {
+    // Straight after the item's wording, ahead of any list of the other kind
+    // the reader gave it.
     const parent = transaction.doc.nodeAt(parentPosition);
     if (!parent) throw new Error("Managed list item missing");
-    transaction.insert(parentPosition + parent.nodeSize - 1, target);
+    const wordingSize = leadingContent(parent)
+      .reduce((size, child) => size + child.nodeSize, 0);
+    transaction.insert(parentPosition + 1 + wordingSize, target);
     return;
   }
 

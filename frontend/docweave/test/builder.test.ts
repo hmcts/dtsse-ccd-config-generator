@@ -374,26 +374,4 @@ describe("document builder", () => {
       ],
     );
   });
-
-  it("builds bulleted lists, whose items are clauses without a number", () => {
-    const document = buildDoc((doc) => {
-      doc.orderedList("clauses", (list) => {
-        list.item("pay", "The defendant must pay:", (item) => {
-          item.bulletList("sums", (sums) => sums.item("rent", "the rent;"));
-        });
-      });
-      doc.bulletList("notes", (list) => list.item("note", "A note."));
-    });
-
-    const node = getDocumentNode(document);
-    assert.deepEqual(node.children.map((child) => [child.type.name, child.attrs.id]), [
-      ["ordered_list", "ordered-list:clauses"],
-      ["bullet_list", "bullet-list:notes"],
-    ]);
-    assert.equal(node.firstChild!.firstChild!.lastChild!.attrs.id, "bullet-list:sums");
-    assert.deepEqual(
-      document.children.map((clause) => [clause.id, clause.children.map((child) => child.id)]),
-      [["pay", ["rent"]], ["note", []]],
-    );
-  });
 });

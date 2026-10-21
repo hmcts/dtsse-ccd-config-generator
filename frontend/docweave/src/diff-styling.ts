@@ -22,7 +22,7 @@ import {
 import { isElement } from "./dom.js";
 import { createUndoIcon } from "./icons.js";
 import { hasSameManagedStructure } from "./invariants.js";
-import { isList } from "./schema.js";
+import { isList, leadingContent } from "./schema.js";
 
 type Announce = (message: string) => void;
 
@@ -90,16 +90,14 @@ export function restoreGeneratedNode(
     node.type.name === "list_item" &&
     generatedNode.type === node.type
   ) {
-    // The generated wording, then the clause's subclauses as they are: any
-    // paragraphs the reader wrote after its subclauses go too.
+    const ownContentSize = leadingContent(node)
+      .reduce((size, child) => size + child.nodeSize, 0);
+
     return state.tr
       .replaceWith(
         position + 1,
-        position + node.nodeSize - 1,
-        [
-          ...generatedNode.children.filter((child) => !isList(child)),
-          ...node.children.filter(isList),
-        ],
+        position + 1 + ownContentSize,
+        leadingContent(generatedNode),
       )
       .scrollIntoView();
   }

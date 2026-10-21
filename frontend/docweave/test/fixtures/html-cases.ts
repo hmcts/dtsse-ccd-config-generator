@@ -62,7 +62,7 @@ export function htmlCases(): HtmlCase[] {
             ] },
           ] },
         ] },
-        paragraph(null, text("and keep to the tenancy.")),
+        paragraph(null, text("and keep"), { type: "hard_break" }, text("to the tenancy.", ["em"])),
         { type: "ordered_list", attrs: { id: null, order: 1 }, content: [
           { type: "list_item", attrs: { id: null }, content: [paragraph(null, text("Subclause"))] },
         ] },

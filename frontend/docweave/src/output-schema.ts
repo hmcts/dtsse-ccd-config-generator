@@ -21,6 +21,7 @@ export const outputSchema = new Schema({
       attrs: { level: { default: 1, validate: validHeadingLevel } },
     },
     text: basicNodes.text,
+    hard_break: { ...basicNodes.hard_break, leafText: () => "\n" },
     ordered_list: { ...orderedList, content: "list_item+", group: "block" },
     bullet_list: { ...bulletList, content: "list_item+", group: "block" },
     list_item: { ...listItem, content: LIST_ITEM_CONTENT },

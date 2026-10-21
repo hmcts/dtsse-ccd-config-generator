@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, describe, it } from "node:test";
+import { describe, it } from "node:test";
 
 import { JSDOM } from "jsdom";
+
+import { type Node as ProseMirrorNode } from "prosemirror-model";
 
 import { listStarts } from "../src/list-numbering.js";
 import { editorSchema } from "../src/schema.js";
@@ -12,7 +14,6 @@ import {
   renderHtml,
   renderText,
 } from "../src/index.js";
-import { installJsdomGlobals } from "./jsdom-globals.js";
 
 const { document: ownerDocument } = new JSDOM().window;
 
@@ -49,81 +50,83 @@ describe("inserting rich text", () => {
     assert.deepEqual(listStarts(current), [undefined, undefined, undefined, 1, 3]);
   });
 
-  it("keeps bold and italic text", () => {
-    const { current } = insertHtml(
-      "<p>As in <strong>paragraph 1 above</strong>, <em>forthwith</em>.</p>",
-    );
+  it("keeps a list as a list when it goes into a list of the other kind", () => {
+    const shape = (node: ProseMirrorNode): unknown =>
+      node.isTextblock ? node.textContent : [node.type.name, ...node.children.map(shape)];
+    const bullets = "<ul><li><p>the rent;</p></li><li><p>the costs</p></li></ul>";
+    const listOfBullets = ["bullet_list", ["list_item", "the rent;"], ["list_item", "the costs"]];
 
-    const marks: Array<[string, string[]]> = [];
-    current.child(2).forEach((text) => {
-      marks.push([text.text!, text.marks.map((mark) => mark.type.name)]);
-    });
-    assert.deepEqual(marks, [
-      ["As in ", []],
-      ["paragraph 1 above", ["strong"]],
-      [", ", []],
-      ["forthwith", ["em"]],
-      [".", []],
+    for (const at of [{ after: "item:costs" }, "end"] as const) {
+      const controller = createDocEditor();
+      controller.render(order());
+      controller.insertHtml(bullets, { at, ownerDocument });
+      const clauses = editorSchema.nodeFromJSON(controller.getSnapshot().current).child(2);
+      assert.deepEqual(shape(clauses), [
+        "ordered_list",
+        ["list_item", "Costs in the case."],
+        ["list_item", "", listOfBullets],
+      ], JSON.stringify(at));
+    }
+
+    const withSubclauses = createDocEditor();
+    withSubclauses.render(buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => {
+        list.item("pay", "The defendant must pay:", (item) => {
+          item.orderedList("sums", (sums) => sums.item("arrears", "the arrears;"));
+        });
+      });
+    }));
+    withSubclauses.insertHtml(bullets, { at: { after: "ordered-list:sums" }, ownerDocument });
+    assert.deepEqual(shape(editorSchema.nodeFromJSON(withSubclauses.getSnapshot().current).child(0).child(0)), [
+      "list_item",
+      "The defendant must pay:",
+      ["ordered_list", ["list_item", "the arrears;"]],
+      listOfBullets,
+    ]);
+
+    const note = { type: "doc", content: [{ type: "bullet_list", content: [{ type: "list_item", content: [
+      { type: "paragraph", content: [{ type: "text", text: "A note." }] },
+    ] }] }] };
+    const afterBullet = createDocEditor({ initialSnapshot: {
+      schema: "docweave-document",
+      version: 1,
+      current: note,
+      generated: { type: "doc", content: [{ type: "paragraph" }] },
+    } });
+    afterBullet.insertHtml("<ol><li><p>First</p></li></ol>", { at: "end", ownerDocument });
+    assert.deepEqual(shape(editorSchema.nodeFromJSON(afterBullet.getSnapshot().current).child(0)), [
+      "bullet_list",
+      ["list_item", "A note."],
+      ["list_item", "", ["ordered_list", ["list_item", "First"]]],
     ]);
   });
 
-  it("keeps bullets as a bulleted list, which takes no clause number", () => {
-    const { snapshot, current } = insertHtml(
-      "<ol><li><p>The defendant must pay:</p><ul><li><p>the rent;</p></li></ul></li></ol>" +
-        "<ul><li><p>the costs</p><ul><li><p>of the claim</p></li></ul></li></ul>",
-    );
+  it("goes on with a clause after its subclauses, unless the wording is more subclauses", () => {
+    const pay = () => buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => {
+        list.item("pay", "The defendant must:", (item) => {
+          item.orderedList("sums", (sums) => sums.item("rent", "pay the rent;"));
+        });
+      });
+    });
+    const clause = (controller: ReturnType<typeof createDocEditor>) =>
+      editorSchema.nodeFromJSON(controller.getSnapshot().current).child(0).child(0);
 
-    assert.deepEqual(types(snapshot).slice(2), ["ordered_list", "bullet_list", "ordered_list"]);
-    assert.deepEqual(listStarts(current).slice(2), [1, undefined, 2]);
-    assert.equal(
-      renderText(snapshot),
-      "UPON the application of Jane Doe\nIT IS ORDERED THAT:\nThe defendant must pay:\n• the rent;\n" +
-        "• the costs\n• of the claim\nCosts in the case.",
-    );
-    assert.equal(
-      renderHtml(snapshot),
-      "<p>UPON the application of Jane Doe</p><p>IT IS ORDERED THAT:</p>" +
-        "<ol><li><p>The defendant must pay:</p><ul><li><p>the rent;</p></li></ul></li></ol>" +
-        "<ul><li><p>the costs</p><ul><li><p>of the claim</p></li></ul></li></ul>" +
-        '<ol start="2"><li><p>Costs in the case.</p></li></ol>',
-    );
-  });
-
-  it("keeps a numbered list under a bullet as the numbers it has, not subclauses", () => {
-    const { snapshot } = insertHtml(
-      '<ul><li><p>Arrears of:</p><ol start="3"><li><p>rent</p></li><li><p>charges</p></li></ol></li></ul>',
-    );
-
-    assert.match(
-      renderHtml(snapshot),
-      /<ul><li><p>Arrears of:<\/p><ol start="3"><li><p>rent<\/p><\/li><li><p>charges<\/p><\/li><\/ol><\/li><\/ul>/,
-    );
-  });
-
-  it("keeps what follows a clause's subclauses in that clause", () => {
-    const { current, snapshot } = insertHtml(
-      "<ol><li><p>The defendant must:</p><ol><li><p>pay the rent;</p></li></ol>" +
-        "<p>and keep to the tenancy.</p></li><li><p>Costs reserved.</p></li></ol>",
-    );
-
-    const clauses = current.child(2);
-    assert.equal(clauses.childCount, 2);
+    const wording = createDocEditor();
+    wording.render(pay());
+    wording.insert(["and keep to the tenancy."], { at: { after: "ordered-list:sums" } });
     assert.deepEqual(
-      clauses.child(0).children.map((node) => [node.type.name, node.textContent]),
+      clause(wording).children.map((node) => [node.type.name, node.textContent]),
       [["paragraph", "The defendant must:"], ["ordered_list", "pay the rent;"], ["paragraph", "and keep to the tenancy."]],
     );
-    assert.match(
-      renderHtml(snapshot),
-      /<ol><li><p>The defendant must:<\/p><ol type="i"><li><p>pay the rent;<\/p><\/li><\/ol><p>and keep to the tenancy\.<\/p><\/li>/,
+
+    const subclause = createDocEditor();
+    subclause.render(pay());
+    subclause.insert(["pay the costs."], { at: { after: "ordered-list:sums" }, numbered: true });
+    assert.deepEqual(
+      clause(subclause).child(1).children.map((item) => item.textContent),
+      ["pay the rent;", "pay the costs."],
     );
-  });
-
-  it("keeps headings as headings", () => {
-    const { current } = insertHtml("<h2>Arrears</h2><p>The arrears are paid.</p>");
-
-    assert.equal(current.child(2).type.name, "heading");
-    assert.equal(current.child(2).attrs.level, 2);
-    assert.equal(current.child(2).textContent, "Arrears");
   });
 
   it("inserts nothing when the rich text holds no text", () => {
@@ -173,69 +176,6 @@ describe("inserting rich text", () => {
     assert.equal(
       renderHtml(controller.getSnapshot()),
       '<ol><li><p>Clause.</p><ol type="i"><li><p>Subclause.</p></li></ol></li></ol>',
-    );
-  });
-});
-
-describe("pasting rich text", () => {
-  let dom: JSDOM;
-  let restoreGlobals: () => void;
-
-  beforeEach(() => {
-    dom = new JSDOM('<!doctype html><div id="editor"></div>', { pretendToBeVisual: true });
-    restoreGlobals = installJsdomGlobals(dom);
-  });
-
-  afterEach(() => {
-    restoreGlobals();
-    dom.window.close();
-  });
-
-  function paste(html: string): DocWeaveSnapshot {
-    const controller = createDocEditor({ mount: "#editor" });
-    const event = new dom.window.Event("paste", { bubbles: true, cancelable: true });
-    Object.defineProperty(event, "clipboardData", {
-      value: { getData: (type: string) => type === "text/html" ? html : "" },
-    });
-    dom.window.document.querySelector(".ProseMirror")!.dispatchEvent(event);
-    const snapshot = controller.getSnapshot();
-    controller.destroy();
-    return snapshot;
-  }
-
-  function inserted(html: string): DocWeaveSnapshot {
-    const controller = createDocEditor({ mount: "#editor" });
-    controller.insertHtml(html);
-    const snapshot = controller.getSnapshot();
-    controller.destroy();
-    return snapshot;
-  }
-
-  for (const [description, html] of [
-    ["numbered clauses with subclauses and wording after them", "<p>The claimant asks that:</p><ol><li><p>the defendant must:</p>" +
-      "<ol><li><p>pay the rent;</p></li></ol><p>and keep to the tenancy.</p></li><li><p>costs are reserved.</p></li></ol>"],
-    ["bullets with a numbered list under one", '<ul><li><p>Arrears of:</p><ol start="3"><li><p>rent</p></li></ol></li>' +
-      "<li><p><strong>charges</strong></p></li></ul><ol><li><p>Costs reserved.</p></li></ol>"],
-    ["a heading", "<h2>Arrears</h2><p>The arrears are paid.</p>"],
-  ]) {
-    it(`reads ${description} as inserting it does`, () => {
-      const pasted = paste(html!);
-
-      assert.deepEqual(pasted.current, inserted(html!).current);
-      assert.notDeepEqual(pasted.current, pasted.generated);
-    });
-  }
-
-  it("keeps a pasted clause's wording after its subclauses in that clause", () => {
-    const { current } = paste(
-      "<ol><li><p>The defendant must:</p><ol><li><p>pay the rent;</p></li></ol>" +
-        "<p>and keep to the tenancy.</p></li><li><p>Costs reserved.</p></li></ol>",
-    );
-
-    const clauses = editorSchema.nodeFromJSON(current).child(0);
-    assert.deepEqual(
-      clauses.children.map((item) => item.lastChild!.textContent),
-      ["and keep to the tenancy.", "Costs reserved."],
     );
   });
 });

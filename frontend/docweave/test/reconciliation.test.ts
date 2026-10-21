@@ -652,4 +652,35 @@ describe("document reconciliation", () => {
       ["The defendant must pay the claimant:", "the rent;", "and keep to the tenancy."],
     );
   });
+
+  it("adds a generated nested list beside the reader's bullets rather than turning them into it", () => {
+    const clause = (withSums: boolean) => buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => {
+        list.item("pay", "The defendant must pay:", (item) => {
+          if (withSums) item.orderedList("sums", (sums) => sums.item("rent", "the rent;"));
+        });
+      });
+    });
+    const previousTarget = clause(false);
+    const item = previousTarget.firstChild!.firstChild!;
+    const live = previousTarget.replace(
+      2 + item.nodeSize - 2,
+      2 + item.nodeSize - 2,
+      new Slice(Fragment.from(editorSchema.node("bullet_list", null, [
+        editorSchema.node("list_item", null, editorSchema.node("paragraph", null, editorSchema.text("reader bullet"))),
+      ])), 0, 0),
+    );
+    const transaction = EditorState.create({ schema: editorSchema, doc: live }).tr;
+
+    reconcileDocument(transaction, previousTarget, clause(true));
+
+    assert.deepEqual(
+      transaction.doc.firstChild!.firstChild!.children.map((child) => [child.type.name, child.attrs.id, child.textContent]),
+      [
+        ["paragraph", null, "The defendant must pay:"],
+        ["ordered_list", "ordered-list:sums", "the rent;"],
+        ["bullet_list", null, "reader bullet"],
+      ],
+    );
+  });
 });

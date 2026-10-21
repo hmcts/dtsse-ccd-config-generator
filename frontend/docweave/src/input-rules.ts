@@ -41,23 +41,6 @@ export const numberedClauseRule = new InputRule(
   },
 );
 
-/**
- * Typing "- " or "* " at the start of a paragraph the reader wrote turns it
- * into a bullet, which takes no number. Generated clauses are left alone.
- */
-export const bulletRule = new InputRule(
-  /^[-*]\s$/u,
-  (state, _match, start, end) => {
-    if (selectionTouchesManagedContent(state)) return null;
-    const transaction = state.tr.delete(start, end);
-    const range = transaction.doc.resolve(start).blockRange();
-    const wrapping = range &&
-      findWrapping(range, editorSchema.nodes.bullet_list!);
-    if (!range || !wrapping) return null;
-    return transaction.wrap(range, wrapping);
-  },
-);
-
 export function createInputRulesPlugin(): Plugin {
-  return inputRules({ rules: [numberedClauseRule, bulletRule] });
+  return inputRules({ rules: [numberedClauseRule] });
 }
