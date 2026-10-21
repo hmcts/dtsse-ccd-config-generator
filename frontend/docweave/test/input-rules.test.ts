@@ -76,3 +76,25 @@ describe("numbered clause input rule", () => {
     assert.equal(state.doc.textContent, "1. ");
   });
 });
+
+describe("bullet input rule", () => {
+  for (const marker of ["-", "*"]) {
+    it(`turns "${marker} " in a paragraph the reader wrote into a bullet`, () => {
+      const doc = editorSchema.node("doc", null, [
+        editorSchema.node("paragraph", null, [editorSchema.text(marker)]),
+      ]);
+      const state = type(stateWithCursorAtEndOfLastParagraph(doc), " ");
+
+      assert.equal(state.doc.firstChild!.type.name, "bullet_list");
+      assert.equal(state.doc.textContent, "");
+    });
+  }
+
+  it("leaves a generated clause alone", () => {
+    const doc = getDocumentNode(buildDoc((builder) => builder.paragraph("note", "-")));
+    const state = type(stateWithCursorAtEndOfLastParagraph(doc), " ");
+
+    assert.equal(state.doc.firstChild!.type.name, "paragraph");
+    assert.equal(state.doc.textContent, "- ");
+  });
+});

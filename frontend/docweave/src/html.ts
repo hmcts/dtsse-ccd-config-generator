@@ -36,6 +36,16 @@ export function renderHtml(snapshot: DocWeaveSnapshot, options: RenderHtmlOption
     const start = starts[index];
     if (start !== undefined) topLevelLists.set(node, start);
   });
+  // Subclauses are numbered (i), (ii), but a numbered list under a bullet keeps
+  // the numbers it has.
+  const bulleted = bullets(output);
+  const subclauses = new Set<ProseMirrorNode>();
+  output.descendants((node, _offset, parent) => {
+    if (node.type.name === "ordered_list" && parent?.type.name === "list_item" &&
+      !bulleted.has(parent)) {
+      subclauses.add(node);
+    }
+  });
   const changes = new Map<ProseMirrorNode, ClauseChange>();
   if (options.changes) {
     const generatedClauses = clauseNodesById(generated);
@@ -67,7 +77,7 @@ export function renderHtml(snapshot: DocWeaveSnapshot, options: RenderHtmlOption
       : undefined, node.type.name === "ordered_list"
       ? topLevelLists.has(node)
         ? { start: topLevelLists.get(node) === 1 ? null : topLevelLists.get(node) }
-        : { type: "i" }
+        : subclauses.has(node) ? { type: "i" } : {}
       : {});
     return open + content + close;
   };
@@ -134,16 +144,28 @@ function escapeHtml(text: string, attribute = false): string {
   });
 }
 
+/** The items of a document's bulleted lists. */
+function bullets(doc: ProseMirrorNode): Set<ProseMirrorNode> {
+  const items = new Set<ProseMirrorNode>();
+  doc.descendants((node) => {
+    if (node.type.name === "bullet_list") node.forEach((item) => items.add(item));
+  });
+  return items;
+}
+
 /**
  * The reader's document as plain text: one line per paragraph or heading,
- * wherever it sits in a list, with facts as their values and no numbering.
+ * wherever it sits in a list, with facts as their values and no numbering. A
+ * bullet's first line starts with one.
  */
 export function renderText(snapshot: DocWeaveSnapshot): string {
   const output = toOutputDocument(readSnapshot(snapshot).snapshot.current);
+  const bulleted = bullets(output);
   const lines: string[] = [];
-  output.descendants((node) => {
+  output.descendants((node, _offset, parent, index) => {
     if (!node.isTextblock) return true;
-    lines.push(node.textContent);
+    const bullet = parent && index === 0 && bulleted.has(parent) ? "\u2022 " : "";
+    lines.push(bullet + node.textContent);
     return false;
   });
   return lines.join("\n");

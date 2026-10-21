@@ -67,6 +67,7 @@ const allowedNodes = new Set([
   "paragraph",
   "heading",
   "ordered_list",
+  "bullet_list",
   "list_item",
   "text",
   TEMPLATE_DATE_NODE,

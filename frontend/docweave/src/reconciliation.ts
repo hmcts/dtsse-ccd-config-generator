@@ -7,6 +7,7 @@ import {
   managedChildren,
   type NodeChange,
 } from "./reconciliation-plan.js";
+import { isList, leadingContent } from "./schema.js";
 
 interface PositionedNode {
   node: ProseMirrorNode;
@@ -79,7 +80,7 @@ function afterReaderContent(transaction: Transaction, position: number): number 
 }
 
 function isManagedContainer(node: ProseMirrorNode): boolean {
-  return node.type.name === "ordered_list" || node.type.name === "list_item";
+  return isList(node) || node.type.name === "list_item";
 }
 
 function findDirectNestedList(
@@ -91,7 +92,7 @@ function findDirectNestedList(
 
   let offset = 0;
   for (const child of parent.children) {
-    if (child.type.name === "ordered_list") {
+    if (isList(child)) {
       return { node: child, position: parentPosition + 1 + offset };
     }
     offset += child.nodeSize;
@@ -180,11 +181,6 @@ function reconcileNestedModifications(
   }
 }
 
-function directListItemContent(
-  node: ProseMirrorNode,
-): readonly ProseMirrorNode[] {
-  return node.children.filter((child) => child.type.name !== "ordered_list");
-}
 
 function referenceContentNodeEqual(
   left: ProseMirrorNode,
@@ -212,10 +208,10 @@ function referenceClauseContentEqual(
   target: ProseMirrorNode,
 ): boolean {
   const previousContent = previous.type.name === "list_item"
-    ? directListItemContent(previous)
+    ? leadingContent(previous)
     : previous.children;
   const targetContent = target.type.name === "list_item"
-    ? directListItemContent(target)
+    ? leadingContent(target)
     : target.children;
 
   return previousContent.length === targetContent.length &&
@@ -230,8 +226,10 @@ function reconcileListItemContent(
   previous: ProseMirrorNode,
   target: ProseMirrorNode,
 ): boolean {
-  const liveContent = directListItemContent(live.node);
-  const targetContent = directListItemContent(target);
+  // Paragraphs the reader wrote after the item's subclauses stay where they
+  // are; only the wording before them is the generated item's.
+  const liveContent = leadingContent(live.node);
+  const targetContent = leadingContent(target);
 
   if (referenceClauseContentEqual(previous, target)) return false;
 
@@ -248,8 +246,7 @@ function reconcileListItemContent(
 }
 
 function isNestedListChange(change: NodeChange): boolean {
-  const node = change.kind === "removed" ? change.previous : change.target;
-  return node.type.name === "ordered_list";
+  return isList(change.kind === "removed" ? change.previous : change.target);
 }
 
 function reconcileModified(
@@ -331,7 +328,7 @@ function reconcileParent(
       case "added": {
         if (
           targetParent.type.name === "list_item" &&
-          change.target.type.name === "ordered_list" &&
+          isList(change.target) &&
           parentPosition !== null
         ) {
           addNestedList(transaction, parentPosition, change.target);
@@ -352,7 +349,7 @@ function reconcileParent(
       case "removed": {
         if (
           previousParent.type.name === "list_item" &&
-          change.previous.type.name === "ordered_list"
+          isList(change.previous)
         ) {
           removeNestedList(transaction, change.previous);
           break;

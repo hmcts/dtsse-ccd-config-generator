@@ -133,9 +133,8 @@
       ]
     },
     {
-      "type": "ordered_list",
+      "type": "bullet_list",
       "attrs": {
-        "order": 1,
         "id": null
       },
       "content": [

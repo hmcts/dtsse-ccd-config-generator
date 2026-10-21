@@ -216,6 +216,22 @@ describe("public editor API", () => {
     controller.destroy();
   });
 
+  it("inserts rich text into the mounted editor with the page's document, as one undo step", async () => {
+    const { createDocEditor, buildDoc } = await import("../src/index.js");
+    const controller = createDocEditor({ mount: "#editor" });
+    const surface = dom.window.document.querySelector<HTMLElement>("#editor .ProseMirror")!;
+    controller.render(buildDoc((doc) => doc.paragraph("ordered-that", "IT IS ORDERED THAT:")));
+    const generated = controller.getSnapshot();
+
+    assert.equal(controller.insertHtml("<ol><li><p><strong>Costs</strong> reserved.</p></li></ol>", { at: "end" }), true);
+
+    assert.equal(surface.querySelector("ol > li strong")?.textContent, "Costs");
+    assert.equal(dom.window.document.activeElement, surface);
+    dom.window.document.querySelector<HTMLButtonElement>('[aria-label="Undo"]')!.click();
+    assert.deepEqual(controller.getSnapshot(), generated);
+    controller.destroy();
+  });
+
   it("leaves focus where it was when there is nothing to insert", async () => {
     const { createDocEditor, buildDoc } = await import("../src/index.js");
     const host = dom.window.document.createElement("input");

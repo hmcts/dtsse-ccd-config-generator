@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { Fragment, Slice } from "prosemirror-model";
 import { EditorState } from "prosemirror-state";
 
 import {
@@ -621,5 +622,34 @@ describe("document reconciliation", () => {
     const reconciledItem = transaction.doc.firstChild!.firstChild!;
     assert.equal(reconciledItem.childCount, 1);
     assert.equal(reconciledItem.firstChild!.textContent, "Parent clause");
+  });
+
+  it("keeps the reader's wording after a clause's subclauses when its own wording changes", () => {
+    const clause = (wording: string) => buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => {
+        list.item("pay", wording, (item) => {
+          item.orderedList("sums", (sums) => sums.item("rent", "the rent;"));
+        });
+      });
+    });
+    const previousTarget = clause("The defendant must pay:");
+    const item = previousTarget.firstChild!.firstChild!;
+    const live = previousTarget.replace(
+      2 + item.nodeSize - 2,
+      2 + item.nodeSize - 2,
+      new Slice(Fragment.from(editorSchema.node(
+        "paragraph",
+        null,
+        editorSchema.text("and keep to the tenancy."),
+      )), 0, 0),
+    );
+    const transaction = EditorState.create({ schema: editorSchema, doc: live }).tr;
+
+    reconcileDocument(transaction, previousTarget, clause("The defendant must pay the claimant:"));
+
+    assert.deepEqual(
+      transaction.doc.firstChild!.firstChild!.children.map((child) => child.textContent),
+      ["The defendant must pay the claimant:", "the rent;", "and keep to the tenancy."],
+    );
   });
 });

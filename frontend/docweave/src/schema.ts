@@ -1,9 +1,15 @@
-import { type MarkSpec, type NodeSpec, Schema } from "prosemirror-model";
+import {
+  type MarkSpec,
+  type Node as ProseMirrorNode,
+  type NodeSpec,
+  Schema,
+} from "prosemirror-model";
 import {
   marks as basicMarks,
   nodes as basicNodes,
 } from "prosemirror-schema-basic";
 import {
+  bulletList,
   listItem,
   orderedList,
 } from "prosemirror-schema-list";
@@ -12,6 +18,26 @@ export function validHeadingLevel(value: unknown): void {
   if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 6) {
     throw new RangeError("Heading level must be an integer from 1 to 6");
   }
+}
+
+/** What a list item holds, in the editor and in a final document. */
+export const LIST_ITEM_CONTENT =
+  "paragraph (paragraph | ordered_list | bullet_list)*";
+
+/** Whether a node is a list: numbered, whose items are clauses, or bulleted. */
+export function isList(node: ProseMirrorNode): boolean {
+  return node.type.name === "ordered_list" || node.type.name === "bullet_list";
+}
+
+/**
+ * A list item's own wording: the paragraphs before its first nested list,
+ * which is all a generated item has besides that list.
+ */
+export function leadingContent(
+  item: ProseMirrorNode,
+): readonly ProseMirrorNode[] {
+  const firstList = item.children.findIndex(isList);
+  return firstList === -1 ? item.children : item.children.slice(0, firstList);
 }
 
 const nodes = {
@@ -58,12 +84,21 @@ const nodes = {
     content: "list_item+",
     group: "block",
   },
+  bullet_list: {
+    ...bulletList,
+    attrs: {
+      id: { default: null, validate: "string|null" },
+    },
+    content: "list_item+",
+    group: "block",
+  },
+  // A clause starts with its wording, and may go on after its subclauses.
   list_item: {
     ...listItem,
     attrs: {
       id: { default: null, validate: "string|null" },
     },
-    content: "paragraph+ ordered_list?",
+    content: LIST_ITEM_CONTENT,
   },
 } satisfies Record<string, NodeSpec>;
 

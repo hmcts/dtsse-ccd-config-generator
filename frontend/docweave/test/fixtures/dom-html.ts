@@ -9,6 +9,7 @@ import {
 import { type DocWeaveSnapshot, readSnapshot as parseSnapshot } from "../../src/snapshot.js";
 import { listStarts } from "../../src/list-numbering.js";
 import { outputSchema, toOutputDocument } from "../../src/output-schema.js";
+import { isList } from "../../src/schema.js";
 
 export interface RenderHtmlOptions {
   /** The DOM used to build the markup; defaults to the global document. */
@@ -48,7 +49,7 @@ export function renderDomHtml(
 /**
  * Numbers the lists as the editor shows them, which its document leaves to the
  * view: the top-level lists count on from one another, and a list within a
- * clause is numbered i, ii, iii.
+ * clause is numbered i, ii, iii, unless the clause is a bullet.
  */
 function numberAsTheEditorShows(output: ProseMirrorNode, container: HTMLElement): void {
   listStarts(output).forEach((start, index) => {
@@ -60,8 +61,8 @@ function numberAsTheEditorShows(output: ProseMirrorNode, container: HTMLElement)
       list.setAttribute("start", String(start));
     }
   });
-  for (const nested of container.querySelectorAll("ol ol")) {
-    nested.setAttribute("type", "i");
+  for (const nested of container.querySelectorAll("li > ol")) {
+    if (nested.parentElement!.parentElement!.tagName === "OL") nested.setAttribute("type", "i");
   }
 }
 
@@ -83,7 +84,7 @@ function markChildren(
 ): void {
   parent.forEach((child, _offset, index) => {
     const childElement = element.children[index]!;
-    if (child.type.name === "ordered_list") {
+    if (isList(child)) {
       markChildren(child, childElement, generatedClauses);
     } else {
       markClause(child, childElement, generatedClauses);
@@ -108,7 +109,7 @@ function markClause(
     if (!wording.hasChildNodes()) wording.append(element.ownerDocument.createElement("br"));
     wording.prepend(description);
   }
-  if (clause.lastChild?.type.name === "ordered_list") {
-    markChildren(clause.lastChild, element.lastElementChild!, generatedClauses);
-  }
+  clause.forEach((child, _offset, index) => {
+    if (isList(child)) markChildren(child, element.children[index]!, generatedClauses);
+  });
 }

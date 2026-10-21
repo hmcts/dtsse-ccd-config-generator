@@ -806,3 +806,8 @@ li.docweave-clause--modified > p {
 .docweave-editor .ProseMirror ol ol {
   list-style-type: lower-roman;
 }
+
+// A numbered list under a bullet keeps the numbers it was given.
+.docweave-editor .ProseMirror ul > li > ol {
+  list-style-type: decimal;
+}

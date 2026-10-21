@@ -10,7 +10,7 @@ import {
   type Transaction,
 } from "prosemirror-state";
 
-import { editorSchema } from "../schema.js";
+import { editorSchema, isList } from "../schema.js";
 
 /** The nearest numbered clause, or generated paragraph, around a position. */
 function clauseAt(
@@ -49,27 +49,30 @@ function insertAndSelect(
   transaction.setSelection(Selection.near(transaction.doc.resolve(end), -1));
 }
 
+/**
+ * The wording as clauses of a list: each paragraph a clause, with any lists
+ * after it as its subclauses or bullets, and a numbered list's items clauses
+ * of their own. A bulleted list with no paragraph before it to belong to is
+ * left as clauses too.
+ */
 function listItems(document: ProseMirrorNode): Fragment {
   const items: ProseMirrorNode[] = [];
 
   for (let index = 0; index < document.childCount; index++) {
     const node = document.child(index);
-    if (node.type === editorSchema.nodes.ordered_list) {
+    if (isList(node)) {
       items.push(...node.children);
       continue;
     }
-    const paragraph = node.type === editorSchema.nodes.paragraph
-      ? node
-      : editorSchema.nodes.paragraph!.create(null, node.content);
-    const next = document.maybeChild(index + 1);
-    if (next?.type === editorSchema.nodes.ordered_list) {
-      items.push(
-        editorSchema.nodes.list_item!.create(null, [paragraph, next]),
-      );
-      index++;
-    } else {
-      items.push(editorSchema.nodes.list_item!.create(null, paragraph));
+    const content = [
+      node.type === editorSchema.nodes.paragraph
+        ? node
+        : editorSchema.nodes.paragraph!.create(null, node.content),
+    ];
+    while (document.maybeChild(index + 1) && isList(document.child(index + 1))) {
+      content.push(document.child(++index));
     }
+    items.push(editorSchema.nodes.list_item!.create(null, content));
   }
 
   return Fragment.from(items);
@@ -100,14 +103,14 @@ export function insertAfterNode(
 
     const transaction = state.tr;
     const parent = transaction.doc.resolve(found.position).parent;
-    const subclauses = found.node.type === editorSchema.nodes.ordered_list &&
+    const subclauses = isList(found.node) &&
       parent.type === editorSchema.nodes.list_item;
     const end = found.position + found.node.nodeSize - (subclauses ? 1 : 0);
     insertAndSelect(
       transaction,
       end,
       end,
-      subclauses || parent.type === editorSchema.nodes.ordered_list
+      subclauses || isList(parent)
         ? listItems(document)
         : document.content,
     );
@@ -157,7 +160,7 @@ export function insertTemplate(
           transaction,
           $to.pos,
           $to.pos,
-          $to.parent.type === editorSchema.nodes.ordered_list
+          isList($to.parent)
             ? listItems(document)
             : document.content,
         );
