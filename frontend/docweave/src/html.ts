@@ -10,6 +10,7 @@ import {
 import { type DocWeaveSnapshot, readSnapshot } from "./snapshot.js";
 import { listStarts } from "./list-numbering.js";
 import { outputSchema, toOutputDocument } from "./output-schema.js";
+import { isList } from "./schema.js";
 
 export interface RenderHtmlOptions {
   /**
@@ -52,23 +53,31 @@ export function renderHtml(snapshot: DocWeaveSnapshot, options: RenderHtmlOption
     collect(output, current, null);
   }
 
-  const renderNode = (node: ProseMirrorNode, description = ""): string => {
+  // A list's attributes, given the list of the item it is in, which a list item
+  // passes on: subclauses are numbered (i), (ii), but a numbered list under a
+  // bullet keeps the numbers it has.
+  const listAttributes = (node: ProseMirrorNode, outerList?: ProseMirrorNode) => {
+    if (node.type.name !== "ordered_list") return {};
+    if (topLevelLists.has(node)) {
+      return { start: topLevelLists.get(node) === 1 ? null : topLevelLists.get(node) };
+    }
+    return outerList?.type.name === "bullet_list" ? {} : { type: "i" };
+  };
+
+  const renderNode = (node: ProseMirrorNode, outerList?: ProseMirrorNode, description = ""): string => {
     if (node.isText) return escapeHtml(node.text!);
+    if (node.type.name === "hard_break") return "<br>";
     const change = changes.get(node);
     const prefix = change
       ? `<span class="docweave-visually-hidden">${CHANGE_DESCRIPTIONS[change.kind]} </span>`
       : description;
     const content = node.type.name === "list_item"
-      ? node.children.map((child, index) => renderNode(child, index === 0 ? prefix : "")).join("")
+      ? node.children.map((child, index) => renderNode(child, outerList, index === 0 ? prefix : "")).join("")
       : prefix + renderChildren(node) + (prefix && !node.childCount ? "<br>" : "");
     const spec = serializer.nodes[node.type.name]!(node);
     const { open, close } = htmlWrapper(spec, change
       ? `docweave-clause docweave-clause--${change.kind}`
-      : undefined, node.type.name === "ordered_list"
-      ? topLevelLists.has(node)
-        ? { start: topLevelLists.get(node) === 1 ? null : topLevelLists.get(node) }
-        : { type: "i" }
-      : {});
+      : undefined, listAttributes(node, outerList));
     return open + content + close;
   };
 
@@ -85,7 +94,7 @@ export function renderHtml(snapshot: DocWeaveSnapshot, options: RenderHtmlOption
         html += open;
         active.push({ mark, close });
       }
-      html += renderNode(node);
+      html += renderNode(node, isList(parent) ? parent : undefined);
     });
     while (active.length) html += active.pop()!.close;
     return html;
@@ -136,15 +145,21 @@ function escapeHtml(text: string, attribute = false): string {
 
 /**
  * The reader's document as plain text: one line per paragraph or heading,
- * wherever it sits in a list, with facts as their values and no numbering.
+ * wherever it sits in a list, with facts as their values and no numbering. A
+ * bullet's first line starts with one.
  */
 export function renderText(snapshot: DocWeaveSnapshot): string {
   const output = toOutputDocument(readSnapshot(snapshot).snapshot.current);
   const lines: string[] = [];
-  output.descendants((node) => {
-    if (!node.isTextblock) return true;
-    lines.push(node.textContent);
-    return false;
-  });
+  const visit = (node: ProseMirrorNode, bullet: boolean): void => {
+    node.forEach((child, _offset, index) => {
+      if (child.isTextblock) {
+        lines.push((bullet && index === 0 ? "\u2022 " : "") + child.textContent);
+      } else {
+        visit(child, node.type.name === "bullet_list");
+      }
+    });
+  };
+  visit(output, false);
   return lines.join("\n");
 }

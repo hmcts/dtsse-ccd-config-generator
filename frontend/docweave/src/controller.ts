@@ -1,5 +1,8 @@
 import { closeHistory } from "prosemirror-history";
-import { type Node as ProseMirrorNode } from "prosemirror-model";
+import {
+  DOMParser as ProseMirrorDOMParser,
+  type Node as ProseMirrorNode,
+} from "prosemirror-model";
 import {
   type Command,
   EditorState,
@@ -46,6 +49,15 @@ export interface DocEditorController {
    * happens when none remain. Returns whether anything was inserted.
    */
   insert(paragraphs: readonly string[], options?: InsertOptions): boolean;
+  /**
+   * Adds rich text, such as a RichTextArea answer, to the document as the
+   * reader's own content, as insert does, parsed with the editor's schema as
+   * pasting it is: its headings, numbered and bulleted lists, line breaks, and
+   * bold or italic text as they are.
+   * Nothing happens when it holds no text. Returns whether anything was
+   * inserted.
+   */
+  insertHtml(html: string, options?: InsertHtmlOptions): boolean;
   getDocument(): DocWeaveDocument | undefined;
   getSnapshot(): DocWeaveSnapshot;
   destroy(): void;
@@ -62,6 +74,11 @@ export interface InsertOptions {
    * not one, as after a heading.
    */
   numbered?: boolean;
+}
+
+export interface InsertHtmlOptions extends Pick<InsertOptions, "at"> {
+  /** The document to parse the HTML with, when there is no global one. */
+  ownerDocument?: Document;
 }
 
 /** What a render changed, for telling the reader. */
@@ -198,6 +215,21 @@ export function createDocEditorController(
     insertOptions?: InsertTemplateOptions,
   ): void => runInsertion(insertTemplate(wording, selection, insertOptions));
 
+  const insertWording = (
+    wording: ProseMirrorNode,
+    at: InsertOptions["at"],
+  ): void => {
+    // The end of the document is also the start of its last clause when
+    // that clause is empty, and the wording still belongs after it.
+    if (at === "end") {
+      insertDocument(wording, Selection.atEnd(state.doc), { after: true });
+    } else if (typeof at === "object" && at !== null) {
+      runInsertion(insertAfterNode(wording, at.after));
+    } else {
+      insertDocument(wording);
+    }
+  };
+
   const controller: DocEditorController = {
     render(nextDocument: DocWeaveDocument): void {
       const target = getDocumentNode(nextDocument);
@@ -270,15 +302,25 @@ export function createDocEditorController(
           )
           : blocks,
       );
-      // The end of the document is also the start of its last clause when
-      // that clause is empty, and the wording still belongs after it.
-      if (at === "end") {
-        insertDocument(document, Selection.atEnd(state.doc), { after: true });
-      } else if (typeof at === "object" && at !== null) {
-        runInsertion(insertAfterNode(document, at.after));
-      } else {
-        insertDocument(document);
-      }
+      insertWording(document, at);
+      return true;
+    },
+    insertHtml(
+      html,
+      {
+        at = "selection",
+        ownerDocument = globalThis.document,
+      }: InsertHtmlOptions = {},
+    ): boolean {
+      // ProseMirror parses DOM nodes rather than a string. A document of its
+      // own, as ProseMirror's paste uses, runs no scripts or image handlers.
+      const container = ownerDocument.implementation
+        .createHTMLDocument("").body;
+      container.innerHTML = html;
+      const document = ProseMirrorDOMParser.fromSchema(editorSchema)
+        .parse(container);
+      if (!document.textContent.trim()) return false;
+      insertWording(document, at);
       return true;
     },
     getDocument(): DocWeaveDocument | undefined {

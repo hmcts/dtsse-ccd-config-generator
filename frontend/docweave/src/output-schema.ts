@@ -3,9 +3,9 @@ import {
   marks as basicMarks,
   nodes as basicNodes,
 } from "prosemirror-schema-basic";
-import { listItem, orderedList } from "prosemirror-schema-list";
+import { bulletList, listItem, orderedList } from "prosemirror-schema-list";
 
-import { validHeadingLevel } from "./schema.js";
+import { LIST_ITEM_CONTENT, validHeadingLevel } from "./schema.js";
 
 /**
  * What a final document may contain: the editor schema without its editing
@@ -21,8 +21,10 @@ export const outputSchema = new Schema({
       attrs: { level: { default: 1, validate: validHeadingLevel } },
     },
     text: basicNodes.text,
+    hard_break: { ...basicNodes.hard_break, leafText: () => "\n" },
     ordered_list: { ...orderedList, content: "list_item+", group: "block" },
-    list_item: { ...listItem, content: "paragraph+ ordered_list?" },
+    bullet_list: { ...bulletList, content: "list_item+", group: "block" },
+    list_item: { ...listItem, content: LIST_ITEM_CONTENT },
   },
   marks: {
     em: basicMarks.em,

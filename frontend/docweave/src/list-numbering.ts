@@ -5,8 +5,8 @@ import { Decoration, DecorationSet } from "prosemirror-view";
 /**
  * The number each of a document's top-level blocks starts at, for the ordered
  * lists among them: the lists count on from one another, so clauses are
- * numbered through the document whatever lies between them. Other blocks get
- * no number.
+ * numbered through the document whatever lies between them. Other blocks,
+ * bulleted lists among them, get no number.
  */
 export function listStarts(doc: ProseMirrorNode): Array<number | undefined> {
   const starts: Array<number | undefined> = [];

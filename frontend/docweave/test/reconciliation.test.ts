@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { Fragment, Slice } from "prosemirror-model";
 import { EditorState } from "prosemirror-state";
 
 import {
   buildDoc as buildDocWeaveDocument,
   getDocumentNode,
 } from "../src/builder.js";
+import { createDocEditorController } from "../src/controller.js";
+import { restoreGeneratedNode } from "../src/diff-styling.js";
+import { describeChanges, renderHtml } from "../src/index.js";
 import { reconcileDocument } from "../src/reconciliation.js";
 import { editorSchema } from "../src/schema.js";
 
@@ -621,5 +625,105 @@ describe("document reconciliation", () => {
     const reconciledItem = transaction.doc.firstChild!.firstChild!;
     assert.equal(reconciledItem.childCount, 1);
     assert.equal(reconciledItem.firstChild!.textContent, "Parent clause");
+  });
+
+  it("moves the reader's bullets into a clause of their own when a generated subclause list arrives", () => {
+    const clause = (withSums: boolean) => buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => {
+        list.item("pay", "The defendant must pay:", (item) => {
+          if (withSums) item.orderedList("sums", (sums) => sums.item("rent", "the rent;"));
+        });
+      });
+    });
+    const previousTarget = clause(false);
+    const item = previousTarget.firstChild!.firstChild!;
+    const live = previousTarget.replace(
+      2 + item.nodeSize - 2,
+      2 + item.nodeSize - 2,
+      new Slice(Fragment.from(editorSchema.node("bullet_list", null, [
+        editorSchema.node("list_item", null, editorSchema.node("paragraph", null, editorSchema.text("reader bullet"))),
+      ])), 0, 0),
+    );
+    const transaction = EditorState.create({ schema: editorSchema, doc: live }).tr;
+
+    reconcileDocument(transaction, previousTarget, clause(true));
+
+    transaction.doc.check();
+    assert.deepEqual(
+      transaction.doc.firstChild!.children.map((item) =>
+        [item.attrs.id, item.children.map((child) => [child.type.name, child.attrs.id, child.textContent])]
+      ),
+      [
+        ["item:pay", [["paragraph", null, "The defendant must pay:"], ["ordered_list", "ordered-list:sums", "the rent;"]]],
+        [null, [["paragraph", null, ""], ["bullet_list", null, "reader bullet"]]],
+      ],
+    );
+  });
+
+  describe("the reader's wording in a generated clause", () => {
+    const clauses = (wording: string, withSums: boolean) => buildDocWeaveDocument((doc) => {
+      doc.orderedList("clauses", (list) => {
+        list.item("pay", wording, (item) => {
+          if (withSums) item.orderedList("sums", (sums) => sums.item("rent", "pay the rent;"));
+        });
+      });
+    });
+    const items = (runtime: ReturnType<typeof createDocEditorController>) =>
+      runtime.state.doc.child(0).children.map((item) => [item.attrs.id, item.textContent]);
+    const revert = (runtime: ReturnType<typeof createDocEditorController>) =>
+      runtime.dispatch(restoreGeneratedNode(runtime.state, 1, runtime.generatedDocument.child(0).child(0))!);
+
+    it("is all reverted, leaving the clause as generated", () => {
+      const runtime = createDocEditorController({});
+      runtime.controller.render(clauses("Costs in the case.", false));
+      const paragraph = (text: string) => editorSchema.node("paragraph", null, editorSchema.text(text));
+      const item = runtime.state.doc.child(0).child(0);
+      runtime.dispatch(runtime.state.tr.replaceWith(2, 2 + item.content.size, [
+        paragraph("Costs edited."),
+        paragraph("extra"),
+      ]));
+      assert.deepEqual(describeChanges(runtime.controller.getSnapshot()), { inserted: 0, modified: 1 });
+
+      revert(runtime);
+
+      assert.deepEqual(describeChanges(runtime.controller.getSnapshot()), { inserted: 0, modified: 0 });
+    });
+
+    it("keeps one copy of a fact the reader moved into a paragraph of their own", () => {
+      const pay = (amount: string) => buildDocWeaveDocument((doc) => {
+        doc.orderedList("clauses", (list) => {
+          list.item("pay", (content) => content.text("Pay ").fact("amount", amount));
+        });
+      });
+      const facts = (runtime: ReturnType<typeof createDocEditorController>) => {
+        const found: string[] = [];
+        runtime.state.doc.descendants((node) => {
+          if (node.type.name === "generated_text") found.push(node.attrs.text as string);
+        });
+        return found;
+      };
+      const split = (runtime: ReturnType<typeof createDocEditorController>) => {
+        const item = runtime.state.doc.child(0).child(0);
+        const fact = item.firstChild!.lastChild!;
+        runtime.dispatch(runtime.state.tr.replaceWith(2, 2 + item.content.size, [
+          editorSchema.node("paragraph", null, editorSchema.text("Pay now")),
+          editorSchema.node("paragraph", null, [editorSchema.text("by Friday "), fact]),
+        ]));
+      };
+
+      const reverted = createDocEditorController({});
+      reverted.controller.render(pay("£100"));
+      split(reverted);
+      revert(reverted);
+      assert.deepEqual(facts(reverted), ["£100"]);
+      assert.doesNotThrow(() => renderHtml(reverted.controller.getSnapshot()));
+
+      const rendered = createDocEditorController({});
+      rendered.controller.render(pay("£100"));
+      split(rendered);
+      rendered.controller.render(pay("£200"));
+      assert.deepEqual(facts(rendered), ["£200"]);
+      assert.doesNotThrow(() => renderHtml(rendered.controller.getSnapshot()));
+    });
   });
 });

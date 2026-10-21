@@ -14,6 +14,7 @@ export {
 } from "./client.js";
 export {
   type DocEditorController,
+  type InsertHtmlOptions,
   type InsertOptions,
 } from "./controller.js";
 export {

@@ -1,5 +1,7 @@
 import { type Node as ProseMirrorNode } from "prosemirror-model";
 
+import { isList } from "./schema.js";
+
 interface ManagedNodeSnapshot {
   node: ProseMirrorNode;
   parentId: string | null;
@@ -71,7 +73,7 @@ function sameValues(
 }
 
 function isManagedContainer(node: ProseMirrorNode): boolean {
-  return node.type.name === "ordered_list" || node.type.name === "list_item";
+  return isList(node) || node.type.name === "list_item";
 }
 
 export function assertValidGeneratedDocument(

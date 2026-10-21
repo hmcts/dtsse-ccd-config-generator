@@ -216,6 +216,69 @@ describe("public editor API", () => {
     controller.destroy();
   });
 
+  it("inserts rich text into the mounted editor with the page's document, as one undo step", async () => {
+    const { createDocEditor, buildDoc } = await import("../src/index.js");
+    const controller = createDocEditor({ mount: "#editor" });
+    const surface = dom.window.document.querySelector<HTMLElement>("#editor .ProseMirror")!;
+    controller.render(buildDoc((doc) => doc.paragraph("ordered-that", "IT IS ORDERED THAT:")));
+    const generated = controller.getSnapshot();
+
+    assert.equal(controller.insertHtml("<ol><li><p><strong>Costs</strong> reserved.</p></li></ol>", { at: "end" }), true);
+
+    assert.equal(surface.querySelector("ol > li strong")?.textContent, "Costs");
+    assert.equal(dom.window.document.activeElement, surface);
+    dom.window.document.querySelector<HTMLButtonElement>('[aria-label="Undo"]')!.click();
+    assert.deepEqual(controller.getSnapshot(), generated);
+    controller.destroy();
+  });
+
+  it("undoes an insertion after a clause without undoing a later render of that clause", async () => {
+    const { createDocEditor, buildDoc } = await import("../src/index.js");
+    const pay = (amount: string) => buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => list.item("pay", (content) => content.text("Pay ").fact("amount", amount)));
+    });
+    for (const insert of [
+      (controller: ReturnType<typeof createDocEditor>) =>
+        controller.insertHtml("<ul><li><p>Send receipt</p></li></ul>", { at: { after: "item:pay" } }),
+      (controller: ReturnType<typeof createDocEditor>) =>
+        controller.insert(["Costs reserved."], { at: { after: "item:pay" } }),
+    ]) {
+      const controller = createDocEditor({ mount: "#editor" });
+      const surface = dom.window.document.querySelector<HTMLElement>("#editor .ProseMirror")!;
+      controller.render(pay("£100"));
+      insert(controller);
+      controller.render(pay("£200"));
+
+      dom.window.document.querySelector<HTMLButtonElement>('[aria-label="Undo"]')!.click();
+
+      assert.deepEqual(controller.getSnapshot().current, controller.getSnapshot().generated);
+      assert.equal(surface.textContent, "Pay £200");
+      controller.destroy();
+    }
+  });
+
+  it("undoes and redoes the reader's bullets after a render moves them out of a clause", async () => {
+    const { createDocEditor, buildDoc, renderText } = await import("../src/index.js");
+    const pay = (withSums: boolean) => buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => list.item("pay", "The defendant must pay:", (item) => {
+        if (withSums) item.orderedList("sums", (sums) => sums.item("rent", "the rent;"));
+      }));
+    });
+    const controller = createDocEditor({ mount: "#editor" });
+    const click = (label: string) => dom.window.document.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!.click();
+    controller.render(pay(false));
+    controller.insertHtml("<ul><li><p>Reader bullet</p></li></ul>", { at: { after: "item:pay" } });
+    controller.render(pay(true));
+    assert.equal(renderText(controller.getSnapshot()), "The defendant must pay:\nthe rent;\n\n\u2022 Reader bullet");
+
+    click("Undo");
+    assert.equal(renderText(controller.getSnapshot()), "The defendant must pay:\nthe rent;\n");
+
+    click("Redo");
+    assert.equal(renderText(controller.getSnapshot()), "The defendant must pay:\nthe rent;\n\n\u2022 Reader bullet");
+    controller.destroy();
+  });
+
   it("leaves focus where it was when there is nothing to insert", async () => {
     const { createDocEditor, buildDoc } = await import("../src/index.js");
     const host = dom.window.document.createElement("input");

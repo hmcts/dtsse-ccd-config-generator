@@ -7,6 +7,7 @@ import {
   managedChildren,
   type NodeChange,
 } from "./reconciliation-plan.js";
+import { editorSchema, isList } from "./schema.js";
 
 interface PositionedNode {
   node: ProseMirrorNode;
@@ -79,19 +80,21 @@ function afterReaderContent(transaction: Transaction, position: number): number 
 }
 
 function isManagedContainer(node: ProseMirrorNode): boolean {
-  return node.type.name === "ordered_list" || node.type.name === "list_item";
+  return isList(node) || node.type.name === "list_item";
 }
 
+/** The item's first nested list of the type, which a generated one adopts. */
 function findDirectNestedList(
   transaction: Transaction,
   parentPosition: number,
+  type: ProseMirrorNode["type"],
 ): PositionedNode | undefined {
   const parent = transaction.doc.nodeAt(parentPosition);
   if (!parent) throw new Error("Managed list item missing");
 
   let offset = 0;
   for (const child of parent.children) {
-    if (child.type.name === "ordered_list") {
+    if (child.type === type) {
       return { node: child, position: parentPosition + 1 + offset };
     }
     offset += child.nodeSize;
@@ -104,11 +107,20 @@ function addNestedList(
   parentPosition: number,
   target: ProseMirrorNode,
 ): void {
-  const existing = findDirectNestedList(transaction, parentPosition);
+  const existing = findDirectNestedList(transaction, parentPosition, target.type);
   if (!existing) {
     const parent = transaction.doc.nodeAt(parentPosition);
     if (!parent) throw new Error("Managed list item missing");
-    transaction.insert(parentPosition + parent.nodeSize - 1, target);
+    let wordingEnd = parentPosition + parent.nodeSize - 1;
+    const readerList = parent.lastChild!;
+    // An item holds one nested list, so bullets the reader gave it go on as a
+    // clause of their own after it, split off in place so undo still finds them.
+    if (isList(readerList)) {
+      wordingEnd -= readerList.nodeSize;
+      transaction.insert(wordingEnd, editorSchema.nodes.paragraph!.create());
+      transaction.split(wordingEnd, 1, [{ type: editorSchema.nodes.list_item!, attrs: { id: null } }]);
+    }
+    transaction.insert(wordingEnd, target);
     return;
   }
 
@@ -179,11 +191,10 @@ function reconcileNestedModifications(
     reconcileModified(transaction, change);
   }
 }
-
 function directListItemContent(
   node: ProseMirrorNode,
 ): readonly ProseMirrorNode[] {
-  return node.children.filter((child) => child.type.name !== "ordered_list");
+  return node.children.filter((child) => !isList(child));
 }
 
 function referenceContentNodeEqual(
@@ -248,8 +259,7 @@ function reconcileListItemContent(
 }
 
 function isNestedListChange(change: NodeChange): boolean {
-  const node = change.kind === "removed" ? change.previous : change.target;
-  return node.type.name === "ordered_list";
+  return isList(change.kind === "removed" ? change.previous : change.target);
 }
 
 function reconcileModified(
@@ -331,7 +341,7 @@ function reconcileParent(
       case "added": {
         if (
           targetParent.type.name === "list_item" &&
-          change.target.type.name === "ordered_list" &&
+          isList(change.target) &&
           parentPosition !== null
         ) {
           addNestedList(transaction, parentPosition, change.target);
@@ -352,7 +362,7 @@ function reconcileParent(
       case "removed": {
         if (
           previousParent.type.name === "list_item" &&
-          change.previous.type.name === "ordered_list"
+          isList(change.previous)
         ) {
           removeNestedList(transaction, change.previous);
           break;

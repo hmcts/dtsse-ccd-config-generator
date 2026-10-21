@@ -1,18 +1,20 @@
 import { type Node as ProseMirrorNode } from "prosemirror-model";
 
+import { isList } from "./schema.js";
 import { type DocWeaveSnapshot, readSnapshot } from "./snapshot.js";
 
 /**
  * A clause is the unit the reader edits and reverts: a block at the top of
- * the document, other than a list, or an item of a numbered list.
+ * the document, other than a list, or an item of a list. Only a numbered
+ * list's items are numbered.
  */
 export function isClauseNode(
   node: ProseMirrorNode,
   parent: ProseMirrorNode | null,
   doc: ProseMirrorNode,
 ): boolean {
-  return (parent === doc && node.type.name !== "ordered_list") ||
-    parent?.type.name === "ordered_list";
+  return (parent === doc && !isList(node)) ||
+    (parent !== null && isList(parent));
 }
 
 /** The generated clauses of a document, by their ID. */
@@ -35,7 +37,7 @@ export function clauseNodesById(
  */
 export function ownContent(clause: ProseMirrorNode): ProseMirrorNode[] {
   return clause.type.name === "list_item"
-    ? clause.children.filter((child) => child.type.name !== "ordered_list")
+    ? clause.children.filter((child) => !isList(child))
     : [clause];
 }
 

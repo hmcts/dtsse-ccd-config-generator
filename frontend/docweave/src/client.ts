@@ -376,6 +376,14 @@ export function createDocEditor(
       if (inserted) view.focus();
       return inserted;
     },
+    insertHtml(html, options): boolean {
+      const inserted = runtime.controller.insertHtml(html, {
+        ownerDocument: editor.ownerDocument,
+        ...options,
+      });
+      if (inserted) view.focus();
+      return inserted;
+    },
     destroy(): void {
       editor.removeEventListener("input", stopAtMount);
       editor.removeEventListener("change", stopAtMount);

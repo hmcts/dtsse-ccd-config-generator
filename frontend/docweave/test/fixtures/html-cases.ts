@@ -50,6 +50,37 @@ export function htmlCases(): HtmlCase[] {
       ] },
     ],
   }))) });
+  cases.push({ name: "bullets-and-line-breaks", snapshot: snapshot([
+    { type: "ordered_list", attrs: { id: "clauses", order: 1 }, content: [
+      { type: "list_item", attrs: { id: "pay" }, content: [
+        paragraph(null, text("The defendant must pay:")),
+        { type: "bullet_list", attrs: { id: null }, content: [
+          { type: "list_item", attrs: { id: null }, content: [
+            paragraph(null, text("arrears of:")),
+            { type: "ordered_list", attrs: { id: null, order: 3 }, content: [
+              { type: "list_item", attrs: { id: null }, content: [paragraph(null, text("rent"))] },
+            ] },
+          ] },
+        ] },
+      ] },
+      { type: "list_item", attrs: { id: null }, content: [
+        paragraph(null, text("and keep"), { type: "hard_break" }, text("to the tenancy.", ["em"])),
+        { type: "ordered_list", attrs: { id: null, order: 1 }, content: [
+          { type: "list_item", attrs: { id: null }, content: [paragraph(null, text("Subclause"))] },
+        ] },
+      ] },
+    ] },
+    { type: "bullet_list", attrs: { id: null }, content: [
+      { type: "list_item", attrs: { id: null }, content: [paragraph(null, text("A bullet", ["strong"]))] },
+    ] },
+    { type: "ordered_list", attrs: { id: null, order: 1 }, content: [
+      { type: "list_item", attrs: { id: null }, content: [paragraph(null, text("Second clause"))] },
+    ] },
+  ], [
+    { type: "ordered_list", attrs: { id: "clauses", order: 1 }, content: [
+      { type: "list_item", attrs: { id: "pay" }, content: [paragraph(null, text("The defendant must pay:"))] },
+    ] },
+  ]) });
   cases.push({ name: "blank-document", snapshot: snapshot([paragraph("blank")]) });
   cases.push({ name: "empty-clauses", snapshot: snapshot([
     paragraph("changed"), paragraph(null),
