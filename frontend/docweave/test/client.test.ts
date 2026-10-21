@@ -232,6 +232,31 @@ describe("public editor API", () => {
     controller.destroy();
   });
 
+  it("undoes an insertion after a clause without undoing a later render of that clause", async () => {
+    const { createDocEditor, buildDoc } = await import("../src/index.js");
+    const pay = (amount: string) => buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => list.item("pay", (content) => content.text("Pay ").fact("amount", amount)));
+    });
+    for (const insert of [
+      (controller: ReturnType<typeof createDocEditor>) =>
+        controller.insertHtml("<ul><li><p>Send receipt</p></li></ul>", { at: { after: "item:pay" } }),
+      (controller: ReturnType<typeof createDocEditor>) =>
+        controller.insert(["Costs reserved."], { at: { after: "item:pay" } }),
+    ]) {
+      const controller = createDocEditor({ mount: "#editor" });
+      const surface = dom.window.document.querySelector<HTMLElement>("#editor .ProseMirror")!;
+      controller.render(pay("£100"));
+      insert(controller);
+      controller.render(pay("£200"));
+
+      dom.window.document.querySelector<HTMLButtonElement>('[aria-label="Undo"]')!.click();
+
+      assert.deepEqual(controller.getSnapshot().current, controller.getSnapshot().generated);
+      assert.equal(surface.textContent, "Pay £200");
+      controller.destroy();
+    }
+  });
+
   it("leaves focus where it was when there is nothing to insert", async () => {
     const { createDocEditor, buildDoc } = await import("../src/index.js");
     const host = dom.window.document.createElement("input");

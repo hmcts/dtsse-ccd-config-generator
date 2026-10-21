@@ -5,8 +5,6 @@ import { JSDOM } from "jsdom";
 
 import { type Node as ProseMirrorNode } from "prosemirror-model";
 
-import { createDocEditorController } from "../src/controller.js";
-import { restoreGeneratedNode } from "../src/diff-styling.js";
 import { listStarts } from "../src/list-numbering.js";
 import { editorSchema } from "../src/schema.js";
 import {
@@ -135,28 +133,6 @@ describe("inserting rich text", () => {
       clause(subclause).child(1).children.map((item) => item.textContent),
       ["pay the rent;", "pay the costs."],
     );
-  });
-
-  it("keeps what the reader wrote after a clause's subclauses once a render removes them", () => {
-    const pay = (wording: string, withSums: boolean) => buildDoc((doc) => {
-      doc.orderedList("clauses", (list) => {
-        list.item("pay", wording, (item) => {
-          if (withSums) item.orderedList("sums", (sums) => sums.item("rent", "pay the rent;"));
-        });
-      });
-    });
-    const runtime = createDocEditorController({});
-    const clause = () => runtime.state.doc.child(0).child(0).children.map((node) => node.textContent);
-    runtime.controller.render(pay("The defendant must:", true));
-    runtime.controller.insert(["and keep to the tenancy."], { at: { after: "ordered-list:sums" } });
-
-    runtime.controller.render(pay("The defendant must:", false));
-    runtime.controller.render(pay("The defendant must now:", false));
-    assert.deepEqual(clause(), ["The defendant must now:", "and keep to the tenancy."]);
-
-    runtime.dispatch(runtime.state.tr.insertText(" still", 2 + "The defendant must now".length));
-    runtime.dispatch(restoreGeneratedNode(runtime.state, 1, runtime.generatedDocument.child(0).child(0))!);
-    assert.deepEqual(clause(), ["The defendant must now:", "and keep to the tenancy."]);
   });
 
   it("inserts nothing when the rich text holds no text", () => {

@@ -47,18 +47,6 @@ export function leadingContent(
   return firstList === -1 ? item.children : item.children.slice(0, firstList);
 }
 
-/**
- * The generated wording in the reader's copy of a generated item: as many
- * blocks as the generated item has, since what the reader wrote after its
- * subclauses stays theirs once a render removes the subclauses.
- */
-export function generatedWording(
-  live: ProseMirrorNode,
-  generated: ProseMirrorNode,
-): readonly ProseMirrorNode[] {
-  return leadingContent(live).slice(0, leadingContent(generated).length);
-}
-
 const nodes = {
   doc: basicNodes.doc,
   paragraph: {

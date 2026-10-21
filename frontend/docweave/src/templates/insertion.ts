@@ -45,24 +45,21 @@ function insertAndSelect(
   to: number,
   content: Fragment,
 ): void {
+  const steps = transaction.steps.length;
   transaction.replaceWith(from, to, content);
-  const end = transaction.mapping.map(to, 1);
+  const end = transaction.mapping.slice(steps).map(to, 1);
   transaction.setSelection(Selection.near(transaction.doc.resolve(end), -1));
 }
 
 /**
- * The wording as items of a list of the type, after the clause it follows if
- * any, which comes first: each paragraph or heading an item, with any lists
- * after it as its subclauses or bullets, and the items of a list of the same
- * type items of their own. A list of the other type stays a list, under the
- * item before it, or under an empty one when nothing comes before it.
+ * The wording as items of a list of the type: each paragraph or heading an
+ * item, with any lists after it as its subclauses or bullets, and the items of
+ * a list of the same type items of their own. A list of the other type stays a
+ * list, under the item before it, or under an empty one when nothing comes
+ * before it.
  */
-function listItems(
-  document: ProseMirrorNode,
-  listType: NodeType,
-  after?: ProseMirrorNode,
-): Fragment {
-  const items: ProseMirrorNode[] = after ? [after] : [];
+function listItems(document: Fragment, listType: NodeType): Fragment {
+  const items: ProseMirrorNode[] = [];
   const listItem = editorSchema.nodes.list_item!;
 
   for (let index = 0; index < document.childCount; index++) {
@@ -86,6 +83,25 @@ function listItems(
   }
 
   return Fragment.from(items);
+}
+
+/**
+ * Inserts the wording after the clause that ends at the position, as items of
+ * its list. The clause takes any list of the other kind the wording starts
+ * with, in place rather than replaced, so undo leaves the clause as it is.
+ */
+function insertAfterClause(
+  transaction: Transaction,
+  clauseEnd: number,
+  document: ProseMirrorNode,
+  listType: NodeType,
+): void {
+  const { children } = document;
+  const split = children.findIndex((node) => !isList(node) || node.type === listType);
+  const leading = split === -1 ? children : children.slice(0, split);
+  transaction.insert(clauseEnd - 1, leading);
+  const end = transaction.mapping.map(clauseEnd);
+  insertAndSelect(transaction, end, end, listItems(Fragment.from(children.slice(leading.length)), listType));
 }
 
 /**
@@ -122,12 +138,11 @@ export function insertAfterNode(
         addsToSubclauses ? end - 1 : end,
         addsToSubclauses ? end - 1 : end,
         addsToSubclauses
-          ? listItems(document, listType)
+          ? listItems(document.content, listType)
           : document.content,
       );
     } else if (isList(parent)) {
-      // The clause takes any list of the other kind the wording starts with.
-      insertAndSelect(transaction, found.position, end, listItems(document, parent.type, found.node));
+      insertAfterClause(transaction, end, document, parent.type);
     } else {
       insertAndSelect(transaction, end, end, document.content);
     }
@@ -178,7 +193,7 @@ export function insertTemplate(
           $to.pos,
           $to.pos,
           isList($to.parent)
-            ? listItems(document, $to.parent.type)
+            ? listItems(document.content, $to.parent.type)
             : document.content,
         );
       } else {
@@ -190,7 +205,7 @@ export function insertTemplate(
       const listType = clause.node.type === editorSchema.nodes.list_item
         ? $to.node(clause.depth - 1).type
         : undefined;
-      const content = listType ? listItems(document, listType) : document.content;
+      const content = listType ? listItems(document.content, listType) : document.content;
 
       if (isEmptyPersonalClause(clause.node)) {
         // The template becomes the clause the reader has just started.
@@ -198,9 +213,7 @@ export function insertTemplate(
       } else if (!alwaysAfter && atClauseStart($to, clause.depth)) {
         insertAndSelect(transaction, before, before, content);
       } else if (listType) {
-        // After a clause, it takes any list of the other kind the wording
-        // starts with.
-        insertAndSelect(transaction, before, after, listItems(document, listType, clause.node));
+        insertAfterClause(transaction, after, document, listType);
       } else {
         insertAndSelect(transaction, after, after, content);
       }

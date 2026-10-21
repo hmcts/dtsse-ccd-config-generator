@@ -7,7 +7,7 @@ import {
   managedChildren,
   type NodeChange,
 } from "./reconciliation-plan.js";
-import { generatedWording, isList, leadingContent } from "./schema.js";
+import { editorSchema, isList, leadingContent } from "./schema.js";
 
 interface PositionedNode {
   node: ProseMirrorNode;
@@ -105,7 +105,6 @@ function findDirectNestedList(
 function addNestedList(
   transaction: Transaction,
   parentPosition: number,
-  targetParent: ProseMirrorNode,
   target: ProseMirrorNode,
 ): void {
   const existing = findDirectNestedList(transaction, parentPosition, target.type);
@@ -114,7 +113,7 @@ function addNestedList(
     // the reader gave it.
     const parent = transaction.doc.nodeAt(parentPosition);
     if (!parent) throw new Error("Managed list item missing");
-    const wordingSize = generatedWording(parent, targetParent)
+    const wordingSize = leadingContent(parent)
       .reduce((size, child) => size + child.nodeSize, 0);
     transaction.insert(parentPosition + 1 + wordingSize, target);
     return;
@@ -150,10 +149,17 @@ function removeNestedList(
   );
 
   if (!hasUserAuthoredChildren) {
-    transaction.delete(
-      liveList.position,
-      liveList.position + liveList.node.nodeSize,
-    );
+    const listEnd = liveList.position + liveList.node.nodeSize;
+    const $list = transaction.doc.resolve(liveList.position);
+    const itemEnd = $list.after();
+    // Wording the reader wrote after the subclauses would otherwise join the
+    // generated wording, so it goes on as a clause of their own.
+    if (transaction.doc.nodeAt(listEnd)?.isTextblock) {
+      const own = transaction.doc.slice(listEnd, itemEnd - 1).content;
+      transaction.insert(itemEnd, editorSchema.nodes.list_item!.create(null, own));
+      transaction.delete(listEnd, itemEnd - 1);
+    }
+    transaction.delete(liveList.position, listEnd);
     return;
   }
 
@@ -233,7 +239,9 @@ function reconcileListItemContent(
   previous: ProseMirrorNode,
   target: ProseMirrorNode,
 ): boolean {
-  const liveContent = generatedWording(live.node, previous);
+  // Paragraphs the reader wrote after the item's subclauses stay where they
+  // are; only the wording before them is the generated item's.
+  const liveContent = leadingContent(live.node);
   const targetContent = leadingContent(target);
 
   if (referenceClauseContentEqual(previous, target)) return false;
@@ -336,7 +344,7 @@ function reconcileParent(
           isList(change.target) &&
           parentPosition !== null
         ) {
-          addNestedList(transaction, parentPosition, targetParent, change.target);
+          addNestedList(transaction, parentPosition, change.target);
           break;
         }
         const position = insertionPosition(
