@@ -7,7 +7,7 @@ import {
   managedChildren,
   type NodeChange,
 } from "./reconciliation-plan.js";
-import { isList, leadingContent } from "./schema.js";
+import { generatedWording, isList, leadingContent } from "./schema.js";
 
 interface PositionedNode {
   node: ProseMirrorNode;
@@ -105,6 +105,7 @@ function findDirectNestedList(
 function addNestedList(
   transaction: Transaction,
   parentPosition: number,
+  targetParent: ProseMirrorNode,
   target: ProseMirrorNode,
 ): void {
   const existing = findDirectNestedList(transaction, parentPosition, target.type);
@@ -113,7 +114,7 @@ function addNestedList(
     // the reader gave it.
     const parent = transaction.doc.nodeAt(parentPosition);
     if (!parent) throw new Error("Managed list item missing");
-    const wordingSize = leadingContent(parent)
+    const wordingSize = generatedWording(parent, targetParent)
       .reduce((size, child) => size + child.nodeSize, 0);
     transaction.insert(parentPosition + 1 + wordingSize, target);
     return;
@@ -232,9 +233,7 @@ function reconcileListItemContent(
   previous: ProseMirrorNode,
   target: ProseMirrorNode,
 ): boolean {
-  // Paragraphs the reader wrote after the item's subclauses stay where they
-  // are; only the wording before them is the generated item's.
-  const liveContent = leadingContent(live.node);
+  const liveContent = generatedWording(live.node, previous);
   const targetContent = leadingContent(target);
 
   if (referenceClauseContentEqual(previous, target)) return false;
@@ -337,7 +336,7 @@ function reconcileParent(
           isList(change.target) &&
           parentPosition !== null
         ) {
-          addNestedList(transaction, parentPosition, change.target);
+          addNestedList(transaction, parentPosition, targetParent, change.target);
           break;
         }
         const position = insertionPosition(

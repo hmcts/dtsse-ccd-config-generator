@@ -23,7 +23,9 @@ export function validHeadingLevel(value: unknown): void {
 /**
  * What a list item holds, in the editor and in a final document: its wording,
  * then anything, so a clause may go on after its subclauses. It is what CCD's
- * RichTextArea editor allows, so its HTML parses as it is.
+ * RichTextArea editor allows (ccd-case-ui-toolkit's
+ * write-rich-text-area-field.component.ts overrides ngx-editor's list_item),
+ * so its HTML parses as it is.
  */
 export const LIST_ITEM_CONTENT = "(paragraph | heading) block*";
 
@@ -43,6 +45,18 @@ export function leadingContent(
 ): readonly ProseMirrorNode[] {
   const firstList = item.children.findIndex(isList);
   return firstList === -1 ? item.children : item.children.slice(0, firstList);
+}
+
+/**
+ * The generated wording in the reader's copy of a generated item: as many
+ * blocks as the generated item has, since what the reader wrote after its
+ * subclauses stays theirs once a render removes the subclauses.
+ */
+export function generatedWording(
+  live: ProseMirrorNode,
+  generated: ProseMirrorNode,
+): readonly ProseMirrorNode[] {
+  return leadingContent(live).slice(0, leadingContent(generated).length);
 }
 
 const nodes = {

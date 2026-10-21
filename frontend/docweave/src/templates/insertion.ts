@@ -51,13 +51,18 @@ function insertAndSelect(
 }
 
 /**
- * The wording as items of a list of the type: each paragraph an item, with
- * any lists after it as its subclauses or bullets, and the items of a list of
- * the same type items of their own. A list of the other type stays a list,
- * under the item before it, or under an empty one when it comes first.
+ * The wording as items of a list of the type, after the clause it follows if
+ * any, which comes first: each paragraph or heading an item, with any lists
+ * after it as its subclauses or bullets, and the items of a list of the same
+ * type items of their own. A list of the other type stays a list, under the
+ * item before it, or under an empty one when nothing comes before it.
  */
-function listItems(document: ProseMirrorNode, listType: NodeType): Fragment {
-  const items: ProseMirrorNode[] = [];
+function listItems(
+  document: ProseMirrorNode,
+  listType: NodeType,
+  after?: ProseMirrorNode,
+): Fragment {
+  const items: ProseMirrorNode[] = after ? [after] : [];
   const listItem = editorSchema.nodes.list_item!;
 
   for (let index = 0; index < document.childCount; index++) {
@@ -73,11 +78,7 @@ function listItems(document: ProseMirrorNode, listType: NodeType): Fragment {
         : listItem.create(null, [editorSchema.nodes.paragraph!.create(), node]));
       continue;
     }
-    const content = [
-      node.type === editorSchema.nodes.paragraph
-        ? node
-        : editorSchema.nodes.paragraph!.create(null, node.content),
-    ];
+    const content = [node];
     while (document.maybeChild(index + 1) && isList(document.child(index + 1))) {
       content.push(document.child(++index));
     }
@@ -124,13 +125,11 @@ export function insertAfterNode(
           ? listItems(document, listType)
           : document.content,
       );
+    } else if (isList(parent)) {
+      // The clause takes any list of the other kind the wording starts with.
+      insertAndSelect(transaction, found.position, end, listItems(document, parent.type, found.node));
     } else {
-      insertAndSelect(
-        transaction,
-        end,
-        end,
-        isList(parent) ? listItems(document, parent.type) : document.content,
-      );
+      insertAndSelect(transaction, end, end, document.content);
     }
     dispatch(transaction.scrollIntoView());
     return true;
@@ -188,18 +187,22 @@ export function insertTemplate(
     } else {
       const before = $to.before(clause.depth);
       const after = $to.after(clause.depth);
-      const content = clause.node.type === editorSchema.nodes.list_item
-        ? listItems(document, $to.node(clause.depth - 1).type)
-        : document.content;
+      const listType = clause.node.type === editorSchema.nodes.list_item
+        ? $to.node(clause.depth - 1).type
+        : undefined;
+      const content = listType ? listItems(document, listType) : document.content;
 
       if (isEmptyPersonalClause(clause.node)) {
         // The template becomes the clause the reader has just started.
         insertAndSelect(transaction, before, after, content);
+      } else if (!alwaysAfter && atClauseStart($to, clause.depth)) {
+        insertAndSelect(transaction, before, before, content);
+      } else if (listType) {
+        // After a clause, it takes any list of the other kind the wording
+        // starts with.
+        insertAndSelect(transaction, before, after, listItems(document, listType, clause.node));
       } else {
-        const position = !alwaysAfter && atClauseStart($to, clause.depth)
-          ? before
-          : after;
-        insertAndSelect(transaction, position, position, content);
+        insertAndSelect(transaction, after, after, content);
       }
     }
 

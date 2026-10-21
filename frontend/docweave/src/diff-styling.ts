@@ -22,7 +22,7 @@ import {
 import { isElement } from "./dom.js";
 import { createUndoIcon } from "./icons.js";
 import { hasSameManagedStructure } from "./invariants.js";
-import { isList, leadingContent } from "./schema.js";
+import { generatedWording, isList, leadingContent } from "./schema.js";
 
 type Announce = (message: string) => void;
 
@@ -90,7 +90,7 @@ export function restoreGeneratedNode(
     node.type.name === "list_item" &&
     generatedNode.type === node.type
   ) {
-    const ownContentSize = leadingContent(node)
+    const ownContentSize = generatedWording(node, generatedNode)
       .reduce((size, child) => size + child.nodeSize, 0);
 
     return state.tr

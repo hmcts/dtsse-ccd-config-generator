@@ -5,6 +5,8 @@ import { JSDOM } from "jsdom";
 
 import { type Node as ProseMirrorNode } from "prosemirror-model";
 
+import { createDocEditorController } from "../src/controller.js";
+import { restoreGeneratedNode } from "../src/diff-styling.js";
 import { listStarts } from "../src/list-numbering.js";
 import { editorSchema } from "../src/schema.js";
 import {
@@ -50,7 +52,7 @@ describe("inserting rich text", () => {
     assert.deepEqual(listStarts(current), [undefined, undefined, undefined, 1, 3]);
   });
 
-  it("keeps a list as a list when it goes into a list of the other kind", () => {
+  it("keeps a list as a list when it goes into a list of the other kind, under the clause it follows", () => {
     const shape = (node: ProseMirrorNode): unknown =>
       node.isTextblock ? node.textContent : [node.type.name, ...node.children.map(shape)];
     const bullets = "<ul><li><p>the rent;</p></li><li><p>the costs</p></li></ul>";
@@ -63,8 +65,7 @@ describe("inserting rich text", () => {
       const clauses = editorSchema.nodeFromJSON(controller.getSnapshot().current).child(2);
       assert.deepEqual(shape(clauses), [
         "ordered_list",
-        ["list_item", "Costs in the case."],
-        ["list_item", "", listOfBullets],
+        ["list_item", "Costs in the case.", listOfBullets],
       ], JSON.stringify(at));
     }
 
@@ -96,9 +97,16 @@ describe("inserting rich text", () => {
     afterBullet.insertHtml("<ol><li><p>First</p></li></ol>", { at: "end", ownerDocument });
     assert.deepEqual(shape(editorSchema.nodeFromJSON(afterBullet.getSnapshot().current).child(0)), [
       "bullet_list",
-      ["list_item", "A note."],
-      ["list_item", "", ["ordered_list", ["list_item", "First"]]],
+      ["list_item", "A note.", ["ordered_list", ["list_item", "First"]]],
     ]);
+
+    const heading = createDocEditor();
+    heading.render(order());
+    heading.insertHtml("<h3>Rent arrears</h3>", { at: "end", ownerDocument });
+    assert.deepEqual(
+      editorSchema.nodeFromJSON(heading.getSnapshot().current).child(2).child(1).firstChild!.type.name,
+      "heading",
+    );
   });
 
   it("goes on with a clause after its subclauses, unless the wording is more subclauses", () => {
@@ -127,6 +135,28 @@ describe("inserting rich text", () => {
       clause(subclause).child(1).children.map((item) => item.textContent),
       ["pay the rent;", "pay the costs."],
     );
+  });
+
+  it("keeps what the reader wrote after a clause's subclauses once a render removes them", () => {
+    const pay = (wording: string, withSums: boolean) => buildDoc((doc) => {
+      doc.orderedList("clauses", (list) => {
+        list.item("pay", wording, (item) => {
+          if (withSums) item.orderedList("sums", (sums) => sums.item("rent", "pay the rent;"));
+        });
+      });
+    });
+    const runtime = createDocEditorController({});
+    const clause = () => runtime.state.doc.child(0).child(0).children.map((node) => node.textContent);
+    runtime.controller.render(pay("The defendant must:", true));
+    runtime.controller.insert(["and keep to the tenancy."], { at: { after: "ordered-list:sums" } });
+
+    runtime.controller.render(pay("The defendant must:", false));
+    runtime.controller.render(pay("The defendant must now:", false));
+    assert.deepEqual(clause(), ["The defendant must now:", "and keep to the tenancy."]);
+
+    runtime.dispatch(runtime.state.tr.insertText(" still", 2 + "The defendant must now".length));
+    runtime.dispatch(restoreGeneratedNode(runtime.state, 1, runtime.generatedDocument.child(0).child(0))!);
+    assert.deepEqual(clause(), ["The defendant must now:", "and keep to the tenancy."]);
   });
 
   it("inserts nothing when the rich text holds no text", () => {
