@@ -26,9 +26,17 @@ class AuthorisationCaseTypeGenerator<T, S, R extends HasRole> implements ConfigG
             boolean shuttered =
                 (config.isShutterService() || config.getShutterServiceForRoles().contains(r))
                     && !config.getShutterServiceExcludedRoles().contains(r);
+            String crud = shuttered ? "D" : r.getCaseTypePermissions();
+            // CRUD is a required column on this sheet, so the importer fails the whole definition
+            // on a row that leaves it blank (DefinitionDataItem.findAttribute throws
+            // "Couldn't find the column CRUD in the sheet AuthorisationCaseType"). A role with no
+            // case-type grant is simply absent from a hand-written definition; emit nothing.
+            if (crud == null || crud.isBlank()) {
+              continue;
+            }
             Map<String, Object> entry = JsonUtils.caseRow(config.getCaseType());
             entry.put("UserRole", r.getRole());
-            entry.put("CRUD", shuttered ? "D" : r.getCaseTypePermissions());
+            entry.put("CRUD", crud);
             result.add(entry);
           }
         }

@@ -2035,21 +2035,20 @@ public class NormalisingCcdConfigComparatorTest {
         assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
     }
 
-    // ---- EMPTY_CRUD_AUTHORISATION ----
+    // ---- Authorisation CRUD ----
 
     @Test
-    public void emptyCrudAuthorisationRowPresentOnOneSideIsForgiven() {
+    public void emptyCrudAuthorisationRowPresentOnOneSideFails() {
+        // CRUD is a required column on the authorisation sheets, so a blank one does not grant
+        // nothing - DefinitionDataItem.findAttribute throws and the whole import is rejected. An
+        // extra blank-CRUD row is therefore a real difference.
         Map<String, List<Map<String, Object>>> expected = sheets("AuthorisationCaseType",
             rows(row("CaseTypeID", "X", "AccessProfile", "caseworker", "CRUD", "CRUD")));
         Map<String, List<Map<String, Object>>> actual = sheets("AuthorisationCaseType",
             rows(row("CaseTypeID", "X", "AccessProfile", "caseworker", "CRUD", "CRUD"),
                 row("CaseTypeID", "X", "AccessProfile", "idam-role", "CRUD", "")));
 
-        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
-
-        assertThat(result.matches()).as(result.report()).isTrue();
-        assertThat(result.getAppliedRules())
-            .anySatisfy(rule -> assertThat(rule).startsWith("EMPTY_CRUD_AUTHORISATION"));
+        assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
     }
 
     @Test
@@ -2065,7 +2064,6 @@ public class NormalisingCcdConfigComparatorTest {
 
     @Test
     public void emptyCrudRowPresentOnBothSidesIsCompared() {
-        // When both sides carry the row, empty CRUD is not dropped; a CRUD mismatch still fails.
         Map<String, List<Map<String, Object>>> expected = sheets("AuthorisationCaseType",
             rows(row("CaseTypeID", "X", "AccessProfile", "caseworker", "CRUD", "")));
         Map<String, List<Map<String, Object>>> actual = sheets("AuthorisationCaseType",

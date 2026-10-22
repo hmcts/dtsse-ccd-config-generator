@@ -40,7 +40,6 @@ conscious decision instead of inheriting invisible JSON — see
 | Retries under a column the importer does not read, or on a hook with no URL | Not semantic | `CASE_EVENT_RETRIES` | `EventParser` reads `RetriesTimeoutAboutToStartEvent`, `RetriesTimeoutURLAboutToSubmitEvent` and `RetriesTimeoutURLSubmittedEvent`, and only alongside the hook's URL |
 | Tab metadata spellings (`Channel` default, label/role propagation, role-suffixed `TabID`) | Not semantic | `CASE_TYPE_TAB` | Same tab, two encodings (also strips `TabFieldDisplayOrder` → display-order row below) |
 | Generator-written CCD defaults vs omitted columns; importer-ignored metadata; whitespace-only labels | Not semantic | `DEFAULTS` | Only fires when the other side omits the column (also strips ordering columns → display-order row below) |
-| Empty-`CRUD` authorisation row ≡ absent row | Not semantic | `EMPTY_CRUD_AUTHORISATION` | Importer rejects blank `CRUD`; grants nothing |
 | `CRUD` letter order (`CUR` ≡ `CRU`) | Not semantic | `CRUD_LETTER_ORDER` | Importer parses `CRUD` as an order-independent set (`String.contains` per letter); a genuine set difference still fails |
 | `""`/`null` ≡ absent column | Not semantic | `EMPTY_STRING_ABSENT` | Importer treats all identically |
 | `Complex`+parameter ≡ direct type-ID spelling | Not semantic | `FIELD_TYPE_COMPLEX` | Same complex-type reference |
@@ -168,8 +167,6 @@ bullet each:
   ordering columns (`DisplayOrder`, `FieldDisplayOrder`, `PageFieldDisplayOrder`, `PageDisplayOrder`,
   `PageColumnNumber`, `TabDisplayOrder`) from both sides unconditionally — that is a *semantic*
   concession, not a cosmetic one; see [accepted difference 2](#2-display-order-renumbering).
-- **`EMPTY_CRUD_AUTHORISATION`** — drops an authorisation row whose `CRUD` is empty; the importer
-  rejects blank `CRUD`, so such a row grants nothing and equals an absent row.
 - **`CRUD_LETTER_ORDER`** — canonicalises the letter order of the `CRUD` column on the five
   authorisation sheets (`AuthorisationCaseType`/`Field`/`Event`/`State`/`ComplexType`). The importer
   parses `CRUD` as an order-independent, case-insensitive *set* — `AuthorisationParser#parseCrud`

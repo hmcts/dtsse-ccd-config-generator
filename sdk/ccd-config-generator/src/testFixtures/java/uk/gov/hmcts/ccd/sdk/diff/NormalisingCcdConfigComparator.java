@@ -69,7 +69,6 @@ public final class NormalisingCcdConfigComparator {
         new FieldTypeComplexRule(),
         new RedundantFieldTypeParameterRule(),
         new PublishIgnoredOnFieldSheetsRule(),
-        new EmptyCrudAuthorisationRule(),
         new CrudLetterOrderRule(),
         new PostConditionNoChangeRule(),
         new ConditionalPostStateRule(),
