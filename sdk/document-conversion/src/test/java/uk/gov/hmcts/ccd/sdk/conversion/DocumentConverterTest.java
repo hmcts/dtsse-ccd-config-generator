@@ -259,6 +259,38 @@ class DocumentConverterTest {
     }
   }
 
+  /**
+   * Send-letter drops a document whose page content streams match one already sent to the same
+   * recipients. A retry of the same pack must match; a different pack with the same layout must
+   * not, or it would silently never be posted.
+   */
+  @Test
+  void sendLetterTellsDifferentPacksApartButRecognisesARetry() throws Exception {
+    Path coversheet = Files.write(inputs.resolve("coversheet.pdf"),
+        Fixtures.pdfSaying("Coversheet"));
+    // Same size, same layout, different pictures.
+    Path photo = Fixtures.bmp(Files.createDirectories(inputs.resolve("a")));
+    Path otherPhoto = Fixtures.alphaPngSized(Files.createDirectories(inputs.resolve("b")),
+        640, 480);
+
+    String first = checksumOfLetter(coversheet, photo, "photo.bmp", "image/bmp");
+    String retry = checksumOfLetter(coversheet, photo, "photo.bmp", "image/bmp");
+    String other = checksumOfLetter(coversheet, otherPhoto, "alpha.png", "image/png");
+
+    assertThat(retry).isEqualTo(first);
+    assertThat(other).isNotEqualTo(first);
+  }
+
+  private String checksumOfLetter(Path coversheet, Path evidence, String name, String type)
+      throws Exception {
+    try (ConvertedPdf letter = converter.toPrintReadyLetter("Claim pack", List.of(
+        PrintPart.asIs(coversheet, "coversheet"),
+        PrintPart.convert(ConversionSource.of(evidence, name, type))),
+        PrintOptions.bulkPrint())) {
+      return SendLetterReplay.duplicateChecksum(Files.readAllBytes(letter.file()));
+    }
+  }
+
   @Test
   void colourDropsToGreyscaleNearTheSizeLimitAndFailsAboveIt() throws Exception {
     Path photo = Fixtures.largePhoto(inputs);

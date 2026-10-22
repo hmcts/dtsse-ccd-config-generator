@@ -154,6 +154,11 @@ public final class Fixtures {
     return write(alphaImage(800, 600), "png", dir.resolve("alpha.png"));
   }
 
+  /** A PNG of the given size with a transparent background. */
+  public static Path alphaPngSized(Path dir, int width, int height) throws IOException {
+    return write(alphaImage(width, height), "png", dir.resolve("alpha.png"));
+  }
+
   /** A 24-bit BMP. */
   public static Path bmp(Path dir) throws IOException {
     return write(scan(640, 480, new Color(0, 90, 60)), "bmp", dir.resolve("photo.bmp"));
