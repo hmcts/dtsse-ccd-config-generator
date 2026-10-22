@@ -121,8 +121,28 @@ final class TypeMapper {
 
   private static Mapping collection(
       String fieldTypeParameter, ComplexResolver complexTypeResolver) {
-    String element = collectionElement(fieldTypeParameter, complexTypeResolver);
-    return plain("java.util.List<" + LIST_VALUE + "<" + element + ">>");
+    String parameter = fieldTypeParameter == null ? "" : fieldTypeParameter.trim();
+    String element = collectionElement(parameter, complexTypeResolver);
+    String javaType = "java.util.List<" + LIST_VALUE + "<" + element + ">>";
+    // The SDK names a collection's element type after the element class
+    // (CaseFieldGenerator.resolveCollectionType), so an element type carried by a Java class of
+    // another name - Text, TextArea and Email all by String, Date by LocalDate - would be written
+    // as the carrier's name. The definition store rejects that: FieldTypeParser resolves a
+    // Collection's FieldTypeParameter to a declared type, and String is not one of them ("No type
+    // found for collection of: String"). Carry the definition's own spelling instead. A complex
+    // type the definition declares needs no override: the SDK reads its ID off the generated
+    // class's @ComplexType.
+    boolean elementNamesItsCarrier = !parameter.isEmpty()
+        && complexTypeResolver.resolve(parameter) == null
+        && !parameter.equals(simpleName(element));
+    return elementNamesItsCarrier
+        ? new Mapping(javaType, "Collection", parameter, false)
+        : plain(javaType);
+  }
+
+  private static String simpleName(String javaType) {
+    int lastDot = javaType.lastIndexOf('.');
+    return lastDot < 0 ? javaType : javaType.substring(lastDot + 1);
   }
 
   private static String collectionElement(

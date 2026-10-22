@@ -39,7 +39,6 @@ conscious decision instead of inheriting invisible JSON — see
 | Vestigial mid-event/retry columns on `CaseEvent` | Not semantic | `CASE_EVENT_MID_EVENT` | Importer has no such `CaseEvent` field; real mid-event lives on `CaseEventToFields` |
 | Retries under a column the importer does not read, or on a hook with no URL | Not semantic | `CASE_EVENT_RETRIES` | `EventParser` reads `RetriesTimeoutAboutToStartEvent`, `RetriesTimeoutURLAboutToSubmitEvent` and `RetriesTimeoutURLSubmittedEvent`, and only alongside the hook's URL |
 | Tab metadata spellings (`Channel` default, label/role propagation, role-suffixed `TabID`) | Not semantic | `CASE_TYPE_TAB` | Same tab, two encodings (also strips `TabFieldDisplayOrder` → display-order row below) |
-| `Text` ≡ `String` collection element type | Not semantic | `COLLECTION_ELEMENT_TYPE` | Import identically |
 | Generator-written CCD defaults vs omitted columns; importer-ignored metadata; whitespace-only labels | Not semantic | `DEFAULTS` | Only fires when the other side omits the column (also strips ordering columns → display-order row below) |
 | Empty-`CRUD` authorisation row ≡ absent row | Not semantic | `EMPTY_CRUD_AUTHORISATION` | Importer rejects blank `CRUD`; grants nothing |
 | `CRUD` letter order (`CUR` ≡ `CRU`) | Not semantic | `CRUD_LETTER_ORDER` | Importer parses `CRUD` as an order-independent set (`String.contains` per letter); a genuine set difference still fails |
@@ -137,8 +136,6 @@ bullet each:
   `TabID`, `AccessProfile` repeated). `TabFieldDisplayOrder` is **stripped entirely from both sides**
   (not merely renumbered) — tab-field order is never verified, so a genuinely reordered tab passes;
   see [accepted difference 2](#2-display-order-renumbering).
-- **`COLLECTION_ELEMENT_TYPE`** — `Text` (hand-written) ≡ `String` (SDK) as a text collection's
-  `FieldTypeParameter`; both import identically.
 - **`CONFLICTING_ELEMENT_LABELS`** — collapses a `ComplexTypes` member declared more than once on
   the expected side with differing `ElementLabel`s (prl ships some members in both a flat
   `ComplexTypes.json` and a `ComplexTypes/` fragment directory, and the fragments disagree on the
@@ -723,13 +720,13 @@ a baseline refresh — the ratchet only tightens).
 | probate  |        6 | regression gate | five `[STATE]` `CaseEventToFields` no-match rows, plus one `MaNDATORY` typo |
 | fpl      |        7 | regression gate | `caseProgressionReport` pre-states, `colleaguesToNotify` `Label`, `allocationDecision ShowSummaryContentOption`, one `colleagues` `EventToComplexTypes` row, two `HearingVenue LiveTo`, `RepresentativeRole`/`LA_BARRISTER` |
 | et       |       10 | regression gate | two `retainHiddenValue`, `UnavailabilityDateRange` ×2, `sendNotificationCollection` ×4, two `SearchCriteria` `LiveTo=` rows |
-| sscs     |       11 | regression gate | three `TextArea`-vs-`Text` `FieldTypeParameter`, two `confidentialityRequiredChangedDate` no-match, three `JudicialUser`-vs-`Text`, three `FL_selectWhoReviewsCase` |
-| prl      |       43 | regression gate | `CaseField` 20 (16 of them `ShowSummaryContentOption`), `AuthorisationCaseEvent` 6, `FixedLists`/`CaseEventToFields` 4 each |
-| civil    |       89 | regression gate | `ComplexTypes` 36 (`Label` 11, `CaseFieldID` 10, `CaseEventID` 8), `CaseField` 13, `CaseEventToFields` 12, `CaseTypeTab` 9, `FixedLists` 8 |
+| sscs     |        5 | regression gate | two `confidentialityRequiredChangedDate` no-match, three `FL_selectWhoReviewsCase` |
+| prl      |       37 | regression gate | `CaseField` 16 (all `ShowSummaryContentOption`), `AuthorisationCaseEvent` 6, `FixedLists`/`CaseEventToFields` 4 each |
+| civil    |       85 | regression gate | `ComplexTypes` 34 (`Label` 11, `CaseFieldID` 10, `CaseEventID` 8), `CaseField` 11, `CaseEventToFields` 12, `CaseTypeTab` 9, `FixedLists` 8 |
 | finrem   |       98 | regression gate | `FixedLists` 63 (all no-match, all `CU_fl_citizenUploadDocuments`), `ComplexTypes` 18 (all no-match: 16 on `CU_ct_citizenApplicantDocument`/`CU_ct_citizenRespondentDocument`, 2 on `FR_accessCodeEntry`), `CaseTypeTab` 16 (all `DisplayContextParameter` missing), one `CaseEvent` `Name` with a trailing space |
 
-265 lines in total (counted 2026-10-13 from the checked-in baseline files) — but that total is a
-property of the test suite, not of any migration: 264 of it belongs to services that will ship the
+249 lines in total (counted 2026-10-22 from the checked-in baseline files) — but that total is a
+property of the test suite, not of any migration: 248 of it belongs to services that will ship the
 retrofit output instead. To regenerate a baseline after an intended change, run `GenerateGoldenFiles`
 with `-Djunit.jupiter.conditions.deactivate='*'`.
 
@@ -773,6 +770,15 @@ Java via the `@ComplexType(name)` carrier (prl's `schoolDirections&Details`); a 
 ID with a complex type is generated as an enum named `<Id>List` (fpl's `*Selector` lists become
 `ChildSelectorList`, …), its wire ID pinned by `@ComplexType(name)`; and platform types such
 as `JudicialUser` are real `FieldType` constants emitting `typeOverride` rather than `Text`.
+
+A `Collection` carries its element type explicitly as
+`@CCD(typeOverride = FieldType.Collection, typeParameterOverride = "<element>")` whenever the Java
+carrier is named differently from the CCD type - `Text`, `TextArea`, `Email` and `JudicialUser` are
+all carried by `String`, `Date` by `LocalDate`. The SDK would otherwise name the element after the
+carrier class, and the definition store rejects a `FieldTypeParameter` it cannot resolve to a
+declared type: `FieldTypeParser` fails the import with `No type found for collection of: String`. A
+complex type the definition declares needs no override, because the SDK reads its ID off the
+generated class's `@ComplexType`.
 
 ## Retrofit-lane residual {#retrofit-lane-residual}
 

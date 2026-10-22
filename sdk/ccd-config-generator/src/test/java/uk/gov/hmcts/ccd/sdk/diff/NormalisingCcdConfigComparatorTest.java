@@ -2178,25 +2178,23 @@ public class NormalisingCcdConfigComparatorTest {
         assertThat(result.matches()).as(result.report()).isTrue();
     }
 
-    // ---- COLLECTION_ELEMENT_TYPE ----
+    // ---- Collection element types ----
 
     @Test
-    public void collectionOfStringMatchesCollectionOfText() {
+    public void collectionOfStringDoesNotMatchCollectionOfText() {
+        // The definition store resolves a Collection FieldTypeParameter to a declared type, and
+        // "String" is not one: FieldTypeParser rejects the import with "No type found for
+        // collection of: String". The two spellings are therefore a real difference.
         Map<String, List<Map<String, Object>>> expected = sheets("CaseField",
             rows(row("ID", "notes", "FieldType", "Collection", "FieldTypeParameter", "Text")));
         Map<String, List<Map<String, Object>>> actual = sheets("CaseField",
             rows(row("ID", "notes", "FieldType", "Collection", "FieldTypeParameter", "String")));
 
-        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
-
-        assertThat(result.matches()).as(result.report()).isTrue();
-        assertThat(result.getAppliedRules())
-            .anySatisfy(rule -> assertThat(rule).startsWith("COLLECTION_ELEMENT_TYPE"));
+        assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
     }
 
     @Test
     public void stringElementOnNonCollectionStillFails() {
-        // The String->Text canonicalisation is scoped to Collection; a Complex reference is not.
         Map<String, List<Map<String, Object>>> expected = sheets("CaseField",
             rows(row("ID", "x", "FieldType", "Complex", "FieldTypeParameter", "Text")));
         Map<String, List<Map<String, Object>>> actual = sheets("CaseField",

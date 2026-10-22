@@ -86,6 +86,34 @@ class TypeMapperTest {
   }
 
   @Test
+  void collectionOfComplexTypeNeedsNoParameterOverride() {
+    TypeMapper.Mapping mapping = map("Collection", "Party");
+    assertThat(mapping.getTypeOverride()).isNull();
+    assertThat(mapping.getTypeParameterOverride()).isNull();
+  }
+
+  @Test
+  void collectionOfBaseTypeCarriesItsElementTypeExplicitly() {
+    // The SDK would name the element after its Java carrier - String for Text, Email and
+    // JudicialUser, LocalDate for Date - and the definition store rejects a FieldTypeParameter it
+    // cannot resolve to a declared type ("No type found for collection of: String"), so the
+    // definition's own spelling is carried over.
+    for (String[] expected : new String[][] {
+        {"Text", "String"},
+        {"TextArea", "String"},
+        {"Email", "String"},
+        {"JudicialUser", "String"},
+        {"Date", "java.time.LocalDate"},
+        {"DateTime", "java.time.LocalDateTime"}}) {
+      TypeMapper.Mapping mapping = map("Collection", expected[0]);
+      assertThat(mapping.getJavaType())
+          .isEqualTo("java.util.List<uk.gov.hmcts.ccd.sdk.type.ListValue<" + expected[1] + ">>");
+      assertThat(mapping.getTypeOverride()).isEqualTo("Collection");
+      assertThat(mapping.getTypeParameterOverride()).isEqualTo(expected[0]);
+    }
+  }
+
+  @Test
   void complexMapsToGeneratedType() {
     TypeMapper.Mapping mapping = map("Complex", "Party");
     assertThat(mapping.getJavaType()).isEqualTo("Party");

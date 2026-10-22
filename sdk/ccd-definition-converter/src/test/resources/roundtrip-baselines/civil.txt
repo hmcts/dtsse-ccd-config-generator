@@ -15,8 +15,6 @@ Sheet 'CaseEventToFields' row [GENERATE_DIRECTIONS_ORDER|selectTemplateLabel] co
 Sheet 'CaseField' row [claimantGaAppDetails] column 'ElementLabel': expected <Application Type> but column is missing in actual
 Sheet 'CaseField' row [gaDetailsMasterCollection] column 'ElementLabel': expected <Application Type> but column is missing in actual
 Sheet 'CaseField' row [gaDetailsTranslationCollection] column 'ElementLabel': expected <Application Type> but column is missing in actual
-Sheet 'CaseField' row [generalAppDetailsOfOrderColl] column 'FieldTypeParameter': expected <TextArea> but was <Text>
-Sheet 'CaseField' row [generalAppReasonsOfOrderColl] column 'FieldTypeParameter': expected <TextArea> but was <Text>
 Sheet 'CaseField' row [generalAppStatementOfTruthConsent] column 'ListElementCode': expected <ConsentAgreementCheckBox> but column is missing in actual
 Sheet 'CaseField' row [qmApplicantSolicitorQueries] column 'CRUD': expected <CRUD> but column is missing in actual
 Sheet 'CaseField' row [qmLatestQuery] column 'CRUD': expected <CRUD> but column is missing in actual
@@ -46,8 +44,6 @@ Sheet 'ComplexTypes' row [ExpertDetails|fieldofExpertise] column 'Label': expect
 Sheet 'ComplexTypes' row [GeneralApplicationDetailsGAspec|caseLink] column 'Label': expected <Application ID> but column is missing in actual
 Sheet 'ComplexTypes' row [GeneralApplicationDetailsGAspec|caseState] column 'Label': expected <Status> but column is missing in actual
 Sheet 'ComplexTypes' row [GeneralApplicationDetailsGAspec|generalAppSubmittedDateGAspec] column 'Label': expected <Submitted on> but column is missing in actual
-Sheet 'ComplexTypes' row [GeneralApplicationGAspec|generalAppDetailsOfOrderColl] column 'FieldTypeParameter': expected <TextArea> but was <Text>
-Sheet 'ComplexTypes' row [GeneralApplicationGAspec|generalAppReasonsOfOrderColl] column 'FieldTypeParameter': expected <TextArea> but was <Text>
 Sheet 'ComplexTypes' row [GeneralApplicationTypesGAspec|typeOfApplicationToBeCreated]: expected row has no match in actual: {ID=GeneralApplicationTypesGAspec, ListElementCode=typeOfApplicationToBeCreated, FieldType=MultiSelectList, FieldTypeParameter=GeneralApplicationTypesGAspec, SecurityClassification=PUBLIC, Searchable=N}
 Sheet 'ComplexTypes' row [HearingSupportRequirementsListDJ|hearingDates] column 'CaseEventID': expected <DEFAULT_JUDGEMENT> but column is missing in actual
 Sheet 'ComplexTypes' row [HearingSupportRequirementsListDJ|hearingDates] column 'CaseFieldID': expected <hearingDates> but column is missing in actual
