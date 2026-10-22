@@ -2,12 +2,17 @@ package uk.gov.hmcts.ccd.sdk.conversion.testsupport;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.List;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.io.MemoryUsageSetting;
 import org.apache.pdfbox.io.RandomAccessRead;
 import org.apache.pdfbox.io.RandomAccessReadBuffer;
 import org.apache.pdfbox.multipdf.PDFMergerUtility;
+import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 
@@ -30,6 +35,25 @@ public final class SendLetterReplay {
       prepared.add(duplex(document));
     }
     return merge(prepared);
+  }
+
+  /**
+   * Send-letter's per-document duplicate key, from {@code LetterChecksumService
+   * .calculateContentChecksum}: an MD5 over every page's content stream, and nothing else. With
+   * the recipients, it decides whether a document was already sent.
+   */
+  public static String duplicateChecksum(byte[] pdf) throws IOException {
+    try (PDDocument document = Loader.loadPDF(pdf)) {
+      MessageDigest md = MessageDigest.getInstance("MD5");
+      for (PDPage page : document.getPages()) {
+        try (InputStream contents = page.getContents()) {
+          md.update(contents.readAllBytes());
+        }
+      }
+      return HexFormat.of().formatHex(md.digest());
+    } catch (NoSuchAlgorithmException e) {
+      throw new IllegalStateException(e);
+    }
   }
 
   private static byte[] duplex(byte[] pdf) throws IOException {

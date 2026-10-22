@@ -7,6 +7,9 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.io.MemoryUsageSetting;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -129,12 +132,16 @@ final class PrintRenderer {
   private void addPage(PDDocument out, BufferedImage source, Placement placement)
       throws IOException {
     BufferedImage prepared = prepare(source, placement);
-    PDImageXObject image = encode(out, prepared);
+    Encoded encoded = encode(out, prepared);
     PDPage page = new PDPage(new PDRectangle(pageBox.getWidth(), pageBox.getHeight()));
     page.setTrimBox(new PDRectangle(pageBox.getWidth(), pageBox.getHeight()));
     out.addPage(page);
     try (PDPageContentStream contents = new PDPageContentStream(out, page)) {
-      contents.drawImage(image, placement.x(), placement.y(), placement.width(),
+      // Name the image's content in the page's own content stream. Send-letter detects
+      // duplicate letters by hashing page content streams alone, and without this every page of
+      // the same layout would hash the same whatever its image showed.
+      contents.addComment("image sha256 " + encoded.sha256());
+      contents.drawImage(encoded.image(), placement.x(), placement.y(), placement.width(),
           placement.height());
     }
   }
@@ -198,7 +205,10 @@ final class PrintRenderer {
    * CMYK separation is the neutral formula: K carries the darkness common to all channels, so
    * black and grey print on the black plate alone.
    */
-  private PDImageXObject encode(PDDocument out, BufferedImage image) throws IOException {
+  private record Encoded(PDImageXObject image, String sha256) {
+  }
+
+  private Encoded encode(PDDocument out, BufferedImage image) throws IOException {
     int width = image.getWidth();
     int height = image.getHeight();
     boolean cmyk = options.colour() == PrintColour.CMYK;
@@ -230,7 +240,15 @@ final class PrintRenderer {
     encoded.setBitsPerComponent(8);
     PDColorSpace colorSpace = cmyk ? PDDeviceCMYK.INSTANCE : PDDeviceGray.INSTANCE;
     encoded.setColorSpace(colorSpace);
-    return encoded;
+    return new Encoded(encoded, sha256(samples));
+  }
+
+  private static String sha256(byte[] samples) {
+    try {
+      return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(samples));
+    } catch (NoSuchAlgorithmException e) {
+      throw new IllegalStateException("SHA-256 is unavailable", e);
+    }
   }
 
   /**
