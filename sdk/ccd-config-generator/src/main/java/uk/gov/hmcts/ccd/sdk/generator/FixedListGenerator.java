@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import lombok.SneakyThrows;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
@@ -26,10 +27,21 @@ class FixedListGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     File dir = root.toPath().resolve("FixedLists").toFile();
     dir.mkdir();
 
+    // A list is emitted only when some field or complex-type member the definition contains
+    // references its ID as a FieldTypeParameter. Reachability of the enum CLASS is not enough: a
+    // field may declare an enum and then declare itself to be something else
+    // (@CCD(typeOverride = FieldType.Text) over a DirectionType field), or hold it purely as an
+    // in-Java value, and neither produces a list in the definition. See
+    // CaseFieldGenerator#referencedTypeParameters.
+    Set<String> referenced = CaseFieldGenerator.referencedTypeParameters(config);
+
     for (Class<?> c : config.getTypes().keySet()) {
       ComplexType complexType = c.getAnnotation(ComplexType.class);
       if (c.isEnum() && (complexType == null || complexType.generate())) {
         String listId = GeneratorUtils.typeId(c);
+        if (!referenced.contains(listId)) {
+          continue;
+        }
         List<Map<String, Object>> fields = Lists.newArrayList();
 
         int order = 1;

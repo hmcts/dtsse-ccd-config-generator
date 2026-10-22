@@ -28,6 +28,9 @@ public class JsonUtils {
 
   public static final String DEFAULT_LIVE_FROM = "01/01/2017";
 
+  /** Written for a field or complex-type member that declares no label of its own. */
+  public static final String DEFAULT_LABEL = " ";
+
   @SneakyThrows
   private static void writeFile(Path path, String value) {
     Files.writeString(path, value, StandardCharsets.UTF_8);
@@ -131,6 +134,13 @@ public class JsonUtils {
     if (!Strings.isNullOrEmpty(annotation.categoryID())) {
       target.put("CategoryID", annotation.categoryID());
     }
+    if (!Strings.isNullOrEmpty(annotation.displayContextParameter())) {
+      // Reaches ComplexTypes member rows through ComplexTypeGenerator -> CaseFieldGenerator
+      // .toComplex, the only place a complex-type member's metadata can come from (there is no
+      // builder for it). The importer reads the column on that sheet; on the CaseField sheet it
+      // ignores it, so the column is inert there rather than wrong.
+      target.put("DisplayContextParameter", annotation.displayContextParameter());
+    }
     if (annotation.min() > Integer.MIN_VALUE) {
       target.put("Min", annotation.min());
     }
@@ -143,7 +153,7 @@ public class JsonUtils {
   }
 
   static void ensureDefaultLabel(Map<String, Object> target) {
-    target.putIfAbsent("Label", " ");
+    target.putIfAbsent("Label", DEFAULT_LABEL);
   }
 
   static void applyLabelAnnotation(
@@ -254,6 +264,26 @@ public class JsonUtils {
   public static class AddMissing extends OverwriteSpecific {
     public AddMissing() {
       super(Sets.newHashSet());
+    }
+  }
+
+  /**
+   * Adds missing keys like {@link AddMissing}, but lets a real label displace the
+   * {@link #DEFAULT_LABEL} placeholder written for a member that carries none. Two model classes can
+   * share one CCD ID — the same simple name in different packages, or the same
+   * {@code @ComplexType(name)} — and merge into a single output file. Under a plain first-writer-wins
+   * merge, an unlabelled member then blanks out a labelled one's {@code ElementLabel} purely because
+   * it was visited first.
+   */
+  public static class AddMissingPreferringLabels extends AddMissing {
+
+    @Override
+    public Object merge(String key, Object existingValue, Object generatedValue) {
+      if (DEFAULT_LABEL.equals(existingValue) && generatedValue != null
+          && !DEFAULT_LABEL.equals(generatedValue)) {
+        return generatedValue;
+      }
+      return super.merge(key, existingValue, generatedValue);
     }
   }
 

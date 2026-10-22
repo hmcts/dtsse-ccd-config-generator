@@ -20,14 +20,77 @@ import uk.gov.hmcts.ccd.sdk.api.Webhook;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.reform.EventComplexMemberCaseData;
 import uk.gov.hmcts.reform.EventComplexMemberState;
+import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
+import uk.gov.hmcts.reform.fpl.model.CaseData;
 
 public class CaseEventGeneratorTest {
 
+    private static final String CASE_TYPE = "TEST_CASE_TYPE";
+    private static final String POST_CONDITION = "PostConditionState";
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Rule
     public TemporaryFolder tmp = new TemporaryFolder();
+
+    @Test
+    public void writesTheResolvedPostStateByDefault() {
+        ConfigBuilderImpl<CaseData, State, UserRole> builder = newBuilder();
+        builder.event("transition").forStateTransition(State.Open, State.Submitted).name("Transition");
+
+        assertThat(event(builder, "transition")).containsEntry(POST_CONDITION, "Submitted");
+    }
+
+    @Test
+    public void postStateFromCallbackOmitsTheColumnEntirely() {
+        // An absent PostConditionState is a third runtime behaviour, distinct from a concrete state
+        // and from '*': the data store applies only the state the about-to-submit callback returned.
+        // Writing any value here would force a definition-declared transition the hand-written
+        // definition deliberately omitted, so the column must be absent, not empty or '*'.
+        ConfigBuilderImpl<CaseData, State, UserRole> builder = newBuilder();
+        builder.event("callbackDecides")
+            .forState(State.Open)
+            .name("Callback decides")
+            .postStateFromCallback();
+
+        assertThat(event(builder, "callbackDecides")).doesNotContainKey(POST_CONDITION);
+    }
+
+    @Test
+    public void postStateFromCallbackLeavesThePreStateAlone() {
+        // Only the post-state column is suppressed: the event is still restricted to the states it
+        // was declared for, so an event available in one state does not become available in all.
+        ConfigBuilderImpl<CaseData, State, UserRole> builder = newBuilder();
+        builder.event("callbackDecides")
+            .forStateTransition(State.Open, State.Submitted)
+            .name("Callback decides")
+            .postStateFromCallback();
+
+        Map<String, Object> row = event(builder, "callbackDecides");
+        assertThat(row).containsEntry("PreConditionState(s)", "Open");
+        assertThat(row).doesNotContainKey(POST_CONDITION);
+    }
+
+    private ConfigBuilderImpl<CaseData, State, UserRole> newBuilder() {
+        ResolvedCCDConfig<CaseData, State, UserRole> config = new ResolvedCCDConfig<>(
+            CaseData.class, State.class, UserRole.class, Map.of(),
+            ImmutableSet.copyOf(State.values()));
+        ConfigBuilderImpl<CaseData, State, UserRole> builder = new ConfigBuilderImpl<>(config);
+        builder.caseType(CASE_TYPE, "Test", "Test case type");
+        return builder;
+    }
+
+    @SneakyThrows
+    private Map<String, Object> event(ConfigBuilderImpl<CaseData, State, UserRole> builder, String eventId) {
+        ResolvedCCDConfig<CaseData, State, UserRole> config = builder.build();
+        new CaseEventGenerator<CaseData, State, UserRole>().write(tmp.getRoot(), config);
+
+        File output = new File(new File(tmp.getRoot(), "CaseEvent"), eventId + ".json");
+        List<Map<String, Object>> rows =
+            MAPPER.readValue(output, new TypeReference<List<Map<String, Object>>>() {});
+        assertThat(rows).hasSize(1);
+        return rows.get(0);
+    }
 
     /**
      * The definition store reads about-to-start retries from {@code RetriesTimeoutAboutToStartEvent},
@@ -35,7 +98,8 @@ public class CaseEventGeneratorTest {
      */
     @Test
     public void writesAboutToStartRetriesToTheColumnTheDefinitionStoreReads() {
-        ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> builder = newBuilder();
+        ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> builder =
+            newComplexMemberBuilder();
         builder.event("start")
             .forState(EventComplexMemberState.Open)
             .name("Start")
@@ -55,7 +119,8 @@ public class CaseEventGeneratorTest {
      */
     @Test
     public void writesRetriesGivenWithAHandlerForThatHookOnly() {
-        ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> builder = newBuilder();
+        ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> builder =
+            newComplexMemberBuilder();
         builder.event("submit")
             .forState(EventComplexMemberState.Open)
             .name("Submit")
@@ -74,7 +139,8 @@ public class CaseEventGeneratorTest {
      */
     @Test
     public void appliesRetriesSetSeparatelyToACallbackGivenByUrl() {
-        ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> builder = newBuilder();
+        ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> builder =
+            newComplexMemberBuilder();
         builder.event("submit")
             .forState(EventComplexMemberState.Open)
             .name("Submit")
@@ -94,7 +160,8 @@ public class CaseEventGeneratorTest {
     @Test
     @SneakyThrows
     public void writesAPageHandlersRetriesOnItsFirstRow() {
-        ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> builder = newBuilder();
+        ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> builder =
+            newComplexMemberBuilder();
         builder.event("paged")
             .forState(EventComplexMemberState.Open)
             .name("Paged")
@@ -121,14 +188,15 @@ public class CaseEventGeneratorTest {
         return AboutToStartOrSubmitResponse.<EventComplexMemberCaseData, EventComplexMemberState>builder().build();
     }
 
-    private ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> newBuilder() {
+    private ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole>
+        newComplexMemberBuilder() {
         ResolvedCCDConfig<EventComplexMemberCaseData, EventComplexMemberState, UserRole> config =
             new ResolvedCCDConfig<>(
                 EventComplexMemberCaseData.class, EventComplexMemberState.class, UserRole.class,
                 Map.of(), ImmutableSet.copyOf(EventComplexMemberState.values()));
         ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> builder =
             new ConfigBuilderImpl<>(config);
-        builder.caseType("TEST_CASE_TYPE", "Test", "Test case type");
+        builder.caseType(CASE_TYPE, "Test", "Test case type");
         return builder;
     }
 

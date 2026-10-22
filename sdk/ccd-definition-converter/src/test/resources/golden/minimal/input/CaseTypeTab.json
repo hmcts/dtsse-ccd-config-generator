@@ -1,0 +1,33 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "Channel": "CaseWorker",
+    "TabID": "summary",
+    "TabLabel": "Summary",
+    "TabDisplayOrder": 1,
+    "CaseFieldID": "applicantName",
+    "TabFieldDisplayOrder": 1
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "Channel": "CaseWorker",
+    "TabID": "summary",
+    "TabLabel": "Summary",
+    "TabDisplayOrder": 1,
+    "CaseFieldID": "claimType",
+    "TabFieldDisplayOrder": 2
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "Channel": "CaseWorker",
+    "TabID": "notes",
+    "TabLabel": "Notes",
+    "TabDisplayOrder": 2,
+    "CaseFieldID": "notes",
+    "TabFieldDisplayOrder": 1,
+    "FieldShowCondition": "isUrgent=\"Yes\""
+  }
+]

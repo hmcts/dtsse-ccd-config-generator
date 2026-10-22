@@ -1,0 +1,10 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "Name": "Care, supervision and EPOs",
+    "Description": "Care, supervision and emergency protection orders",
+    "ID": "CARE_SUPERVISION_EPO",
+    "SecurityClassification": "Public",
+    "JurisdictionID": "PUBLICLAW"
+  }
+]

@@ -1,0 +1,72 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 1,
+    "ListElementCode": "RESPONDENT_1",
+    "ListElement": "Respondent 1",
+    "ID": "ParentsAndRespondentsDirectionAssignee"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 2,
+    "ListElementCode": "RESPONDENT_2",
+    "ListElement": "Respondent 2",
+    "ID": "ParentsAndRespondentsDirectionAssignee"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 3,
+    "ListElementCode": "RESPONDENT_3",
+    "ListElement": "Respondent 3",
+    "ID": "ParentsAndRespondentsDirectionAssignee"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 4,
+    "ListElementCode": "RESPONDENT_4",
+    "ListElement": "Respondent 4",
+    "ID": "ParentsAndRespondentsDirectionAssignee"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 5,
+    "ListElementCode": "RESPONDENT_5",
+    "ListElement": "Respondent 5",
+    "ID": "ParentsAndRespondentsDirectionAssignee"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 6,
+    "ListElementCode": "RESPONDENT_6",
+    "ListElement": "Respondent 6",
+    "ID": "ParentsAndRespondentsDirectionAssignee"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 7,
+    "ListElementCode": "RESPONDENT_7",
+    "ListElement": "Respondent 7",
+    "ID": "ParentsAndRespondentsDirectionAssignee"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 8,
+    "ListElementCode": "RESPONDENT_8",
+    "ListElement": "Respondent 8",
+    "ID": "ParentsAndRespondentsDirectionAssignee"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 9,
+    "ListElementCode": "RESPONDENT_9",
+    "ListElement": "Respondent 9",
+    "ID": "ParentsAndRespondentsDirectionAssignee"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 10,
+    "ListElementCode": "RESPONDENT_10",
+    "ListElement": "Respondent 10",
+    "ID": "ParentsAndRespondentsDirectionAssignee"
+  }
+]

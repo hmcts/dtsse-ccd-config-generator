@@ -1,0 +1,47 @@
+[
+  {
+    "ID": "Placement",
+    "FieldType": "Document",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "placementApplication"
+  },
+  {
+    "ID": "Placement",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "placementChildName"
+  },
+  {
+    "ID": "Placement",
+    "FieldType": "UUID",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "placementChildId"
+  },
+  {
+    "ID": "Placement",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "PlacementSupportingDocument",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "placementSupportingDocuments"
+  },
+  {
+    "ID": "Placement",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "PlacementOrderAndNotices",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "placementOrderAndNotices"
+  },
+  {
+    "ID": "Placement",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "PlacementConfidentialDocument",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "placementConfidentialDocuments"
+  }
+]

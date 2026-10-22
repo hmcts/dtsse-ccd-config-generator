@@ -1,0 +1,19 @@
+[
+  {
+    "PreConditionState(s)": "*",
+    "CallBackURLAboutToStartEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callbacks/about-to-start?eventId=addFamilyManCaseNumber",
+    "CallBackURLSubmittedEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callbacks/submitted?eventId=addFamilyManCaseNumber",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "PostConditionState": "*",
+    "Description": "Add case number",
+    "DisplayOrder": 1,
+    "EndButtonLabel": "Save and continue",
+    "ID": "addFamilyManCaseNumber",
+    "SecurityClassification": "Public",
+    "Name": "Add case number",
+    "CallBackURLAboutToSubmitEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callbacks/about-to-submit?eventId=addFamilyManCaseNumber",
+    "Publish": "N",
+    "TTLIncrement": 100
+  }
+]

@@ -51,6 +51,12 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
     List<Map<String, Object>> entries = Lists.newArrayList();
     for (Field.FieldBuilder builder : collection.getFields()) {
       Field field = builder.build();
+      // A field placed on this event via a typed getter still compiles when it is gated off (the
+      // Java member always exists), but its CaseField row is suppressed — so skip the placement to
+      // avoid a dangling CaseEventToFields row referencing a field that was not emitted.
+      if (config.getGatedOffFieldIds().contains(field.getId())) {
+        continue;
+      }
       Map<String, Object> row = JsonUtils.caseRow(config.getCaseType());
       entries.add(row);
       populateCoreColumns(row, event, field);
@@ -92,9 +98,14 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
    * {@code field.publish(boolean)} overrides the event-level {@code publishToCamunda()} cascade:
    * {@code publish(false)} opts the field out of a publishing event, while {@code publish(true)}
    * (or {@code publishAs}, which implies it) publishes the field even on a non-publishing event.
-   * With no explicit value the cascade applies. The definition store rejects a
+   * With no explicit value the cascade applies as before. The definition store rejects a
    * {@code Publish} column on {@code COMPLEX} fields, so neither the cascade nor an explicit
    * override is written there.
+   *
+   * <p>{@code PublishAs} is written whenever set, independently of the resolved publish flag: the
+   * definition store's {@code EventCaseFieldParser}/{@code PublishFieldsValidator} read and
+   * validate {@code Publish} and {@code PublishAs} as unrelated columns (no rule ties one to the
+   * other), so a field can carry an alias while {@code Publish} is {@code N} or absent.
    */
   private void applyPublishFlag(Map<String, Object> row, Event<T, R, S> event, Field field) {
     String context = row.get("DisplayContext").toString();
@@ -103,10 +114,9 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
     }
     Boolean explicit = field.getPublish();
     boolean publish = explicit != null ? explicit : event.isPublishToCamunda();
-    if (!publish) {
-      return;
+    if (publish) {
+      row.put("Publish", "Y");
     }
-    row.put("Publish", "Y");
     if (field.getPublishAs() != null) {
       row.put("PublishAs", field.getPublishAs());
     }

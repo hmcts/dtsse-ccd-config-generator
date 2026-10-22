@@ -1,0 +1,13 @@
+[
+  {
+    "TabDisplayOrder": 1,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CustomHistory",
+    "CaseFieldID": "aField",
+    "Channel": "CaseWorker",
+    "UserRole": "",
+    "TabFieldDisplayOrder": 1,
+    "TabLabel": "First tab",
+    "TabID": "First"
+  }
+]

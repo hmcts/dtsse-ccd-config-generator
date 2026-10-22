@@ -1,0 +1,26 @@
+[
+  {
+    "CaseEventID": "explicitAccess",
+    "CaseFieldID": "explicitAccessLabel",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "DisplayContext": "READONLY",
+    "LiveFrom": "01/01/2017",
+    "PageColumnNumber": 1,
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 2,
+    "PageID": "ExplicitAccessPage"
+  },
+  {
+    "CaseEventFieldLabel": "Gatekeeper email (explicit)",
+    "CaseEventID": "explicitAccess",
+    "CaseFieldID": "gatekeeperEmail",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "DisplayContext": "OPTIONAL",
+    "LiveFrom": "01/01/2017",
+    "PageColumnNumber": 1,
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 1,
+    "PageID": "ExplicitAccessPage",
+    "ShowSummaryChangeOption": "Y"
+  }
+]

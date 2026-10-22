@@ -1,0 +1,10 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "ID": "Minimal",
+    "Name": "Minimal Case",
+    "Description": "Fixture case type for converter tests",
+    "JurisdictionID": "TEST",
+    "SecurityClassification": "Public"
+  }
+]

@@ -1,0 +1,72 @@
+[
+  {
+    "ID": "Hearing",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "respondentsAware"
+  },
+  {
+    "ID": "Hearing",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "withoutNotice"
+  },
+  {
+    "ID": "Hearing",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "reason"
+  },
+  {
+    "ID": "Hearing",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "respondentsAwareReason"
+  },
+  {
+    "ID": "Hearing",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "reducedNotice"
+  },
+  {
+    "ID": "Hearing",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "type_GiveReason"
+  },
+  {
+    "ID": "Hearing",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "reducedNoticeReason"
+  },
+  {
+    "ID": "Hearing",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "timeFrame"
+  },
+  {
+    "ID": "Hearing",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "type"
+  },
+  {
+    "ID": "Hearing",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "withoutNoticeReason"
+  }
+]

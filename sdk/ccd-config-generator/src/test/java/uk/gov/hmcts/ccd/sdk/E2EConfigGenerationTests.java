@@ -114,6 +114,54 @@ public class E2EConfigGenerationTests {
 
     @SneakyThrows
     @Test
+    public void emitsScalarScopeMemberOverridesIncludingAComplexMemberRow() {
+        // A scalar complex field scoped via .complexScope(getter): its members must emit their
+        // CaseEventToComplexTypes rows exactly as a .complex(getter) scope would, including a member
+        // placed as DisplayContext=COMPLEX in its own right via .complexMember(getter) alongside the
+        // dotted row for a leaf descended through that same intermediate.
+        Map<String, File> actual = CcdConfigComparator.dirToMap(
+            new File(tmp.getRoot(), "EventComplexScope/CaseEventToComplexTypes"));
+        Map<String, File> expected = CcdConfigComparator.resourcesDirToMap(
+            "EventComplexScope/CaseEventToComplexTypes");
+        CcdConfigComparator.assertEquivalent(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
+    public void openingAScalarScopeLeavesTheComplexFieldRowUntouched() {
+        // The whole point of .complexScope(getter): unlike .complex(getter) it registers no root
+        // field, so the field's own CaseEventToFields row keeps the READONLY context its single
+        // .readonly(getter) placement gave it rather than being forced to COMPLEX, and no second row
+        // appears.
+        File expected = resourceFile("EventComplexScope/CaseEventToFields/create.json");
+        File actual = new File(tmp.getRoot(), "EventComplexScope/CaseEventToFields/create.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
+    public void distinguishesTheSummaryFlagOnAComplexMemberPlacement() {
+        // .complexMember/.complexMemberNoSummary differ only in ShowSummaryChangeOption, a column
+        // CaseEventToComplexTypes has no concept of — so the pair is observable only where a member
+        // lands on CaseEventToFields, which is what a prefix-less @JsonUnwrapped holder does to its
+        // members. Stated here as well as in the snapshot so the intent survives a snapshot refresh.
+        String rows = com.google.common.io.Files.asCharSource(
+            new File(tmp.getRoot(), "EventComplexScope/CaseEventToFields/create.json"),
+            StandardCharsets.UTF_8).read();
+
+        assertThat(rows.replaceAll("\\s+", ""))
+            .as("the default variant carries the flag")
+            .contains("\"CaseFieldID\":\"jointPartyBenefitType\",\"CaseTypeID\":\"EventComplexScope\","
+                + "\"DisplayContext\":\"COMPLEX\"")
+            .contains("\"PageFieldDisplayOrder\":2,\"PageID\":1,\"ShowSummaryChangeOption\":\"Y\"")
+            .as("and the NoSummary variant omits it while keeping the COMPLEX context")
+            .contains("\"CaseFieldID\":\"jointPartyDetails\",\"CaseTypeID\":\"EventComplexScope\","
+                + "\"DisplayContext\":\"COMPLEX\"")
+            .contains("\"PageFieldDisplayOrder\":3,\"PageID\":1}");
+    }
+
+    @SneakyThrows
+    @Test
     public void emitsConfiguredBanner() {
         File expected = resourceFile("BannerFeature/Banner.json");
         File actual = new File(tmp.getRoot(), "BannerFeature/Banner.json");
@@ -173,6 +221,69 @@ public class E2EConfigGenerationTests {
         File expected = resourceFile("RoleMappings/CaseRoles.json");
         File actual = new File(tmp.getRoot(), "RoleMappings/CaseRoles.json");
         CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
+    public void honoursJsonPropertyOnStateIds() {
+        // CASE_MANAGEMENT carries @JsonProperty("PREPARE_FOR_HEARING"); Open has no @JsonProperty.
+        // Every sheet that serialises a state must use the resolved id on the annotated constant and
+        // the constant name on the plain one.
+        File expectedState = resourceFile("JsonPropertyState/State.json");
+        File actualState = new File(tmp.getRoot(), "JsonPropertyState/State.json");
+        CcdConfigComparator.assertEquals(expectedState, actualState, JSONCompareMode.NON_EXTENSIBLE);
+
+        File expectedEvent = resourceFile("JsonPropertyState/CaseEvent/create.json");
+        File actualEvent = new File(tmp.getRoot(), "JsonPropertyState/CaseEvent/create.json");
+        CcdConfigComparator.assertEquals(expectedEvent, actualEvent, JSONCompareMode.NON_EXTENSIBLE);
+
+        File expectedAuth = resourceFile("JsonPropertyState/AuthorisationCaseState.json");
+        File actualAuth = new File(tmp.getRoot(), "JsonPropertyState/AuthorisationCaseState.json");
+        CcdConfigComparator.assertEquals(expectedAuth, actualAuth, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
+    public void grantsAFieldWhoseIdCollidesWithAnUnwrappedContainerName() {
+        // See uk.gov.hmcts.reform.UnwrappedCollisionCaseData: the @JsonUnwrapped container's member
+        // name is caseOutcome and, being prefix-less, so is the ID of a real leaf inside it. The
+        // container emits no CaseField row and so must carry no grants, but the leaf must keep its
+        // own — a suppression keyed on the Java member name alone dropped every caseOutcome row
+        // while its identically-configured sibling didPoAttend kept hers, leaving a field the
+        // CaseField sheet declares that no role could read.
+        File expected = resourceFile(
+            "UnwrappedCollision/AuthorisationCaseField/caseworker-publiclaw-solicitor.json");
+        File actual = new File(tmp.getRoot(),
+            "UnwrappedCollision/AuthorisationCaseField/caseworker-publiclaw-solicitor.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+
+        // ...and the container itself is still suppressed: no row names the holder, which would
+        // reference a CaseField the reflection walk never emits.
+        String caseFields = Resources.toString(
+            new File(tmp.getRoot(), "UnwrappedCollision/CaseField.json").toURI().toURL(),
+            StandardCharsets.UTF_8);
+        assertThat(caseFields)
+            .contains("\"ID\": \"caseOutcome\"")
+            .contains("\"ID\": \"didPoAttend\"");
+    }
+
+    @SneakyThrows
+    @Test
+    public void honoursIgnoreOnStateConstants() {
+        // See uk.gov.hmcts.reform.IgnoredStateState: Unknown and LegacyComposite carry
+        // @CCD(ignore = true), so neither emits a State row and the surviving constants renumber
+        // (DisplayOrder 1, 2 — a suppressed constant consumes no index).
+        File expectedState = resourceFile("IgnoredState/State.json");
+        File actualState = new File(tmp.getRoot(), "IgnoredState/State.json");
+        CcdConfigComparator.assertEquals(expectedState, actualState, JSONCompareMode.NON_EXTENSIBLE);
+
+        // ...and neither carries AuthorisationCaseState rows, by either grant path: Unknown is the
+        // post-state of the `reopen` event (an event-derived grant), LegacyComposite declares
+        // @CCD(access = SolicitorAccess.class) (a constant-declared grant). A row naming a state the
+        // State sheet no longer declares would fail to import.
+        File expectedAuth = resourceFile("IgnoredState/AuthorisationCaseState.json");
+        File actualAuth = new File(tmp.getRoot(), "IgnoredState/AuthorisationCaseState.json");
+        CcdConfigComparator.assertEquals(expectedAuth, actualAuth, JSONCompareMode.NON_EXTENSIBLE);
     }
 
     @SneakyThrows
@@ -316,6 +427,23 @@ public class E2EConfigGenerationTests {
         File actual =
             new File(tmp.getRoot(), "SearchCasesRole/SearchCasesResultFields/SearchCasesResultFields.json");
         CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
+    public void descendsThroughAComplexMemberNamedAfterAJdkField() {
+        // See uk.gov.hmcts.reform.JdkNamedMemberWrapper: descending through a complex member named
+        // `value` makes CaseEventToComplexTypesGenerator resolve that name against the member's own
+        // type, hitting String's private `value`. Asking for accessibility on the hit threw
+        // InaccessibleObjectException and aborted generation for every case type here, so this
+        // asserting at all is most of the regression test; the golden file pins the rows the descent
+        // must still emit. Real shape: finrem addresses ordersToSend with ListElementCodes like
+        // value.documentName across seven FR_sendOrder rows.
+        Map<String, File> actual = CcdConfigComparator.dirToMap(
+            new File(tmp.getRoot(), "JdkNamedMember/CaseEventToComplexTypes"));
+        Map<String, File> expected = CcdConfigComparator.resourcesDirToMap(
+            "JdkNamedMember/CaseEventToComplexTypes");
+        CcdConfigComparator.assertEquivalent(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
     }
 
     @SneakyThrows

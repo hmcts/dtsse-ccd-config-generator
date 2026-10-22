@@ -1,0 +1,65 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Clustered",
+    "CaseEventID": "createCase",
+    "CaseFieldID": "caseTitle",
+    "DisplayContext": "MANDATORY",
+    "PageID": "1",
+    "PageFieldDisplayOrder": 1
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Clustered",
+    "CaseEventID": "createCase",
+    "CaseFieldID": "applicant1FirstName",
+    "DisplayContext": "MANDATORY",
+    "PageID": "1",
+    "PageFieldDisplayOrder": 2
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Clustered",
+    "CaseEventID": "createCase",
+    "CaseFieldID": "applicant1LastName",
+    "DisplayContext": "MANDATORY",
+    "PageID": "1",
+    "PageFieldDisplayOrder": 3
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Clustered",
+    "CaseEventID": "createCase",
+    "CaseFieldID": "applicant1EmailAddress",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "1",
+    "PageFieldDisplayOrder": 4
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Clustered",
+    "CaseEventID": "createCase",
+    "CaseFieldID": "applicant2FirstName",
+    "DisplayContext": "MANDATORY",
+    "PageID": "1",
+    "PageFieldDisplayOrder": 5
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Clustered",
+    "CaseEventID": "createCase",
+    "CaseFieldID": "applicant2LastName",
+    "DisplayContext": "MANDATORY",
+    "PageID": "1",
+    "PageFieldDisplayOrder": 6
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Clustered",
+    "CaseEventID": "createCase",
+    "CaseFieldID": "applicant2EmailAddress",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "1",
+    "PageFieldDisplayOrder": 7
+  }
+]

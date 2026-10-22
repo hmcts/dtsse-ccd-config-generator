@@ -1,0 +1,65 @@
+[
+  {
+    "ID": "GeneratedOrder",
+    "FieldType": "Document",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "document"
+  },
+  {
+    "ID": "GeneratedOrder",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "date"
+  },
+  {
+    "ID": "GeneratedOrder",
+    "FieldType": "FurtherDirections",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "furtherDirections"
+  },
+  {
+    "ID": "GeneratedOrder",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "expiryDate"
+  },
+  {
+    "ID": "GeneratedOrder",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "type"
+  },
+  {
+    "ID": "GeneratedOrder",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "title"
+  },
+  {
+    "ID": "GeneratedOrder",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "dateOfIssue"
+  },
+  {
+    "ID": "GeneratedOrder",
+    "FieldType": "JudgeAndLegalAdvisor",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "judgeAndLegalAdvisor"
+  },
+  {
+    "ID": "GeneratedOrder",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "details"
+  }
+]

@@ -1,0 +1,10 @@
+[
+  {
+    "ElementLabel": "An always-present member",
+    "FieldType": "Text",
+    "ID": "GatedMemberComplex",
+    "ListElementCode": "alwaysMember",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  }
+]

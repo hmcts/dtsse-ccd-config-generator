@@ -1,0 +1,9 @@
+[
+  {
+    "CaseTypeID": "Test",
+    "ID": "flatOnlyRow",
+    "CaseEventID": "someEvent",
+    "CaseFieldID": "field1",
+    "ListElementCode": "fromFlatFile"
+  }
+]

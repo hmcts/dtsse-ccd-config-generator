@@ -18,6 +18,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
+import uk.gov.hmcts.ccd.sdk.StateId;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
@@ -82,7 +83,11 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       data.put("PreConditionState(s)", getPreStateString(event.getPreState(), allStates));
     }
 
-    data.put("PostConditionState", getPostStateString(event.getPostState()));
+    // An absent column is a third behaviour distinct from both a concrete state and '*': the state
+    // is whatever the about-to-submit callback returned. See EventBuilder.postStateFromCallback().
+    if (!event.isPostStateFromCallback()) {
+      data.put("PostConditionState", getPostStateString(event.getPostState()));
+    }
     data.put("SecurityClassification", "Public");
 
     addCallbackIfConfigured(data, callbackHost, event,
@@ -98,10 +103,13 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     return result;
   }
 
+  // State IDs are resolved via StateId.of so @JsonProperty on a state constant is honoured here just
+  // as it is on the State sheet. The all-states -> "*" and single-state semantics are unchanged; the
+  // sort is by the resolved id (what actually lands in the sheet).
   private String getPreStateString(Set<S> states, Set<S> allStates) {
     return states.equals(allStates)
         ? "*"
-        : states.stream().map(Objects::toString)
+        : states.stream().map(StateId::of)
         .sorted()
         .collect(Collectors.joining(";"));
   }
@@ -109,7 +117,7 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   private String getPostStateString(Set<S> states) {
     return states.size() != 1
         ? "*"
-        : states.stream().findFirst().map(Objects::toString).orElse("");
+        : states.stream().findFirst().map(StateId::of).orElse("");
   }
 
   private int resolveDisplayOrder(Event<T, R, S> event) {
