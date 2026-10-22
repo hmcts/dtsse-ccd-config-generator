@@ -6,7 +6,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.api.HandlerContext;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderService;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderService;
 
 final class DefaultHandlerContext implements HandlerContext {
   static final int MAX_TEMP_FILES_PER_DOCUMENT = 100;

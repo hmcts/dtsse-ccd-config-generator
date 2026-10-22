@@ -29,6 +29,7 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResolver;
 import uk.gov.hmcts.ccd.sdk.bundling.api.ResolutionFailure;
 import uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocuments;
+import uk.gov.hmcts.ccd.sdk.conversion.detect.MediaTypeDetection;
 
 final class Resolution {
   private static final Logger log = LoggerFactory.getLogger(Resolution.class);
@@ -210,7 +211,7 @@ final class Resolution {
           file,
           copied,
           HexFormat.of().formatHex(digest.digest()),
-          MediaTypes.normalise(resolved.mediaType()),
+          MediaTypeDetection.normalise(resolved.mediaType()),
           resolved.fileName(),
           resolved.checksum()));
       file = null;

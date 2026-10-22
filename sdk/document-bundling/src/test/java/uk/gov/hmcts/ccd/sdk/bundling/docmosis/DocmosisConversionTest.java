@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk.bundling.docmosis;
+package uk.gov.hmcts.ccd.sdk.conversion.docmosis;
 
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 import static java.nio.charset.StandardCharsets.UTF_8;

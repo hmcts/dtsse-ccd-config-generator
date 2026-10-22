@@ -9,8 +9,8 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentHandlingException;
 import uk.gov.hmcts.ccd.sdk.bundling.api.HandledDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.api.HandlerContext;
 import uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocument;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderException;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderService;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderException;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderService;
 
 public final class DocmosisOfficeHandler implements DocumentHandler {
   @Override

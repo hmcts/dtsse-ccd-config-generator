@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.ToString;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleLimits;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisConnection;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisConnection;
 
 /**
  * {@code ccd.bundling.*} properties. Unset values fall back to the module defaults

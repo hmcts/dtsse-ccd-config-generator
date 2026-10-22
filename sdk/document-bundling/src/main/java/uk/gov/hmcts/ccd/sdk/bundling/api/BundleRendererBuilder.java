@@ -11,8 +11,8 @@ import uk.gov.hmcts.ccd.sdk.bundling.convert.DocmosisOfficeHandler;
 import uk.gov.hmcts.ccd.sdk.bundling.convert.ImageHandler;
 import uk.gov.hmcts.ccd.sdk.bundling.convert.MediaLinkHandler;
 import uk.gov.hmcts.ccd.sdk.bundling.convert.PdfPassthroughHandler;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderService;
 import uk.gov.hmcts.ccd.sdk.bundling.render.DefaultBundleRenderer;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderService;
 
 /**
  * Builds a {@link BundleRenderer}.
