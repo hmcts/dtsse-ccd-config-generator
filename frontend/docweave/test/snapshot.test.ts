@@ -154,4 +154,74 @@ describe("createDocEditor's field", () => {
     assert.throws(() => createDocEditor({ field: textarea, initialSnapshot: unsupported() }), InvalidSnapshotError);
     assert.equal(textarea.value, saved);
   });
+
+  function posted(form: HTMLFormElement): FormData {
+    const formData = new dom.window.FormData(form);
+    // jsdom does not emit the browser's formdata event when building the entry list.
+    form.dispatchEvent(Object.assign(new dom.window.Event("formdata"), { formData }));
+    return formData;
+  }
+
+  it("posts UTF-8 base64url repeatedly while leaving the current snapshot as JSON", () => {
+    const form = dom.window.document.createElement("form");
+    const textarea = field();
+    textarea.name = "document";
+    form.append(textarea);
+    const other = dom.window.document.createElement("input");
+    other.name = "action";
+    other.value = "draft";
+    form.append(other);
+    const controller = createDocEditor({ field: textarea });
+
+    for (const wording of ["Pay £100 — café 🏠".repeat(10_000), "Corrected wording"]) {
+      controller.render(order(wording));
+      const before = textarea.value;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const body = posted(form);
+        assert.equal(body.get("document"), Buffer.from(before, "utf8").toString("base64url"));
+        assert.deepEqual(parseSnapshot(Buffer.from(String(body.get("document")), "base64url").toString("utf8")),
+          parseSnapshot(before));
+        assert.equal(body.get("action"), "draft");
+        assert.equal(textarea.value, before);
+      }
+    }
+    controller.destroy();
+    assert.equal(posted(form).get("document"), textarea.value);
+  });
+
+  it("leaves empty fields empty and does not submit disabled or unnamed fields", () => {
+    const form = dom.window.document.createElement("form");
+    const textarea = field();
+    textarea.name = "document";
+    form.append(textarea);
+    const controller = createDocEditor({ field: textarea });
+    assert.equal(posted(form).get("document"), "");
+
+    controller.render(order("1 May"));
+    textarea.disabled = true;
+    assert.equal(posted(form).has("document"), false);
+    textarea.disabled = false;
+    textarea.name = "";
+    assert.equal([...posted(form)].length, 0);
+    controller.destroy();
+  });
+
+  it("binds fields associated through the form attribute", () => {
+    const form = dom.window.document.createElement("form");
+    form.id = "order";
+    const textarea = field();
+    textarea.name = "document";
+    textarea.setAttribute("form", form.id);
+    dom.window.document.body.append(form, textarea);
+    const controller = createDocEditor({ field: textarea });
+    controller.render(order("1 May"));
+
+    assert.equal(posted(form).get("document"), Buffer.from(textarea.value).toString("base64url"));
+    controller.destroy();
+    const replacement = createDocEditor({ field: textarea });
+    assert.equal(posted(form).get("document"), Buffer.from(textarea.value).toString("base64url"));
+    replacement.destroy();
+    form.remove();
+    textarea.remove();
+  });
 });

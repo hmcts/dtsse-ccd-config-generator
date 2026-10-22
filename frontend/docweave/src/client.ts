@@ -74,9 +74,11 @@ export interface CreateDocEditorOptions {
   label?: string;
   initialSnapshot?: DocWeaveSnapshot;
   /**
-   * A form field that holds the snapshot as JSON, so it is posted with the
-   * form. The editor starts from the snapshot in it, unless given
-   * initialSnapshot, and writes every change to it before calling onChange.
+   * A form field with a unique name, placed in its form before binding. It holds
+   * the snapshot as JSON. In FormData and native submissions, its value is
+   * UTF-8 base64url instead; decode it on the server before parsing the snapshot.
+   * The editor starts from the JSON in it, unless given initialSnapshot, and
+   * writes every change to it before calling onChange.
    * An empty field holds no document. A field holding something other than a
    * snapshot is reported to onError and left as it is, unwritten, until the
    * host empties it.
@@ -185,6 +187,32 @@ function bindField(options: CreateDocEditorOptions): {
   };
 }
 
+/** Encode the submitted value without changing the JSON field the host reads. */
+function bindForm(
+  controller: DocEditorController,
+  field?: HTMLTextAreaElement | HTMLInputElement,
+): DocEditorController {
+  const form = field?.form;
+  if (!field || !form) return controller;
+  const encode = (event: FormDataEvent): void => {
+    const value = event.formData.get(field.name);
+    if (typeof value !== "string") return;
+    let binary = "";
+    for (const byte of new TextEncoder().encode(value)) {
+      binary += String.fromCharCode(byte);
+    }
+    event.formData.set(field.name, btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""));
+  };
+  form.addEventListener("formdata", encode);
+  return {
+    ...controller,
+    destroy(): void {
+      form.removeEventListener("formdata", encode);
+      controller.destroy();
+    },
+  };
+}
+
 export function createDocEditor(
   options: CreateDocEditorOptions = {},
 ): DocEditorController {
@@ -193,7 +221,7 @@ export function createDocEditor(
   }
   const { initialSnapshot, onChange } = bindField(options);
   if (options.mount === undefined) {
-    return createDocEditorController({ initialSnapshot, onChange }).controller;
+    return bindForm(createDocEditorController({ initialSnapshot, onChange }).controller, options.field);
   }
 
   const ownerDocument = typeof options.mount === "string"
@@ -366,7 +394,7 @@ export function createDocEditor(
     templateButton.addEventListener("click", openTemplateDialog);
   }
 
-  return {
+  return bindForm({
     render: runtime.controller.render,
     load: runtime.controller.load,
     getDocument: runtime.controller.getDocument,
@@ -396,5 +424,5 @@ export function createDocEditor(
       editorSurface.remove();
       if (!mountAlreadyStyled) editor.classList.remove("docweave-editor");
     },
-  };
+  }, options.field);
 }
