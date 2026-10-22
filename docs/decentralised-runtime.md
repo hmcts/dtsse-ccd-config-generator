@@ -252,7 +252,15 @@ Supplementary data operations are implemented and persisted in the `ccd.case_dat
 
 ## Message publishing to Azure Service Bus
 
-A transactional outbox-based `message_queue_candidates` table is maintained and written to based on your CCD definition, mirroring CCD's implementation.
+Enable messaging explicitly in your application configuration to write events to the transactional outbox table, `message_queue_candidates`, based on your CCD definition:
+
+```yaml
+ccd:
+  messaging:
+    enabled: true
+```
+
+Messaging is disabled by default. Adding `ccd-servicebus-support` alone does not enable outbox writes. When messaging is enabled, each event's case type must have a definition snapshot in `build/cftlib/definition-snapshots`; an event with no matching snapshot fails and rolls back rather than committing without its message.
 
 The SDK's `ccd-servicebus-support` module provides:
 

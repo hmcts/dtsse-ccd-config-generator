@@ -34,15 +34,6 @@ class DefinitionRegistry {
     return Optional.ofNullable(loadDefinitions().get(caseTypeId));
   }
 
-  void requireDefinitions() {
-    if (loadDefinitions().isEmpty()) {
-      throw new IllegalStateException(
-          "CCD messaging is enabled but no definition snapshots were found in "
-              + snapshotDirectory.getAbsolutePath()
-      );
-    }
-  }
-
   /**
    * Lazily loads case type definitions from the generated snapshot directory.
    */
