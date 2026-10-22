@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk.conversion.spring;
 import java.nio.file.Path;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -25,8 +26,9 @@ public class ConversionAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  @ConditionalOnProperty(prefix = "ccd.conversion.docmosis",
-      name = {"convert-endpoint", "access-key"})
+  // Both must be non-blank: services set them from optional env vars, which bind as "".
+  @ConditionalOnExpression("!'${ccd.conversion.docmosis.convert-endpoint:}'.isBlank()"
+      + " and !'${ccd.conversion.docmosis.access-key:}'.isBlank()")
   public DocmosisRenderService conversionDocmosisRenderService(ConversionProperties properties) {
     return new HttpDocmosisRenderService(properties.getDocmosis().toConnection(),
         tempDirectory(properties).resolve("ccd-conversion-docmosis"));

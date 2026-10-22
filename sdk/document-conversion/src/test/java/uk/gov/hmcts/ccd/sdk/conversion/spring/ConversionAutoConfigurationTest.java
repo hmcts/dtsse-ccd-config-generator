@@ -86,6 +86,18 @@ class ConversionAutoConfigurationTest {
   }
 
   @Test
+  void unsetDocmosisEnvVarsLeaveOfficeConversionOff() {
+    // As a service's application.yaml writes them: ${DOCMOSIS_CONVERT_ENDPOINT:} binds "".
+    runner.withPropertyValues("ccd.conversion.docmosis.convert-endpoint=",
+            "ccd.conversion.docmosis.access-key=")
+        .run(context -> {
+          assertThat(context).hasNotFailed().doesNotHaveBean(DocmosisRenderService.class);
+          assertThat(context.getBean(DocumentConverter.class).supportedMediaTypes())
+              .doesNotContain(DOCX);
+        });
+  }
+
+  @Test
   void anExistingDocmosisBeanIsReused() {
     StubDocmosis bundlingDocmosis = StubDocmosis.returning(new byte[0], dir);
     runner.withBean(DocmosisRenderService.class, () -> bundlingDocmosis)
