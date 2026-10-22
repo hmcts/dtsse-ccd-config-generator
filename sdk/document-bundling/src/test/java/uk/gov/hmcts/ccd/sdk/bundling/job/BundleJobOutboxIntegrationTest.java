@@ -378,7 +378,7 @@ class BundleJobOutboxIntegrationTest {
     FakeRenderer coverFails = new FakeRenderer(tempDir).onNextRender(FakeRenderer.failure(
         new BundleGenerationException(BundleErrorCode.COVER_PAGE_FAILED, BundleStage.CONVERT,
             "The cover page template could not be rendered.", "Check the template exists.",
-            List.of(), new uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderException(
+            List.of(), new uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderException(
                 "Docmosis returned HTTP 404", false))));
     directWorker(coverFails).poll();
     assertThat(job(missingTemplate).state()).isEqualTo(BundleJobState.FAILED);
