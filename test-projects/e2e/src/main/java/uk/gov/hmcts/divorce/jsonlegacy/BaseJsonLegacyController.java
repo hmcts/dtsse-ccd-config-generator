@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +32,11 @@ public abstract class BaseJsonLegacyController {
   public static final String CONFIRMATION_BODY = "JSON legacy submitted callback ran";
   public static final String EXTERNAL_CONFIRMATION_HEADER = "# JSON legacy external submitted";
   public static final String EXTERNAL_CONFIRMATION_BODY = "hello from external endpoint";
+  public static final String CLIENT_CONTEXT_NOTE = "json-legacy-client-context";
+  public static final String RETURNED_CLIENT_CONTEXT = Base64.getEncoder().encodeToString(
+      "{\"client_context\":{\"user_task\":{\"complete_task\":true}}}".getBytes(StandardCharsets.UTF_8));
+  public static volatile String aboutToSubmitClientContext;
+  public static volatile String submittedClientContext;
   public static volatile int aboutToSubmitAttempts;
   public static volatile int submittedAttempts;
   public static volatile int externalSubmittedAttempts;
@@ -46,9 +52,11 @@ public abstract class BaseJsonLegacyController {
   public ResponseEntity<Map<String, Object>> aboutToSubmit(
       @RequestHeader("Authorization") String authorisation,
       @RequestHeader("ServiceAuthorization") String serviceAuthorisation,
+      @RequestHeader(value = "Client-Context", required = false) String clientContext,
       @RequestBody Map<String, Object> request
   ) {
     aboutToSubmitAttempts++;
+    aboutToSubmitClientContext = clientContext;
     Map<String, Object> data = new LinkedHashMap<>(caseData(request));
     if ("json-legacy-error".equals(data.get("note"))) {
       return ResponseEntity.ok(aboutToSubmitResponse(data, List.of("JSON legacy validation error")));
@@ -70,6 +78,12 @@ public abstract class BaseJsonLegacyController {
     aboutToSubmitSawAuthorisation = authorisation != null && !authorisation.isBlank();
     aboutToSubmitSawServiceAuthorisation = serviceAuthorisation != null && !serviceAuthorisation.isBlank();
     String override = "json-legacy-empty-override".equals(data.get("note")) ? "" : null;
+    if (CLIENT_CONTEXT_NOTE.equals(data.get("note"))) {
+      // As a service asks ExUI to complete a WA task, in brackets as CCD tolerates.
+      return ResponseEntity.ok()
+          .header("Client-Context", "[" + RETURNED_CLIENT_CONTEXT + "]")
+          .body(aboutToSubmitResponse(data, List.of(), override));
+    }
     return ResponseEntity.ok(aboutToSubmitResponse(data, List.of(), override));
   }
 
@@ -132,8 +146,12 @@ public abstract class BaseJsonLegacyController {
   }
 
   @PostMapping("/submitted")
-  public Map<String, Object> submitted(@RequestBody Map<String, Object> request) {
+  public Map<String, Object> submitted(
+      @RequestHeader(value = "Client-Context", required = false) String clientContext,
+      @RequestBody Map<String, Object> request
+  ) {
     int attempt = ++submittedAttempts;
+    submittedClientContext = clientContext;
     Map<String, Object> data = caseData(request);
     if ("json-legacy-retry".equals(data.get("note")) && attempt < 3) {
       throw new IllegalStateException("retry submitted callback");
@@ -173,6 +191,8 @@ public abstract class BaseJsonLegacyController {
   }
 
   public static void reset() {
+    aboutToSubmitClientContext = null;
+    submittedClientContext = null;
     aboutToSubmitAttempts = 0;
     submittedAttempts = 0;
     externalSubmittedAttempts = 0;
