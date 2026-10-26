@@ -10,16 +10,17 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleSection;
 import uk.gov.hmcts.ccd.sdk.bundling.api.EmptySectionPolicy;
 import uk.gov.hmcts.ccd.sdk.bundling.api.WatermarkPreset;
+import uk.gov.hmcts.ccd.sdk.bundling.pdf.AssemblyContent;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.AssemblyFolder;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.AssemblyItem;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.AssemblyNode;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.AssemblyRequest;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.EmptySectionPage;
-import uk.gov.hmcts.ccd.sdk.bundling.pdf.PdfSource;
+import uk.gov.hmcts.ccd.sdk.bundling.pdf.MissingDocumentPage;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.Watermark;
 
 final class AssemblyMapping {
-  record Origin(BundleDocument document) {
+  record Origin(BundleDocument document, List<String> sectionPath) {
   }
 
   record Mapped(AssemblyRequest request, List<Origin> origins) {
@@ -28,13 +29,13 @@ final class AssemblyMapping {
   private AssemblyMapping() {
   }
 
-  static Mapped map(BundleRequest request, Map<String, PdfSource> handledPdfs,
+  static Mapped map(BundleRequest request, Map<String, AssemblyContent> handledPdfs,
       Optional<Path> coverPage, Map<String, Path> watermarkImages) {
     List<Origin> origins = new ArrayList<>();
-    List<AssemblyNode> items = mapChildren(request.root(), handledPdfs, origins);
+    List<AssemblyNode> items = mapChildren(request.root(), handledPdfs, origins, List.of());
     if (items.isEmpty()
         && request.root().emptySectionPolicy() == EmptySectionPolicy.INCLUDE_PLACEHOLDER) {
-      origins.add(new Origin(null));
+      origins.add(new Origin(null, List.of()));
       items = List.of(new AssemblyItem(
           request.root().title(), Optional.empty(), false, new EmptySectionPage()));
     }
@@ -62,32 +63,37 @@ final class AssemblyMapping {
   }
 
   private static List<AssemblyNode> mapChildren(
-      BundleSection section, Map<String, PdfSource> handledPdfs, List<Origin> origins) {
+      BundleSection section, Map<String, AssemblyContent> handledPdfs, List<Origin> origins,
+      List<String> sectionPath) {
     List<AssemblyNode> nodes = new ArrayList<>();
     for (BundleDocument document : section.documents()) {
+      AssemblyContent content = handledPdfs.get(document.id());
       nodes.add(new AssemblyItem(
-          document.title(),
+          content instanceof MissingDocumentPage ? document.title() + " (missing)" : document.title(),
           document.date(),
           document.confidential(),
-          handledPdfs.get(document.id())));
-      origins.add(new Origin(document));
+          content));
+      origins.add(new Origin(document, sectionPath));
     }
     for (BundleSection child : section.sections()) {
-      mapSection(child, handledPdfs, origins).ifPresent(nodes::add);
+      mapSection(child, handledPdfs, origins, sectionPath).ifPresent(nodes::add);
     }
     return nodes;
   }
 
   private static Optional<AssemblyNode> mapSection(
-      BundleSection section, Map<String, PdfSource> handledPdfs, List<Origin> origins) {
+      BundleSection section, Map<String, AssemblyContent> handledPdfs, List<Origin> origins,
+      List<String> sectionPath) {
+    List<String> path = new ArrayList<>(sectionPath);
+    path.add(section.title());
     List<Origin> childOrigins = new ArrayList<>();
-    List<AssemblyNode> children = mapChildren(section, handledPdfs, childOrigins);
+    List<AssemblyNode> children = mapChildren(section, handledPdfs, childOrigins, List.copyOf(path));
     if (!children.isEmpty()) {
       origins.addAll(childOrigins);
       return Optional.of(new AssemblyFolder(section.title(), children));
     }
     if (section.emptySectionPolicy() == EmptySectionPolicy.INCLUDE_PLACEHOLDER) {
-      origins.add(new Origin(null));
+      origins.add(new Origin(null, List.of()));
       return Optional.of(new AssemblyItem(
           section.title(), Optional.empty(), false, new EmptySectionPage()));
     }

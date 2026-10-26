@@ -40,6 +40,9 @@ public final class BundleRequest {
   @JsonProperty
   private final CoverPage coverPage;
 
+  @JsonProperty
+  private final MissingDocumentPolicy missingDocuments;
+
   private BundleRequest(Builder builder) {
     this.externalId = builder.externalId;
     this.title = builder.title;
@@ -47,6 +50,7 @@ public final class BundleRequest {
     this.root = builder.root;
     this.presentation = builder.presentation;
     this.coverPage = builder.coverPage;
+    this.missingDocuments = builder.missingDocuments;
   }
 
   /** Starts building a bundle request. */
@@ -57,9 +61,23 @@ public final class BundleRequest {
   /**
    * The consumer-minted UUID identifying this bundle request. Whether a new bundle replaces,
    * versions, or coexists with a previous one is the service team's decision, expressed through the ids it mints.
+   * Required to submit or render the request; managed case bundles set it to the job's id.
    */
   public UUID externalId() {
     return externalId;
+  }
+
+  /** This request with a different external id. */
+  public BundleRequest withExternalId(UUID externalId) {
+    Builder builder = new Builder();
+    builder.externalId = externalId;
+    builder.title = title;
+    builder.fileName = fileName;
+    builder.root = root;
+    builder.presentation = presentation;
+    builder.coverPage = coverPage;
+    builder.missingDocuments = missingDocuments;
+    return builder.build();
   }
 
   /** The bundle title, rendered on the generated title page. */
@@ -85,6 +103,11 @@ public final class BundleRequest {
   /** The Docmosis cover page placed first in the bundle, if any. */
   public Optional<CoverPage> coverPage() {
     return Optional.ofNullable(coverPage);
+  }
+
+  /** What the render does with a document it cannot include. */
+  public MissingDocumentPolicy missingDocuments() {
+    return missingDocuments;
   }
 
   /** All documents in the tree, in deterministic render order. */
@@ -121,11 +144,13 @@ public final class BundleRequest {
     private BundleSection root;
     private BundlePresentation presentation = BundlePresentation.courtDefault();
     private CoverPage coverPage;
+    private MissingDocumentPolicy missingDocuments = MissingDocumentPolicy.FAIL;
 
     private Builder() {
     }
 
-    /** Sets the consumer-minted UUID that identifies this bundle request. Required. */
+    /** Sets the consumer-minted UUID that identifies this bundle request. Required to submit or render the
+     * request; managed case bundles set it to the job id. */
     public Builder externalId(UUID externalId) {
       this.externalId = externalId;
       return this;
@@ -170,11 +195,19 @@ public final class BundleRequest {
     }
 
     /**
+     * Sets what the render does with a document it cannot include. Defaults to
+     * {@link MissingDocumentPolicy#FAIL}.
+     */
+    public Builder missingDocuments(MissingDocumentPolicy policy) {
+      this.missingDocuments = Validate.requireNonNull(policy, "BundleRequest.missingDocuments");
+      return this;
+    }
+
+    /**
      * Builds the request, validating required fields, the output file name, document id
      * uniqueness across the whole tree, and that the bundle has content.
      */
     public BundleRequest build() {
-      Validate.requireNonNull(externalId, "BundleRequest.externalId");
       Validate.requireNonBlank(title, "BundleRequest.title");
       validateFileName(fileName);
       Validate.requireNonNull(root, "BundleRequest.root");

@@ -238,6 +238,13 @@ It is also possible to override the Java type for a CCD specific one. For exampl
   private String applicantEmail;
 ```
 
+For rich text stored as an HTML string, use `FieldType.RichTextArea`:
+
+```java
+  @CCD(label = "Notes", typeOverride = FieldType.RichTextArea)
+  private String notes;
+```
+
 A common pattern is to use a Java enum to represent a fixed list
 
 ```java

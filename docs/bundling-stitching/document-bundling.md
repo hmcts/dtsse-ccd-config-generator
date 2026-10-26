@@ -72,9 +72,25 @@ it in the service's own case model.
 If a document cannot be fetched or converted, the render fails with a `BundleGenerationException`
 carrying a stable `code()`, the `stage()`, one `DocumentFailure` per document at fault, and a hint
 on what to do. The message on its own says what failed, on which document, at which stage.
-Nothing is left on disk. A later change will add an opt-in policy that renders a placeholder page
-for a document that could not be fetched and lists it on the result instead of failing, so a
-caseworker can still get a bundle and see what is missing (see the scope document).
+Nothing is left on disk.
+
+To get a bundle anyway, set `.missingDocuments(MissingDocumentPolicy.PLACEHOLDER)` on the request.
+A document that cannot be fetched, converted or opened is then replaced by a one-page placeholder
+in its place, titled "<title> (missing)" in the contents and bookmarks, with a plain-English
+reason printed on it. The result lists it in `missingDocuments()`: the document id, a
+`MissingDocumentReason` (`NOT_FOUND`, `ACCESS_DENIED`, `UNAVAILABLE`, `UNSUPPORTED_FORMAT`,
+`CONVERSION_FAILED`, `UNREADABLE`, `TOO_LARGE`) whose `message()` is safe to show users, the
+technical `code` and `detail`, and the placeholder's start page. The outcome is
+`COMPLETED_WITH_WARNINGS` with a `DOCUMENT_MISSING` warning per document. Request-level problems
+(limits, an unregistered provider, an invalid request, an office document with no Docmosis
+configured) still fail the render.
+
+A source that is only temporarily unavailable (a timeout, a 5xx, a Docmosis outage) should not
+end up as a placeholder if a retry would fetch it. `render(request, context, RenderAttempt.RETRYABLE)`
+fails such a render instead; the durable worker passes `RETRYABLE` while the job has retries left
+and `FINAL` on its last attempt. A plain `render(request, context)` is a final attempt. A
+document still unavailable on the final attempt, including one Docmosis could not convert because
+it was down, gets the `UNAVAILABLE` reason.
 
 ## What you get by default
 
@@ -187,17 +203,51 @@ a retried job can finish after a newer one. Among completed jobs, the one with t
 every change submitted before it. Break ties by `externalId`, and fall back to `submittedAt` for a
 job claimed before `claimed_at` existed. `findLatest(key)` returns the job that reflects the newest
 state, for a "regenerating..." status: the waiting job if there is one, otherwise the most recently
-claimed. The completion handler receives the job's `BundleJobContext` (selector parameters and
+claimed. A delayed re-run for unavailable documents counts as waiting only once it is due. The completion handler receives the job's `BundleJobContext` (selector parameters and
 execution context), so it knows which case the bundle is for. Rows are never deleted by the
 module; an always-current bundle adds one per burst of changes, so purge old terminal rows on your
 own schedule if the table grows.
 
-pcs-api's `CaseBundleTrigger` is a worked example: a Hibernate listener that submits from the
-before-commit hook, so every path that adds, amends or removes a document is covered.
+When a job completes, the worker records the bundle it rendered in `bundling.bundle`, in the same
+statement that marks the job completed, so a row exists exactly when its job completed and never
+for a worker that lost its lease. The row holds everything about the bundle except the PDF: the
+request that was rendered (for a selector-driven job, the documents it selected), where each
+document landed, the missing documents and why, the warnings, the PDF's file name, media type,
+size, checksum and page count, the job's coalesce key and case reference, and when its documents
+were selected. Missing documents carry the selected `title` and `sectionPath` (outermost to
+innermost, excluding the request root), so they can be listed without searching the request. The
+completion handler still receives the full `BundleResult`, so the service stores the PDF wherever
+it keeps documents, as an ordinary document carrying the job id, and reads everything else back
+through `OutboxBundleJobService`. A handler that returns a `StoredBundleDocument` (the stored
+PDF's id, URL and binary URL) has it recorded on the bundle row, and is told through `discarded`
+when its job could not be marked completed, so it can delete the PDF. A handler failure fails the
+job, unless the handler's `retryable` says to retry it like a transient render failure.
+
+- `findBundleForJob(jobId)`: the bundle a job rendered, for describing a stored PDF ("pages 40 to
+  52", "two documents are missing"). Empty until the job completes, and for a job whose handler
+  failed.
+- `findLatestBundle(key)`: of the bundles rendered under a coalesce key, the one whose documents
+  were selected last. A waiting or in-progress job (`findLatest(key)`) may be about to replace it.
+
+The bundle table has no foreign key to `bundle_job`, so job rows can be purged without losing the
+description of a bundle still in use; bundle rows for bundles the service no longer holds can be
+purged on its own schedule. The bundle is recorded for every service that runs the job worker,
+since the worker needs the service's own database (a decentralised service's) for its outbox
+anyway; a service rendering directly with `BundleRenderer` records nothing and gets only the
+`BundleResult`.
+
+A coalesced bundle completed with placeholders for `UNAVAILABLE` documents is re-run later, so it
+fills in once the source is back: the worker queues a job under the same key that is not claimable
+for `requeue.delay`. A change to the case in the meantime joins it and makes it immediate. A bundle
+is re-run at most `requeue.max-attempts` times in a row for unavailable documents (counted in the
+execution context attribute `bundling.unavailableRequeues`).
+
+For a case bundle that follows document changes, the managed layer below does all of this.
 
 Properties under `ccd.bundling.job.*`: `enabled` (default `false`), `worker.enabled` (`true`), `worker.poll-delay` (`1s`), `worker.batch-size` (`5`),
 `worker.max-concurrent-renders` (`2`), `worker.lease-duration` (`5m`), `retry.max-attempts` (`3`),
-`retry.initial-delay` (`5s`), `retry.multiplier` (`2.0`), `retry.max-delay` (`5m`).
+`retry.initial-delay` (`5s`), `retry.multiplier` (`2.0`), `retry.max-delay` (`5m`),
+`requeue.enabled` (`true`), `requeue.delay` (`15m`), `requeue.max-attempts` (`3`).
 
 ## Extending it
 
@@ -336,3 +386,48 @@ your event handlers can fake it.
 the feature matrix and the one-click bundle requirements coverage. Every rendering feature the
 microservice offers is now in the module; built-in CDAM adapters and the items in the scope
 document's section 4 come later.
+
+## Managed case bundles
+
+For a case bundle that should follow document changes, opt into the managed layer:
+
+```yaml
+ccd.bundling.managed.enabled: true
+ccd.bundling.job.enabled: true
+```
+
+Register a `CaseBundleDefinition` bean. Its `name()` identifies the bundle, and `select(caseKey)`
+returns a `SelectedCaseBundle`: the case reference, case type, jurisdiction and an ordered
+`BundleRequest`. The library calls it in a short repeatable-read transaction, so the documents and
+whatever decides their visibility are read consistently. Selection and visibility rules stay
+application code. Several definitions can share the managed layer.
+
+Call `CaseBundles.changed(definition, caseKey)` in the transaction that changes the bundle's
+sources. It queues a coalesced job under the key `managed:<definition>:<caseKey>`; repeated calls
+join that job, and a rollback cancels it. The SDK does not detect changes itself:
+a JPA entity listener on each entity the selection reads is the simplest way to cover every write
+path, including cascades. Native SQL changes must call it explicitly.
+
+Each job selects afresh, renders, uploads the PDF to CDAM and attaches it to the case, and the
+worker records it on the bundle row. The case's current bundle is the one whose documents were
+selected last, so a slower, older render never replaces a newer one. `cleanUp` (every
+`ccd.bundling.managed.cleanup-delay`, default one minute) deletes a replaced bundle's PDF 12 hours
+after its replacement, so a link a reader already has keeps working, and sets the row's
+`deleted_at`. A failed attachment deletes its upload and retries; a worker that lost
+its lease deletes its upload. A PDF uploaded by a worker that dies before recording it stays in
+CDAM, unreadable: CDAM serves a document only to a user who can see it in the case data.
+
+`CaseBundles.view(definition, caseKey)` returns the current bundle's `BundleMetadata`, including
+where its PDF is stored, and a lifecycle worked out from the key's latest job and bundle: `NONE`,
+`PREPARING` (no bundle yet), `UPDATING`, `UP_TO_DATE` or `FAILED`. **This is sensitive data, and
+these Java methods do not authorise readers.** There is no SDK HTTP endpoint. Expose the reference
+and report only through an authorised application projection with restrictive CCD field
+permissions. Do not add the bundle to a general document collection: CDAM checks references
+anywhere in a caller's permission-filtered case data when authorising a download.
+
+The standard CDAM adapter uses the application's `CaseDocumentClientApi`, `AuthTokenGenerator`
+and a `BundleSystemUser` bean supplying its cached system token. The deployed CDAM configuration
+must grant that service CREATE, ATTACH and DELETE for the destination case type. A different store
+can implement `BundleDocumentStore`, whose `store` must leave nothing stored when it fails. Managed mode owns the worker's selector and completion
+handler; do not register another, or submit other jobs to that worker. A
+`CdamBundleDocumentResolver` bean of your own replaces the default one.

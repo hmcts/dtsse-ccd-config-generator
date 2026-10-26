@@ -14,7 +14,7 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentFailure;
  * cannot read an old request fails clearly instead of guessing.
  */
 final class BundleJobJson {
-  static final int REQUEST_VERSION = 2;
+  static final int REQUEST_VERSION = 3;
 
   private static final TypeReference<Map<String, String>> STRING_MAP = new TypeReference<>() {
   };
@@ -46,6 +46,14 @@ final class BundleJobJson {
   }
 
   <T> T read(String json, Class<T> type, String what) {
+    try {
+      return mapper.readValue(json, type);
+    } catch (Exception e) {
+      throw new Unreadable("the stored " + what + " could not be read", e);
+    }
+  }
+
+  <T> T read(String json, TypeReference<T> type, String what) {
     try {
       return mapper.readValue(json, type);
     } catch (Exception e) {

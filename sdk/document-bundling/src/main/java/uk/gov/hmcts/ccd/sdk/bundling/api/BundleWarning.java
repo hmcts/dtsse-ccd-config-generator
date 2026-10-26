@@ -3,9 +3,11 @@ package uk.gov.hmcts.ccd.sdk.bundling.api;
 import java.util.Optional;
 
 /**
- * A non-fatal presentational note on a successful result — for example an included empty-section
- * page or an inspection finding. Warnings never describe omitted documents; a document that
- * cannot be stitched fails the bundle.
+ * A non-fatal note on a successful result — for example an included empty-section page or an
+ * inspection finding. Under {@link MissingDocumentPolicy#PLACEHOLDER} a document replaced by a
+ * placeholder page also has a {@code DOCUMENT_MISSING} warning, whose message carries the
+ * user-facing reason only; the technical detail is in {@link BundleResult#missingDocuments()}.
+ * Under the default {@link MissingDocumentPolicy#FAIL} no document is ever omitted.
  */
 public record BundleWarning(String code, String message, Optional<String> documentId) {
 

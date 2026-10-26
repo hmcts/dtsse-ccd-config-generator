@@ -71,6 +71,23 @@ final class GeneratedPages {
         BODY_WIDTH);
   }
 
+  static void addMissingDocumentPage(PDDocument document, String title, Optional<LocalDate> date,
+      MissingDocumentPage missing, PdfFonts fonts) throws IOException {
+    PDPage page = new PDPage();
+    document.addPage(page);
+    PdfUtility.addCenterText(document, page, title, 150, fonts.helveticaBold(), 14);
+    PdfUtility.addCenterText(document, page, "This document is missing from the bundle", 190,
+        fonts.helveticaBold(), 12);
+
+    float yyOffset = 250;
+    if (date.isPresent()) {
+      yyOffset = addBodyLine(document, page, "Date: " + DATE_FORMAT.format(date.get()),
+          yyOffset, fonts);
+    }
+    PdfUtility.addText(document, page, missing.reason(), BODY_XX_OFFSET, yyOffset,
+        fonts.helvetica(), 12, BODY_WIDTH);
+  }
+
   private static float addBodyLine(PDDocument document, PDPage page, String text, float yyOffset,
       PdfFonts fonts) throws IOException {
     PdfUtility.addText(document, page, text, BODY_XX_OFFSET, yyOffset, fonts.helvetica(), 12,

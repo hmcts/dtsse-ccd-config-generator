@@ -44,11 +44,17 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResolver;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResult;
 import uk.gov.hmcts.ccd.sdk.bundling.api.HandledDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.api.HandlerRegistry;
+import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
+import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocumentPolicy;
+import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocumentReason;
+import uk.gov.hmcts.ccd.sdk.bundling.api.RenderAttempt;
 import uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.api.WatermarkPreset;
 import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderException;
 import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderService;
+import uk.gov.hmcts.ccd.sdk.bundling.pdf.AssemblyContent;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.AssemblyResult;
+import uk.gov.hmcts.ccd.sdk.bundling.pdf.MissingDocumentPage;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.PdfBundleAssembler;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.PdfSource;
 
@@ -56,6 +62,8 @@ public final class DefaultBundleRenderer implements BundleRenderer {
   public static final String WARNING_MEDIA_TYPE_MISMATCH = "MEDIA_TYPE_MISMATCH";
 
   public static final String WARNING_NO_EXTRACTABLE_TEXT = "NO_EXTRACTABLE_TEXT";
+
+  public static final String WARNING_DOCUMENT_MISSING = "DOCUMENT_MISSING";
 
   static final String RENDER_ENDPOINT_PROPERTY = "ccd.bundling.docmosis.render-endpoint";
 
@@ -100,8 +108,17 @@ public final class DefaultBundleRenderer implements BundleRenderer {
 
   @Override
   public BundleResult render(BundleRequest request, BundleExecutionContext context) {
-    if (request == null || context == null) {
+    return render(request, context, RenderAttempt.FINAL);
+  }
+
+  @Override
+  public BundleResult render(BundleRequest request, BundleExecutionContext context,
+      RenderAttempt attempt) {
+    if (request == null || context == null || attempt == null) {
       throw new IllegalArgumentException("request and context must be provided");
+    }
+    if (request.externalId() == null) {
+      throw new IllegalArgumentException("BundleRequest.externalId must be provided");
     }
     String previousExternalId = MDC.get(MDC_EXTERNAL_ID);
     String previousStage = MDC.get(MDC_STAGE);
@@ -109,7 +126,7 @@ public final class DefaultBundleRenderer implements BundleRenderer {
     MDC.put(MDC_EXTERNAL_ID, request.externalId().toString());
     permits.acquireUninterruptibly();
     try {
-      return new Render(request, context).execute();
+      return new Render(request, context, attempt).execute();
     } catch (BundleGenerationException e) {
       metrics.failure(e.code().name());
       log.error("Bundle generation failed. {}", e.getMessage());
@@ -141,16 +158,24 @@ public final class DefaultBundleRenderer implements BundleRenderer {
   private record Conversion(Map<String, Converted> documents, Optional<Path> coverPage) {
   }
 
+  private record Missing(
+      BundleDocument document, MissingDocumentReason reason, BundleErrorCode code, String detail) {
+  }
+
   private final class Render {
     private final BundleRequest request;
     private final BundleExecutionContext context;
+    private final RenderAttempt attempt;
+    // Documents replaced by placeholder pages, by document id.
+    private final Map<String, Missing> missing = new LinkedHashMap<>();
     private final List<BundleWarning> warnings = new ArrayList<>();
     private final EnumMap<BundleStage, Duration> timings = new EnumMap<>(BundleStage.class);
     private Path jobDirectory;
 
-    private Render(BundleRequest request, BundleExecutionContext context) {
+    private Render(BundleRequest request, BundleExecutionContext context, RenderAttempt attempt) {
       this.request = request;
       this.context = context;
+      this.attempt = attempt;
     }
 
     private BundleResult execute() {
@@ -162,11 +187,13 @@ public final class DefaultBundleRenderer implements BundleRenderer {
           return null;
         });
         log.info("Validated bundle request: {} documents", request.allDocuments().size());
-        Map<DocumentReference, Resolution.Spooled> spooled = timedStage(BundleStage.RESOLVE,
+        Resolution.Resolved resolved = timedStage(BundleStage.RESOLVE,
             () -> Resolution.resolveAndSpool(
-                request.allDocuments(), resolvers, context, jobDirectory, limits));
+                request.allDocuments(), resolvers, context, jobDirectory, limits, tolerance()));
+        Map<DocumentReference, Resolution.Spooled> spooled = resolved.spooled();
         log.info("Resolved and spooled {} unique reference(s), {} bytes", spooled.size(),
             spooled.values().stream().mapToLong(Resolution.Spooled::size).sum());
+        markUnresolvedMissing(resolved.failures());
         Conversion conversion = timedStage(BundleStage.CONVERT,
             () -> new Conversion(convertAll(spooled), renderCoverPage()));
         Map<String, Converted> converted = conversion.documents();
@@ -188,6 +215,54 @@ public final class DefaultBundleRenderer implements BundleRenderer {
           JobDirectory.deleteRecursively(jobDirectory);
         }
       }
+    }
+
+    private Resolution.Tolerance tolerance() {
+      if (request.missingDocuments() != MissingDocumentPolicy.PLACEHOLDER) {
+        return Resolution.Tolerance.NONE;
+      }
+      return attempt == RenderAttempt.FINAL
+          ? Resolution.Tolerance.ALL : Resolution.Tolerance.PERMANENT;
+    }
+
+    private void markUnresolvedMissing(Map<DocumentReference, Resolution.Failure> failures) {
+      for (BundleDocument document : request.allDocuments()) {
+        Resolution.Failure failure =
+            document.media().isPresent() ? null : failures.get(document.reference());
+        if (failure != null) {
+          markMissing(document, failure.code(), failure.detail(), null);
+        }
+      }
+    }
+
+    /**
+     * Whether a failure confined to one document is replaced by a placeholder: under the
+     * placeholder policy, unless it is transient and the caller will retry the render. A missing
+     * Docmosis configuration is the service's problem, not the document's, so it always fails.
+     */
+    private boolean substitutes(BundleGenerationException failure) {
+      return request.missingDocuments() == MissingDocumentPolicy.PLACEHOLDER
+          && !failure.documentFailures().isEmpty()
+          && failure.code() != BundleErrorCode.DOCMOSIS_NOT_CONFIGURED
+          && (attempt == RenderAttempt.FINAL
+              || !TransientFailures.isTransient(failure.code(), failure.getCause()));
+    }
+
+    private void markMissing(
+        BundleDocument document, BundleErrorCode code, String detail, Throwable cause) {
+      // A conversion that failed because Docmosis is down is a temporary problem, not a
+      // problem with the document, so it is re-run like an unavailable source.
+      MissingDocumentReason reason = TransientFailures.isDocmosisOutage(cause)
+          ? MissingDocumentReason.UNAVAILABLE : MissingDocumentReason.of(code);
+      missing.put(document.id(), new Missing(document, reason, code, detail));
+      // The detail stays in the logs and on the MissingDocument; the warning has the
+      // user-facing reason only.
+      log.warn("Document '{}' is replaced by a placeholder page: {} - {}", document.id(), code,
+          detail);
+      addWarning(BundleWarning.forDocument(WARNING_DOCUMENT_MISSING,
+          "Document '" + document.id() + "' could not be included and was replaced by a "
+              + "placeholder page. " + reason.message(),
+          document.id()));
     }
 
     private Path createJobDirectory() {
@@ -288,7 +363,7 @@ public final class DefaultBundleRenderer implements BundleRenderer {
 
     private int inspectAll(Map<String, Converted> converted) {
       int totalSourcePages = 0;
-      for (Converted document : converted.values()) {
+      for (Converted document : List.copyOf(converted.values())) {
         String documentId = document.document().id();
         MDC.put(MDC_DOCUMENT_ID, documentId);
         try {
@@ -296,7 +371,7 @@ public final class DefaultBundleRenderer implements BundleRenderer {
           try {
             facts = PdfInspection.inspect(document.pdf(), jobDirectory);
           } catch (PdfInspection.InspectionException e) {
-            throw new BundleGenerationException(
+            BundleGenerationException failure = new BundleGenerationException(
                 BundleErrorCode.DOCUMENT_INSPECTION_FAILED, BundleStage.INSPECT,
                 "Document '" + documentId + "' failed inspection after conversion: "
                     + e.getMessage() + ".",
@@ -304,6 +379,12 @@ public final class DefaultBundleRenderer implements BundleRenderer {
                     + "the bundle.",
                 List.of(new DocumentFailure(documentId, document.document().reference(),
                     BundleErrorCode.DOCUMENT_INSPECTION_FAILED, e.getMessage())), e);
+            if (!substitutes(failure)) {
+              throw failure;
+            }
+            converted.remove(documentId);
+            markMissing(document.document(), failure.code(), e.getMessage(), e);
+            continue;
           }
           if (!facts.hasExtractableText()) {
             addWarning(BundleWarning.forDocument(WARNING_NO_EXTRACTABLE_TEXT,
@@ -332,12 +413,20 @@ public final class DefaultBundleRenderer implements BundleRenderer {
         Map<DocumentReference, Resolution.Spooled> spooled) {
       Map<String, Converted> outcome = new LinkedHashMap<>();
       for (BundleDocument document : request.allDocuments()) {
+        if (missing.containsKey(document.id())) {
+          continue;
+        }
         MDC.put(MDC_DOCUMENT_ID, document.id());
         try {
           long start = System.nanoTime();
           outcome.put(document.id(), convertOne(document, spooled));
           log.info("Converted document '{}' in {} ms", document.id(),
               Duration.ofNanos(System.nanoTime() - start).toMillis());
+        } catch (BundleGenerationException e) {
+          if (!substitutes(e)) {
+            throw e;
+          }
+          markMissing(document, e.code(), e.documentFailures().getFirst().detail(), e.getCause());
         } finally {
           MDC.remove(MDC_DOCUMENT_ID);
         }
@@ -455,12 +544,13 @@ public final class DefaultBundleRenderer implements BundleRenderer {
 
     private BundleGenerationException unsupportedMediaType(
         BundleDocument document, String effectiveType) {
-      if (docmosis == null && BuiltInMediaTypes.OFFICE.contains(effectiveType)) {
+      if ((docmosis == null || !docmosis.convertsFiles())
+          && BuiltInMediaTypes.OFFICE.contains(effectiveType)) {
         return new BundleGenerationException(
             BundleErrorCode.DOCMOSIS_NOT_CONFIGURED, BundleStage.CONVERT,
             "Document '" + document.id() + "' is an office-format source ('" + effectiveType
-                + "') but the Docmosis render service is not configured, so there is no office "
-                + "conversion handler.",
+                + "') but the Docmosis render service is not configured for conversion, so there is "
+                + "no office conversion handler.",
             "Configure Docmosis (ccd.bundling.docmosis.convert-endpoint and "
                 + "ccd.bundling.docmosis.access-key — or call docmosis(...) on the renderer "
                 + "builder), or register a replacement handler for the media type through a "
@@ -492,9 +582,11 @@ public final class DefaultBundleRenderer implements BundleRenderer {
     }
 
     private AssemblyOutcome assemble(Map<String, Converted> converted, Optional<Path> coverPage) {
-      Map<String, PdfSource> handledPdfs = new LinkedHashMap<>();
+      Map<String, AssemblyContent> handledPdfs = new LinkedHashMap<>();
       converted.forEach((id, document) ->
           handledPdfs.put(id, new PdfSource(document.pdf(), document.generated())));
+      missing.forEach((id, document) -> handledPdfs.put(id,
+          new MissingDocumentPage(document.reason().message())));
       AssemblyMapping.Mapped mapped =
           AssemblyMapping.map(request, handledPdfs, coverPage, watermarkImages);
       AssemblyResult result;
@@ -542,9 +634,18 @@ public final class DefaultBundleRenderer implements BundleRenderer {
     private BundleResult buildResult(AssemblyOutcome assembly, Map<String, Converted> converted) {
       AssemblyResult result = assembly.result();
       List<DocumentResult> documents = new ArrayList<>();
+      List<MissingDocument> missingDocuments = new ArrayList<>();
       for (int i = 0; i < assembly.origins().size(); i++) {
         BundleDocument origin = assembly.origins().get(i).document();
         if (origin == null) {
+          continue;
+        }
+        Missing missingDocument = missing.get(origin.id());
+        if (missingDocument != null) {
+          missingDocuments.add(new MissingDocument(origin.id(), origin.reference(),
+              missingDocument.reason(), missingDocument.code(),
+              missingDocument.detail(), result.items().get(i).startPage(), origin.title(),
+              assembly.origins().get(i).sectionPath()));
           continue;
         }
         Converted convertedDocument = converted.get(origin.id());
@@ -555,7 +656,7 @@ public final class DefaultBundleRenderer implements BundleRenderer {
       FileArtifact artifact = new FileArtifact(result.outputPdf(), request.fileName(),
           assembly.size(), sha256Of(result.outputPdf()), result.totalPages());
       Path directory = jobDirectory;
-      return new BundleResult(artifact, warnings, documents, Map.copyOf(timings),
+      return new BundleResult(artifact, warnings, documents, missingDocuments, Map.copyOf(timings),
           () -> JobDirectory.deleteRecursively(directory));
     }
 
