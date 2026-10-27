@@ -88,6 +88,12 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
         }
       }
     }
+    // Fields that declare their own access, learned before the loops below so the injection can
+    // leave them alone; the declarations themselves are merged in afterwards.
+    Table<String, String, Set<Permission>> declaredAccess = HashBasedTable.create();
+    addPermissionsFromFields(declaredAccess, config.getCaseClass(), null, null);
+    Set<String> explicitlyAccessedFields = ImmutableSet.copyOf(declaredAccess.rowKeySet());
+
     // Add Permissions for all tabs.
     for (String role : ImmutableSet.copyOf(fieldRolePermissions.columnKeySet())) {
       if (!config.getRolesWithNoHistory().contains(role)) {
@@ -95,14 +101,18 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       }
 
       // Add read for any tab fields
-      if (!config.isNoImplicitTabReadAccess()) {
-        for (Tab<T, R> tab : config.getTabs()) {
-          for (TabField field : tab.getFields()) {
-            boolean giveReadPermission =
-                tab.getForRolesAsString().contains(role) || tab.getForRoles().isEmpty();
-            if (giveReadPermission && !fieldRolePermissions.contains(field.getId(), role)) {
-              fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
-            }
+      for (Tab<T, R> tab : config.getTabs()) {
+        for (TabField field : tab.getFields()) {
+          // A field that declares its own access has said who may read it. Injecting read here as
+          // well would widen that, and because this runs before addPermissionsFromFields the
+          // declaration could not take it back.
+          if (explicitlyAccessedFields.contains(field.getId())) {
+            continue;
+          }
+          boolean giveReadPermission =
+              tab.getForRolesAsString().contains(role) || tab.getForRoles().isEmpty();
+          if (giveReadPermission && !fieldRolePermissions.contains(field.getId(), role)) {
+            fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
           }
         }
       }

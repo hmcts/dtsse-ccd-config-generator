@@ -90,20 +90,6 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   void explicitStateGrants();
 
   /**
-   * Stop a tab granting read on the fields it places.
-   *
-   * <p>By default {@code AuthorisationCaseFieldGenerator} gives every role read on every field of
-   * a tab the role can see, which for a tab naming no roles means every role in the case type. A
-   * definition whose fields are scoped by their grant alone then loses that scoping: ia-bail shows
-   * one of 41 {@code progress_*} fields per role on an overview tab open to everyone, and all 41
-   * reached all roles. Call this to emit only the grants the fields declare.
-   *
-   * <p>Workbasket and search fields still take read from where they appear, since a field a role
-   * can search on has to be readable by it.
-   */
-  void noImplicitTabReadAccess();
-
-  /**
    * Suppress the {@code CaseHistory} tab the generator adds when no tab declares that ID.
    *
    * <p>By default {@code CaseTypeTabGenerator} prepends a tab {@code TabID=CaseHistory} placing the

@@ -170,11 +170,6 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
-  public void noImplicitTabReadAccess() {
-    config.noImplicitTabReadAccess = true;
-  }
-
-  @Override
   public void noCaseHistoryTab() {
     config.noCaseHistoryTab = true;
   }
