@@ -33,5 +33,12 @@
     "CaseTypeID": "DeclaredFieldAccess",
     "LiveFrom": "01/01/2017",
     "UserRole": "caseworker-publiclaw-courtadmin"
+  },
+  {
+    "CRUD": "R",
+    "CaseFieldID": "unwrappedChild",
+    "CaseTypeID": "DeclaredFieldAccess",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-courtadmin"
   }
 ]

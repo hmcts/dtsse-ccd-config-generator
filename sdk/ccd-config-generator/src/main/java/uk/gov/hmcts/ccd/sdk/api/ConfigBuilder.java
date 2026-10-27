@@ -90,17 +90,22 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   void explicitStateGrants();
 
   /**
-   * Stop a tab adding read on a field that declares its own access.
+   * Stop a tab that names no roles from adding read on a field that names its own access classes.
    *
    * <p>{@code AuthorisationCaseFieldGenerator} adds read for every field on a tab a role can see,
    * before it reads the field's {@code @CCD(access)}, so a field that names who may read it is
    * widened to every role and the declaration cannot take it back. ia-bail scopes 41
    * {@code progress_*} fields that way on an overview tab open to everyone, and all 41 reached all
-   * roles. Call this and a field that declares access keeps only what it declares.
+   * roles. Call this and such a field takes no read from the tab.
    *
-   * <p>A field that declares nothing is unaffected, so tab labels - which exist only on their tab
-   * and have no other source of read - and tabs naming roles keep working. Workbasket and search
-   * fields are unaffected too, since a field a role can search on has to be readable by it.
+   * <p>This stops tab read and nothing else. Permissions from the field's events still apply, as
+   * does the read added for the workbasket and search fields a role can use, so a field granted
+   * through either keeps it.
+   *
+   * <p>Unaffected: a field whose own {@code @CCD} names no access class, including one inside a
+   * {@code @JsonUnwrapped} parent that names some, and a field from {@code TabBuilder.label(...)},
+   * which exists only on its tab and has no other source of read; and any tab declaring
+   * {@code forRoles(...)}, which is already scoped to those roles.
    */
   default void tabsRespectDeclaredFieldAccess() {
     // Default no-op for backward compatibility; implementations may override.

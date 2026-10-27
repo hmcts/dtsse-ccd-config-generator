@@ -88,11 +88,9 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
         }
       }
     }
-    // Fields that declare their own access, learned before the loops below so the injection can
-    // leave them alone; the declarations themselves are merged in afterwards.
-    Table<String, String, Set<Permission>> declaredAccess = HashBasedTable.create();
-    addPermissionsFromFields(declaredAccess, config.getCaseClass(), null, null);
-    Set<String> explicitlyAccessedFields = ImmutableSet.copyOf(declaredAccess.rowKeySet());
+    Set<String> fieldsDeclaringAccess = config.isTabsRespectDeclaredFieldAccess()
+        ? fieldsDeclaringAccess(config.getCaseClass(), null)
+        : Set.of();
 
     // Add Permissions for all tabs.
     for (String role : ImmutableSet.copyOf(fieldRolePermissions.columnKeySet())) {
@@ -103,15 +101,15 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       // Add read for any tab fields
       for (Tab<T, R> tab : config.getTabs()) {
         for (TabField field : tab.getFields()) {
-          // A field that declares its own access has said who may read it. Injecting read here as
-          // well would widen that, and because this runs before addPermissionsFromFields the
-          // declaration could not take it back.
-          if (config.isTabsRespectDeclaredFieldAccess()
-              && explicitlyAccessedFields.contains(field.getId())) {
-            continue;
-          }
           boolean giveReadPermission =
               tab.getForRolesAsString().contains(role) || tab.getForRoles().isEmpty();
+          // A field on a tab open to every role, which has named who may read it: adding read here
+          // would widen that, and this runs before addPermissionsFromFields so the declaration
+          // could not take it back. A tab naming roles is already scoped, so it still grants.
+          if (tab.getForRoles().isEmpty()
+              && fieldsDeclaringAccess.contains(field.getId())) {
+            continue;
+          }
           if (giveReadPermission && !fieldRolePermissions.contains(field.getId(), role)) {
             fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
           }
@@ -179,6 +177,29 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       JsonUtils.mergeInto(output, permissions, new JsonUtils.AddMissing(), "CaseFieldID",
           "UserRole");
     }
+  }
+
+  /**
+   * Ids of the fields whose own {@code @CCD} names an access class. A {@code @JsonUnwrapped}
+   * parent passes its access down to its children for the grants themselves, but a child that
+   * names nothing has not said who may read it, so it is not listed here.
+   */
+  private static Set<String> fieldsDeclaringAccess(Class<?> parent, String prefix) {
+    Set<String> declaring = new HashSet<>();
+    for (java.lang.reflect.Field field : getCaseFields(parent)) {
+      JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
+      if (null != unwrapped) {
+        String newPrefix = isNullOrEmpty(prefix)
+            ? unwrapped.prefix() : prefix.concat(capitalize(unwrapped.prefix()));
+        declaring.addAll(fieldsDeclaringAccess(field.getType(), newPrefix));
+        continue;
+      }
+      CCD ccdAnnotation = field.getAnnotation(CCD.class);
+      if (null != ccdAnnotation && ccdAnnotation.access().length > 0) {
+        declaring.add(getFieldId(field, prefix));
+      }
+    }
+    return declaring;
   }
 
   private static void addPermissionsFromFields(

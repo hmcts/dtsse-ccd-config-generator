@@ -35,8 +35,11 @@ public class DeclaredFieldAccessCaseType
     builder.tab("overview", "Overview")
         .field(DeclaredFieldAccessCaseData::getSolicitorOnlyPanel)
         .field(DeclaredFieldAccessCaseData::getTabOnlyField)
+        .field(DeclaredFieldAccessCaseData::getNoGrantsField)
+        .field("unwrappedChild")
         .label("overviewLabel", null, "A label");
 
+    // A field declaring access only for the solicitor, on a tab built for the courtadmin.
     builder.tab("judicial", "Judicial")
         .forRoles(HMCTS_ADMIN)
         .field(DeclaredFieldAccessCaseData::getRoleScopedTabField);
