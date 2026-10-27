@@ -94,9 +94,14 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
    *
    * <p>{@code AuthorisationCaseFieldGenerator} adds read for every field on a tab a role can see,
    * before it reads the field's {@code @CCD(access)}, so a field that names who may read it is
-   * widened to every role and the declaration cannot take it back. ia-bail scopes 41
-   * {@code progress_*} fields that way on an overview tab open to everyone, and all 41 reached all
-   * roles. Call this and such a field takes no read from the tab.
+   * widened to every role and the declaration cannot take it back. Call this and such a field takes
+   * no read from the tab.
+   *
+   * <p>Only a field whose own {@code @CCD} names an access class is covered, so this is no help to
+   * a definition that relies on the injection to grant read in the first place: ia-bail's 41
+   * {@code progress_*} fields each want one role and reach all of them, but they name no access
+   * class, so calling this changes nothing for them. Such a definition has to name the access on
+   * the fields first, and then this is what stops it being widened again.
    *
    * <p>This stops tab read and nothing else. Permissions from the field's events still apply, as
    * does the read added for the workbasket and search fields a role can use, so a field granted

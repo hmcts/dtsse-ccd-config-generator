@@ -13,6 +13,7 @@ import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Multimaps;
 import com.google.common.collect.SetMultimap;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
@@ -26,7 +27,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
-import java.util.TreeSet;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ArrayUtils;
@@ -94,6 +95,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       }
     }
     SetMultimap<String, String> readWithheld = HashMultimap.create();
+    SetMultimap<String, String> widenedByScopedTab = HashMultimap.create();
     Set<String> fieldsDeclaringAccess = config.isUnscopedTabsRespectDeclaredFieldAccess()
         ? fieldsDeclaringAccess(config.getCaseClass(), null)
         : Set.of();
@@ -111,13 +113,22 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
         // could not take it back. A tab naming roles is already scoped, so it still grants.
         boolean respectDeclared = tab.getForRoles().isEmpty();
         for (TabField field : tab.getFields()) {
-          if (respectDeclared && fieldsDeclaringAccess.contains(field.getId())) {
-            readWithheld.put(field.getId(), role);
-            continue;
-          }
           boolean giveReadPermission =
               tab.getForRolesAsString().contains(role) || tab.getForRoles().isEmpty();
-          if (giveReadPermission && !fieldRolePermissions.contains(field.getId(), role)) {
+          boolean wouldGrant =
+              giveReadPermission && !fieldRolePermissions.contains(field.getId(), role);
+          boolean declaresAccess = fieldsDeclaringAccess.contains(field.getId());
+
+          if (respectDeclared && declaresAccess) {
+            if (wouldGrant) {
+              readWithheld.put(field.getId(), role);
+            }
+            continue;
+          }
+          if (wouldGrant && declaresAccess) {
+            widenedByScopedTab.put(field.getId(), role);
+          }
+          if (wouldGrant) {
             fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
           }
         }
@@ -148,9 +159,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
 
     addPermissionsFromFields(fieldRolePermissions, config.getCaseClass(), null, null);
 
-    reportWithheldTabRead(readWithheld, fieldRolePermissions);
-
-    reportWithheldTabRead(readWithheld, fieldRolePermissions);
+    reportWithheldTabRead(readWithheld, widenedByScopedTab, fieldRolePermissions);
 
     File folder = new File(root.getPath(), "AuthorisationCaseField");
     folder.mkdir();
@@ -191,29 +200,45 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
   }
 
   /**
-   * Says what {@code unscopedTabsRespectDeclaredFieldAccess()} took away, so adopting it is not blind: the
-   * fields whose tab read was withheld, and separately any left readable by nobody, which means the
-   * access classes they name grant no read at all.
+   * Says what {@code unscopedTabsRespectDeclaredFieldAccess()} did, so adopting it is not blind:
+   * the read it withheld and from which roles, any field left readable by nobody, which means the
+   * access classes it names grant no read at all, and any field still widened by a tab that names
+   * roles, where the opt-in does not reach.
    */
   private void reportWithheldTabRead(
       SetMultimap<String, String> readWithheld,
+      SetMultimap<String, String> widenedByScopedTab,
       Table<String, String, Set<Permission>> fieldRolePermissions
   ) {
-    if (readWithheld.isEmpty()) {
-      return;
+    // Only where the role ends with no read: a role the declaration grants anyway lost nothing.
+    SetMultimap<String, String> lostRead = HashMultimap.create();
+    readWithheld.forEach((field, role) -> {
+      Set<Permission> granted = fieldRolePermissions.get(field, role);
+      if (granted == null || !granted.contains(Permission.R)) {
+        lostRead.put(field, role);
+      }
+    });
+
+    if (!lostRead.isEmpty()) {
+      log.info("unscopedTabsRespectDeclaredFieldAccess withheld tab read on {} field(s): {}",
+          lostRead.keySet().size(), new TreeMap<>(Multimaps.asMap(lostRead)));
+
+      List<String> unreadable = lostRead.keySet().stream()
+          .filter(field -> fieldRolePermissions.row(field).values().stream()
+              .noneMatch(perms -> perms.contains(Permission.R)))
+          .sorted()
+          .collect(Collectors.toList());
+
+      if (!unreadable.isEmpty()) {
+        log.warn("unscopedTabsRespectDeclaredFieldAccess leaves {} field(s) readable by no role,"
+            + " so the access classes they name grant no read: {}", unreadable.size(), unreadable);
+      }
     }
-    List<String> unreadable = readWithheld.keySet().stream()
-        .filter(field -> fieldRolePermissions.row(field).values().stream()
-            .noneMatch(perms -> perms.contains(Permission.R)))
-        .sorted()
-        .collect(Collectors.toList());
 
-    log.info("unscopedTabsRespectDeclaredFieldAccess withheld tab read on {} field(s): {}",
-        readWithheld.keySet().size(), new TreeSet<>(readWithheld.keySet()));
-
-    if (!unreadable.isEmpty()) {
-      log.warn("unscopedTabsRespectDeclaredFieldAccess leaves {} field(s) readable by no role, so the"
-          + " access classes they name grant no read: {}", unreadable.size(), unreadable);
+    if (!widenedByScopedTab.isEmpty()) {
+      log.warn("{} field(s) naming their own access are still given read by a tab naming roles,"
+          + " which unscopedTabsRespectDeclaredFieldAccess does not cover: {}",
+          widenedByScopedTab.keySet().size(), new TreeMap<>(Multimaps.asMap(widenedByScopedTab)));
     }
   }
 
