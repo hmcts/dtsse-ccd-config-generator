@@ -11,9 +11,15 @@ import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 
 /**
- * A tab places four things: a field declaring its own access, a field declaring none, a tab label,
- * and — on a second tab scoped to one role — a field declaring none. Only the first keeps the
- * access it declares; the rest still take read from the tab they appear on.
+ * The {@code overview} tab names no roles and places five things: a field naming
+ * {@code SolicitorAccess}, a field naming nothing, a field naming an access class that grants
+ * nothing, a field inside a {@code @JsonUnwrapped} parent that names access but which names none
+ * itself, and a label. The {@code judicial} tab names {@code HMCTS_ADMIN} and places a field naming
+ * {@code SolicitorAccess}.
+ *
+ * <p>So the checked-in sheet shows the first readable only by the solicitor, the third readable by
+ * nobody, and the rest still taking read from the tab they are on — including the field on the
+ * tab that names a role, which keeps read for that role.
  */
 @Component
 public class DeclaredFieldAccessCaseType
@@ -22,7 +28,7 @@ public class DeclaredFieldAccessCaseType
   @Override
   public void configure(ConfigBuilder<DeclaredFieldAccessCaseData, ExplicitState, UserRole> builder) {
     builder.caseType("DeclaredFieldAccess", "DeclaredFieldAccess", "Declared field access case type");
-    builder.tabsRespectDeclaredFieldAccess();
+    builder.unscopedTabsRespectDeclaredFieldAccess();
 
     builder.event("edit")
         .forState(Open)

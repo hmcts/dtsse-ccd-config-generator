@@ -9,6 +9,7 @@ import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.google.common.collect.HashBasedTable;
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -25,6 +26,9 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ArrayUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Component;
@@ -40,6 +44,7 @@ import uk.gov.hmcts.ccd.sdk.api.SearchField;
 import uk.gov.hmcts.ccd.sdk.api.Tab;
 import uk.gov.hmcts.ccd.sdk.api.TabField;
 
+@Slf4j
 @Component
 class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
 
@@ -88,7 +93,8 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
         }
       }
     }
-    Set<String> fieldsDeclaringAccess = config.isTabsRespectDeclaredFieldAccess()
+    SetMultimap<String, String> readWithheld = HashMultimap.create();
+    Set<String> fieldsDeclaringAccess = config.isUnscopedTabsRespectDeclaredFieldAccess()
         ? fieldsDeclaringAccess(config.getCaseClass(), null)
         : Set.of();
 
@@ -100,16 +106,17 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
 
       // Add read for any tab fields
       for (Tab<T, R> tab : config.getTabs()) {
+        // A field on a tab open to every role, which has named who may read it: adding read here
+        // would widen that, and this runs before addPermissionsFromFields so the declaration
+        // could not take it back. A tab naming roles is already scoped, so it still grants.
+        boolean respectDeclared = tab.getForRoles().isEmpty();
         for (TabField field : tab.getFields()) {
-          boolean giveReadPermission =
-              tab.getForRolesAsString().contains(role) || tab.getForRoles().isEmpty();
-          // A field on a tab open to every role, which has named who may read it: adding read here
-          // would widen that, and this runs before addPermissionsFromFields so the declaration
-          // could not take it back. A tab naming roles is already scoped, so it still grants.
-          if (tab.getForRoles().isEmpty()
-              && fieldsDeclaringAccess.contains(field.getId())) {
+          if (respectDeclared && fieldsDeclaringAccess.contains(field.getId())) {
+            readWithheld.put(field.getId(), role);
             continue;
           }
+          boolean giveReadPermission =
+              tab.getForRolesAsString().contains(role) || tab.getForRoles().isEmpty();
           if (giveReadPermission && !fieldRolePermissions.contains(field.getId(), role)) {
             fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
           }
@@ -140,6 +147,10 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
     }
 
     addPermissionsFromFields(fieldRolePermissions, config.getCaseClass(), null, null);
+
+    reportWithheldTabRead(readWithheld, fieldRolePermissions);
+
+    reportWithheldTabRead(readWithheld, fieldRolePermissions);
 
     File folder = new File(root.getPath(), "AuthorisationCaseField");
     folder.mkdir();
@@ -176,6 +187,33 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       Path output = Paths.get(folder.getPath(), filename + ".json");
       JsonUtils.mergeInto(output, permissions, new JsonUtils.AddMissing(), "CaseFieldID",
           "UserRole");
+    }
+  }
+
+  /**
+   * Says what {@code unscopedTabsRespectDeclaredFieldAccess()} took away, so adopting it is not blind: the
+   * fields whose tab read was withheld, and separately any left readable by nobody, which means the
+   * access classes they name grant no read at all.
+   */
+  private void reportWithheldTabRead(
+      SetMultimap<String, String> readWithheld,
+      Table<String, String, Set<Permission>> fieldRolePermissions
+  ) {
+    if (readWithheld.isEmpty()) {
+      return;
+    }
+    List<String> unreadable = readWithheld.keySet().stream()
+        .filter(field -> fieldRolePermissions.row(field).values().stream()
+            .noneMatch(perms -> perms.contains(Permission.R)))
+        .sorted()
+        .collect(Collectors.toList());
+
+    log.info("unscopedTabsRespectDeclaredFieldAccess withheld tab read on {} field(s): {}",
+        readWithheld.keySet().size(), new TreeSet<>(readWithheld.keySet()));
+
+    if (!unreadable.isEmpty()) {
+      log.warn("unscopedTabsRespectDeclaredFieldAccess leaves {} field(s) readable by no role, so the"
+          + " access classes they name grant no read: {}", unreadable.size(), unreadable);
     }
   }
 

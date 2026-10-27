@@ -106,8 +106,15 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
    * {@code @JsonUnwrapped} parent that names some, and a field from {@code TabBuilder.label(...)},
    * which exists only on its tab and has no other source of read; and any tab declaring
    * {@code forRoles(...)}, which is already scoped to those roles.
+   *
+   * <p>This subtracts, and only the declaration puts anything back. A field whose access classes
+   * name two of eight roles becomes readable by those two and no others, however many could read
+   * it off the tab before — so a definition whose fields are authorised individually wants every
+   * role it means to grant named on the field, not just the ones that edit it. The generator logs
+   * the fields whose tab read it withheld, and warns about any left readable by nobody, so what a
+   * case type gives up by calling this is visible at generation time.
    */
-  default void tabsRespectDeclaredFieldAccess() {
+  default void unscopedTabsRespectDeclaredFieldAccess() {
     // Default no-op for backward compatibility; implementations may override.
   }
 
