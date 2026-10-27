@@ -170,6 +170,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
+  public void tabsRespectDeclaredFieldAccess() {
+    config.tabsRespectDeclaredFieldAccess = true;
+  }
+
+  @Override
   public void noCaseHistoryTab() {
     config.noCaseHistoryTab = true;
   }

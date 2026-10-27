@@ -106,7 +106,8 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
           // A field that declares its own access has said who may read it. Injecting read here as
           // well would widen that, and because this runs before addPermissionsFromFields the
           // declaration could not take it back.
-          if (explicitlyAccessedFields.contains(field.getId())) {
+          if (config.isTabsRespectDeclaredFieldAccess()
+              && explicitlyAccessedFields.contains(field.getId())) {
             continue;
           }
           boolean giveReadPermission =

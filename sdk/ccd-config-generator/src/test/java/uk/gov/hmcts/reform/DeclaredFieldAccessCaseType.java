@@ -22,6 +22,7 @@ public class DeclaredFieldAccessCaseType
   @Override
   public void configure(ConfigBuilder<DeclaredFieldAccessCaseData, ExplicitState, UserRole> builder) {
     builder.caseType("DeclaredFieldAccess", "DeclaredFieldAccess", "Declared field access case type");
+    builder.tabsRespectDeclaredFieldAccess();
 
     builder.event("edit")
         .forState(Open)
