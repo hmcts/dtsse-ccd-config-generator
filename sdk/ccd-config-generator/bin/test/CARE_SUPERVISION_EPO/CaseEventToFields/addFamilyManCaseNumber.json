@@ -1,0 +1,27 @@
+[
+  {
+    "PageID": 1,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "familyManCaseNumber",
+    "CaseEventID": "addFamilyManCaseNumber",
+    "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 1,
+    "DisplayContext": "OPTIONAL",
+    "PageDisplayOrder": 1,
+    "ShowSummaryChangeOption" : "Y",
+    "CallBackURLMidEvent" : "${CCD_DEF_CASE_SERVICE_BASE_URL}/callbacks/mid-event?page=1&eventId=addFamilyManCaseNumber"
+  },
+  {
+    "CaseEventID" : "addFamilyManCaseNumber",
+    "CaseFieldID" : "caseNotes",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "DisplayContext" : "OPTIONAL",
+    "LiveFrom" : "01/01/2017",
+    "PageColumnNumber" : 1,
+    "PageDisplayOrder" : 1,
+    "PageFieldDisplayOrder": 2,
+    "PageID" : 1,
+    "ShowSummaryChangeOption" : "Y"
+  }
+]

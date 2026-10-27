@@ -94,6 +94,9 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     config.searchParties = buildBuilders(searchParty, SearchPartyBuilder::build);
     config.noticeOfChange = noticeOfChangeBuilder == null ? null : noticeOfChangeBuilder.build(config.caseType);
     config.complexTypeAuthorisations = Lists.newArrayList(complexTypeAuthorisations);
+    // Resolve @CCD(gate) fields against the current environment once, so every ID-based generator
+    // gates the same set. Empty unless a field is gated off, keeping ungated definitions unchanged.
+    config.gatedOffFieldIds = FieldUtils.gatedOffFieldIds(config.caseClass);
 
     return config;
   }
@@ -162,6 +165,18 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   @Override
   public void shutterServiceExclude(R... roles) {
     config.shutterServiceExcludedRoles.addAll(Set.of(roles));
+  }
+
+  @Override
+  @SafeVarargs
+  public final void includeCaseRolesInCaseTypeAuthorisation(R... roles) {
+    for (R role : roles) {
+      if (!role.getRole().matches("\\[.+\\]")) {
+        throw new IllegalArgumentException(
+            "Case-type case-role authorisation requires a CCD case role: " + role.getRole());
+      }
+    }
+    config.caseRolesWithCaseTypeAuthorisation.addAll(Set.of(roles));
   }
 
   @Override
@@ -319,6 +334,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     Set<List<String>> existingAccessTypeKeys = config.accessTypes.stream()
         .map(ConfigBuilderImpl::accessTypeKey)
         .collect(Collectors.toCollection(HashSet::new));
+    // A mapping declared against a literal role name carries no HasRole constant, so read its name
+    // from roleName instead — the same either/or RoleToAccessProfilesGenerator emits the row from.
     Set<String> mappedRoleNames = config.caseRoleToAccessProfiles.stream()
         .map(CaseRoleToAccessProfile::getRoleName)
         .collect(Collectors.toCollection(HashSet::new));

@@ -1,0 +1,24 @@
+[
+  {
+    "TabDisplayOrder": 10,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "hearingPreferencesLocationPreferencesLocal",
+    "UserRole": "caseworker-publiclaw-bulkscan",
+    "Channel": "CaseWorker",
+    "TabFieldDisplayOrder": 1,
+    "TabLabel": "Test multiple tabs get created for each user",
+    "TabID": "TabWithUserRolescaseworker-publiclaw-bulkscan"
+  },
+  {
+    "TabDisplayOrder": 10,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "hearingPreferencesLocationPreferencesOnline",
+    "UserRole": "",
+    "Channel": "CaseWorker",
+    "TabFieldDisplayOrder": 2,
+    "TabLabel": "Test multiple tabs get created for each user",
+    "TabID": "TabWithUserRolescaseworker-publiclaw-bulkscan"
+  }
+]

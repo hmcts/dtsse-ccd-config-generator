@@ -1,0 +1,9 @@
+[
+  {
+    "CRUD": "CRU",
+    "CaseEventID": "create",
+    "CaseTypeID": "GatedField",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor"
+  }
+]

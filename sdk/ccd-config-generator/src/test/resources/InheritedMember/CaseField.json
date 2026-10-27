@@ -1,0 +1,50 @@
+[
+  {
+    "CaseTypeID": "InheritedMember",
+    "FieldType": "InheritedMemberAppellant",
+    "ID": "appellant",
+    "Label": "Appellant",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "InheritedMember",
+    "FieldType": "Text",
+    "ID": "baseField",
+    "Label": "A base field",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "InheritedMember",
+    "FieldType": "CaseHistoryViewer",
+    "ID": "caseHistory",
+    "Label": " ",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "InheritedMember",
+    "FieldType": "Text",
+    "ID": "hasJointParty",
+    "Label": "Has joint party",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "InheritedMember",
+    "FieldType": "Text",
+    "ID": "partyName",
+    "Label": "Name",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "InheritedMember",
+    "FieldType": "InheritedMemberRepresentative",
+    "ID": "representative",
+    "Label": "Representative",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  }
+]

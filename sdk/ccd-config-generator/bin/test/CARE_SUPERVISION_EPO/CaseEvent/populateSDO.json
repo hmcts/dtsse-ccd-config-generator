@@ -1,0 +1,15 @@
+[
+  {
+    "PreConditionState(s)": "Submitted",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "PostConditionState": "Gatekeeping",
+    "Description": "Populate standard directions",
+    "DisplayOrder": 14,
+    "EndButtonLabel": "Save and continue",
+    "ID": "populateSDO",
+    "SecurityClassification": "Public",
+    "Name": "Populate standard directions",
+    "Publish": "N"
+  }
+]

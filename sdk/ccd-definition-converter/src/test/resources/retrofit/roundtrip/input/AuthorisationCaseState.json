@@ -1,0 +1,30 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseStateID": "Open",
+    "UserRole": "caseworker-rt",
+    "CRUD": "CRU"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseStateID": "Open",
+    "UserRole": "citizen",
+    "CRUD": "R"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseStateID": "PREPARE_FOR_HEARING",
+    "UserRole": "caseworker-rt",
+    "CRUD": "CRU"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseStateID": "Closed",
+    "UserRole": "caseworker-rt",
+    "CRUD": "CRUD"
+  }
+]

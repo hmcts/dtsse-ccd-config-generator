@@ -19,14 +19,24 @@ class AuthorisationCaseTypeGenerator<T, S, R extends HasRole> implements ConfigG
     if (roleEnum.isEnum()) {
       for (Object enumConstant : roleEnum.getEnumConstants()) {
         if (enumConstant instanceof HasRole r) {
-          // Add non case roles.
-          if (!r.getRole().matches("\\[.+\\]")) {
+          // Add non case roles. Case roles are opt-in because most CCD definitions authorise them
+          // through case-role assignment rather than static case-type authorisation.
+          if (!r.getRole().matches("\\[.+\\]")
+              || config.getCaseRolesWithCaseTypeAuthorisation().contains(r)) {
             boolean shuttered =
                 (config.isShutterService() || config.getShutterServiceForRoles().contains(r))
                     && !config.getShutterServiceExcludedRoles().contains(r);
+            String crud = shuttered ? "D" : r.getCaseTypePermissions();
+            // CRUD is a required column on this sheet, so the importer fails the whole definition
+            // on a row that leaves it blank (DefinitionDataItem.findAttribute throws
+            // "Couldn't find the column CRUD in the sheet AuthorisationCaseType"). A role with no
+            // case-type grant is simply absent from a hand-written definition; emit nothing.
+            if (crud == null || crud.isBlank()) {
+              continue;
+            }
             Map<String, Object> entry = JsonUtils.caseRow(config.getCaseType());
             entry.put("UserRole", r.getRole());
-            entry.put("CRUD", shuttered ? "D" : r.getCaseTypePermissions());
+            entry.put("CRUD", crud);
             result.add(entry);
           }
         }

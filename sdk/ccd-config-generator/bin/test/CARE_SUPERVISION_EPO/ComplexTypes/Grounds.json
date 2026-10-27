@@ -1,0 +1,17 @@
+[
+  {
+    "ID": "Grounds",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "String",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "thresholdReason"
+  },
+  {
+    "ID": "Grounds",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "thresholdDetails"
+  }
+]

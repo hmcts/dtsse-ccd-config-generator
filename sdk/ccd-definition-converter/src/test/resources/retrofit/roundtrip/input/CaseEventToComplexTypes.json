@@ -1,0 +1,29 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseEventID": "updateCase",
+    "CaseFieldID": "changeOrganisationRequestField",
+    "ListElementCode": "OrganisationToAdd.OrganisationID",
+    "DisplayContext": "OPTIONAL",
+    "FieldDisplayOrder": 1
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseEventID": "updateCase",
+    "CaseFieldID": "changeOrganisationRequestField",
+    "ListElementCode": "OrganisationToAdd.OrganisationName",
+    "DisplayContext": "OPTIONAL",
+    "FieldDisplayOrder": 2
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseEventID": "updateCase",
+    "CaseFieldID": "changeOrganisationRequestField",
+    "ListElementCode": "CaseRoleId",
+    "DisplayContext": "OPTIONAL",
+    "FieldDisplayOrder": 3
+  }
+]
