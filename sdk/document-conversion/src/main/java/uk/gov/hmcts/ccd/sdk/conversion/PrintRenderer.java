@@ -58,10 +58,9 @@ final class PrintRenderer {
     }
   }
 
-  /** Renders each page of a PDF; returns the page count. */
-  int renderPdf(Path pdf, String title, Path output) throws IOException {
-    try (PDDocument source = PdfChecks.load(pdf, scratchDirectory);
-        PDDocument out = newDocument()) {
+  /** Renders each page of an open PDF; returns the page count. */
+  int renderPdf(PDDocument source, String title, Path output) throws IOException {
+    try (PDDocument out = newDocument()) {
       PDFRenderer renderer = new PDFRenderer(source);
       renderer.setSubsamplingAllowed(false);
       for (int i = 0; i < source.getNumberOfPages(); i++) {

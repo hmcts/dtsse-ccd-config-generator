@@ -16,6 +16,11 @@ public record ConversionWarning(Code code, String message) {
     /** No usable media type was declared; it was inferred from the file name's extension. */
     MEDIA_TYPE_INFERRED,
     /** CMYK output was near the size limit, so it was converted in greyscale instead. */
-    COLOUR_REDUCED_FOR_SIZE
+    COLOUR_REDUCED_FOR_SIZE,
+    /**
+     * The letter has pages added as they are, which may not meet the requested
+     * {@link PdfStandard}, so the file is not identified as meeting it. Converted pages still do.
+     */
+    STANDARD_NOT_CLAIMED
   }
 }

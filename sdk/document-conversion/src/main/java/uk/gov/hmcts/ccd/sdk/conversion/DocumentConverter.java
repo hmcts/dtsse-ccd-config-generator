@@ -7,11 +7,14 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import org.apache.pdfbox.pdmodel.PDDocument;
 import uk.gov.hmcts.ccd.sdk.conversion.ConversionException.Reason;
 import uk.gov.hmcts.ccd.sdk.conversion.ConversionWarning.Code;
 import uk.gov.hmcts.ccd.sdk.conversion.detect.MediaTypeDetection;
@@ -107,7 +110,9 @@ public final class DocumentConverter {
     }
     Path work = createWorkDirectory();
     try {
-      Assembled letter = assemble(title, parts, options, Files.createDirectory(
+      // Docmosis output is the same whatever the colour, so a greyscale retry reuses it.
+      OfficePdfs officePdfs = new OfficePdfs(work, new IdentityHashMap<>());
+      Assembled letter = assemble(title, parts, options, officePdfs, Files.createDirectory(
           work.resolve("attempt-1")));
       List<ConversionWarning> warnings = new ArrayList<>(letter.warnings());
       long threshold = options.greyscaleThresholdBytes();
@@ -116,13 +121,17 @@ public final class DocumentConverter {
         warnings = new ArrayList<>();
         PrintOptions grey = options.toBuilder().colour(PrintColour.GRAYSCALE).build();
         WorkDirectory.deleteRecursively(letter.file().getParent());
-        letter = assemble(title, parts, grey, Files.createDirectory(work.resolve("attempt-2")));
+        letter = assemble(title, parts, grey, officePdfs,
+            Files.createDirectory(work.resolve("attempt-2")));
         warnings.addAll(letter.warnings());
         warnings.add(new ConversionWarning(Code.COLOUR_REDUCED_FOR_SIZE,
             title + " was " + cmykSize + " bytes in CMYK, above " + threshold + " bytes ("
                 + Math.round(options.greyscaleAboveFraction() * 100) + "% of the "
                 + options.maxOutputBytes() + " byte limit); it was converted in greyscale ("
                 + letter.size() + " bytes)."));
+      }
+      for (Path officePdf : officePdfs.byPart().values()) {
+        Files.deleteIfExists(officePdf);
       }
       if (options.maxOutputBytes() > 0 && letter.size() > options.maxOutputBytes()) {
         throw new ConversionException(Reason.OUTPUT_TOO_LARGE,
@@ -149,8 +158,14 @@ public final class DocumentConverter {
       List<ConversionWarning> warnings, PrintOptions options) {
   }
 
+  /**
+   * Docmosis results kept for the life of one letter, in {@code dir}, by the part they came from.
+   */
+  private record OfficePdfs(Path dir, Map<PrintPart, Path> byPart) {
+  }
+
   private Assembled assemble(String title, List<PrintPart> parts, PrintOptions options,
-      Path dir) throws ConversionException, IOException {
+      OfficePdfs officePdfs, Path dir) throws ConversionException, IOException {
     List<ConversionWarning> warnings = new ArrayList<>();
     List<Path> pieces = new ArrayList<>();
     String mediaType = SupportedMediaTypes.PDF;
@@ -159,7 +174,8 @@ public final class DocumentConverter {
       switch (part) {
         case PrintPart.Convert convert -> {
           Path piece = WorkDirectory.createFile(dir, ".pdf");
-          Converted converted = convertInto(convert.source(), options, dir, piece, warnings);
+          Converted converted =
+              convertInto(convert.source(), options, dir, piece, warnings, officePdfs, convert);
           pieces.add(piece);
           pages = converted.pages();
           mediaType = parts.size() == 1 ? converted.mediaType() : SupportedMediaTypes.PDF;
@@ -179,7 +195,13 @@ public final class DocumentConverter {
     Path output = pieces.get(0);
     if (!alreadyFinal) {
       output = WorkDirectory.createFile(dir, ".pdf");
-      pages = PrintAssembler.join(pieces, title, options, dir, output);
+      boolean allPrintReady = parts.stream().allMatch(PrintPart.Convert.class::isInstance);
+      pages = PrintAssembler.join(pieces, title, options, allPrintReady, dir, output);
+      if (!allPrintReady && options.standard() == PdfStandard.PDF_X_1A_2001) {
+        warnings.add(new ConversionWarning(Code.STANDARD_NOT_CLAIMED, title + " includes pages"
+            + " added as they are, which may not meet " + PdfX1a.CONFORMANCE + ", so it is not"
+            + " identified as " + PdfX1a.CONFORMANCE + ". Its converted pages meet it."));
+      }
     }
     return new Assembled(output, pages, Files.size(output), mediaType, warnings, options);
   }
@@ -190,7 +212,7 @@ public final class DocumentConverter {
     try {
       List<ConversionWarning> warnings = new ArrayList<>();
       Path output = WorkDirectory.createFile(work, ".pdf");
-      Converted converted = convertInto(source, print, work, output, warnings);
+      Converted converted = convertInto(source, print, work, output, warnings, null, null);
       return new ConvertedPdf(output, work, converted.pages(), converted.mediaType(), warnings);
     } catch (ConversionException e) {
       WorkDirectory.deleteRecursively(work);
@@ -210,10 +232,12 @@ public final class DocumentConverter {
   }
 
   /**
-   * Converts one source into {@code output}; {@code print} is null for plain conversion.
+   * Converts one source into {@code output}; {@code print} is null for plain conversion. With
+   * {@code officePdfs}, Docmosis is called once per {@code part} and its result kept there.
    */
   private Converted convertInto(ConversionSource source, PrintOptions print, Path work,
-      Path output, List<ConversionWarning> warnings) throws ConversionException, IOException {
+      Path output, List<ConversionWarning> warnings, OfficePdfs officePdfs, PrintPart part)
+      throws ConversionException, IOException {
     String type = effectiveType(source, warnings);
     int pages;
     if (SupportedMediaTypes.IMAGES.contains(type)) {
@@ -221,10 +245,17 @@ public final class DocumentConverter {
     } else if (SupportedMediaTypes.PDF.equals(type)) {
       pages = convertPdf(source, source.file(), print, work, output);
     } else if (SupportedMediaTypes.OFFICE.contains(type)) {
-      Path converted = viaDocmosis(source, type, work);
-      pages = convertPdf(source, converted, print, work, output);
-      if (print != null) {
+      if (officePdfs == null) {
+        Path converted = viaDocmosis(source, type, work);
+        pages = convertPdf(source, converted, print, work, output);
         Files.deleteIfExists(converted);
+      } else {
+        Path converted = officePdfs.byPart().get(part);
+        if (converted == null) {
+          converted = viaDocmosis(source, type, officePdfs.dir());
+          officePdfs.byPart().put(part, converted);
+        }
+        pages = convertPdf(source, converted, print, work, output);
       }
     } else {
       throw new ConversionException(Reason.UNSUPPORTED_MEDIA_TYPE,
@@ -258,13 +289,8 @@ public final class DocumentConverter {
 
   private static int convertPdf(ConversionSource source, Path pdf, PrintOptions print,
       Path work, Path output) throws ConversionException, IOException {
-    int pages;
-    try {
-      pages = PdfChecks.requireUsablePdf(pdf, work);
-    } catch (ConversionException e) {
-      throw new ConversionException(e.reason(), source.fileName() + ": " + e.getMessage(), e);
-    }
     if (print == null) {
+      int pages = named(source, () -> PdfChecks.requireUsablePdf(pdf, work));
       if (pdf.equals(source.file())) {
         Files.copy(pdf, output, StandardCopyOption.REPLACE_EXISTING);
       } else {
@@ -272,7 +298,22 @@ public final class DocumentConverter {
       }
       return pages;
     }
-    return new PrintRenderer(print, work).renderPdf(pdf, source.fileName(), output);
+    try (PDDocument document = named(source, () -> PdfChecks.openUsablePdf(pdf, work))) {
+      return new PrintRenderer(print, work).renderPdf(document, source.fileName(), output);
+    }
+  }
+
+  private interface Check<T> {
+    T run() throws ConversionException;
+  }
+
+  /** Runs a PDF check, naming the source in any failure. */
+  private static <T> T named(ConversionSource source, Check<T> check) throws ConversionException {
+    try {
+      return check.run();
+    } catch (ConversionException e) {
+      throw new ConversionException(e.reason(), source.fileName() + ": " + e.getMessage(), e);
+    }
   }
 
   private Path viaDocmosis(ConversionSource source, String type, Path work)
@@ -309,16 +350,8 @@ public final class DocumentConverter {
   private static String effectiveType(ConversionSource source, List<ConversionWarning> warnings)
       throws ConversionException {
     String declared = alias(MediaTypeDetection.normalise(source.mediaType()));
-    boolean untyped = UNTYPED.contains(declared);
-    if (untyped) {
-      Optional<String> inferred = MediaTypeDetection.fromFileName(source.fileName());
-      if (inferred.isPresent()) {
-        declared = inferred.get();
-        warnings.add(new ConversionWarning(Code.MEDIA_TYPE_INFERRED,
-            source.fileName() + " has no usable media type; '" + declared
-                + "' was inferred from its file name."));
-      }
-    }
+    Optional<String> inferred = UNTYPED.contains(declared)
+        ? MediaTypeDetection.fromFileName(source.fileName()) : Optional.empty();
     byte[] head = new byte[MediaTypeDetection.DETECTION_PREFIX_BYTES];
     int length;
     try (InputStream in = Files.newInputStream(source.file())) {
@@ -327,23 +360,32 @@ public final class DocumentConverter {
       throw new ConversionException(Reason.IO_FAILURE,
           "Could not read " + source.fileName(), e);
     }
-    return switch (MediaTypeDetection.route(declared, head, length)) {
-      case MediaTypeDetection.Routing.Route route -> route.mediaType();
+    // What the caller told us, for messages: an inferred type was never declared.
+    String claim = inferred.isPresent()
+        ? "has no usable media type and its file name suggests '" + inferred.get() + "'"
+        : "was declared '" + declared + "'";
+    return switch (MediaTypeDetection.route(inferred.orElse(declared), head, length)) {
+      case MediaTypeDetection.Routing.Route route -> {
+        inferred.ifPresent(type -> warnings.add(new ConversionWarning(Code.MEDIA_TYPE_INFERRED,
+            source.fileName() + " has no usable media type; '" + type
+                + "' was inferred from its file name.")));
+        yield route.mediaType();
+      }
       case MediaTypeDetection.Routing.RouteWithMismatch mismatch -> {
-        warnings.add(UNTYPED.contains(mismatch.declared())
+        warnings.add(UNTYPED.contains(declared)
             ? new ConversionWarning(Code.MEDIA_TYPE_INFERRED,
-                source.fileName() + " has no usable media type; its content is '"
-                    + mismatch.detected() + "'.")
+                source.fileName() + " has no usable media type"
+                    + inferred.map(type -> " and its file name suggests '" + type + "'").orElse("")
+                    + "; its content is '" + mismatch.detected() + "'.")
             : new ConversionWarning(Code.MEDIA_TYPE_MISMATCH,
-                source.fileName() + " was declared '" + mismatch.declared()
+                source.fileName() + " was declared '" + declared
                     + "' but its content is '" + mismatch.detected()
                     + "'; it was converted as '" + mismatch.mediaType() + "'."));
         yield mismatch.mediaType();
       }
       case MediaTypeDetection.Routing.Irreconcilable conflict ->
           throw new ConversionException(Reason.MEDIA_TYPE_CONFLICT,
-              source.fileName() + " was declared '" + conflict.declared() + "' but is "
-                  + conflict.detectedDescription() + ".");
+              source.fileName() + " " + claim + " but is " + conflict.detectedDescription() + ".");
     };
   }
 

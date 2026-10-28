@@ -6,6 +6,7 @@ import java.awt.GradientPaint;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -162,6 +163,53 @@ public final class Fixtures {
   /** A 24-bit BMP. */
   public static Path bmp(Path dir) throws IOException {
     return write(scan(640, 480, new Color(0, 90, 60)), "bmp", dir.resolve("photo.bmp"));
+  }
+
+  /**
+   * A phone photo: a portrait picture, dark in its top half, stored the way a phone held at an
+   * angle stores it, with the EXIF orientation that tells a viewer how to turn it upright. For
+   * orientation 6 the pixels are landscape, as most phone photos are.
+   */
+  public static Path phonePhoto(Path dir, int orientation) throws IOException {
+    int width = 300;
+    int height = 500;
+    BufferedImage upright = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        upright.setRGB(x, y, y < height / 2 ? 0x202020 : 0xF0F0F0);
+      }
+    }
+    // Store the pixels turned the opposite way to how the viewer will turn them.
+    boolean quarter = orientation == 6 || orientation == 8;
+    BufferedImage stored = new BufferedImage(quarter ? height : width, quarter ? width : height,
+        BufferedImage.TYPE_INT_RGB);
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        int rgb = upright.getRGB(x, y);
+        switch (orientation) {
+          case 3 -> stored.setRGB(width - 1 - x, height - 1 - y, rgb);
+          // Viewer turns clockwise, so store turned counter-clockwise.
+          case 6 -> stored.setRGB(y, width - 1 - x, rgb);
+          case 8 -> stored.setRGB(height - 1 - y, x, rgb);
+          default -> stored.setRGB(x, y, rgb);
+        }
+      }
+    }
+    ByteArrayOutputStream jpeg = new ByteArrayOutputStream();
+    ImageIO.write(stored, "jpeg", jpeg);
+    byte[] plain = jpeg.toByteArray();
+    // Big-endian EXIF with one IFD0 entry: tag 0x0112, SHORT, count 1, the orientation.
+    byte[] exif = {
+        (byte) 0xFF, (byte) 0xE1, 0, 34, 'E', 'x', 'i', 'f', 0, 0,
+        'M', 'M', 0, 42, 0, 0, 0, 8,
+        0, 1,
+        0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, (byte) orientation, 0, 0,
+        0, 0, 0, 0};
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    out.write(plain, 0, 2);
+    out.write(exif);
+    out.write(plain, 2, plain.length - 2);
+    return Files.write(dir.resolve("phone-" + orientation + ".jpg"), out.toByteArray());
   }
 
   /** A 24 megapixel landscape JPEG: printed at 300 dpi it must be downsampled about threefold. */

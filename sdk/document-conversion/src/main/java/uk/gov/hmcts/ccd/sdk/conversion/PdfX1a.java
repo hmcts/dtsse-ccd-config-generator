@@ -27,19 +27,16 @@ final class PdfX1a {
   private PdfX1a() {
   }
 
+  /**
+   * Identifies the document as PDF/X-1a:2001, after {@link #describe}.
+   */
   static void identify(PDDocument document, String title, OutputCondition condition) {
+    describe(document, title);
     // PDF/X-1a:2001 is built on PDF 1.3. PDDocument.setVersion refuses to lower the version,
     // so set the header version on the COS document directly.
     document.getDocument().setVersion(1.3f);
 
     PDDocumentInformation info = document.getDocumentInformation();
-    Calendar now = Calendar.getInstance();
-    info.setTitle(title);
-    info.setCreator(CREATOR);
-    info.setProducer(CREATOR);
-    info.setCreationDate(now);
-    info.setModificationDate(now);
-    info.setTrapped("False");
     info.setCustomMetadataValue("GTS_PDFXVersion", VERSION);
     info.setCustomMetadataValue("GTS_PDFXConformance", CONFORMANCE);
 
@@ -53,6 +50,25 @@ final class PdfX1a {
     COSArray intents = new COSArray();
     intents.add(intent);
     document.getDocumentCatalog().getCOSObject().setItem(COSName.OUTPUT_INTENTS, intents);
+  }
+
+  /**
+   * The document information and trailer ID PDF/X-1a requires, without claiming conformance:
+   * for a letter whose as-is pages may not conform.
+   */
+  static void describe(PDDocument document, String title) {
+    PDDocumentInformation info = document.getDocumentInformation();
+    // Merged print-ready parts bring their own identification; only identify() may add it back.
+    info.getCOSObject().removeItem(COSName.getPDFName("GTS_PDFXVersion"));
+    info.getCOSObject().removeItem(COSName.getPDFName("GTS_PDFXConformance"));
+    document.getDocumentCatalog().getCOSObject().removeItem(COSName.OUTPUT_INTENTS);
+    Calendar now = Calendar.getInstance();
+    info.setTitle(title);
+    info.setCreator(CREATOR);
+    info.setProducer(CREATOR);
+    info.setCreationDate(now);
+    info.setModificationDate(now);
+    info.setTrapped("False");
 
     byte[] id = new byte[16];
     RANDOM.nextBytes(id);
