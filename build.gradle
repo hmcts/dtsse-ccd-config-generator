@@ -116,6 +116,7 @@ subprojects.each { subproject ->
                 task.dependsOn gradle.includedBuild('sdk').task(':ccd-servicebus-support:jar')
                 task.dependsOn gradle.includedBuild('sdk').task(':task-management:jar')
                 task.dependsOn gradle.includedBuild('sdk').task(':document-bundling:jar')
+                task.dependsOn gradle.includedBuild('sdk').task(':document-conversion:jar')
             }
         }
     }

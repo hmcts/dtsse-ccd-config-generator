@@ -342,6 +342,103 @@ class DocumentConverterTest {
     }
   }
 
+  /**
+   * Phones store most photos sideways and record how to turn them in the EXIF orientation. The
+   * printed photo must be the way up the person who took it saw it: portrait, dark half on top.
+   */
+  @ParameterizedTest(name = "orientation {0}")
+  @ValueSource(ints = {1, 3, 6, 8})
+  void phonePhotosPrintTheWayUpTheyWereTaken(int orientation) throws Exception {
+    Path photo = Fixtures.phonePhoto(inputs, orientation);
+    try (ConvertedPdf pdf = converter.toPrintReadyPdf(
+        ConversionSource.of(photo, "photo.jpg", "image/jpeg"), PrintOptions.bulkPrint())) {
+      PrintRequirements.assertPrintReady(pdf.file(), PrintOptions.bulkPrint());
+      try (PDDocument document = Loader.loadPDF(pdf.file().toFile())) {
+        PrintFacts.PlacedImage image = PrintFacts.pages(document).get(0).images().get(0);
+        assertThat(image.pixelHeight()).as("portrait").isGreaterThan(image.pixelWidth());
+      }
+      java.awt.image.BufferedImage page = PrintFacts.render(pdf.file(), 50).get(0);
+      int x = page.getWidth() / 2;
+      int top = luminance(page.getRGB(x, page.getHeight() * 3 / 10));
+      int bottom = luminance(page.getRGB(x, page.getHeight() * 7 / 10));
+      assertThat(bottom - top).as("the top half (%d) is darker than the bottom (%d)", top, bottom)
+          .isGreaterThan(80);
+    }
+  }
+
+  private static int luminance(int rgb) {
+    return (299 * (rgb >> 16 & 0xFF) + 587 * (rgb >> 8 & 0xFF) + 114 * (rgb & 0xFF)) / 1000;
+  }
+
+  /**
+   * A type inferred from the file name is the caller's best guess, not a declaration: when the
+   * content disagrees, there is one warning, and neither it nor a refusal claims the caller
+   * declared anything.
+   */
+  @Test
+  void anInferredTypeIsNeverReportedAsDeclared() throws Exception {
+    Path png = Fixtures.alphaPng(inputs);
+    try (ConvertedPdf pdf = converter.toPrintReadyPdf(
+        ConversionSource.of(png, "photo.jpg", "application/octet-stream"),
+        PrintOptions.bulkPrint())) {
+      assertThat(pdf.mediaType()).isEqualTo("image/png");
+      assertThat(pdf.warnings()).singleElement().satisfies(warning -> {
+        assertThat(warning.code()).isEqualTo(Code.MEDIA_TYPE_INFERRED);
+        assertThat(warning.message())
+            .contains("no usable media type", "suggests 'image/jpeg'", "content is 'image/png'")
+            .doesNotContain("declared");
+      });
+    }
+    ConversionException refused = catchThrowableOfType(ConversionException.class,
+        () -> converter.toPdf(ConversionSource.of(Fixtures.zip(inputs), "bundle.pdf", null)));
+    assertThat(refused.reason()).isEqualTo(Reason.MEDIA_TYPE_CONFLICT);
+    assertThat(refused.getMessage())
+        .contains("no usable media type", "suggests 'application/pdf'", "ZIP container")
+        .doesNotContain("declared");
+  }
+
+  /** Text that happens to start with "BM" is text, not a bitmap. */
+  @Test
+  void textStartingWithBmIsNotMistakenForABitmap() throws Exception {
+    Path text = Fixtures.text(inputs, "notes.txt", "BMW service history\n2019: new tyres\n");
+    try (ConvertedPdf pdf = converter.toPrintReadyPdf(
+        ConversionSource.of(text, "notes.txt", "text/plain"), PrintOptions.bulkPrint())) {
+      assertThat(pdf.mediaType()).isEqualTo("text/plain");
+      assertThat(pdf.warnings()).isEmpty();
+    }
+    assertThat(docmosis.calls()).containsExactly(new StubDocmosis.Call("notes.txt", "text/plain"));
+  }
+
+  /**
+   * The greyscale retry re-renders what Docmosis returned the first time: asking again would
+   * double the load on Docmosis and let a blip there fail a letter that had already converted.
+   * A letter made only of converted parts is identified as PDF/X-1a.
+   */
+  @Test
+  void theGreyscaleRetryDoesNotCallDocmosisAgain() throws Exception {
+    Path docx = Fixtures.text(inputs, "statement.docx", "stand-in for a Word document");
+    List<PrintPart> parts = List.of(
+        PrintPart.convert(ConversionSource.of(docx, "statement.docx", DOCX)),
+        PrintPart.convert(ConversionSource.of(Fixtures.largePhoto(inputs), "large-photo.jpg",
+            "image/jpeg")));
+    long cmyk;
+    try (ConvertedPdf letter = converter.toPrintReadyLetter("Pack", parts,
+        PrintOptions.builder().maxOutputBytes(0).build())) {
+      cmyk = Files.size(letter.file());
+      PrintRequirements.assertPrintReady(letter.file(), PrintOptions.bulkPrint());
+    }
+    docmosis.calls().clear();
+
+    PrintOptions tight = PrintOptions.builder().maxOutputBytes(cmyk).build();
+    try (ConvertedPdf letter = converter.toPrintReadyLetter("Pack", parts, tight)) {
+      assertThat(colourSpaces(letter)).containsOnly("DeviceGray");
+      assertThat(letter.warnings()).extracting(ConversionWarning::code)
+          .containsExactly(Code.COLOUR_REDUCED_FOR_SIZE);
+    }
+    assertThat(docmosis.calls()).containsExactly(new StubDocmosis.Call("statement.docx", DOCX));
+    assertThat(workDirectories()).isEmpty();
+  }
+
   @Test
   void optionsRejectLayoutsThatCannotPrint() {
     assertThat(catchThrowableOfType(IllegalArgumentException.class,

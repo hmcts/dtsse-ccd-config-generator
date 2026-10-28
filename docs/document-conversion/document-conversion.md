@@ -83,10 +83,18 @@ is not re-rendered, so a coversheet's address stays where the envelope window ex
 pages keep their own colour and fonts, so they are the only pages that can fall outside
 PDF/X-1a. Every `convert` page meets the requirements below.
 
+Because the converter does not check `asIs` pages, a letter that has any is not identified as
+PDF/X-1a. It has no `GTS_PDFX` keys or output intent, and its header is whatever version its
+parts need. It keeps the rest of the file structure, so the converted pages reach the printer
+as they were rendered. The result carries a `STANDARD_NOT_CLAIMED` warning. A letter made only
+of `convert` parts is identified as PDF/X-1a.
+
 ### The size limit
 
 When the letter is over `greyscaleAboveFraction` of `maxOutputBytes` in CMYK, every converted
 part is converted again in greyscale, and the result carries a `COLOUR_REDUCED_FOR_SIZE` warning.
+Office parts are not sent to Docmosis again: the greyscale pass reuses the PDFs Docmosis returned
+the first time.
 A letter that is still over `maxOutputBytes` in greyscale fails with `OUTPUT_TOO_LARGE`.
 send-letter has no request size limit of its own. The 20 MiB default keeps a letter well clear of
 the out-of-memory errors its upload job has hit on batches of about 95 MB zipped.
@@ -124,7 +132,7 @@ produced it. This is the conversion document bundling uses.
 | Upload | Media type | Converted by |
 |---|---|---|
 | PDF | `application/pdf` | validated (unencrypted, parseable, at least one page) |
-| JPG/JPEG, PNG, BMP, GIF | `image/*` | decoded in-process; PNG transparency prints white |
+| JPG/JPEG, PNG, BMP, GIF | `image/*` | decoded in-process; PNG transparency prints white; for print, a JPEG's EXIF orientation is applied, so phone photos print upright |
 | TIF/TIFF | `image/tiff` | decoded in-process, one page per frame |
 | DOC/DOT, DOCX, DOTX | Word types | Docmosis |
 | XLS/XLT/XLA, XLSX, XLTX, XLSB | Excel types | Docmosis |

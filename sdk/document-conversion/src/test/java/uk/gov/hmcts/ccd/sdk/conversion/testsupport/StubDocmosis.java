@@ -10,8 +10,8 @@ import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderService;
 
 /**
  * An in-process Docmosis that returns a fixed PDF for every conversion and records what it was
- * asked to convert. The real HTTP client is covered by the auto-configuration test and by the
- * opt-in contract test against a real Docmosis.
+ * asked to convert. The real HTTP client is covered by {@code HttpDocmosisRenderServiceTest}
+ * against a fake server, and by the opt-in contract test against a real Docmosis.
  */
 public final class StubDocmosis implements DocmosisRenderService {
 

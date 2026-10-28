@@ -30,24 +30,52 @@ public final class PdfChecks {
    */
   public static int requireUsablePdf(Path file, Path scratchDirectory)
       throws ConversionException {
+    try (PDDocument document = openUsablePdf(file, scratchDirectory)) {
+      return document.getNumberOfPages();
+    } catch (IOException e) {
+      throw new ConversionException(Reason.INVALID_CONTENT,
+          "The PDF is corrupt or unreadable: it could not be closed", e);
+    }
+  }
+
+  /**
+   * Opens a PDF that passes {@link #requireUsablePdf}, for callers that go on to read it, so it is
+   * parsed once. The caller closes it.
+   */
+  static PDDocument openUsablePdf(Path file, Path scratchDirectory) throws ConversionException {
     if (!hasPdfSignature(file)) {
       throw new ConversionException(Reason.INVALID_CONTENT,
           "The source is not a PDF: no %PDF- signature in the first " + SIGNATURE_SCAN_BYTES
               + " bytes");
     }
-    try (PDDocument document = load(file, scratchDirectory)) {
+    PDDocument document;
+    try {
+      document = load(file, scratchDirectory);
+    } catch (InvalidPasswordException e) {
+      throw new ConversionException(Reason.ENCRYPTED, "The PDF is password protected", e);
+    } catch (IOException e) {
+      throw new ConversionException(Reason.INVALID_CONTENT,
+          "The PDF is corrupt or unreadable: it could not be parsed", e);
+    }
+    try {
       if (document.isEncrypted()) {
         throw new ConversionException(Reason.ENCRYPTED, "The PDF is encrypted");
       }
       if (document.getNumberOfPages() == 0) {
         throw new ConversionException(Reason.INVALID_CONTENT, "The PDF has no pages");
       }
-      return document.getNumberOfPages();
-    } catch (InvalidPasswordException e) {
-      throw new ConversionException(Reason.ENCRYPTED, "The PDF is password protected", e);
+      return document;
+    } catch (ConversionException | RuntimeException e) {
+      closeQuietly(document, e);
+      throw e;
+    }
+  }
+
+  private static void closeQuietly(PDDocument document, Exception failure) {
+    try {
+      document.close();
     } catch (IOException e) {
-      throw new ConversionException(Reason.INVALID_CONTENT,
-          "The PDF is corrupt or unreadable: it could not be parsed", e);
+      failure.addSuppressed(e);
     }
   }
 

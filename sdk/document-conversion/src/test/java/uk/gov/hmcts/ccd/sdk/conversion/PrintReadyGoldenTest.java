@@ -118,7 +118,8 @@ class PrintReadyGoldenTest {
 
   /**
    * A bulk print letter as PCS sends it: the address coversheet as it is, then the supporting
-   * documents converted. The coversheet page must be untouched, every other page print-ready.
+   * documents converted. The coversheet page must be untouched, every other page print-ready,
+   * and the letter must not claim PDF/X-1a for a coversheet it has not checked.
    */
   @Test
   void assemblesALetterBehindAnUntouchedCoversheet() throws Exception {
@@ -135,6 +136,10 @@ class PrintReadyGoldenTest {
             "application/pdf"))), PrintOptions.bulkPrint())) {
       // 1 coversheet + 1 photo + 3 document pages, padded to 6.
       assertThat(letter.pageCount()).isEqualTo(6);
+      assertThat(letter.warnings()).singleElement().satisfies(warning -> {
+        assertThat(warning.code()).isEqualTo(ConversionWarning.Code.STANDARD_NOT_CLAIMED);
+        assertThat(warning.message()).contains("Claim pack", "PDF/X-1a:2001");
+      });
       PrintRequirements.assertPrintReady(letter.file(), PrintOptions.bulkPrint(), 2);
       try (PDDocument document = Loader.loadPDF(letter.file().toFile())) {
         assertThat(PrintFacts.pages(document).get(0)

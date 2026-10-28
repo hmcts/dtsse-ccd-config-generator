@@ -57,6 +57,9 @@ public final class MediaTypeDetection {
       PDF, "image/png", "image/jpeg", "image/jpg", "image/gif", "image/bmp",
       "image/tiff", "audio/mpeg", "video/mp4");
 
+  // BITMAPCOREHEADER, OS/2 2.x (short and full), BITMAPINFOHEADER, V2, V3, V4 and V5.
+  private static final Set<Integer> BMP_DIB_HEADER_SIZES = Set.of(12, 16, 64, 40, 52, 56, 108, 124);
+
   private MediaTypeDetection() {
   }
 
@@ -158,7 +161,7 @@ public final class MediaTypeDetection {
     if (startsWith(head, length, 'G', 'I', 'F', '8')) {
       return Optional.of("image/gif");
     }
-    if (startsWith(head, length, 'B', 'M')) {
+    if (isBmp(head, length)) {
       return Optional.of("image/bmp");
     }
     if (startsWith(head, length, 'I', 'I', '*', 0) || startsWith(head, length, 'M', 'M', 0, '*')) {
@@ -176,6 +179,24 @@ public final class MediaTypeDetection {
       return Optional.of("video/mp4");
     }
     return Optional.empty();
+  }
+
+  /**
+   * A BMP file header: {@code BM}, four reserved zero bytes at offset 6, and a known DIB header
+   * size at offset 14. Two bytes alone would claim any text that starts with "BM".
+   */
+  private static boolean isBmp(byte[] head, int length) {
+    if (length < 18 || !startsWith(head, length, 'B', 'M')) {
+      return false;
+    }
+    for (int i = 6; i < 10; i++) {
+      if (head[i] != 0) {
+        return false;
+      }
+    }
+    int dibHeaderSize = (head[14] & 0xFF) | (head[15] & 0xFF) << 8 | (head[16] & 0xFF) << 16
+        | (head[17] & 0xFF) << 24;
+    return BMP_DIB_HEADER_SIZES.contains(dibHeaderSize);
   }
 
   private static boolean isZip(byte[] head, int length) {

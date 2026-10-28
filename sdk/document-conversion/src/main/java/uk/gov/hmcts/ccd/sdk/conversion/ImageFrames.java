@@ -61,11 +61,23 @@ final class ImageFrames {
   }
 
   /**
-   * Decodes each frame, subsampling by the factor {@code subsampling} returns for the frame's
-   * full width and height.
+   * Decodes each frame upright, applying a JPEG's EXIF orientation, and subsampling by the factor
+   * {@code subsampling} returns for the frame's full, upright width and height.
    */
   static void read(Path image, IntBinaryOperator subsampling, FrameConsumer consumer)
       throws IOException {
+    int orientation = ExifOrientation.of(image);
+    boolean swap = ExifOrientation.swapsAxes(orientation);
+    FrameConsumer upright = (frame, fullWidth, fullHeight) -> consumer.accept(
+        ExifOrientation.apply(frame, orientation),
+        swap ? fullHeight : fullWidth, swap ? fullWidth : fullHeight);
+    IntBinaryOperator uprightSubsampling = (width, height) ->
+        swap ? subsampling.applyAsInt(height, width) : subsampling.applyAsInt(width, height);
+    readStored(image, uprightSubsampling, upright);
+  }
+
+  private static void readStored(Path image, IntBinaryOperator subsampling,
+      FrameConsumer consumer) throws IOException {
     int delivered = 0;
     try (ImageInputStream in = ImageIO.createImageInputStream(image.toFile())) {
       Iterator<ImageReader> readers = in == null ? null : ImageIO.getImageReaders(in);

@@ -15,6 +15,8 @@ dependencies {
 
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
+    // Rendering and image decoding must not depend on a display, locally or in CI.
+    systemProperty 'java.awt.headless', 'true'
     // ./gradlew -p sdk :document-conversion:test -PupdateGoldens rewrites the golden files.
     systemProperty 'conversion.updateGoldens', project.hasProperty('updateGoldens')
     systemProperty 'conversion.goldenDir', file('src/test/resources/golden').absolutePath

@@ -34,23 +34,44 @@ public final class PrintRequirements {
   private PrintRequirements() {
   }
 
+  private static boolean isIdentification(String violation) {
+    return violation.startsWith("header is ")
+        || violation.startsWith("document information /GTS_PDFX")
+        || violation.startsWith("needs exactly one GTS_PDFX output intent");
+  }
+
+  /** The page a violation is on, or 0 for a document-level one. */
+  private static int pageOf(String violation) {
+    return violation.matches("page ([0-9]+): .*")
+        ? Integer.parseInt(violation.replaceAll("page ([0-9]+): .*", "$1")) : 0;
+  }
+
   /** Asserts every requirement. */
   public static void assertPrintReady(Path pdf, PrintOptions options) throws IOException {
     assertPrintReady(pdf, options, 1);
   }
 
   /**
-   * Asserts every requirement from page {@code firstPage} on; earlier pages were added as they
-   * are (a coversheet), so only they may break PDF/X-1a.
+   * Asserts every requirement from page {@code firstPage} on. Earlier pages were added as they
+   * are (a coversheet) and may break PDF/X-1a, so the file must not claim it either: it keeps
+   * the PDF/X-1a file structure, and only the identification is left out.
    */
   public static void assertPrintReady(Path pdf, PrintOptions options, int firstPage)
       throws IOException {
     if (options.standard() == PdfStandard.PDF_X_1A_2001) {
-      assertThat(PdfX1aChecker.violations(pdf)).as("PDF/X-1a:2001 violations")
-          .allSatisfy(violation -> assertThat(firstPage > 1
-              && violation.matches("page ([0-9]+): .*")
-              && Integer.parseInt(violation.replaceAll("page ([0-9]+): .*", "$1")) < firstPage)
-              .as(violation).isTrue());
+      List<String> violations = PdfX1aChecker.violations(pdf);
+      if (firstPage == 1) {
+        assertThat(violations).as("PDF/X-1a:2001 violations").isEmpty();
+      } else {
+        try (PDDocument document = Loader.loadPDF(pdf.toFile())) {
+          assertThat(document.getDocumentInformation().getCustomMetadataValue("GTS_PDFXVersion"))
+              .as("a letter with as-is pages does not claim PDF/X").isNull();
+          assertThat(document.getDocumentCatalog().getOutputIntents()).isEmpty();
+        }
+        assertThat(violations).as("PDF/X-1a:2001 violations beyond the missing identification")
+            .allSatisfy(violation -> assertThat(isIdentification(violation)
+                || pageOf(violation) > 0 && pageOf(violation) < firstPage).as(violation).isTrue());
+      }
     }
     double margin = options.marginMillimetres();
     String colourSpace = options.colour() == PrintColour.CMYK ? "DeviceCMYK" : "DeviceGray";
