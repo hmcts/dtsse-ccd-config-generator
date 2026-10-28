@@ -41,8 +41,8 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentHandler;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference;
 import uk.gov.hmcts.ccd.sdk.bundling.api.HandledDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.api.WatermarkPreset;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderException;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderService;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderException;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderService;
 
 class BundleRenderingFailureTest {
   private static final long MB = 1024L * 1024L;
