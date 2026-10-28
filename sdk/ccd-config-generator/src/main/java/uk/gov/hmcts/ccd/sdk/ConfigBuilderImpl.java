@@ -170,8 +170,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
-  public void unscopedTabsRespectDeclaredFieldAccess() {
-    config.unscopedTabsRespectDeclaredFieldAccess = true;
+  public void tabsRespectDeclaredFieldAccess() {
+    config.tabsRespectDeclaredFieldAccess = true;
   }
 
   @Override

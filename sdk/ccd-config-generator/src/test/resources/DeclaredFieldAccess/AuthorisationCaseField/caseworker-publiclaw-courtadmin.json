@@ -14,13 +14,6 @@
     "UserRole": "caseworker-publiclaw-courtadmin"
   },
   {
-    "CRUD": "R",
-    "CaseFieldID": "roleScopedTabField",
-    "CaseTypeID": "DeclaredFieldAccess",
-    "LiveFrom": "01/01/2017",
-    "UserRole": "caseworker-publiclaw-courtadmin"
-  },
-  {
     "CRUD": "CRU",
     "CaseFieldID": "sharedField",
     "CaseTypeID": "DeclaredFieldAccess",
@@ -30,13 +23,6 @@
   {
     "CRUD": "R",
     "CaseFieldID": "tabOnlyField",
-    "CaseTypeID": "DeclaredFieldAccess",
-    "LiveFrom": "01/01/2017",
-    "UserRole": "caseworker-publiclaw-courtadmin"
-  },
-  {
-    "CRUD": "R",
-    "CaseFieldID": "unwrappedChild",
     "CaseTypeID": "DeclaredFieldAccess",
     "LiveFrom": "01/01/2017",
     "UserRole": "caseworker-publiclaw-courtadmin"

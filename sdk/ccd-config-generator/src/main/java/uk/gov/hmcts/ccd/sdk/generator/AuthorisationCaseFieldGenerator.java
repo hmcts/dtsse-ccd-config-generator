@@ -95,9 +95,8 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       }
     }
     SetMultimap<String, String> readWithheld = HashMultimap.create();
-    SetMultimap<String, String> widenedByScopedTab = HashMultimap.create();
-    Set<String> fieldsDeclaringAccess = config.isUnscopedTabsRespectDeclaredFieldAccess()
-        ? fieldsDeclaringAccess(config.getCaseClass(), null)
+    Set<String> fieldsDeclaringAccess = config.isTabsRespectDeclaredFieldAccess()
+        ? fieldsDeclaringAccess(config.getCaseClass(), null, null)
         : Set.of();
 
     // Add Permissions for all tabs.
@@ -108,29 +107,20 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
 
       // Add read for any tab fields
       for (Tab<T, R> tab : config.getTabs()) {
-        // A field on a tab open to every role, which has named who may read it: adding read here
-        // would widen that, and this runs before addPermissionsFromFields so the declaration
-        // could not take it back. A tab naming roles is already scoped, so it still grants.
-        boolean respectDeclared = tab.getForRoles().isEmpty();
         for (TabField field : tab.getFields()) {
           boolean giveReadPermission =
               tab.getForRolesAsString().contains(role) || tab.getForRoles().isEmpty();
-          boolean wouldGrant =
-              giveReadPermission && !fieldRolePermissions.contains(field.getId(), role);
-          boolean declaresAccess = fieldsDeclaringAccess.contains(field.getId());
-
-          if (respectDeclared && declaresAccess) {
-            if (wouldGrant) {
-              readWithheld.put(field.getId(), role);
-            }
+          if (!giveReadPermission || fieldRolePermissions.contains(field.getId(), role)) {
             continue;
           }
-          if (wouldGrant && declaresAccess) {
-            widenedByScopedTab.put(field.getId(), role);
+          // A field @CCD(access) authorises has named who may read it. Adding read here would
+          // widen that, and this runs before addPermissionsFromFields, so the declaration could
+          // not take it back.
+          if (fieldsDeclaringAccess.contains(field.getId())) {
+            readWithheld.put(field.getId(), role);
+            continue;
           }
-          if (wouldGrant) {
-            fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
-          }
+          fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
         }
       }
 
@@ -159,7 +149,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
 
     addPermissionsFromFields(fieldRolePermissions, config.getCaseClass(), null, null);
 
-    reportWithheldTabRead(readWithheld, widenedByScopedTab, fieldRolePermissions);
+    reportWithheldTabRead(config.getCaseType(), readWithheld, fieldRolePermissions);
 
     File folder = new File(root.getPath(), "AuthorisationCaseField");
     folder.mkdir();
@@ -200,14 +190,13 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
   }
 
   /**
-   * Says what {@code unscopedTabsRespectDeclaredFieldAccess()} did, so adopting it is not blind:
-   * the read it withheld and from which roles, any field left readable by nobody, which means the
-   * access classes it names grant no read at all, and any field still widened by a tab that names
-   * roles, where the opt-in does not reach.
+   * Says what {@code tabsRespectDeclaredFieldAccess()} did, so adopting it is not blind: the read
+   * it withheld and from which roles, and any field left readable by nobody, which means the access
+   * classes it names grant no read at all.
    */
   private void reportWithheldTabRead(
+      String caseType,
       SetMultimap<String, String> readWithheld,
-      SetMultimap<String, String> widenedByScopedTab,
       Table<String, String, Set<Permission>> fieldRolePermissions
   ) {
     // Only where the role ends with no read: a role the declaration grants anyway lost nothing.
@@ -219,46 +208,43 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       }
     });
 
-    if (!lostRead.isEmpty()) {
-      log.info("unscopedTabsRespectDeclaredFieldAccess withheld tab read on {} field(s): {}",
-          lostRead.keySet().size(), new TreeMap<>(Multimaps.asMap(lostRead)));
-
-      List<String> unreadable = lostRead.keySet().stream()
-          .filter(field -> fieldRolePermissions.row(field).values().stream()
-              .noneMatch(perms -> perms.contains(Permission.R)))
-          .sorted()
-          .collect(Collectors.toList());
-
-      if (!unreadable.isEmpty()) {
-        log.warn("unscopedTabsRespectDeclaredFieldAccess leaves {} field(s) readable by no role,"
-            + " so the access classes they name grant no read: {}", unreadable.size(), unreadable);
-      }
+    if (lostRead.isEmpty()) {
+      return;
     }
 
-    if (!widenedByScopedTab.isEmpty()) {
-      log.warn("{} field(s) naming their own access are still given read by a tab naming roles,"
-          + " which unscopedTabsRespectDeclaredFieldAccess does not cover: {}",
-          widenedByScopedTab.keySet().size(), new TreeMap<>(Multimaps.asMap(widenedByScopedTab)));
+    log.info("{}: tabsRespectDeclaredFieldAccess withheld tab read on {} field(s): {}",
+        caseType, lostRead.keySet().size(), new TreeMap<>(Multimaps.asMap(lostRead)));
+
+    List<String> unreadable = lostRead.keySet().stream()
+        .filter(field -> fieldRolePermissions.row(field).values().stream()
+            .noneMatch(perms -> perms.contains(Permission.R)))
+        .sorted()
+        .collect(Collectors.toList());
+
+    if (!unreadable.isEmpty()) {
+      log.warn("{}: tabsRespectDeclaredFieldAccess leaves {} field(s) readable by no role, so the"
+          + " access classes they name grant no read: {}", caseType, unreadable.size(), unreadable);
     }
   }
 
   /**
-   * Ids of the fields whose own {@code @CCD} names an access class. A {@code @JsonUnwrapped}
-   * parent passes its access down to its children for the grants themselves, but a child that
-   * names nothing has not said who may read it, so it is not listed here.
+   * Ids of the fields {@code @CCD(access)} authorises, named on the field itself or inherited from
+   * a {@code @JsonUnwrapped} parent, mirroring how {@link #addPermissionsFromFields} decides the
+   * grants.
    */
-  private static Set<String> fieldsDeclaringAccess(Class<?> parent, String prefix) {
+  private static Set<String> fieldsDeclaringAccess(
+      Class<?> parent, String prefix, Class<? extends HasAccessControl>[] defaultAccessControl) {
     Set<String> declaring = new HashSet<>();
     for (java.lang.reflect.Field field : getCaseFields(parent)) {
+      CCD ccdAnnotation = field.getAnnotation(CCD.class);
+      Class<? extends HasAccessControl>[] access = mergeAccess(defaultAccessControl, ccdAnnotation);
       JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
+
       if (null != unwrapped) {
         String newPrefix = isNullOrEmpty(prefix)
             ? unwrapped.prefix() : prefix.concat(capitalize(unwrapped.prefix()));
-        declaring.addAll(fieldsDeclaringAccess(field.getType(), newPrefix));
-        continue;
-      }
-      CCD ccdAnnotation = field.getAnnotation(CCD.class);
-      if (null != ccdAnnotation && ccdAnnotation.access().length > 0) {
+        declaring.addAll(fieldsDeclaringAccess(field.getType(), newPrefix, access));
+      } else if (null != access && access.length > 0) {
         declaring.add(getFieldId(field, prefix));
       }
     }

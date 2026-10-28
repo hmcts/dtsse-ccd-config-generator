@@ -90,27 +90,25 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   void explicitStateGrants();
 
   /**
-   * Stop a tab that names no roles from adding read on a field that names its own access classes.
+   * Stop a tab from adding read on a field that {@code @CCD(access)} authorises.
    *
    * <p>{@code AuthorisationCaseFieldGenerator} adds read for every field on a tab a role can see,
    * before it reads the field's {@code @CCD(access)}, so a field that names who may read it is
-   * widened to every role and the declaration cannot take it back. Call this and such a field takes
-   * no read from the tab.
+   * widened to every role on that tab and the declaration cannot take it back. Call this and such a
+   * field takes no read from any tab, whether the tab declares {@code forRoles(...)} or not.
    *
-   * <p>Only a field whose own {@code @CCD} names an access class is covered, so this is no help to
-   * a definition that relies on the injection to grant read in the first place: ia-bail's 41
-   * {@code progress_*} fields each want one role and reach all of them, but they name no access
-   * class, so calling this changes nothing for them. Such a definition has to name the access on
-   * the fields first, and then this is what stops it being widened again.
+   * <p>A field counts as authorised when {@code @CCD(access)} names an access class on the field
+   * itself or on a {@code @JsonUnwrapped} parent it inherits from, which is how the grants
+   * themselves are decided. So this is no help to a definition that relies on the tab injection to
+   * grant read in the first place: ia-bail's 41 {@code progress_*} fields each want one role and
+   * reach all of them, but neither they nor their parent names an access class, so calling this
+   * changes nothing for them. Such a definition has to name the access first, and then this is what
+   * stops it being widened again.
    *
    * <p>This stops tab read and nothing else. Permissions from the field's events still apply, as
    * does the read added for the workbasket and search fields a role can use, so a field granted
-   * through either keeps it.
-   *
-   * <p>Unaffected: a field whose own {@code @CCD} names no access class, including one inside a
-   * {@code @JsonUnwrapped} parent that names some, and a field from {@code TabBuilder.label(...)},
-   * which exists only on its tab and has no other source of read; and any tab declaring
-   * {@code forRoles(...)}, which is already scoped to those roles.
+   * through either keeps it. A field from {@code TabBuilder.label(...)} is unaffected: it exists
+   * only on its tab and has no other source of read.
    *
    * <p>This subtracts, and only the declaration puts anything back. A field whose access classes
    * name two of eight roles becomes readable by those two and no others, however many could read
@@ -119,7 +117,7 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
    * the fields whose tab read it withheld, and warns about any left readable by nobody, so what a
    * case type gives up by calling this is visible at generation time.
    */
-  default void unscopedTabsRespectDeclaredFieldAccess() {
+  default void tabsRespectDeclaredFieldAccess() {
     // Default no-op for backward compatibility; implementations may override.
   }
 

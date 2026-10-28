@@ -56,7 +56,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   boolean shutterService = false;
   boolean explicitStateGrants = false;
   boolean emitCaseRoleJurisdiction = false;
-  boolean unscopedTabsRespectDeclaredFieldAccess = false;
+  boolean tabsRespectDeclaredFieldAccess = false;
 
   boolean noCaseHistoryTab = false;
   boolean jurisdictionShuttered = false;

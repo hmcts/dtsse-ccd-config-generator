@@ -14,12 +14,14 @@ import uk.gov.hmcts.reform.fpl.enums.UserRole;
  * The {@code overview} tab names no roles and places five things: a field naming
  * {@code SolicitorAccess}, a field naming nothing, a field naming an access class that grants
  * nothing, a field inside a {@code @JsonUnwrapped} parent that names access but which names none
- * itself, and a label. The {@code judicial} tab names {@code HMCTS_ADMIN} and places a field naming
- * {@code SolicitorAccess}.
+ * itself, and a label. The {@code judicial} and {@code solicitorPanel} tabs each name one role and
+ * place a field naming {@code SolicitorAccess}: the first a role that access class does not grant,
+ * the second the role it does.
  *
- * <p>So the checked-in sheet shows the first readable only by the solicitor, the third readable by
- * nobody, and the rest still taking read from the tab they are on — including the field on the
- * tab that names a role, which keeps read for that role.
+ * <p>So the checked-in sheet shows every field {@code SolicitorAccess} reaches readable only by the
+ * solicitor, whichever tab it sits on and whether that tab names roles or not; the field naming an
+ * access class that grants nothing readable by nobody; and the field naming nothing and the label
+ * still taking read from the tab.
  */
 @Component
 public class DeclaredFieldAccessCaseType
@@ -28,7 +30,7 @@ public class DeclaredFieldAccessCaseType
   @Override
   public void configure(ConfigBuilder<DeclaredFieldAccessCaseData, ExplicitState, UserRole> builder) {
     builder.caseType("DeclaredFieldAccess", "DeclaredFieldAccess", "Declared field access case type");
-    builder.unscopedTabsRespectDeclaredFieldAccess();
+    builder.tabsRespectDeclaredFieldAccess();
 
     builder.event("edit")
         .forState(Open)
@@ -49,5 +51,10 @@ public class DeclaredFieldAccessCaseType
     builder.tab("judicial", "Judicial")
         .forRoles(HMCTS_ADMIN)
         .field(DeclaredFieldAccessCaseData::getRoleScopedTabField);
+
+    // The same declaration, on a tab built for the role it grants: nothing is lost.
+    builder.tab("solicitorPanel", "Solicitor panel")
+        .forRoles(LOCAL_AUTHORITY)
+        .field(DeclaredFieldAccessCaseData::getSolicitorScopedTabField);
   }
 }

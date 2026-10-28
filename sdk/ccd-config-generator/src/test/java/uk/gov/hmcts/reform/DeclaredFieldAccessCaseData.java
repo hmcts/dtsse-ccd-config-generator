@@ -18,8 +18,11 @@ public class DeclaredFieldAccessCaseData {
   @CCD(label = "On a tab, declares nothing")
   private String tabOnlyField;
 
-  @CCD(label = "On a tab scoped to one role", access = {SolicitorAccess.class})
+  @CCD(label = "On a tab scoped to a role it does not name", access = {SolicitorAccess.class})
   private String roleScopedTabField;
+
+  @CCD(label = "On a tab scoped to the role it names", access = {SolicitorAccess.class})
+  private String solicitorScopedTabField;
 
   @CCD(label = "Names an access class that grants nothing", access = {NoGrantsAccess.class})
   private String noGrantsField;
