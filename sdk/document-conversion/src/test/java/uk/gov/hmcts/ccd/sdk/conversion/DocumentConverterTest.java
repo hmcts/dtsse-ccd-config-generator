@@ -12,6 +12,7 @@ import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -392,6 +393,36 @@ class DocumentConverterTest {
     assertPrintsUpright(scan, "scan.tif", "image/tiff");
     try (ConvertedPdf pdf = converter.toPdf(ConversionSource.of(scan, "scan.tif", "image/tiff"))) {
       assertThat(pdf.pageCount()).as("plain conversion pages").isEqualTo(1);
+    }
+  }
+
+  /**
+   * A TIFF page that cannot be decoded fails the conversion. Printing only the pages that could
+   * be read would post a pack with evidence silently missing.
+   */
+  @Test
+  void anUndecodableTiffPageFailsRatherThanBeingDropped() throws Exception {
+    Path scan = Fixtures.tiffWithUndecodableSecondPage(inputs);
+    ConversionSource source = ConversionSource.of(scan, "scan.tif", "image/tiff");
+    for (ThrowingCallable conversion : List.<ThrowingCallable>of(
+        () -> converter.toPrintReadyPdf(source, PrintOptions.bulkPrint()),
+        () -> converter.toPdf(source))) {
+      ConversionException failure = catchThrowableOfType(ConversionException.class, conversion);
+      assertThat(failure).isNotNull();
+      assertThat(failure.reason()).isEqualTo(Reason.INVALID_CONTENT);
+    }
+    assertThat(workDirectories()).isEmpty();
+  }
+
+  /** A letter of one converted part is still titled as the letter, not as its source file. */
+  @Test
+  void aSinglePartLetterKeepsTheLetterTitle() throws Exception {
+    PrintOptions unpadded = PrintOptions.bulkPrint().toBuilder().padToEvenPages(false).build();
+    try (ConvertedPdf letter = converter.toPrintReadyLetter("Claim pack", List.of(
+        PrintPart.convert(ConversionSource.of(Fixtures.bmp(inputs), "photo.bmp", "image/bmp"))),
+        unpadded);
+        PDDocument document = Loader.loadPDF(letter.file().toFile())) {
+      assertThat(document.getDocumentInformation().getTitle()).isEqualTo("Claim pack");
     }
   }
 
