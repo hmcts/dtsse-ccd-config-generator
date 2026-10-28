@@ -1,0 +1,18 @@
+[
+  {
+    "CaseTypeID": "OwnHistoryViewer",
+    "FieldType": "CaseHistoryViewer",
+    "ID": "auditTrail",
+    "Label": " ",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "OwnHistoryViewer",
+    "FieldType": "Text",
+    "ID": "sharedField",
+    "Label": "Edited by both roles",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  }
+]
