@@ -109,6 +109,7 @@ public final class DocumentConverter {
       throw new IllegalArgumentException("parts must not be empty");
     }
     Path work = createWorkDirectory();
+    boolean succeeded = false;
     try {
       // Docmosis output is the same whatever the colour, so a greyscale retry reuses it.
       OfficePdfs officePdfs = new OfficePdfs(work, new IdentityHashMap<>());
@@ -139,18 +140,20 @@ public final class DocumentConverter {
                 + options.maxOutputBytes() + " byte limit even in " + (letter.options().colour()
                 == PrintColour.GRAYSCALE ? "greyscale" : "CMYK") + ".");
       }
-      return new ConvertedPdf(letter.file(), work, letter.pages(), letter.mediaType(), warnings);
-    } catch (ConversionException e) {
-      WorkDirectory.deleteRecursively(work);
-      throw e;
+      ConvertedPdf result =
+          new ConvertedPdf(letter.file(), work, letter.pages(), letter.mediaType(), warnings);
+      succeeded = true;
+      return result;
     } catch (IOException e) {
-      WorkDirectory.deleteRecursively(work);
-      throw new ConversionException(Reason.IO_FAILURE,
-          "Local I/O failed while converting " + title, e);
+      throw localIoFailure(title, e);
     } catch (RuntimeException e) {
-      WorkDirectory.deleteRecursively(work);
       throw new ConversionException(Reason.INVALID_CONTENT,
           title + " could not be converted: " + e.getClass().getSimpleName(), e);
+    } finally {
+      // Also on an Error, such as running out of memory on a huge page.
+      if (!succeeded) {
+        WorkDirectory.deleteRecursively(work);
+      }
     }
   }
 
@@ -209,23 +212,31 @@ public final class DocumentConverter {
   private ConvertedPdf convert(ConversionSource source, PrintOptions print)
       throws ConversionException {
     Path work = createWorkDirectory();
+    boolean succeeded = false;
     try {
       List<ConversionWarning> warnings = new ArrayList<>();
       Path output = WorkDirectory.createFile(work, ".pdf");
       Converted converted = convertInto(source, print, work, output, warnings, null, null);
-      return new ConvertedPdf(output, work, converted.pages(), converted.mediaType(), warnings);
-    } catch (ConversionException e) {
-      WorkDirectory.deleteRecursively(work);
-      throw e;
+      ConvertedPdf result =
+          new ConvertedPdf(output, work, converted.pages(), converted.mediaType(), warnings);
+      succeeded = true;
+      return result;
     } catch (IOException e) {
-      WorkDirectory.deleteRecursively(work);
-      throw new ConversionException(Reason.IO_FAILURE,
-          "Local I/O failed while converting " + source.fileName(), e);
+      throw localIoFailure(source.fileName(), e);
     } catch (RuntimeException e) {
-      WorkDirectory.deleteRecursively(work);
       throw new ConversionException(Reason.INVALID_CONTENT,
           source.fileName() + " could not be converted: " + e.getClass().getSimpleName(), e);
+    } finally {
+      if (!succeeded) {
+        WorkDirectory.deleteRecursively(work);
+      }
     }
+  }
+
+  /** Local disk trouble (full, unwritable) says nothing about the document: worth a retry. */
+  private static ConversionException localIoFailure(String name, IOException e) {
+    return new ConversionException(Reason.IO_FAILURE,
+        "Local I/O failed while converting " + name, true, e);
   }
 
   private record Converted(int pages, String mediaType) {
@@ -270,7 +281,7 @@ public final class DocumentConverter {
       return WorkDirectory.create(tempDirectory);
     } catch (IOException e) {
       throw new ConversionException(Reason.IO_FAILURE,
-          "Could not create a working directory under " + tempDirectory, e);
+          "Could not create a working directory under " + tempDirectory, true, e);
     }
   }
 
@@ -333,14 +344,14 @@ public final class DocumentConverter {
           e.isTransientFailure(), e);
     }
     // Move the result into this conversion's directory so closing the result cleans it up.
-    Path owned = WorkDirectory.createFile(work, ".docmosis.pdf");
     try {
+      Path owned = WorkDirectory.createFile(work, ".docmosis.pdf");
       Files.move(converted, owned, StandardCopyOption.REPLACE_EXISTING);
+      return owned;
     } catch (IOException e) {
       Files.deleteIfExists(converted);
       throw e;
     }
-    return owned;
   }
 
   private boolean convertsOffice() {
@@ -349,7 +360,7 @@ public final class DocumentConverter {
 
   private static String effectiveType(ConversionSource source, List<ConversionWarning> warnings)
       throws ConversionException {
-    String declared = alias(MediaTypeDetection.normalise(source.mediaType()));
+    String declared = MediaTypeDetection.normalise(source.mediaType());
     Optional<String> inferred = UNTYPED.contains(declared)
         ? MediaTypeDetection.fromFileName(source.fileName()) : Optional.empty();
     byte[] head = new byte[MediaTypeDetection.DETECTION_PREFIX_BYTES];
@@ -358,7 +369,7 @@ public final class DocumentConverter {
       length = in.readNBytes(head, 0, head.length);
     } catch (IOException e) {
       throw new ConversionException(Reason.IO_FAILURE,
-          "Could not read " + source.fileName(), e);
+          "Could not read " + source.fileName(), true, e);
     }
     // What the caller told us, for messages: an inferred type was never declared.
     String claim = inferred.isPresent()
@@ -387,10 +398,6 @@ public final class DocumentConverter {
           throw new ConversionException(Reason.MEDIA_TYPE_CONFLICT,
               source.fileName() + " " + claim + " but is " + conflict.detectedDescription() + ".");
     };
-  }
-
-  private static String alias(String type) {
-    return SupportedMediaTypes.ALIASES.getOrDefault(type, type);
   }
 
   /**

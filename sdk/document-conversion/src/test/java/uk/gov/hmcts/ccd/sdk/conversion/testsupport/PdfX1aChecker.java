@@ -68,6 +68,11 @@ public final class PdfX1aChecker {
       violations.add("uses a cross-reference stream (PDF 1.5)");
     }
     try (PDDocument document = Loader.loadPDF(pdf.toFile())) {
+      String catalogVersion = document.getDocumentCatalog().getVersion();
+      if (catalogVersion != null && catalogVersion.compareTo("1.3") > 0) {
+        violations.add("catalog /Version " + catalogVersion + " overrides the header; PDF/X-1a:2001"
+            + " requires PDF 1.3 or lower");
+      }
       checkDocument(document, violations);
       for (int i = 0; i < document.getNumberOfPages(); i++) {
         checkPage(document.getPage(i), i + 1, violations);

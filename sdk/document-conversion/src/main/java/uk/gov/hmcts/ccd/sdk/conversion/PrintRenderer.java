@@ -62,7 +62,9 @@ final class PrintRenderer {
   int renderPdf(PDDocument source, String title, Path output) throws IOException {
     try (PDDocument out = newDocument()) {
       PDFRenderer renderer = new PDFRenderer(source);
-      renderer.setSubsamplingAllowed(false);
+      // Embedded images denser than the output are subsampled as they are decoded, rather than
+      // decoded whole and scaled down; the output resolution is unaffected.
+      renderer.setSubsamplingAllowed(true);
       for (int i = 0; i < source.getNumberOfPages(); i++) {
         PDPage page = source.getPage(i);
         PDRectangle crop = page.getCropBox();
@@ -71,9 +73,14 @@ final class PrintRenderer {
         float height = quarterTurned ? crop.getWidth() : crop.getHeight();
         Placement placement = place(width, height, false);
         // Render straight to the pixel count the placement prints at, so nothing is resampled.
-        int pixelsAcrossSourceWidth =
-            placement.rotate() ? placement.pixelHeight() : placement.pixelWidth();
-        float scale = pixelsAcrossSourceWidth / width;
+        int pixelsAcross = placement.rotate() ? placement.pixelHeight() : placement.pixelWidth();
+        int pixelsDown = placement.rotate() ? placement.pixelWidth() : placement.pixelHeight();
+        float scale = pixelsAcross / width;
+        // The height bounds it too: a sliver of a page clamped to one pixel across must not be
+        // rendered at a scale that makes its other side millions of pixels long.
+        if (height * scale > pixelsDown + 1) {
+          scale = pixelsDown / height;
+        }
         BufferedImage rendered =
             renderer.renderImage(i, scale, ImageType.RGB, RenderDestination.PRINT);
         addPage(out, rendered, placement);

@@ -20,13 +20,18 @@ import uk.gov.hmcts.ccd.sdk.conversion.testsupport.PrintRequirements;
  * The other print tests read the output back with PDFBox, the library that wrote it. This one
  * has Ghostscript, an independent interpreter close to what print RIPs run, open and render the
  * output: it must parse without complaint and agree that the margins are blank. Skipped where
- * {@code gs} is not installed.
+ * {@code gs} is not installed, except on CI, which installs it.
  */
-@EnabledIf("ghostscriptInstalled")
+@EnabledIf("ghostscriptInstalledOrCi")
 class GhostscriptCrossCheckTest {
 
   @TempDir
   Path dir;
+
+  /** CI installs Ghostscript, so there a missing one fails the test rather than skipping it. */
+  static boolean ghostscriptInstalledOrCi() {
+    return "true".equals(System.getenv("CI")) || ghostscriptInstalled();
+  }
 
   static boolean ghostscriptInstalled() {
     try {
@@ -48,7 +53,7 @@ class GhostscriptCrossCheckTest {
       try (ConvertedPdf pdf = converter.toPrintReadyPdf(source, PrintOptions.bulkPrint())) {
         Path out = Files.createDirectories(dir.resolve("gs-" + source.fileName()));
         Process gs = new ProcessBuilder("gs", "-q", "-dNOPAUSE", "-dBATCH", "-dSAFER",
-            "-dPDFSTOPONERROR", "-sDEVICE=pnggray", "-r50",
+            "-dPDFSTOPONERROR", "-sDEVICE=pnggray", "-r" + (int) PrintRequirements.RENDER_DPI,
             "-sOutputFile=" + out.resolve("page-%d.png"), pdf.file().toString())
             .redirectErrorStream(true).start();
         String log = new String(gs.getInputStream().readAllBytes(), StandardCharsets.UTF_8);

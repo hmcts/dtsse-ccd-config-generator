@@ -133,7 +133,7 @@ produced it. This is the conversion document bundling uses.
 |---|---|---|
 | PDF | `application/pdf` | validated (unencrypted, parseable, at least one page) |
 | JPG/JPEG, PNG, BMP, GIF | `image/*` | decoded in-process; PNG transparency prints white; for print, a JPEG's EXIF orientation is applied, so phone photos print upright |
-| TIF/TIFF | `image/tiff` | decoded in-process, one page per frame |
+| TIF/TIFF | `image/tiff` | decoded in-process, one page per frame; thumbnails and masks stored alongside a page are skipped, and for print each page's orientation tag is applied |
 | DOC/DOT, DOCX, DOTX | Word types | Docmosis |
 | XLS/XLT/XLA, XLSX, XLTX, XLSB | Excel types | Docmosis |
 | PPT/POT/PPS/PPA, PPTX, POTX, PPSX | PowerPoint types | Docmosis |
@@ -143,8 +143,9 @@ The converter checks the declared media type against the content first, using th
 as document bundling. Content that is clearly another type is converted as that type, with a
 `MEDIA_TYPE_MISMATCH` warning. A missing or `application/octet-stream` type is inferred from the
 file extension, with a `MEDIA_TYPE_INFERRED` warning. Common store aliases, such as `text/rtf`
-and `image/x-ms-bmp`, are accepted as they are. A failure throws `ConversionException` with a
-`reason()`:
+and `image/x-ms-bmp`, are accepted as they are, in bundles too. Binary content declared or named
+as text, RTF or CSV fails with `MEDIA_TYPE_CONFLICT` rather than reaching Docmosis, which would
+print it as garbage. A failure throws `ConversionException` with a `reason()`:
 
 - `UNSUPPORTED_MEDIA_TYPE`
 - `MEDIA_TYPE_CONFLICT`
@@ -155,12 +156,40 @@ and `image/x-ms-bmp`, are accepted as they are. A failure throws `ConversionExce
 - `OUTPUT_TOO_LARGE`
 - `IO_FAILURE`
 
-`OUTPUT_TOO_LARGE` comes from print conversion. `isTransientFailure()` is true only when Docmosis was unavailable, which is the case worth
-retrying.
+`OUTPUT_TOO_LARGE` comes from print conversion. `isTransientFailure()` says whether the same
+conversion could succeed later, so it is worth retrying. It is true when:
+
+- Docmosis was unavailable: a timeout, a connection failure, an interruption, or a 5xx response;
+- Docmosis was busy: 408 or 429;
+- Docmosis rejected the access key: 401 or 403, which needs the key fixing, not a new document;
+- local disk I/O failed (`IO_FAILURE`).
+
+Everything else is a problem with the document itself, and retrying it will fail the same way.
 
 The result is written to a private directory under `ccd.conversion.temp-directory` (default
 `java.io.tmpdir`). Closing the `ConvertedPdf` deletes it. A failed conversion leaves nothing
-behind.
+behind, even when it fails with an `Error` such as running out of memory.
+
+Images ImageIO cannot read, such as CMYK JPEGs, are decoded at full size by PDFBox instead. Above
+50 million pixels these fail with `INVALID_CONTENT`, so that one upload cannot exhaust the heap.
+
+## Upgrading from document-bundling 8.x
+
+The Docmosis client moved from `uk.gov.hmcts.ccd.sdk.bundling.docmosis` to
+`uk.gov.hmcts.ccd.sdk.conversion.docmosis`, with the same class names:
+
+- `DocmosisRenderService`
+- `DocmosisConnection`
+- `HttpDocmosisRenderService`
+- `DocmosisRenderException`
+
+Code that imports them, such as a stub `DocmosisRenderService` bean, a custom `DocumentHandler`
+that calls `context.docmosis()`, or a `catch` of `DocmosisRenderException`, needs its imports
+updating. Bundling's built-in office types now also include Word and Excel templates, XLSB and
+CSV.
+
+`ImageToPdf` and `PdfChecks` are public only so that document-bundling can use them. Services
+should use `DocumentConverter`.
 
 ## Testing
 
@@ -184,12 +213,20 @@ The module's tests are behavioural, following [the testing strategy](../testing-
   merge logic. A test requires our output to come out of it byte for byte, so PDF/X-1a reaches
   Xerox. Another test builds a letter behind a coversheet and checks that the coversheet renders
   exactly as it did before.
-- **Size selector**: the same photo is kept in colour at 50% of the limit, switched to greyscale
-  at 100%, and refused when the limit is below its greyscale size.
-- **Every Possessions upload extension** converts for print, and office formats reach Docmosis
-  with the right media type.
-- **Ghostscript cross-check** (runs when `gs` is installed). An independent interpreter must
-  render the output without complaint and agree that the margins are blank.
+- **Size selector**: the same photo is kept in colour at 79% of the limit, switched to greyscale
+  at 81%, and refused when the limit is below its greyscale size.
+- **Every Possessions upload extension** converts for print, with one image on every page, and
+  office formats reach Docmosis with the media type the test names for each extension.
+- **Colour separation**: a swatch of red, green, blue, black and grey must come out on the
+  expected CMYK plates, with black and grey on the black plate alone.
+- **Orientation**: photos in all eight EXIF orientations, and a TIFF with an orientation tag and a
+  thumbnail, must print with an asymmetric pattern the right way round and mirrored correctly.
+- **Ghostscript cross-check** (runs when `gs` is installed, and always on CI, which installs it).
+  An independent interpreter must render the output without complaint and agree that the
+  margins are blank.
+- **Docmosis**: conversion tests use an in-process stub (`StubDocmosis`), because a real Docmosis
+  needs an access key and network that CI does not have. The HTTP client is tested against a
+  fake server speaking em-stitching's contract (`HttpDocmosisRenderServiceTest`).
 - **Real Docmosis** (opt-in). Set `DOCMOSIS_CONVERT_ENDPOINT` and `DOCMOSIS_ACCESS_KEY` to
   convert the real office fixtures through a non-production Docmosis and check the output against
   the same requirements.

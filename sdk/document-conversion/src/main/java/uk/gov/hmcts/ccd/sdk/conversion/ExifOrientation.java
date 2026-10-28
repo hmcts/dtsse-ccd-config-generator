@@ -22,6 +22,7 @@ final class ExifOrientation {
 
   private static final int ORIENTATION_TAG = 0x0112;
   private static final int SHORT = 3;
+  private static final int LONG = 4;
 
   private ExifOrientation() {
   }
@@ -35,9 +36,17 @@ final class ExifOrientation {
         return UPRIGHT;
       }
       while (true) {
-        int marker = in.readUnsignedShort();
+        if (in.readUnsignedByte() != 0xFF) {
+          return UPRIGHT;
+        }
+        int code = in.readUnsignedByte();
+        // Any number of 0xFF fill bytes may precede a marker code.
+        while (code == 0xFF) {
+          code = in.readUnsignedByte();
+        }
+        int marker = 0xFF00 | code;
         // Image data starts at start-of-scan; EXIF can only come before it.
-        if ((marker & 0xFF00) != 0xFF00 || marker == 0xFFDA || marker == 0xFFD9) {
+        if (marker == 0xFFDA || marker == 0xFFD9) {
           return UPRIGHT;
         }
         int length = in.readUnsignedShort() - 2;
@@ -116,10 +125,11 @@ final class ExifOrientation {
       if (entry + 12 > segment.length) {
         return UPRIGHT;
       }
-      if (unsigned16(segment, entry, littleEndian) == ORIENTATION_TAG
-          && unsigned16(segment, entry + 2, littleEndian) == SHORT) {
-        int value = unsigned16(segment, entry + 8, littleEndian);
-        return value >= 1 && value <= 8 ? value : UPRIGHT;
+      if (unsigned16(segment, entry, littleEndian) == ORIENTATION_TAG) {
+        int type = unsigned16(segment, entry + 2, littleEndian);
+        long value = type == SHORT ? unsigned16(segment, entry + 8, littleEndian)
+            : type == LONG ? unsigned32(segment, entry + 8, littleEndian) : 0;
+        return value >= 1 && value <= 8 ? (int) value : UPRIGHT;
       }
     }
     return UPRIGHT;

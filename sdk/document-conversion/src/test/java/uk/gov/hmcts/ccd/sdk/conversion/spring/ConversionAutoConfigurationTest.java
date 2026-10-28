@@ -111,6 +111,48 @@ class ConversionAutoConfigurationTest {
         });
   }
 
+  /**
+   * Bundling may have a Docmosis client that only renders cover-page templates. Conversion must
+   * not settle for it when its own convert endpoint is configured.
+   */
+  @Test
+  void aRenderOnlyDocmosisBeanDoesNotStopOfficeConversion() {
+    DocmosisRenderService renderOnly = new DocmosisRenderService() {
+      @Override
+      public Path convertToPdf(Path source, String fileName, String mediaType) {
+        throw new AssertionError("a render-only client must not be asked to convert");
+      }
+
+      @Override
+      public boolean convertsFiles() {
+        return false;
+      }
+
+      @Override
+      public boolean rendersTemplates() {
+        return true;
+      }
+    };
+    runner.withBean(DocmosisRenderService.class, () -> renderOnly)
+        .withPropertyValues(
+            "ccd.conversion.temp-directory=" + dir,
+            "ccd.conversion.docmosis.convert-endpoint=http://127.0.0.1:"
+                + server.getAddress().getPort() + "/rs/convert",
+            "ccd.conversion.docmosis.access-key=it's-a-key")
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context.getBean(DocmosisRenderService.class)).isSameAs(renderOnly);
+          DocumentConverter converter = context.getBean(DocumentConverter.class);
+          try (ConvertedPdf pdf = converter.toPrintReadyPdf(ConversionSource.of(
+              Fixtures.real(dir, "wordDocument2.docx"), "letter.docx", DOCX),
+              PrintOptions.bulkPrint())) {
+            PrintRequirements.assertPrintReady(pdf.file(), PrintOptions.bulkPrint());
+          }
+          // A quote in the key once broke the startup condition, which spliced it into SpEL.
+          assertThat(requests).singleElement().asString().contains("it's-a-key");
+        });
+  }
+
   @Test
   void canBeSwitchedOff() {
     runner.withPropertyValues("ccd.conversion.enabled=false")

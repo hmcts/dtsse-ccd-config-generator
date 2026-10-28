@@ -10,14 +10,16 @@ import java.util.List;
 import java.util.stream.Stream;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDResources;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import uk.gov.hmcts.ccd.sdk.conversion.ConversionException.Reason;
 import uk.gov.hmcts.ccd.sdk.conversion.ConversionWarning.Code;
-import uk.gov.hmcts.ccd.sdk.conversion.detect.MediaTypeDetection;
 import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderException;
 import uk.gov.hmcts.ccd.sdk.conversion.testsupport.Fixtures;
 import uk.gov.hmcts.ccd.sdk.conversion.testsupport.Goldens;
@@ -54,12 +56,26 @@ class DocumentConverterTest {
    * Office formats reach Docmosis with the media type that names them.
    */
   @ParameterizedTest(name = "{0}")
-  @ValueSource(strings = {"jpg", "jpeg", "bmp", "tif", "tiff", "png", "doc", "dot", "docx",
-      "dotx", "pdf", "xls", "xlt", "xla", "xlsx", "xltx", "xlsb", "ppt", "pot", "pps", "ppa",
-      "pptx", "potx", "ppsx", "txt", "rtf", "csv"})
-  void everyPossessionsUploadTypeConvertsForPrint(String extension) throws Exception {
+  @CsvSource({
+      "jpg, image/jpeg", "jpeg, image/jpeg", "bmp, image/bmp", "tif, image/tiff",
+      "tiff, image/tiff", "png, image/png", "pdf, application/pdf",
+      "doc, application/msword", "dot, application/msword",
+      "docx, application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "dotx, application/vnd.openxmlformats-officedocument.wordprocessingml.template",
+      "xls, application/vnd.ms-excel", "xlt, application/vnd.ms-excel",
+      "xla, application/vnd.ms-excel",
+      "xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "xltx, application/vnd.openxmlformats-officedocument.spreadsheetml.template",
+      "xlsb, application/vnd.ms-excel.sheet.binary.macroenabled.12",
+      "ppt, application/vnd.ms-powerpoint", "pot, application/vnd.ms-powerpoint",
+      "pps, application/vnd.ms-powerpoint", "ppa, application/vnd.ms-powerpoint",
+      "pptx, application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "potx, application/vnd.openxmlformats-officedocument.presentationml.template",
+      "ppsx, application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+      "txt, text/plain", "rtf, application/rtf", "csv, text/csv"})
+  void everyPossessionsUploadTypeConvertsForPrint(String extension, String expectedType)
+      throws Exception {
     Path file = sampleFor(extension);
-    String expectedType = MediaTypeDetection.fromFileName("x." + extension).orElseThrow();
 
     try (ConvertedPdf pdf = converter.toPrintReadyPdf(
         ConversionSource.of(file, "evidence." + extension, "application/octet-stream"),
@@ -222,6 +238,12 @@ class DocumentConverterTest {
         .anyMatch(v -> v.contains("soft mask"));
     assertThat(PdfX1aChecker.violations(Fixtures.mixedLayoutPdf(inputs)))
         .anyMatch(v -> v.contains("DeviceRGB"));
+    try (PDDocument document = Loader.loadPDF(Fixtures.mixedLayoutPdf(inputs).toFile())) {
+      document.getDocumentCatalog().setVersion("1.7");
+      Path overridden = inputs.resolve("catalog-version.pdf");
+      document.save(overridden.toFile());
+      assertThat(PdfX1aChecker.violations(overridden)).anyMatch(v -> v.contains("/Version 1.7"));
+    }
   }
 
   @Test
@@ -300,14 +322,14 @@ class DocumentConverterTest {
         .colour(PrintColour.GRAYSCALE).build());
     assertThat(grey).isLessThan(cmyk);
 
-    // CMYK at half the limit: under 80%, kept in colour.
+    // CMYK at 79% of the limit: kept in colour.
     try (ConvertedPdf pdf = converter.toPrintReadyPdf(source,
-        PrintOptions.builder().maxOutputBytes(cmyk * 2).build())) {
+        PrintOptions.builder().maxOutputBytes((long) (cmyk / 0.79)).build())) {
       assertThat(colourSpaces(pdf)).containsOnly("DeviceCMYK");
       assertThat(pdf.warnings()).isEmpty();
     }
-    // CMYK at the limit: over 80%, redone in greyscale, which fits.
-    PrintOptions tight = PrintOptions.builder().maxOutputBytes(cmyk).build();
+    // CMYK at 81% of the limit: redone in greyscale, which fits.
+    PrintOptions tight = PrintOptions.builder().maxOutputBytes((long) (cmyk / 0.81)).build();
     try (ConvertedPdf pdf = converter.toPrintReadyPdf(source, tight)) {
       assertThat(colourSpaces(pdf)).containsOnly("DeviceGray");
       assertThat(Files.size(pdf.file())).isEqualTo(grey);
@@ -344,25 +366,62 @@ class DocumentConverterTest {
 
   /**
    * Phones store most photos sideways and record how to turn them in the EXIF orientation. The
-   * printed photo must be the way up the person who took it saw it: portrait, dark half on top.
+   * printed photo must be the way up the person who took it saw it: portrait, with the dark
+   * quadrant top left. Landscape pages are not turned here, so a sideways photo cannot come out
+   * right by accident.
    */
   @ParameterizedTest(name = "orientation {0}")
-  @ValueSource(ints = {1, 3, 6, 8})
+  @ValueSource(ints = {1, 2, 3, 4, 5, 6, 7, 8})
   void phonePhotosPrintTheWayUpTheyWereTaken(int orientation) throws Exception {
-    Path photo = Fixtures.phonePhoto(inputs, orientation);
-    try (ConvertedPdf pdf = converter.toPrintReadyPdf(
-        ConversionSource.of(photo, "photo.jpg", "image/jpeg"), PrintOptions.bulkPrint())) {
-      PrintRequirements.assertPrintReady(pdf.file(), PrintOptions.bulkPrint());
+    assertPrintsUpright(Fixtures.phonePhoto(inputs, orientation), "photo.jpg", "image/jpeg");
+  }
+
+  /** JPEG allows 0xFF fill bytes before a marker; the orientation must still be found. */
+  @Test
+  void anOrientationAfterFillBytesIsStillApplied() throws Exception {
+    assertPrintsUpright(Fixtures.phonePhoto(inputs, 6, true), "photo.jpg", "image/jpeg");
+  }
+
+  /**
+   * A TIFF page carries its own orientation tag, and a scanner may add a thumbnail of the page
+   * as a second image: the page prints upright, and the thumbnail is not printed as a page.
+   */
+  @Test
+  void aTiffPrintsUprightWithoutItsThumbnail() throws Exception {
+    Path scan = Fixtures.tiffWithThumbnail(inputs, 6);
+    assertPrintsUpright(scan, "scan.tif", "image/tiff");
+    try (ConvertedPdf pdf = converter.toPdf(ConversionSource.of(scan, "scan.tif", "image/tiff"))) {
+      assertThat(pdf.pageCount()).as("plain conversion pages").isEqualTo(1);
+    }
+  }
+
+  private void assertPrintsUpright(Path image, String name, String type) throws Exception {
+    PrintOptions options = PrintOptions.bulkPrint().toBuilder()
+        .rotateLandscapePages(false).padToEvenPages(false).build();
+    try (ConvertedPdf pdf = converter.toPrintReadyPdf(ConversionSource.of(image, name, type),
+        options)) {
+      assertThat(pdf.pageCount()).isEqualTo(1);
+      PrintRequirements.assertPrintReady(pdf.file(), options);
+      PrintFacts.PlacedImage placed;
       try (PDDocument document = Loader.loadPDF(pdf.file().toFile())) {
-        PrintFacts.PlacedImage image = PrintFacts.pages(document).get(0).images().get(0);
-        assertThat(image.pixelHeight()).as("portrait").isGreaterThan(image.pixelWidth());
+        placed = PrintFacts.pages(document).get(0).images().get(0);
       }
+      assertThat(placed.pixelHeight()).as("portrait").isGreaterThan(placed.pixelWidth());
       java.awt.image.BufferedImage page = PrintFacts.render(pdf.file(), 50).get(0);
-      int x = page.getWidth() / 2;
-      int top = luminance(page.getRGB(x, page.getHeight() * 3 / 10));
-      int bottom = luminance(page.getRGB(x, page.getHeight() * 7 / 10));
-      assertThat(bottom - top).as("the top half (%d) is darker than the bottom (%d)", top, bottom)
-          .isGreaterThan(80);
+      double pxPerMm = page.getWidth() / options.pageSize().widthMillimetres();
+      double left = placed.leftMm();
+      double width = options.pageSize().widthMillimetres() - placed.leftMm() - placed.rightMm();
+      double top = placed.topMm();
+      double height = options.pageSize().heightMillimetres() - placed.topMm() - placed.bottomMm();
+      int[] quadrants = new int[4];
+      for (int q = 0; q < 4; q++) {
+        int x = (int) ((left + width * (q % 2 == 0 ? 0.25 : 0.75)) * pxPerMm);
+        int y = (int) ((top + height * (q < 2 ? 0.25 : 0.75)) * pxPerMm);
+        quadrants[q] = luminance(page.getRGB(x, y));
+      }
+      assertThat(quadrants[0] + 80).as("top left is the dark quadrant: %s",
+          java.util.Arrays.toString(quadrants))
+          .isLessThan(Math.min(quadrants[1], Math.min(quadrants[2], quadrants[3])));
     }
   }
 
@@ -436,6 +495,75 @@ class DocumentConverterTest {
           .containsExactly(Code.COLOUR_REDUCED_FOR_SIZE);
     }
     assertThat(docmosis.calls()).containsExactly(new StubDocmosis.Call("statement.docx", DOCX));
+    assertThat(workDirectories()).isEmpty();
+  }
+
+  /**
+   * The separation puts each colour on the plates a printer expects: pure red is magenta and
+   * yellow, black and grey are on the black plate alone, never a four-colour rich black.
+   */
+  @Test
+  void coloursSeparateOntoTheExpectedPlates() throws Exception {
+    try (ConvertedPdf pdf = converter.toPrintReadyPdf(ConversionSource.of(
+        Fixtures.colourSwatch(inputs), "swatch.png", "image/png"), PrintOptions.bulkPrint());
+        PDDocument document = Loader.loadPDF(pdf.file().toFile())) {
+      PDResources resources = document.getPage(0).getResources();
+      PDImageXObject image = (PDImageXObject) resources.getXObject(
+          resources.getXObjectNames().iterator().next());
+      assertThat(image.getColorSpace().getName()).isEqualTo("DeviceCMYK");
+      byte[] samples;
+      try (java.io.InputStream in = image.getStream().createInputStream()) {
+        samples = in.readAllBytes();
+      }
+      int[][] expected = {
+          {0, 255, 255, 0}, {255, 0, 255, 0}, {255, 255, 0, 0}, {0, 0, 0, 255}, {0, 0, 0, 127}};
+      for (int band = 0; band < expected.length; band++) {
+        int y = image.getHeight() * (2 * band + 1) / 10;
+        int at = (y * image.getWidth() + image.getWidth() / 2) * 4;
+        int[] cmyk = {samples[at] & 0xFF, samples[at + 1] & 0xFF, samples[at + 2] & 0xFF,
+            samples[at + 3] & 0xFF};
+        for (int plate = 0; plate < 4; plate++) {
+          assertThat(cmyk[plate]).as("band %d plate %d of %s", band, plate,
+              java.util.Arrays.toString(cmyk)).isCloseTo(expected[band][plate],
+              org.assertj.core.data.Offset.offset(2));
+        }
+      }
+    }
+  }
+
+  /**
+   * A converter would turn any bytes it is given into pages of text, so binary content that is
+   * declared, or only named, as text is refused rather than printed as garbage.
+   */
+  @Test
+  void binaryContentPassedOffAsTextIsRefused() throws Exception {
+    Path elf = Files.write(inputs.resolve("data.csv"),
+        new byte[] {0x7F, 'E', 'L', 'F', 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0x3E, 0});
+    for (ConversionSource source : List.of(
+        ConversionSource.of(Fixtures.zip(inputs), "archive.txt", "text/plain"),
+        ConversionSource.of(elf, "data.csv", "application/octet-stream"))) {
+      ConversionException refused = catchThrowableOfType(ConversionException.class,
+          () -> converter.toPrintReadyPdf(source, PrintOptions.bulkPrint()));
+      assertThat(refused.reason()).as(source.fileName()).isEqualTo(Reason.MEDIA_TYPE_CONFLICT);
+    }
+    assertThat(docmosis.calls()).isEmpty();
+    assertThat(workDirectories()).isEmpty();
+  }
+
+  /** Running out of memory on a huge document must not leave its files behind. */
+  @Test
+  void anErrorStillCleansUp() throws Exception {
+    DocumentConverter failing = DocumentConverter.builder()
+        .docmosis((source, fileName, mediaType) -> {
+          throw new OutOfMemoryError("simulated");
+        })
+        .tempDirectory(work).build();
+    Path docx = Fixtures.text(inputs, "statement.docx", "stand-in for a Word document");
+    assertThat(catchThrowableOfType(OutOfMemoryError.class, () -> failing.toPrintReadyPdf(
+        ConversionSource.of(docx, "statement.docx", DOCX), PrintOptions.bulkPrint())))
+        .isNotNull();
+    assertThat(catchThrowableOfType(OutOfMemoryError.class, () -> failing.toPdf(
+        ConversionSource.of(docx, "statement.docx", DOCX)))).isNotNull();
     assertThat(workDirectories()).isEmpty();
   }
 

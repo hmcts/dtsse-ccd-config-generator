@@ -166,35 +166,22 @@ public final class Fixtures {
   }
 
   /**
-   * A phone photo: a portrait picture, dark in its top half, stored the way a phone held at an
-   * angle stores it, with the EXIF orientation that tells a viewer how to turn it upright. For
-   * orientation 6 the pixels are landscape, as most phone photos are.
+   * A phone photo: a portrait picture, dark only in its top-left quadrant, stored the way a
+   * camera held at an angle stores it, with the EXIF orientation that tells a viewer how to show
+   * it upright. Every orientation, mirrored ones included, puts the dark quadrant somewhere
+   * different in the stored pixels.
    */
   public static Path phonePhoto(Path dir, int orientation) throws IOException {
-    int width = 300;
-    int height = 500;
-    BufferedImage upright = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-    for (int y = 0; y < height; y++) {
-      for (int x = 0; x < width; x++) {
-        upright.setRGB(x, y, y < height / 2 ? 0x202020 : 0xF0F0F0);
-      }
-    }
-    // Store the pixels turned the opposite way to how the viewer will turn them.
-    boolean quarter = orientation == 6 || orientation == 8;
-    BufferedImage stored = new BufferedImage(quarter ? height : width, quarter ? width : height,
-        BufferedImage.TYPE_INT_RGB);
-    for (int y = 0; y < height; y++) {
-      for (int x = 0; x < width; x++) {
-        int rgb = upright.getRGB(x, y);
-        switch (orientation) {
-          case 3 -> stored.setRGB(width - 1 - x, height - 1 - y, rgb);
-          // Viewer turns clockwise, so store turned counter-clockwise.
-          case 6 -> stored.setRGB(y, width - 1 - x, rgb);
-          case 8 -> stored.setRGB(height - 1 - y, x, rgb);
-          default -> stored.setRGB(x, y, rgb);
-        }
-      }
-    }
+    return phonePhoto(dir, orientation, false);
+  }
+
+  /**
+   * A {@link #phonePhoto}; with {@code fillBytes}, the EXIF marker is preceded by 0xFF fill
+   * bytes, which JPEG allows before any marker.
+   */
+  public static Path phonePhoto(Path dir, int orientation, boolean fillBytes)
+      throws IOException {
+    BufferedImage stored = storedForOrientation(uprightQuadrantImage(), orientation);
     ByteArrayOutputStream jpeg = new ByteArrayOutputStream();
     ImageIO.write(stored, "jpeg", jpeg);
     byte[] plain = jpeg.toByteArray();
@@ -207,9 +194,153 @@ public final class Fixtures {
         0, 0, 0, 0};
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     out.write(plain, 0, 2);
+    if (fillBytes) {
+      out.write(new byte[] {(byte) 0xFF, (byte) 0xFF});
+    }
     out.write(exif);
     out.write(plain, 2, plain.length - 2);
-    return Files.write(dir.resolve("phone-" + orientation + ".jpg"), out.toByteArray());
+    return Files.write(dir.resolve("phone-" + orientation + (fillBytes ? "-fill" : "") + ".jpg"),
+        out.toByteArray());
+  }
+
+  /**
+   * A TIFF of one {@link #phonePhoto}-style page stored for {@code orientation} (TIFF tag 274),
+   * followed by a reduced-resolution thumbnail of it (NewSubfileType 1), as some scanners and
+   * editors write. Uncompressed 8-bit grey, written by hand so the tags are exactly these.
+   */
+  public static Path tiffWithThumbnail(Path dir, int orientation) throws IOException {
+    BufferedImage page = storedForOrientation(uprightQuadrantImage(), orientation);
+    BufferedImage thumbnail = new BufferedImage(page.getWidth() / 10, page.getHeight() / 10,
+        BufferedImage.TYPE_BYTE_GRAY);
+    Graphics2D g = thumbnail.createGraphics();
+    try {
+      g.drawImage(page, 0, 0, thumbnail.getWidth(), thumbnail.getHeight(), null);
+    } finally {
+      g.dispose();
+    }
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    // Little-endian header; the first IFD follows the page's pixels.
+    byte[] pagePixels = greyPixels(page);
+    byte[] thumbnailPixels = greyPixels(thumbnail);
+    int pagePixelsAt = 8;
+    int firstIfd = pagePixelsAt + pagePixels.length;
+    int ifdLength = 2 + 10 * 12 + 4;
+    int thumbnailPixelsAt = firstIfd + ifdLength;
+    int secondIfd = thumbnailPixelsAt + thumbnailPixels.length;
+    out.write(new byte[] {'I', 'I', 42, 0});
+    out.write(le32(firstIfd));
+    out.write(pagePixels);
+    out.write(tiffIfd(page.getWidth(), page.getHeight(), 0, orientation, pagePixelsAt,
+        pagePixels.length, secondIfd));
+    out.write(thumbnailPixels);
+    out.write(tiffIfd(thumbnail.getWidth(), thumbnail.getHeight(), 1, orientation,
+        thumbnailPixelsAt, thumbnailPixels.length, 0));
+    return Files.write(dir.resolve("scan-with-thumbnail-" + orientation + ".tif"),
+        out.toByteArray());
+  }
+
+  /**
+   * A portrait swatch of five equal horizontal bands, top to bottom: pure red, pure green, pure
+   * blue, black and mid grey (128).
+   */
+  public static Path colourSwatch(Path dir) throws IOException {
+    int[] bands = {0xFF0000, 0x00FF00, 0x0000FF, 0x000000, 0x808080};
+    BufferedImage image = new BufferedImage(200, 500, BufferedImage.TYPE_INT_RGB);
+    for (int y = 0; y < image.getHeight(); y++) {
+      for (int x = 0; x < image.getWidth(); x++) {
+        image.setRGB(x, y, bands[y / 100]);
+      }
+    }
+    return write(image, "png", dir.resolve("swatch.png"));
+  }
+
+  private static BufferedImage uprightQuadrantImage() {
+    int width = 300;
+    int height = 500;
+    BufferedImage upright = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        upright.setRGB(x, y, x < width / 2 && y < height / 2 ? 0x202020 : 0xF0F0F0);
+      }
+    }
+    return upright;
+  }
+
+  /**
+   * The pixels a camera stores for an upright picture under an EXIF/TIFF orientation: the
+   * inverse of the turn or flip a viewer applies. Written out pixel by pixel, independently of
+   * the production transforms.
+   */
+  private static BufferedImage storedForOrientation(BufferedImage upright, int orientation) {
+    int w = upright.getWidth();
+    int h = upright.getHeight();
+    boolean swap = orientation >= 5;
+    BufferedImage stored = new BufferedImage(swap ? h : w, swap ? w : h,
+        BufferedImage.TYPE_INT_RGB);
+    for (int y = 0; y < h; y++) {
+      for (int x = 0; x < w; x++) {
+        int rgb = upright.getRGB(x, y);
+        switch (orientation) {
+          case 2 -> stored.setRGB(w - 1 - x, y, rgb);
+          case 3 -> stored.setRGB(w - 1 - x, h - 1 - y, rgb);
+          case 4 -> stored.setRGB(x, h - 1 - y, rgb);
+          case 5 -> stored.setRGB(y, x, rgb);
+          // Viewer turns clockwise, so store turned counter-clockwise.
+          case 6 -> stored.setRGB(y, w - 1 - x, rgb);
+          case 7 -> stored.setRGB(h - 1 - y, w - 1 - x, rgb);
+          case 8 -> stored.setRGB(h - 1 - y, x, rgb);
+          default -> stored.setRGB(x, y, rgb);
+        }
+      }
+    }
+    return stored;
+  }
+
+  private static byte[] greyPixels(BufferedImage image) {
+    byte[] pixels = new byte[image.getWidth() * image.getHeight()];
+    for (int y = 0; y < image.getHeight(); y++) {
+      for (int x = 0; x < image.getWidth(); x++) {
+        pixels[y * image.getWidth() + x] = (byte) (image.getRGB(x, y) & 0xFF);
+      }
+    }
+    return pixels;
+  }
+
+  /** A baseline grey IFD with ten entries, in ascending tag order as TIFF requires. */
+  private static byte[] tiffIfd(int width, int height, int subfileType, int orientation,
+      int stripAt, int stripLength, int nextIfd) throws IOException {
+    ByteArrayOutputStream ifd = new ByteArrayOutputStream();
+    ifd.write(le16(10));
+    ifd.write(tiffEntry(254, 4, subfileType));
+    ifd.write(tiffEntry(256, 4, width));
+    ifd.write(tiffEntry(257, 4, height));
+    ifd.write(tiffEntry(258, 3, 8));
+    ifd.write(tiffEntry(259, 3, 1));
+    ifd.write(tiffEntry(262, 3, 1));
+    ifd.write(tiffEntry(273, 4, stripAt));
+    ifd.write(tiffEntry(274, 3, orientation));
+    ifd.write(tiffEntry(278, 4, height));
+    ifd.write(tiffEntry(279, 4, stripLength));
+    ifd.write(le32(nextIfd));
+    return ifd.toByteArray();
+  }
+
+  private static byte[] tiffEntry(int tag, int type, int value) throws IOException {
+    ByteArrayOutputStream entry = new ByteArrayOutputStream();
+    entry.write(le16(tag));
+    entry.write(le16(type));
+    entry.write(le32(1));
+    entry.write(type == 3 ? new byte[] {(byte) value, (byte) (value >> 8), 0, 0} : le32(value));
+    return entry.toByteArray();
+  }
+
+  private static byte[] le16(int value) {
+    return new byte[] {(byte) value, (byte) (value >> 8)};
+  }
+
+  private static byte[] le32(int value) {
+    return new byte[] {(byte) value, (byte) (value >> 8), (byte) (value >> 16),
+        (byte) (value >> 24)};
   }
 
   /** A 24 megapixel landscape JPEG: printed at 300 dpi it must be downsampled about threefold. */
