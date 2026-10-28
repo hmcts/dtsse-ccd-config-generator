@@ -90,6 +90,48 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   void explicitStateGrants();
 
   /**
+   * Stop a tab from adding read on a field that {@code @CCD(access)} authorises.
+   *
+   * <p>{@code AuthorisationCaseFieldGenerator} adds read for every field on a tab a role can see,
+   * before it reads the field's {@code @CCD(access)}, so a field that names who may read it is
+   * widened to every role on that tab and the declaration cannot take it back. Call this and such a
+   * field takes no read from any tab, whether the tab declares {@code forRoles(...)} or not.
+   *
+   * <p>A field counts as authorised when {@code @CCD(access)} names an access class on the field
+   * itself or on a {@code @JsonUnwrapped} parent it inherits from, which is how the grants
+   * themselves are decided. So this is no help to a definition that relies on the tab injection to
+   * grant read in the first place: ia-bail's 41 {@code progress_*} fields each want one role and
+   * reach all of them, but neither they nor their parent names an access class, so calling this
+   * changes nothing for them. Such a definition has to name the access first, and then this is what
+   * stops it being widened again.
+   *
+   * <p>This stops tab read and nothing else. Permissions from the field's events still apply, as
+   * does the read added for the workbasket and search fields a role can use, so a field granted
+   * through either keeps it. A field from {@code TabBuilder.label(...)} is unaffected: it exists
+   * only on its tab and has no other source of read.
+   *
+   * <p>This subtracts, and only the declaration puts anything back. A field whose access classes
+   * name two of eight roles becomes readable by those two and no others, however many could read
+   * it off the tab before — so a definition whose fields are authorised individually wants every
+   * role it means to grant named on the field, not just the ones that edit it. The generator logs
+   * the fields whose tab read it withheld, and warns about any left readable by nobody, so what a
+   * case type gives up by calling this is visible at generation time.
+   *
+   * <p>Whether a field is covered turns on it naming an access class, not on what that class
+   * grants, so a class granting a role write without read now emits {@code CU} where the tab used
+   * to supply the {@code R}. CCD withholds unreadable fields from the case data it returns, so that
+   * role opens the field blank whatever is stored, and submitting writes the blank back. The
+   * generator warns about each such field and role, because the declaration is taken at face value
+   * rather than being quietly widened; a role that is meant to write a field is meant to read it,
+   * excepting a system role that only ever submits a value it supplies itself.
+   */
+  default void tabsRespectDeclaredFieldAccess() {
+    // Defaulted rather than abstract so 7.x stays source compatible for anything implementing
+    // ConfigBuilder itself. Such an implementation discards the call, so a case type relying on
+    // this has to be asserted against generated output rather than a stub builder.
+  }
+
+  /**
    * Suppress the {@code CaseHistory} tab the generator adds when no tab declares that ID.
    *
    * <p>By default {@code CaseTypeTabGenerator} prepends a tab {@code TabID=CaseHistory} placing the
