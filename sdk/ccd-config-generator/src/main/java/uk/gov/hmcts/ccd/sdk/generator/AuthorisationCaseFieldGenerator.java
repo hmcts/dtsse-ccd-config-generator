@@ -276,10 +276,14 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
         if (!withheldOnThisTab) {
           continue;
         }
-        boolean anyReadable = tab.getFields().stream().anyMatch(field -> {
-          Set<Permission> granted = fieldRolePermissions.get(field.getId(), role);
-          return null != granted && granted.contains(Permission.R);
-        });
+        // Labels take read from the tab and always will, so a tab whose every case field is
+        // withheld still shows that role its section headers and nothing else.
+        boolean anyReadable = tab.getFields().stream()
+            .filter(field -> null == field.getLabel())
+            .anyMatch(field -> {
+              Set<Permission> granted = fieldRolePermissions.get(field.getId(), role);
+              return null != granted && granted.contains(Permission.R);
+            });
         if (!anyReadable) {
           log.warn("{}: tab {} is declared for {}, and after tabsRespectDeclaredFieldAccess no"
               + " field on it is readable by that role alone, so it renders empty for a user"

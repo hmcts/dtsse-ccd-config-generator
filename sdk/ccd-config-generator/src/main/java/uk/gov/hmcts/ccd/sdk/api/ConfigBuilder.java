@@ -116,6 +116,14 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
    * role it means to grant named on the field, not just the ones that edit it. The generator logs
    * the fields whose tab read it withheld, and warns about any left readable by nobody, so what a
    * case type gives up by calling this is visible at generation time.
+   *
+   * <p>Whether a field is covered turns on it naming an access class, not on what that class
+   * grants, so a class granting a role write without read now emits {@code CU} where the tab used
+   * to supply the {@code R}. CCD withholds unreadable fields from the case data it returns, so that
+   * role opens the field blank whatever is stored, and submitting writes the blank back. The
+   * generator warns about each such field and role, because the declaration is taken at face value
+   * rather than being quietly widened; a role that is meant to write a field is meant to read it,
+   * excepting a system role that only ever submits a value it supplies itself.
    */
   default void tabsRespectDeclaredFieldAccess() {
     // Defaulted rather than abstract so 7.x stays source compatible for anything implementing

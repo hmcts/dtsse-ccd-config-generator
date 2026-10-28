@@ -50,9 +50,11 @@ public class DeclaredFieldAccessCaseType
         .field("unwrappedChild")
         .label("overviewLabel", null, "A label");
 
-    // A field declaring access only for the solicitor, on a tab built for the courtadmin.
+    // A field declaring access only for the solicitor, on a tab built for the courtadmin. The
+    // label still takes read from the tab, so the courtadmin is left with the header alone.
     builder.tab("judicial", "Judicial")
         .forRoles(HMCTS_ADMIN)
+        .label("judicialLabel", null, "Orders")
         .field(DeclaredFieldAccessCaseData::getRoleScopedTabField);
 
     // The same declaration, on a tab built for the role it grants: nothing is lost.

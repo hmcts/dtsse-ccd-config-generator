@@ -8,6 +8,13 @@
   },
   {
     "CRUD": "R",
+    "CaseFieldID": "judicialLabel",
+    "CaseTypeID": "DeclaredFieldAccess",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-courtadmin"
+  },
+  {
+    "CRUD": "R",
     "CaseFieldID": "overviewLabel",
     "CaseTypeID": "DeclaredFieldAccess",
     "LiveFrom": "01/01/2017",
