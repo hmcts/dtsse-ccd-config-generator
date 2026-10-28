@@ -34,7 +34,7 @@ jobs:
       - name: Set up Node.js 20
         uses: actions/setup-node@v7
         with:
-          node-version: 24.22.1
+          node-version: 26.12.1
           cache: npm
           cache-dependency-path: frontend/docweave/package-lock.json
 
