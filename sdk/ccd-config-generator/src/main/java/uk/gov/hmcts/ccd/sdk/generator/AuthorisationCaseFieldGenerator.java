@@ -28,6 +28,7 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ArrayUtils;
@@ -96,7 +97,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
     }
     SetMultimap<String, String> readWithheld = HashMultimap.create();
     Set<String> fieldsDeclaringAccess = config.isTabsRespectDeclaredFieldAccess()
-        ? fieldsDeclaringAccess(config.getCaseClass(), null, null)
+        ? fieldsDeclaringAccess(config.getCaseClass())
         : Set.of();
 
     // Add Permissions for all tabs.
@@ -147,7 +148,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       }
     }
 
-    addPermissionsFromFields(fieldRolePermissions, config.getCaseClass(), null, null);
+    addPermissionsFromFields(fieldRolePermissions, config.getCaseClass());
 
     reportWithheldTabRead(config, readWithheld, fieldRolePermissions);
 
@@ -213,8 +214,10 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       return;
     }
 
-    log.info("{}: tabsRespectDeclaredFieldAccess withheld tab read on {} field(s): {}",
-        caseType, lostRead.keySet().size(), new TreeMap<>(Multimaps.asMap(lostRead)));
+    if (log.isInfoEnabled()) {
+      log.info("{}: tabsRespectDeclaredFieldAccess withheld tab read on {} field(s): {}",
+          caseType, lostRead.keySet().size(), sorted(lostRead));
+    }
 
     List<String> unreadable = lostRead.keySet().stream()
         .filter(field -> fieldRolePermissions.row(field).values().stream()
@@ -227,13 +230,39 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
           + " access classes they name grant no read: {}", caseType, unreadable.size(), unreadable);
     }
 
+    // A role left able to write a field it cannot read gets an event page with a field CCD strips
+    // from the case data it returns.
+    SetMultimap<String, String> writeWithoutRead = HashMultimap.create();
+    lostRead.forEach((field, role) -> {
+      Set<Permission> granted = fieldRolePermissions.get(field, role);
+      if (null != granted && !granted.isEmpty()) {
+        writeWithoutRead.put(field, role);
+      }
+    });
+
+    if (!writeWithoutRead.isEmpty()) {
+      log.warn("{}: tabsRespectDeclaredFieldAccess leaves {} field(s) granted to a role that"
+          + " cannot read them: {}",
+          caseType, writeWithoutRead.keySet().size(), sorted(writeWithoutRead));
+    }
+
     reportTabsLeftEmpty(config, readWithheld, fieldRolePermissions);
   }
 
+  /** Field to roles, ordered, so a report can be diffed between generations. */
+  private static Map<String, List<String>> sorted(SetMultimap<String, String> fieldRoles) {
+    Map<String, List<String>> ordered = new TreeMap<>();
+    Multimaps.asMap(fieldRoles).forEach((field, roles) ->
+        ordered.put(field, roles.stream().sorted().collect(Collectors.toList())));
+    return ordered;
+  }
+
   /**
-   * Warns where a tab declaring {@code forRoles(...)} is left with nothing for one of those roles
-   * to read. The tab is still emitted and still shown to that role, so it renders empty, and
-   * neither the tab nor the fields on it say so.
+   * Warns where a tab declaring {@code forRoles(...)} is left with nothing that role can read by
+   * itself. The tab is still emitted and still shown to that role, and neither the tab nor the
+   * fields on it say so. CCD unions a user's access profiles, so a user holding another role that
+   * reads those fields still sees them; this reports the role the tab names, which is the only one
+   * the definition says the tab is for.
    */
   private void reportTabsLeftEmpty(
       ResolvedCCDConfig<T, S, R> config,
@@ -252,8 +281,9 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
           return null != granted && granted.contains(Permission.R);
         });
         if (!anyReadable) {
-          log.warn("{}: tab {} is declared for {}, but tabsRespectDeclaredFieldAccess leaves no"
-              + " field on it readable by that role, so it renders empty",
+          log.warn("{}: tab {} is declared for {}, and after tabsRespectDeclaredFieldAccess no"
+              + " field on it is readable by that role alone, so it renders empty for a user"
+              + " holding no other role that reads them",
               config.getCaseType(), tab.getTabID(), role);
         }
       }
@@ -261,36 +291,17 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
   }
 
   /**
-   * Ids of the fields {@code @CCD(access)} authorises, named on the field itself or inherited from
-   * a {@code @JsonUnwrapped} parent, mirroring how {@link #addPermissionsFromFields} decides the
-   * grants.
+   * Hands each field the id CCD knows it by and the access classes that apply to it, a
+   * {@code @JsonUnwrapped} parent's passed down to its children. Both the grants and the decision
+   * to withhold tab read are taken from this one walk, so they cannot disagree about which fields
+   * {@code @CCD(access)} authorises.
    */
-  private static Set<String> fieldsDeclaringAccess(
-      Class<?> parent, String prefix, Class<? extends HasAccessControl>[] defaultAccessControl) {
-    Set<String> declaring = new HashSet<>();
-    for (java.lang.reflect.Field field : getCaseFields(parent)) {
-      CCD ccdAnnotation = field.getAnnotation(CCD.class);
-      Class<? extends HasAccessControl>[] access = mergeAccess(defaultAccessControl, ccdAnnotation);
-      JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
-
-      if (null != unwrapped) {
-        String newPrefix = isNullOrEmpty(prefix)
-            ? unwrapped.prefix() : prefix.concat(capitalize(unwrapped.prefix()));
-        declaring.addAll(fieldsDeclaringAccess(field.getType(), newPrefix, access));
-      } else if (null != access && access.length > 0) {
-        declaring.add(getFieldId(field, prefix));
-      }
-    }
-    return declaring;
-  }
-
-  private static void addPermissionsFromFields(
-      Table<String, String, Set<Permission>> fieldRolePermissions,
-      Class parent,
+  private static void walkCaseFields(
+      Class<?> parent,
       String prefix,
-      Class<? extends HasAccessControl>[] defaultAccessControl
+      Class<? extends HasAccessControl>[] defaultAccessControl,
+      BiConsumer<String, Class<? extends HasAccessControl>[]> sink
   ) {
-
     for (java.lang.reflect.Field field : getCaseFields(parent)) {
       CCD ccdAnnotation = field.getAnnotation(CCD.class);
       Class<? extends HasAccessControl>[] access = mergeAccess(defaultAccessControl, ccdAnnotation);
@@ -298,26 +309,43 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
 
       if (null != unwrapped) {
         String newPrefix = isNullOrEmpty(prefix) ? unwrapped.prefix() : prefix.concat(capitalize(unwrapped.prefix()));
-        addPermissionsFromFields(fieldRolePermissions, field.getType(), newPrefix, access);
+        walkCaseFields(field.getType(), newPrefix, access, sink);
       } else if (null != access) {
-        String id = getFieldId(field, prefix);
-
-        for (Class<? extends HasAccessControl> klass : access) {
-          HasAccessControl accessHolder = BeanUtils.instantiateClass(klass);
-          SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
-          for (HasRole key : roleGrants.keys()) {
-            Set<Permission> perms = Sets.newHashSet();
-            perms.addAll(roleGrants.get(key));
-
-            if (fieldRolePermissions.contains(id, key.getRole())) {
-              perms.addAll(fieldRolePermissions.get(id, key.getRole()));
-            }
-
-            fieldRolePermissions.put(id, key.getRole(), perms);
-          }
-        }
+        sink.accept(getFieldId(field, prefix), access);
       }
     }
+  }
+
+  private static Set<String> fieldsDeclaringAccess(Class<?> caseClass) {
+    Set<String> declaring = new HashSet<>();
+    walkCaseFields(caseClass, null, null, (id, access) -> {
+      if (access.length > 0) {
+        declaring.add(id);
+      }
+    });
+    return declaring;
+  }
+
+  private static void addPermissionsFromFields(
+      Table<String, String, Set<Permission>> fieldRolePermissions,
+      Class<?> caseClass
+  ) {
+    walkCaseFields(caseClass, null, null, (id, access) -> {
+      for (Class<? extends HasAccessControl> klass : access) {
+        HasAccessControl accessHolder = BeanUtils.instantiateClass(klass);
+        SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
+        for (HasRole key : roleGrants.keys()) {
+          Set<Permission> perms = Sets.newHashSet();
+          perms.addAll(roleGrants.get(key));
+
+          if (fieldRolePermissions.contains(id, key.getRole())) {
+            perms.addAll(fieldRolePermissions.get(id, key.getRole()));
+          }
+
+          fieldRolePermissions.put(id, key.getRole(), perms);
+        }
+      }
+    });
   }
 
   private static Class<? extends HasAccessControl>[] mergeAccess(

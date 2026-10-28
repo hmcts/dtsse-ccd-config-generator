@@ -5,6 +5,7 @@ import lombok.Data;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.reform.fpl.access.NoGrantsAccess;
 import uk.gov.hmcts.reform.fpl.access.SolicitorAccess;
+import uk.gov.hmcts.reform.fpl.access.WriteWithoutReadAccess;
 
 @Data
 public class DeclaredFieldAccessCaseData {
@@ -26,6 +27,10 @@ public class DeclaredFieldAccessCaseData {
 
   @CCD(label = "Names an access class that grants nothing", access = {NoGrantsAccess.class})
   private String noGrantsField;
+
+  @CCD(label = "Names an access class granting write but not read",
+      access = {WriteWithoutReadAccess.class})
+  private String writeWithoutReadField;
 
   @JsonUnwrapped
   @CCD(access = {SolicitorAccess.class})

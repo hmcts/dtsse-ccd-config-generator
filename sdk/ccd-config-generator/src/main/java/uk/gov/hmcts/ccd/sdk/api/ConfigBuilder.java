@@ -118,7 +118,9 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
    * case type gives up by calling this is visible at generation time.
    */
   default void tabsRespectDeclaredFieldAccess() {
-    // Default no-op for backward compatibility; implementations may override.
+    // Defaulted rather than abstract so 7.x stays source compatible for anything implementing
+    // ConfigBuilder itself. Such an implementation discards the call, so a case type relying on
+    // this has to be asserted against generated output rather than a stub builder.
   }
 
   /**
