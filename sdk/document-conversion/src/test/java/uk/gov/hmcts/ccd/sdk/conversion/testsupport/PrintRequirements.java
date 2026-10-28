@@ -27,7 +27,8 @@ import uk.gov.hmcts.ccd.sdk.conversion.PrintOptions;
  * count when padding is on. A page with no image must be blank: it is duplex padding.
  */
 public final class PrintRequirements {
-  private static final float RENDER_DPI = 50;
+  /** Fine enough that the unchecked sliver at the margin's inner edge is under 0.26 mm. */
+  public static final float RENDER_DPI = 100;
   private static final double TOLERANCE_MM = 0.05;
   private static final int PAPER_WHITE = 250;
 
@@ -36,6 +37,7 @@ public final class PrintRequirements {
 
   private static boolean isIdentification(String violation) {
     return violation.startsWith("header is ")
+        || violation.startsWith("catalog /Version ")
         || violation.startsWith("document information /GTS_PDFX")
         || violation.startsWith("needs exactly one GTS_PDFX output intent");
   }
@@ -91,6 +93,12 @@ public final class PrintRequirements {
             .isCloseTo(options.pageSize().heightMillimetres(), org.assertj.core.data.Offset
                 .offset(0.1));
         assertThat(page.hasText()).as(where + " has no live text to reflow").isFalse();
+        // Every converted page is exactly one image. Only a trailing page added to make the
+        // count even may be blank, so output with nothing drawn cannot pass.
+        boolean trailingPadding = i == pages.size() - 1 && options.padToEvenPages();
+        if (!trailingPadding || !page.images().isEmpty()) {
+          assertThat(page.images()).as(where + " images").hasSize(1);
+        }
         for (PrintFacts.PlacedImage image : page.images()) {
           assertThat(image.dpiX()).as(where + " horizontal dpi")
               .isLessThanOrEqualTo(options.resolutionDpi() + 0.05);
@@ -115,9 +123,12 @@ public final class PrintRequirements {
     }
   }
 
-  /** Requires every pixel within the margin band (less one pixel) to be paper white. */
+  /**
+   * Requires every pixel lying wholly within the margin band of a page rendered at
+   * {@link #RENDER_DPI} to be paper white.
+   */
   public static void assertMarginBlank(BufferedImage page, double marginMm, String where) {
-    int band = (int) Math.floor(marginMm / 25.4 * RENDER_DPI) - 1;
+    int band = (int) Math.floor(marginMm / 25.4 * RENDER_DPI);
     for (int y = 0; y < page.getHeight(); y++) {
       for (int x = 0; x < page.getWidth(); x++) {
         boolean inBand = x < band || y < band || x >= page.getWidth() - band

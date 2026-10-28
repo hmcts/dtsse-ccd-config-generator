@@ -5,7 +5,8 @@ import java.time.Duration;
 
 /**
  * Connection settings for the shared Docmosis render service, bound from
- * {@code ccd.bundling.docmosis.*} (or built directly for non-Spring use).
+ * {@code ccd.conversion.docmosis.*} or {@code ccd.bundling.docmosis.*} (or built directly for
+ * non-Spring use).
  *
  * <p>Every call the client makes is bounded by these settings: connection and read timeouts and
  * a source-size ceiling enforced before anything is sent. {@link #toString()} redacts the access

@@ -163,6 +163,25 @@ class HttpDocmosisRenderServiceTest {
     assertThat(outputDir).isEmptyDirectory();
   }
 
+  /**
+   * Rate limiting, a request timeout and a rejected access key say nothing about the document:
+   * a later attempt can succeed, so they are transient. Other client errors are permanent.
+   */
+  @Test
+  void busyAndRejectedCredentialResponsesAreTransient() {
+    HttpDocmosisRenderService service = service(Duration.ofSeconds(10), DocmosisConnection.DEFAULT_MAX_SOURCE_BYTES);
+    for (int status : List.of(401, 403, 408, 429)) {
+      responder.set(exchange -> respond(exchange, status, new byte[0]));
+      DocmosisRenderException failure = catchThrowableOfType(DocmosisRenderException.class,
+          () -> service.convertToPdf(source, "letter.docx", DOC));
+      assertThat(failure.isTransientFailure()).as("HTTP %d", status).isTrue();
+      assertThat(failure.getMessage()).contains(String.valueOf(status));
+    }
+    responder.set(exchange -> respond(exchange, 415, new byte[0]));
+    assertThat(catchThrowableOfType(DocmosisRenderException.class,
+        () -> service.convertToPdf(source, "letter.docx", DOC)).isTransientFailure()).isFalse();
+  }
+
   @Test
   void theSourceSizeCeilingIsEnforcedBeforeAnyBytesAreSent() {
     HttpDocmosisRenderService service = service(Duration.ofSeconds(5), 10);

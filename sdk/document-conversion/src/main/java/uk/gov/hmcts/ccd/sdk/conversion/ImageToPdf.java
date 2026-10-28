@@ -1,9 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.conversion;
 
-import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.List;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -15,6 +13,8 @@ import uk.gov.hmcts.ccd.sdk.conversion.ConversionException.Reason;
 /**
  * Draws an image onto PDF pages the way em-stitching-api does: one Letter page per image,
  * centred, scaled down to fit but never enlarged. A multi-page TIFF becomes one page per frame.
+ *
+ * <p>Public only so document-bundling can use it; services should use {@link DocumentConverter}.
  */
 public final class ImageToPdf {
 
@@ -30,12 +30,10 @@ public final class ImageToPdf {
    */
   public static int write(Path image, Path output) throws ConversionException {
     try (PDDocument document = new PDDocument()) {
-      List<BufferedImage> frames = ImageFrames.tiffFrames(image);
-      if (frames.size() > 1) {
-        for (BufferedImage frame : frames) {
-          addCentredPage(document, LosslessFactory.createFromImage(document, frame));
-        }
-      } else {
+      // One page at a time, so only one decoded page is held in memory.
+      int pages = ImageFrames.tiffPages(image,
+          page -> addCentredPage(document, LosslessFactory.createFromImage(document, page)));
+      if (pages <= 1) {
         addCentredPage(document, PDImageXObject.createFromFileByContent(image.toFile(), document));
       }
       document.save(output.toFile());

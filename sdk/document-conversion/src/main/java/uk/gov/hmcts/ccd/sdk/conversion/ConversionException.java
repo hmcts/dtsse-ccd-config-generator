@@ -54,7 +54,8 @@ public class ConversionException extends Exception {
 
   /**
    * Whether retrying the same conversion later could succeed: a Docmosis timeout, connection
-   * failure or 5xx response. Everything else is permanent.
+   * failure, interruption, rate limit, rejected credentials or 5xx response, or local disk
+   * trouble. Everything else is a problem with the document and is permanent.
    */
   public boolean isTransientFailure() {
     return transientFailure;

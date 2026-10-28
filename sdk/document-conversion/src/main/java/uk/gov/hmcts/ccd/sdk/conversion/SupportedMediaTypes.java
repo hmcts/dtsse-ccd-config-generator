@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.conversion;
 
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -42,19 +41,6 @@ public final class SupportedMediaTypes {
       "application/rtf",
       "text/plain",
       "text/csv");
-
-  /**
-   * Non-standard names document stores use, mapped to the name this module routes by. Applied
-   * before content detection so an alias is not reported as a mismatch.
-   */
-  static final Map<String, String> ALIASES = Map.of(
-      "text/rtf", "application/rtf",
-      "image/tif", "image/tiff",
-      "image/x-ms-bmp", "image/bmp",
-      "image/x-bmp", "image/bmp",
-      "image/pjpeg", "image/jpeg",
-      "application/csv", "text/csv",
-      "text/comma-separated-values", "text/csv");
 
   private SupportedMediaTypes() {
   }

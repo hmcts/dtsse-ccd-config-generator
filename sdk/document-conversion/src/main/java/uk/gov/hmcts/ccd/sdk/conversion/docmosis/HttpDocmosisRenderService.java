@@ -58,8 +58,9 @@ import org.slf4j.LoggerFactory;
  * derived output ceiling stops a runaway response from filling the disk; the read timeout bounds
  * the whole exchange including the streamed body, not just the response headers; a 2xx response
  * whose body is not a PDF is a typed non-transient failure rather than garbage propagated into
- * the pipeline; transient failures (connect/IO errors, timeouts, and 5xx responses) are flagged
- * as such so callers can decide whether to resubmit while 4xx responses are permanent; and
+ * the pipeline; transient failures (connect/IO errors, timeouts, interruption, 5xx responses, and
+ * 401, 403, 408 and 429, none of which is the document's fault) are flagged as such so callers
+ * can decide whether to resubmit while other 4xx responses are permanent; and
  * failure messages are log-safe — they carry the status code and a short classification, never
  * the access key or the raw response body.
  */
@@ -207,17 +208,15 @@ public final class HttpDocmosisRenderService implements DocmosisRenderService {
       pending.cancel(true);
       deleteQuietly(target);
       throw new DocmosisRenderException(
-          "Docmosis " + operation + " of " + subject + " was interrupted.", false, e);
+          "Docmosis " + operation + " of " + subject + " was interrupted.", true, e);
     }
     int status = response.statusCode();
     if (!isSuccess(status)) {
       deleteQuietly(target);
-      boolean transientFailure = status >= 500;
       throw new DocmosisRenderException(
           "Docmosis " + operation + " of " + subject + " failed with HTTP " + status + " ("
-              + (transientFailure ? "server error" : "client error")
-              + "); response body withheld from logs.",
-          transientFailure);
+              + classify(status) + "); response body withheld from logs.",
+          isTransient(status));
     }
     requirePdf(operation, subject, response, target);
     if (log.isDebugEnabled()) {
@@ -290,6 +289,25 @@ public final class HttpDocmosisRenderService implements DocmosisRenderService {
       throw new DocmosisRenderException(
           "Could not create an output file in " + outputDirectory + ".", false, e);
     }
+  }
+
+  /**
+   * Whether a failed status could succeed on a later attempt. Server errors, a request timeout
+   * and rate limiting pass. So do rejected credentials: the document is not at fault, and the
+   * call works again once the access key is corrected.
+   */
+  private static boolean isTransient(int status) {
+    return status >= 500 || status == 401 || status == 403 || status == 408 || status == 429;
+  }
+
+  private static String classify(int status) {
+    if (status == 401 || status == 403) {
+      return "access key rejected";
+    }
+    if (status == 408 || status == 429) {
+      return "busy";
+    }
+    return status >= 500 ? "server error" : "client error";
   }
 
   private static boolean isSuccess(int status) {

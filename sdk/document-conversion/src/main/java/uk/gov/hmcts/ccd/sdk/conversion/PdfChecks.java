@@ -10,7 +10,11 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 import uk.gov.hmcts.ccd.sdk.conversion.ConversionException.Reason;
 
-/** Checks that a file is a PDF that can be opened and has pages. */
+/**
+ * Checks that a file is a PDF that can be opened and has pages.
+ *
+ * <p>Public only so document-bundling can use it; services should use {@link DocumentConverter}.
+ */
 public final class PdfChecks {
   static final long MAX_CACHE_HEAP_BYTES = 16L * 1024 * 1024;
 

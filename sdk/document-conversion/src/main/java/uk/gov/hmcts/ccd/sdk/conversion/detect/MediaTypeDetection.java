@@ -53,9 +53,25 @@ public final class MediaTypeDetection {
       Map.entry("mp3", "audio/mpeg"),
       Map.entry("mp4", "video/mp4"));
 
+  /**
+   * Non-standard names document stores use, mapped to the name the SDK routes by. Applied by
+   * {@link #normalise}, so an alias is never reported as a mismatch.
+   */
+  private static final Map<String, String> ALIASES = Map.of(
+      "text/rtf", "application/rtf",
+      "image/tif", "image/tiff",
+      "image/x-ms-bmp", "image/bmp",
+      "image/x-bmp", "image/bmp",
+      "image/pjpeg", "image/jpeg",
+      "application/csv", "text/csv",
+      "text/comma-separated-values", "text/csv");
+
+  /** Types whose content must be text, whatever converts them. */
+  private static final Set<String> TEXT = Set.of("text/plain", "text/csv", "application/rtf");
+
   private static final Set<String> CONTAINER_INCOMPATIBLE = Set.of(
       PDF, "image/png", "image/jpeg", "image/jpg", "image/gif", "image/bmp",
-      "image/tiff", "audio/mpeg", "video/mp4");
+      "image/tiff", "audio/mpeg", "video/mp4", "text/plain", "text/csv", "application/rtf");
 
   // BITMAPCOREHEADER, OS/2 2.x (short and full), BITMAPINFOHEADER, V2, V3, V4 and V5.
   private static final Set<Integer> BMP_DIB_HEADER_SIZES = Set.of(12, 16, 64, 40, 52, 56, 108, 124);
@@ -79,7 +95,11 @@ public final class MediaTypeDetection {
     }
   }
 
-  /** Lower-cases a media type and strips its parameters; null becomes the empty string. */
+  /**
+   * Lower-cases a media type, strips its parameters and maps store aliases such as
+   * {@code text/rtf} and {@code image/tif} to the name the SDK routes by; null becomes the empty
+   * string.
+   */
   public static String normalise(String mediaType) {
     if (mediaType == null) {
       return "";
@@ -89,7 +109,8 @@ public final class MediaTypeDetection {
     if (parameters >= 0) {
       type = type.substring(0, parameters);
     }
-    return type.trim().toLowerCase(Locale.ROOT);
+    type = type.trim().toLowerCase(Locale.ROOT);
+    return ALIASES.getOrDefault(type, type);
   }
 
   /**
@@ -141,7 +162,33 @@ public final class MediaTypeDetection {
       return new Routing.RouteWithMismatch(
           PDF, declared, PDF);
     }
+    // A converter turns whatever bytes it is given into pages of text, so binary content that
+    // claims to be text would print as garbage.
+    if (TEXT.contains(declared) && !looksLikeText(head, length)) {
+      return new Routing.Irreconcilable(declared, "binary content, not text");
+    }
     return new Routing.Route(declared);
+  }
+
+  /**
+   * Whether the leading bytes read as text in any common encoding: no NUL bytes (unless a UTF-16
+   * byte order mark says to expect them) and almost no other control characters.
+   */
+  private static boolean looksLikeText(byte[] head, int length) {
+    if (startsWith(head, length, 0xFF, 0xFE) || startsWith(head, length, 0xFE, 0xFF)) {
+      return true;
+    }
+    int control = 0;
+    for (int i = 0; i < length; i++) {
+      int b = head[i] & 0xFF;
+      if (b == 0) {
+        return false;
+      }
+      if (b < 0x20 && b != '\t' && b != '\n' && b != '\r' && b != '\f' && b != 0x1B) {
+        control++;
+      }
+    }
+    return control * 20 <= length;
   }
 
   private static String canonical(String type) {

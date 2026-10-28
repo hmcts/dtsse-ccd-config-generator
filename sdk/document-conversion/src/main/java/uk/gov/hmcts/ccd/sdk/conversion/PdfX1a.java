@@ -35,6 +35,8 @@ final class PdfX1a {
     // PDF/X-1a:2001 is built on PDF 1.3. PDDocument.setVersion refuses to lower the version,
     // so set the header version on the COS document directly.
     document.getDocument().setVersion(1.3f);
+    // A catalog /Version (PDF 1.4) overrides the header; merging can raise one from a part.
+    document.getDocumentCatalog().getCOSObject().removeItem(COSName.VERSION);
 
     PDDocumentInformation info = document.getDocumentInformation();
     info.setCustomMetadataValue("GTS_PDFXVersion", VERSION);
