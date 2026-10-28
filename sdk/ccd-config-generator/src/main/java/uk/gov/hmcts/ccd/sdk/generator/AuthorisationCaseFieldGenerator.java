@@ -149,7 +149,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
 
     addPermissionsFromFields(fieldRolePermissions, config.getCaseClass(), null, null);
 
-    reportWithheldTabRead(config.getCaseType(), readWithheld, fieldRolePermissions);
+    reportWithheldTabRead(config, readWithheld, fieldRolePermissions);
 
     File folder = new File(root.getPath(), "AuthorisationCaseField");
     folder.mkdir();
@@ -195,10 +195,11 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
    * classes it names grant no read at all.
    */
   private void reportWithheldTabRead(
-      String caseType,
+      ResolvedCCDConfig<T, S, R> config,
       SetMultimap<String, String> readWithheld,
       Table<String, String, Set<Permission>> fieldRolePermissions
   ) {
+    String caseType = config.getCaseType();
     // Only where the role ends with no read: a role the declaration grants anyway lost nothing.
     SetMultimap<String, String> lostRead = HashMultimap.create();
     readWithheld.forEach((field, role) -> {
@@ -224,6 +225,38 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
     if (!unreadable.isEmpty()) {
       log.warn("{}: tabsRespectDeclaredFieldAccess leaves {} field(s) readable by no role, so the"
           + " access classes they name grant no read: {}", caseType, unreadable.size(), unreadable);
+    }
+
+    reportTabsLeftEmpty(config, readWithheld, fieldRolePermissions);
+  }
+
+  /**
+   * Warns where a tab declaring {@code forRoles(...)} is left with nothing for one of those roles
+   * to read. The tab is still emitted and still shown to that role, so it renders empty, and
+   * neither the tab nor the fields on it say so.
+   */
+  private void reportTabsLeftEmpty(
+      ResolvedCCDConfig<T, S, R> config,
+      SetMultimap<String, String> readWithheld,
+      Table<String, String, Set<Permission>> fieldRolePermissions
+  ) {
+    for (Tab<T, R> tab : config.getTabs()) {
+      for (String role : tab.getForRolesAsString()) {
+        boolean withheldOnThisTab = tab.getFields().stream()
+            .anyMatch(field -> readWithheld.containsEntry(field.getId(), role));
+        if (!withheldOnThisTab) {
+          continue;
+        }
+        boolean anyReadable = tab.getFields().stream().anyMatch(field -> {
+          Set<Permission> granted = fieldRolePermissions.get(field.getId(), role);
+          return null != granted && granted.contains(Permission.R);
+        });
+        if (!anyReadable) {
+          log.warn("{}: tab {} is declared for {}, but tabsRespectDeclaredFieldAccess leaves no"
+              + " field on it readable by that role, so it renders empty",
+              config.getCaseType(), tab.getTabID(), role);
+        }
+      }
     }
   }
 
