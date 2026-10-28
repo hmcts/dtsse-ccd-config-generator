@@ -177,8 +177,10 @@ public final class DocumentConverter {
       switch (part) {
         case PrintPart.Convert convert -> {
           Path piece = WorkDirectory.createFile(dir, ".pdf");
-          Converted converted =
-              convertInto(convert.source(), options, dir, piece, warnings, officePdfs, convert);
+          // A lone converted part may be the finished letter, so it carries the letter's title.
+          String pieceTitle = parts.size() == 1 ? title : convert.source().fileName();
+          Converted converted = convertInto(convert.source(), options, pieceTitle, dir, piece,
+              warnings, officePdfs, convert);
           pieces.add(piece);
           pages = converted.pages();
           mediaType = parts.size() == 1 ? converted.mediaType() : SupportedMediaTypes.PDF;
@@ -216,7 +218,8 @@ public final class DocumentConverter {
     try {
       List<ConversionWarning> warnings = new ArrayList<>();
       Path output = WorkDirectory.createFile(work, ".pdf");
-      Converted converted = convertInto(source, print, work, output, warnings, null, null);
+      Converted converted =
+          convertInto(source, print, source.fileName(), work, output, warnings, null, null);
       ConvertedPdf result =
           new ConvertedPdf(output, work, converted.pages(), converted.mediaType(), warnings);
       succeeded = true;
@@ -243,22 +246,23 @@ public final class DocumentConverter {
   }
 
   /**
-   * Converts one source into {@code output}; {@code print} is null for plain conversion. With
-   * {@code officePdfs}, Docmosis is called once per {@code part} and its result kept there.
+   * Converts one source into {@code output}; {@code print} is null for plain conversion, and
+   * {@code title} is written to print output. With {@code officePdfs}, Docmosis is called once
+   * per {@code part} and its result kept there.
    */
-  private Converted convertInto(ConversionSource source, PrintOptions print, Path work,
-      Path output, List<ConversionWarning> warnings, OfficePdfs officePdfs, PrintPart part)
-      throws ConversionException, IOException {
+  private Converted convertInto(ConversionSource source, PrintOptions print, String title,
+      Path work, Path output, List<ConversionWarning> warnings, OfficePdfs officePdfs,
+      PrintPart part) throws ConversionException, IOException {
     String type = effectiveType(source, warnings);
     int pages;
     if (SupportedMediaTypes.IMAGES.contains(type)) {
-      pages = convertImage(source, print, work, output);
+      pages = convertImage(source, print, title, work, output);
     } else if (SupportedMediaTypes.PDF.equals(type)) {
-      pages = convertPdf(source, source.file(), print, work, output);
+      pages = convertPdf(source, source.file(), print, title, work, output);
     } else if (SupportedMediaTypes.OFFICE.contains(type)) {
       if (officePdfs == null) {
         Path converted = viaDocmosis(source, type, work);
-        pages = convertPdf(source, converted, print, work, output);
+        pages = convertPdf(source, converted, print, title, work, output);
         Files.deleteIfExists(converted);
       } else {
         Path converted = officePdfs.byPart().get(part);
@@ -266,7 +270,7 @@ public final class DocumentConverter {
           converted = viaDocmosis(source, type, officePdfs.dir());
           officePdfs.byPart().put(part, converted);
         }
-        pages = convertPdf(source, converted, print, work, output);
+        pages = convertPdf(source, converted, print, title, work, output);
       }
     } else {
       throw new ConversionException(Reason.UNSUPPORTED_MEDIA_TYPE,
@@ -285,13 +289,13 @@ public final class DocumentConverter {
     }
   }
 
-  private static int convertImage(ConversionSource source, PrintOptions print, Path work,
-      Path output) throws ConversionException {
+  private static int convertImage(ConversionSource source, PrintOptions print, String title,
+      Path work, Path output) throws ConversionException {
     if (print == null) {
       return ImageToPdf.write(source.file(), output);
     }
     try {
-      return new PrintRenderer(print, work).renderImage(source.file(), source.fileName(), output);
+      return new PrintRenderer(print, work).renderImage(source.file(), title, output);
     } catch (IOException e) {
       throw new ConversionException(Reason.INVALID_CONTENT,
           source.fileName() + ": the image could not be decoded", e);
@@ -299,7 +303,7 @@ public final class DocumentConverter {
   }
 
   private static int convertPdf(ConversionSource source, Path pdf, PrintOptions print,
-      Path work, Path output) throws ConversionException, IOException {
+      String title, Path work, Path output) throws ConversionException, IOException {
     if (print == null) {
       int pages = named(source, () -> PdfChecks.requireUsablePdf(pdf, work));
       if (pdf.equals(source.file())) {
@@ -310,7 +314,7 @@ public final class DocumentConverter {
       return pages;
     }
     try (PDDocument document = named(source, () -> PdfChecks.openUsablePdf(pdf, work))) {
-      return new PrintRenderer(print, work).renderPdf(document, source.fileName(), output);
+      return new PrintRenderer(print, work).renderPdf(document, title, output);
     }
   }
 

@@ -230,13 +230,36 @@ public final class Fixtures {
     out.write(new byte[] {'I', 'I', 42, 0});
     out.write(le32(firstIfd));
     out.write(pagePixels);
-    out.write(tiffIfd(page.getWidth(), page.getHeight(), 0, orientation, pagePixelsAt,
+    out.write(tiffIfd(page.getWidth(), page.getHeight(), 0, 1, orientation, pagePixelsAt,
         pagePixels.length, secondIfd));
     out.write(thumbnailPixels);
-    out.write(tiffIfd(thumbnail.getWidth(), thumbnail.getHeight(), 1, orientation,
+    out.write(tiffIfd(thumbnail.getWidth(), thumbnail.getHeight(), 1, 1, orientation,
         thumbnailPixelsAt, thumbnailPixels.length, 0));
     return Files.write(dir.resolve("scan-with-thumbnail-" + orientation + ".tif"),
         out.toByteArray());
+  }
+
+  /**
+   * A two-page TIFF whose first page is fine and whose second claims a compression no decoder
+   * supports, as a damaged or exotic scan can.
+   */
+  public static Path tiffWithUndecodableSecondPage(Path dir) throws IOException {
+    BufferedImage page = uprightQuadrantImage();
+    byte[] pixels = greyPixels(page);
+    int ifdLength = 2 + 10 * 12 + 4;
+    int firstIfd = 8 + pixels.length;
+    int secondPixelsAt = firstIfd + ifdLength;
+    int secondIfd = secondPixelsAt + pixels.length;
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    out.write(new byte[] {'I', 'I', 42, 0});
+    out.write(le32(firstIfd));
+    out.write(pixels);
+    out.write(tiffIfd(page.getWidth(), page.getHeight(), 0, 1, 1, 8, pixels.length, secondIfd));
+    out.write(pixels);
+    // Compression 34661 (JBIG) has no ImageIO or PDFBox decoder.
+    out.write(tiffIfd(page.getWidth(), page.getHeight(), 0, 34661, 1, secondPixelsAt,
+        pixels.length, 0));
+    return Files.write(dir.resolve("scan-damaged-page-2.tif"), out.toByteArray());
   }
 
   /**
@@ -307,15 +330,15 @@ public final class Fixtures {
   }
 
   /** A baseline grey IFD with ten entries, in ascending tag order as TIFF requires. */
-  private static byte[] tiffIfd(int width, int height, int subfileType, int orientation,
-      int stripAt, int stripLength, int nextIfd) throws IOException {
+  private static byte[] tiffIfd(int width, int height, int subfileType, int compression,
+      int orientation, int stripAt, int stripLength, int nextIfd) throws IOException {
     ByteArrayOutputStream ifd = new ByteArrayOutputStream();
     ifd.write(le16(10));
     ifd.write(tiffEntry(254, 4, subfileType));
     ifd.write(tiffEntry(256, 4, width));
     ifd.write(tiffEntry(257, 4, height));
     ifd.write(tiffEntry(258, 3, 8));
-    ifd.write(tiffEntry(259, 3, 1));
+    ifd.write(tiffEntry(259, 3, compression));
     ifd.write(tiffEntry(262, 3, 1));
     ifd.write(tiffEntry(273, 4, stripAt));
     ifd.write(tiffEntry(274, 3, orientation));

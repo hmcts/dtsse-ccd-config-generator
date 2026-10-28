@@ -69,13 +69,18 @@ final class ImageFrames {
           }
         }
         if (pages.size() > 1) {
+          // A page that cannot be decoded fails the conversion: falling back to the single-image
+          // path would print the first page and silently drop the rest.
           for (int page : pages) {
             consumer.accept(reader.read(page));
           }
         }
         return pages.size();
       } catch (IIOException e) {
-        // Leave the TIFF to PDFBox's single-image path, which also reads CCITT fax encodings.
+        if (multiPage(reader)) {
+          throw e;
+        }
+        // Leave a single-page TIFF to PDFBox's image path, which also reads CCITT fax encodings.
         return 0;
       } finally {
         reader.dispose();
@@ -125,7 +130,9 @@ final class ImageFrames {
           }
           return;
         } catch (IIOException e) {
-          if (delivered > 0) {
+          // PDFBox's fallback reads only the first image, so it must not stand in for a
+          // multi-page TIFF: that would drop pages without saying so.
+          if (delivered > 0 || multiPage(reader)) {
             throw e;
           }
         } finally {
@@ -142,6 +149,15 @@ final class ImageFrames {
           PDImageXObject.createFromFileByContent(image.toFile(), scratch).getImage(),
           jpegOrientation);
       consumer.accept(frame, frame.getWidth(), frame.getHeight());
+    }
+  }
+
+  /** Whether the reader's input is a TIFF with more than one image; false if that is unreadable. */
+  private static boolean multiPage(ImageReader reader) {
+    try {
+      return isTiff(reader) && reader.getNumImages(true) > 1;
+    } catch (IOException | IllegalStateException e) {
+      return false;
     }
   }
 
