@@ -114,19 +114,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
           if (!giveReadPermission || fieldRolePermissions.contains(field.getId(), role)) {
             continue;
           }
-          // omitHistoryForRoles is the declaration for caseHistory: CaseFieldGenerator synthesises
-          // that field, so it can carry no @CCD(access), and a History tab naming no roles would
-          // otherwise hand a role the read the declaration withheld from it.
-          if (config.isTabsRespectDeclaredFieldAccess()
-              && "caseHistory".equals(field.getId())
-              && config.getRolesWithNoHistory().contains(role)) {
-            readWithheld.put(field.getId(), role);
-            continue;
-          }
-          // A field @CCD(access) authorises has named who may read it. Adding read here would
-          // widen that, and this runs before addPermissionsFromFields, so the declaration could
-          // not take it back.
-          if (fieldsDeclaringAccess.contains(field.getId())) {
+          if (readersDeclaredElsewhere(config, fieldsDeclaringAccess, field.getId(), role)) {
             readWithheld.put(field.getId(), role);
             continue;
           }
@@ -327,6 +315,27 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
         sink.accept(getFieldId(field, prefix), access);
       }
     }
+  }
+
+  /**
+   * Whether a tab may not add read on this field for this role because something else already
+   * says who reads it: {@code @CCD(access)} for a case field, {@code omitHistoryForRoles} for the
+   * synthesised {@code caseHistory}. This runs before those declarations are applied, so a read
+   * added here could not be taken back by them.
+   */
+  private static boolean readersDeclaredElsewhere(
+      ResolvedCCDConfig<?, ?, ?> config,
+      Set<String> fieldsDeclaringAccess,
+      String fieldId,
+      String role
+  ) {
+    if (!config.isTabsRespectDeclaredFieldAccess()) {
+      return false;
+    }
+    if ("caseHistory".equals(fieldId)) {
+      return config.getRolesWithNoHistory().contains(role);
+    }
+    return fieldsDeclaringAccess.contains(fieldId);
   }
 
   private static Set<String> fieldsDeclaringAccess(Class<?> caseClass) {
