@@ -24,6 +24,10 @@ import uk.gov.hmcts.reform.fpl.enums.UserRole;
  * access class that grants nothing readable by nobody; the field granting write but not read
  * emitted as {@code CU}, where the tab previously supplied the {@code R}; and the field naming
  * nothing and the label still taking read from the tab.
+ *
+ * <p>The {@code CaseHistory} tab names no roles and places {@code caseHistory}, and the solicitor is
+ * in {@code omitHistoryForRoles}. The sheet shows the courtadmin with {@code CRU} on it and the
+ * solicitor with no row, where the role-less tab used to add {@code R}.
  */
 @Component
 public class DeclaredFieldAccessCaseType
@@ -33,6 +37,7 @@ public class DeclaredFieldAccessCaseType
   public void configure(ConfigBuilder<DeclaredFieldAccessCaseData, ExplicitState, UserRole> builder) {
     builder.caseType("DeclaredFieldAccess", "DeclaredFieldAccess", "Declared field access case type");
     builder.tabsRespectDeclaredFieldAccess();
+    builder.omitHistoryForRoles(LOCAL_AUTHORITY);
 
     builder.event("edit")
         .forState(Open)
@@ -50,6 +55,10 @@ public class DeclaredFieldAccessCaseType
         .field("unwrappedChild")
         .label("overviewLabel", null, "A label");
 
+    // A History tab naming no roles. omitHistoryForRoles is caseHistory's declaration, so the
+    // solicitor takes no read from this tab and has no caseHistory row at all.
+    builder.tab("CaseHistory", "History")
+        .field("caseHistory");
     // A field declaring access only for the solicitor, on a tab built for the courtadmin. The
     // label still takes read from the tab, so the courtadmin is left with the header alone.
     builder.tab("judicial", "Judicial")

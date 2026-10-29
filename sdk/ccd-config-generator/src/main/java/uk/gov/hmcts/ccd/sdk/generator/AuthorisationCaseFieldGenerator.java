@@ -114,6 +114,15 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
           if (!giveReadPermission || fieldRolePermissions.contains(field.getId(), role)) {
             continue;
           }
+          // omitHistoryForRoles is the declaration for caseHistory: CaseFieldGenerator synthesises
+          // that field, so it can carry no @CCD(access), and a History tab naming no roles would
+          // otherwise hand a role the read the declaration withheld from it.
+          if (config.isTabsRespectDeclaredFieldAccess()
+              && "caseHistory".equals(field.getId())
+              && config.getRolesWithNoHistory().contains(role)) {
+            readWithheld.put(field.getId(), role);
+            continue;
+          }
           // A field @CCD(access) authorises has named who may read it. Adding read here would
           // widen that, and this runs before addPermissionsFromFields, so the declaration could
           // not take it back.
