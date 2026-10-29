@@ -28,6 +28,8 @@ import org.gradle.jvm.toolchain.JavaLanguageVersion;
 
 public class CcdSdkPlugin implements Plugin<Project> {
 
+  static final String MIGRATE_DATABASE_TASK = "migratePostgresDatabase";
+
   public void apply(Project project) {
     project.getPlugins().apply(JavaPlugin.class);
 
@@ -120,9 +122,51 @@ public class CcdSdkPlugin implements Plugin<Project> {
         });
       }
 
+      registerDatabaseMigration(project, ssc);
+
       if (config.caseEventServiceBus) {
         project.getDependencies().add("implementation", "com.github.hmcts:ccd-servicebus-support:"
             + getVersion());
+      }
+    });
+  }
+
+  /**
+   * Registers {@code migratePostgresDatabase}, which runs the SDK libraries' migrations and then the application's,
+   * in a process of its own. It is the task, and these are the properties, that the CNP pipeline's
+   * {@code enableDbMigration} runs: {@code -Pdburl=host:port/database?options -Pflyway.user= -Pflyway.password=}.
+   * Without them, the application's own datasource configuration applies. An application that defines a task of the
+   * same name keeps it.
+   */
+  private void registerDatabaseMigration(Project project, SourceSetContainer sourceSets) {
+    if (project.getTasks().getNames().contains(MIGRATE_DATABASE_TASK)) {
+      Logging.getLogger(CcdSdkPlugin.class).info("{} already defines {}, so the CCD SDK does not add it",
+          project.getPath(), MIGRATE_DATABASE_TASK);
+      return;
+    }
+    var url = project.getProviders().gradleProperty("dburl");
+    var user = project.getProviders().gradleProperty("flyway.user");
+    var password = project.getProviders().gradleProperty("flyway.password");
+    project.getTasks().register(MIGRATE_DATABASE_TASK, JavaExec.class, task -> {
+      task.setGroup("CCD tasks");
+      task.setDescription("Runs the CCD SDK libraries' Flyway migrations, then the application's");
+      task.getMainClass().set("uk.gov.hmcts.ccd.sdk.config.SdkDatabaseMigration");
+      task.setClasspath(sourceSets.getByName("main").getRuntimeClasspath());
+      // Environment rather than arguments, so the password is not on the command line. Flyway's own settings are
+      // set too, so an application with a separate Flyway connection does not migrate through that instead.
+      // SPRING_APPLICATION_JSON would outrank them all.
+      task.getEnvironment().remove("SPRING_APPLICATION_JSON");
+      if (url.isPresent()) {
+        task.environment("SPRING_DATASOURCE_URL", "jdbc:postgresql://" + url.get());
+        task.environment("SPRING_FLYWAY_URL", "jdbc:postgresql://" + url.get());
+      }
+      if (user.isPresent()) {
+        task.environment("SPRING_DATASOURCE_USERNAME", user.get());
+        task.environment("SPRING_FLYWAY_USER", user.get());
+      }
+      if (password.isPresent()) {
+        task.environment("SPRING_DATASOURCE_PASSWORD", password.get());
+        task.environment("SPRING_FLYWAY_PASSWORD", password.get());
       }
     });
   }

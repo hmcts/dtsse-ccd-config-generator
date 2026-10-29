@@ -1,0 +1,10 @@
+# As a deployed application might be configured: a runtime login, a separate Flyway connection, and Flyway off. The
+# migration task has to override all three.
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:1/not-the-migration-database
+    username: runtime
+  flyway:
+    url: jdbc:postgresql://localhost:1/not-the-migration-database
+    enabled: false
+    locations: classpath:db/migration
