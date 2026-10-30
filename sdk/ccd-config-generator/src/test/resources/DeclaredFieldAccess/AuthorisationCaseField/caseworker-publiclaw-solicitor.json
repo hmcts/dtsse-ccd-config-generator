@@ -1,12 +1,5 @@
 [
   {
-    "CRUD": "CRU",
-    "CaseFieldID": "caseHistory",
-    "CaseTypeID": "DeclaredFieldAccess",
-    "LiveFrom": "01/01/2017",
-    "UserRole": "caseworker-publiclaw-solicitor"
-  },
-  {
     "CRUD": "R",
     "CaseFieldID": "overviewLabel",
     "CaseTypeID": "DeclaredFieldAccess",

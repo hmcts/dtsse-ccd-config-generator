@@ -105,6 +105,8 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
    * changes nothing for them. Such a definition has to name the access first, and then this is what
    * stops it being widened again.
    *
+   * <p>{@code caseHistory} counts as declared by {@code omitHistoryForRoles(...)}.
+   *
    * <p>This stops tab read and nothing else. Permissions from the field's events still apply, as
    * does the read added for the workbasket and search fields a role can use, so a field granted
    * through either keeps it. A field from {@code TabBuilder.label(...)} is unaffected: it exists
