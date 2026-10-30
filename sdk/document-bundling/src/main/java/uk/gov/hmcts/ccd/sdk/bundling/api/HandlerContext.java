@@ -3,7 +3,7 @@ package uk.gov.hmcts.ccd.sdk.bundling.api;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Optional;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderService;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderService;
 
 /**
  * Bounded services available to a {@link DocumentHandler}: temp-file allocation in the job's

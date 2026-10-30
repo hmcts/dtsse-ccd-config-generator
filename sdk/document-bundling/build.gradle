@@ -1,5 +1,6 @@
 dependencies {
     api project(':decentralised-runtime')
+    api project(':document-conversion')
     implementation 'org.springframework:spring-web'
     implementation 'jakarta.annotation:jakarta.annotation-api'
     api 'com.github.hmcts:ccd-case-document-am-client:2.0.0'

@@ -84,6 +84,10 @@ jobs:
     - name: ACR Login
       if: steps.changes.outputs.docs_only != 'true'
       run: az acr login --name hmctsprod
+    - name: Install Ghostscript
+      # document-conversion cross-checks its print output with an independent PDF renderer.
+      if: steps.changes.outputs.docs_only != 'true' && matrix.name == 'build'
+      run: sudo apt-get update -q && sudo apt-get install -y -q ghostscript
     - name: Run ${{ matrix.name }}
       if: steps.changes.outputs.docs_only != 'true'
       run: ./gradlew ${{ matrix.tasks }} -i --stacktrace
