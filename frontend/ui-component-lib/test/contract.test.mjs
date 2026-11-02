@@ -189,6 +189,25 @@ test('renders no client-side language action in the footer', () => {
   assert.match(html, /target="_blank" rel="noopener noreferrer"/);
 });
 
+test('renders Site map after Get help with a safe new-window link', () => {
+  for (const [context, href] of [
+    [{}, '/sitemap'],
+    [{ xuiBaseUrl: 'https://manage-case.example/xui/' }, 'https://manage-case.example/xui/sitemap']
+  ]) {
+    const html = renderFooter(buildFooterModel(context));
+    const links = [...html.matchAll(/<a\b[^>]*>[\s\S]*?<\/a>/g)].map(([link]) => link);
+    const siteMapIndex = links.findIndex((link) => link.includes(`href="${href}"`));
+
+    assert.ok(siteMapIndex > 0);
+    assert.match(links[siteMapIndex - 1], /Get help/);
+    assert.match(links[siteMapIndex], /target="_blank" rel="noopener noreferrer"/);
+    assert.match(
+      links[siteMapIndex],
+      /<span class="visuallyhidden">\(Opens in a new window\)<\/span>Site map/
+    );
+  }
+});
+
 test('keeps header CSS in the shadow stylesheet only', async () => {
   const [globalCss, shadowCss] = await Promise.all([
     readFile(path.join(packageRoot, 'src', 'styles', 'ui-component-lib.css'), 'utf8'),
