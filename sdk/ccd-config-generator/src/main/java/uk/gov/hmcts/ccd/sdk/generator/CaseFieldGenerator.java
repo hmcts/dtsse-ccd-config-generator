@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.core.ResolvableType;
 import org.springframework.stereotype.Component;
@@ -40,13 +41,16 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   public void write(
       File outputFolder, ResolvedCCDConfig<T, S, R> config) {
     List<Map<String, Object>> fields = toComplex(config.getCaseClass(), config.getCaseType());
+    List<Map<String, Object>> explicitFields = getExplicitFields(config);
 
-    Map<String, Object> history = getField(config.getCaseType(), "caseHistory");
-    history.put("Label", " ");
-    history.put("FieldType", "CaseHistoryViewer");
-    fields.add(history);
+    if (!declaresCaseHistoryViewer(fields, explicitFields)) {
+      Map<String, Object> history = getField(config.getCaseType(), "caseHistory");
+      history.put("Label", " ");
+      history.put("FieldType", "CaseHistoryViewer");
+      fields.add(history);
+    }
 
-    fields.addAll(getExplicitFields(config));
+    fields.addAll(explicitFields);
 
     Path path = Paths.get(outputFolder.getPath(), "CaseField.json");
     JsonUtils.mergeInto(path, fields, new JsonUtils.OverwriteSpecific(OVERWRITES_FIELDS), "ID");
@@ -54,6 +58,27 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
 
   public static List<Map<String, Object>> toComplex(Class dataClass, String caseTypeId) {
     return buildComplexFields(dataClass, caseTypeId);
+  }
+
+  /**
+   * Whether the case type declares a {@code CaseHistoryViewer} of its own, in which case it takes
+   * neither the injected {@code caseHistory} field nor the injected tab that places it.
+   *
+   * <p>{@code ccd-data-store-api} fills the first {@code CaseHistoryViewer} it finds in the case
+   * type and returns, so a second one is left empty whichever way round the two fall, and the tab
+   * placing it renders blank. A definition converted from hand-written JSON names its viewer
+   * whatever the original called it, so it is the declared one that a tab places.
+   */
+  static <T, S, R extends HasRole> boolean declaresCaseHistoryViewer(
+      ResolvedCCDConfig<T, S, R> config) {
+    return declaresCaseHistoryViewer(
+        toComplex(config.getCaseClass(), config.getCaseType()), getExplicitFields(config));
+  }
+
+  private static boolean declaresCaseHistoryViewer(
+      List<Map<String, Object>> fields, List<Map<String, Object>> explicitFields) {
+    return Stream.concat(fields.stream(), explicitFields.stream())
+        .anyMatch(field -> FieldType.CaseHistoryViewer.name().equals(field.get("FieldType")));
   }
 
   private static <T, S, R extends HasRole> List<Map<String, Object>> getExplicitFields(
