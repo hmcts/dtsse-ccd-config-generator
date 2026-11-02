@@ -31,6 +31,7 @@ subgraph ET_PET[ET PET]
 end
 ecm_ccd_case_migration -->|http| ecm_consumer
 et_ccd_callbacks -->|http| et_sya_api
+et_ccd_callbacks -->|http| et_sya_frontend
 et_sya_frontend -->|http| et_pet
 et_sya_frontend -->|http| et_sya_api
 et_syr_frontend -->|http| et_pet
