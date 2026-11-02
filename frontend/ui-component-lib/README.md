@@ -107,6 +107,7 @@ judge/judiciary/panelmember roles
 
 `buildFooterModel()` returns the standard root-relative footer links. Pass an
 XUI base URL when the links should resolve directly to XUI.
+The links include Site map (`/sitemap`) after Get help, opening in a new window.
 
 ### `FooterContext` input
 
