@@ -24,6 +24,7 @@ end
 subgraph ET_PET[ET PET]
   et_pet["et-pet"]
 end
+et_ccd_callbacks -->|http| et_sya_frontend
 et_sya_frontend -->|http| et_pet
 et_sya_frontend -->|http| et_ccd_callbacks
 et_syr_frontend -->|http| et_pet
