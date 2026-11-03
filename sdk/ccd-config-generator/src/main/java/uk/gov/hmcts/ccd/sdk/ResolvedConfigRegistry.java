@@ -70,17 +70,35 @@ public class ResolvedConfigRegistry {
     return pipeline.apply(data);
   }
 
+  public boolean hasPostEventHooks(String caseType) {
+    return !getRequired(caseType).getPostEventHooks().isEmpty();
+  }
+
   /**
    * Passes an about-to-submit handler's response through the case type's post-event hooks in
    * registration order. A hook's exception propagates to the caller.
+   *
+   * <p>With no hooks registered the response is returned as it is, null included. Otherwise a null
+   * response reaches the first hook as an empty one, which CCD treats as no change, and a hook that
+   * returns null fails the submission.
    */
   @SuppressWarnings({"rawtypes", "unchecked"})
   public AboutToStartOrSubmitResponse applyPostEventHooks(String caseType, String eventId,
                                                           CaseDetails details, CaseDetails detailsBefore,
                                                           AboutToStartOrSubmitResponse response) {
-    AboutToStartOrSubmitResponse result = response;
-    for (PostEventHook hook : getRequired(caseType).getPostEventHooks()) {
+    List<PostEventHook> hooks = (List) getRequired(caseType).getPostEventHooks();
+    if (hooks.isEmpty()) {
+      return response;
+    }
+    AboutToStartOrSubmitResponse result = response == null
+        ? AboutToStartOrSubmitResponse.builder().build()
+        : response;
+    for (PostEventHook hook : hooks) {
       result = hook.handle(eventId, details, detailsBefore, result);
+      if (result == null) {
+        throw new IllegalStateException("A post-event hook of case type " + caseType
+            + " returned no response for event " + eventId);
+      }
     }
     return result;
   }

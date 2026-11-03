@@ -18,7 +18,8 @@ import uk.gov.hmcts.reform.fpl.enums.UserRole;
  * Registers two post-event hooks. The first replaces the handler's response with a new one, the
  * second appends to whatever it is given, so the response CCD receives shows both their order and
  * that each hook's return value is what is passed on. The {@code refuse} event's submission is
- * rejected by the first hook throwing.
+ * rejected by the first hook throwing, and for the {@code hookReturnsNull} event the first hook
+ * returns no response at all.
  */
 @Component
 public class PostEventHookCaseType implements CCDConfig<PostEventHookCaseData, ExplicitState, UserRole> {
@@ -57,6 +58,18 @@ public class PostEventHookCaseType implements CCDConfig<PostEventHookCaseData, E
             .data(details.getData())
             .errors(List.of("Refused by the handler"))
             .build());
+
+    builder.event("handlerReturnsNull")
+        .forState(Open)
+        .name("Handler returns null")
+        .grant(CRU, HMCTS_ADMIN)
+        .aboutToSubmitCallback((details, before) -> null);
+
+    builder.event("hookReturnsNull")
+        .forState(Open)
+        .name("Hook returns null")
+        .grant(CRU, HMCTS_ADMIN)
+        .aboutToSubmitCallback((details, before) -> respond(details, "submitted"));
   }
 
   private AboutToStartOrSubmitResponse<PostEventHookCaseData, ExplicitState> respond(
@@ -76,7 +89,10 @@ public class PostEventHookCaseType implements CCDConfig<PostEventHookCaseData, E
     if ("refuse".equals(eventId)) {
       throw new IllegalStateException(HOOK_REJECTION);
     }
-    PostEventHookCaseData data = response.getData();
+    if ("hookReturnsNull".equals(eventId)) {
+      return null;
+    }
+    PostEventHookCaseData data = response.getData() == null ? new PostEventHookCaseData() : response.getData();
     data.setHookTrail("first:" + eventId + ":" + data.getNote() + ":" + response.getState());
     return AboutToStartOrSubmitResponse.<PostEventHookCaseData, ExplicitState>builder()
         .data(data)
