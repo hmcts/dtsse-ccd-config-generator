@@ -13,7 +13,10 @@ import java.util.function.Function;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
+import uk.gov.hmcts.ccd.sdk.api.callback.PostEventHook;
 
 /**
  * Simple catalogue for resolved CCD configurations so other components can access
@@ -65,6 +68,21 @@ public class ResolvedConfigRegistry {
     Function<Map<String, Object>, Map<String, Object>> pipeline =
         config.getPreEventHooks().stream().reduce(Function.identity(), Function::andThen);
     return pipeline.apply(data);
+  }
+
+  /**
+   * Passes an about-to-submit handler's response through the case type's post-event hooks in
+   * registration order. A hook's exception propagates to the caller.
+   */
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  public AboutToStartOrSubmitResponse applyPostEventHooks(String caseType, String eventId,
+                                                          CaseDetails details, CaseDetails detailsBefore,
+                                                          AboutToStartOrSubmitResponse response) {
+    AboutToStartOrSubmitResponse result = response;
+    for (PostEventHook hook : getRequired(caseType).getPostEventHooks()) {
+      result = hook.handle(eventId, details, detailsBefore, result);
+    }
+    return result;
   }
 
   public Event<?, ?, ?> getRequiredEvent(String caseType, String eventId) {

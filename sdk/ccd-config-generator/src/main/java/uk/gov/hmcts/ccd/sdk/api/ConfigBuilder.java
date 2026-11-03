@@ -11,6 +11,7 @@ import uk.gov.hmcts.ccd.sdk.api.NoticeOfChange.NoticeOfChangeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
+import uk.gov.hmcts.ccd.sdk.api.callback.PostEventHook;
 
 public interface ConfigBuilder<T, S, R extends HasRole> {
 
@@ -188,6 +189,26 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   void hmctsServiceId(String value);
 
   void addPreEventHook(Function<Map<String, Object>, Map<String, Object>> hook);
+
+  /**
+   * Register a hook that runs after every about-to-submit handler of this case type and sees its
+   * response. Hooks run in the order they are registered, each receiving the response the previous
+   * one returned; the last hook's response is what CCD receives.
+   *
+   * <p>A hook runs only for events whose about-to-submit callback the SDK serves, since CCD makes
+   * no about-to-submit callback for an event that declares none. It does not run for about-to-start,
+   * mid-event or submitted callbacks. It runs whether or not the handler's response carries errors,
+   * so a hook that should leave a rejected submission alone has to check for them.
+   *
+   * <p>Unlike a hook registered with {@link #addPreEventHook(Function)}, whose exceptions are logged
+   * and ignored, an exception thrown by a post-event hook propagates and fails the callback, so a
+   * hook may reject a submission by throwing.
+   */
+  default void addPostEventHook(PostEventHook<T, S> hook) {
+    // Defaulted rather than abstract so 7.x stays source compatible for anything implementing
+    // ConfigBuilder itself. Such an implementation discards the hook, so a case type relying on
+    // one has to be tested against the SDK's own builder rather than a stub.
+  }
 
   CaseRoleToAccessProfileBuilder<R> caseRoleToAccessProfile(R caseRole);
 

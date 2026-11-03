@@ -151,9 +151,12 @@ public class CcdCallbackExecutor {
   public AboutToStartOrSubmitResponse aboutToSubmit(CallbackRequest request) {
     log.info("About to submit event ID: {}", request.getEventId());
 
-    return findCallback(request, Event::getAboutToSubmitCallback)
-        .handle(convertCaseDetails(request.getCaseDetails()),
-            convertCaseDetails(request.getCaseDetailsBefore(), request.getCaseDetails().getCaseTypeId()));
+    String caseType = request.getCaseDetails().getCaseTypeId();
+    var callback = findCallback(request, Event::getAboutToSubmitCallback);
+    CaseDetails details = convertCaseDetails(request.getCaseDetails());
+    CaseDetails detailsBefore = convertCaseDetails(request.getCaseDetailsBefore(), caseType);
+    AboutToStartOrSubmitResponse response = callback.handle(details, detailsBefore);
+    return registry.applyPostEventHooks(caseType, request.getEventId(), details, detailsBefore, response);
   }
 
   @SneakyThrows
