@@ -38,6 +38,7 @@ import uk.gov.hmcts.ccd.sdk.api.SearchCriteria.SearchCriteriaBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchParty.SearchPartyBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.api.TypedPropertyGetter;
+import uk.gov.hmcts.ccd.sdk.api.callback.PostEventHook;
 import uk.gov.hmcts.ccd.sdk.api.callback.Start;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalEventId;
@@ -259,6 +260,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   public void addPreEventHook(
       Function<Map<String, Object>, Map<String, Object>> hook) {
     config.preEventHooks.add(hook);
+  }
+
+  @Override
+  public void addPostEventHook(PostEventHook<T, S> hook) {
+    config.postEventHooks.add(hook);
   }
 
   @Override

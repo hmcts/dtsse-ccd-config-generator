@@ -21,6 +21,7 @@ import uk.gov.hmcts.ccd.sdk.model.AboutToStartOrSubmitCallbackResponse;
 import uk.gov.hmcts.ccd.sdk.type.PreviousOrganisationCollectionItem;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
+import uk.gov.hmcts.reform.PostEventHookCaseType;
 import uk.gov.hmcts.reform.fpl.BulkCaseConfig;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 
@@ -31,6 +32,7 @@ import java.time.LocalDate;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.CCD_SOLICITOR;
@@ -44,6 +46,9 @@ public class CallbackControllerTest {
 
   @Autowired
   private ObjectMapper objectMapper;
+
+  @Autowired
+  private ResolvedConfigRegistry registry;
 
   @Test
   public void usesJackson2ForHttpContracts() {
@@ -82,6 +87,9 @@ public class CallbackControllerTest {
         .contains("\"data_classification\":{\"field1\":\"PUBLIC\"}")
         .contains("\"security_classification\":\"PRIVATE\"")
         .doesNotContain("dataClassification", "securityClassification");
+    assertThat(response.getErrors()).isNull();
+    assertThat(response.getWarnings()).isNull();
+    assertThat(response.getState()).isNull();
   }
 
   @SneakyThrows
@@ -195,6 +203,93 @@ public class CallbackControllerTest {
     assertThat(party.getPostcode()).isEqualTo("SW1A 2AA");
     assertThat(party.getDateOfBirth()).isEqualTo(LocalDate.of(2000, 1, 1));
     assertThat(party.getDateOfDeath()).isEqualTo(LocalDate.of(2020, 12, 31));
+  }
+
+  @SneakyThrows
+  @Test
+  public void postEventHooksRunInRegistrationOrderOnTheHandlersResponse() {
+    MvcResult result = this.makeRequest("about-to-submit", "PostEventHook", "edit")
+        .andExpect(status().isOk())
+        .andReturn();
+
+    AboutToStartOrSubmitCallbackResponse response = getCallbackResponse(result);
+    assertThat(response.getData())
+        .containsEntry("note", "submitted")
+        .containsEntry("hookTrail", "first:edit:submitted:Submitted|second");
+    assertThat(response.getWarnings()).containsExactly("first", "second");
+    assertThat(response.getState()).isEqualTo("Submitted");
+  }
+
+  @SneakyThrows
+  @Test
+  public void postEventHooksRunWhenTheHandlerReturnsErrors() {
+    MvcResult result = this.makeRequest("about-to-submit", "PostEventHook", "handlerErrors")
+        .andExpect(status().isOk())
+        .andReturn();
+
+    AboutToStartOrSubmitCallbackResponse response = getCallbackResponse(result);
+    assertThat(response.getErrors()).containsExactly("Refused by the handler");
+    assertThat(response.getData()).containsEntry("hookTrail", "first:handlerErrors:null:null|second");
+  }
+
+  @Test
+  public void anExceptionFromAPostEventHookFailsTheCallback() {
+    assertThatThrownBy(() -> this.makeRequest("about-to-submit", "PostEventHook", "refuse"))
+        .hasRootCauseInstanceOf(IllegalStateException.class)
+        .hasRootCauseMessage(PostEventHookCaseType.HOOK_REJECTION);
+  }
+
+  @SneakyThrows
+  @Test
+  public void postEventHooksDoNotRunForAboutToStart() {
+    MvcResult result = this.makeRequest("about-to-start", "PostEventHook", "edit")
+        .andExpect(status().isOk())
+        .andReturn();
+
+    AboutToStartOrSubmitCallbackResponse response = getCallbackResponse(result);
+    assertThat(response.getData()).containsEntry("note", "started");
+    assertThat(response.getData().get("hookTrail")).isNull();
+    assertThat(response.getWarnings()).isNull();
+  }
+
+  @SneakyThrows
+  @Test
+  public void postEventHooksDoNotRunForMidEvent() {
+    MvcResult result = this.makeRequest("mid-event?page=1", "PostEventHook", "edit")
+        .andExpect(status().isOk())
+        .andReturn();
+
+    AboutToStartOrSubmitCallbackResponse response = getCallbackResponse(result);
+    assertThat(response.getData()).containsEntry("note", "mid-event");
+    assertThat(response.getData().get("hookTrail")).isNull();
+    assertThat(response.getWarnings()).isNull();
+  }
+
+  @SneakyThrows
+  @Test
+  public void postEventHooksReceiveAnEmptyResponseWhenTheHandlerReturnsNone() {
+    MvcResult result = this.makeRequest("about-to-submit", "PostEventHook", "handlerReturnsNull")
+        .andExpect(status().isOk())
+        .andReturn();
+
+    AboutToStartOrSubmitCallbackResponse response = getCallbackResponse(result);
+    assertThat(response.getData()).containsEntry("hookTrail", "first:handlerReturnsNull:null:null|second");
+    assertThat(response.getErrors()).isNull();
+    assertThat(response.getState()).isNull();
+  }
+
+  @Test
+  public void aCaseTypeWithoutPostEventHooksPassesOnANullResponse() {
+    assertThat(registry.applyPostEventHooks("CARE_SUPERVISION_EPO", "addFamilyManCaseNumber", null, null, null))
+        .isNull();
+  }
+
+  @Test
+  public void aPostEventHookReturningNoResponseFailsTheCallback() {
+    assertThatThrownBy(() -> this.makeRequest("about-to-submit", "PostEventHook", "hookReturnsNull"))
+        .hasRootCauseInstanceOf(IllegalStateException.class)
+        .hasRootCauseMessage("A post-event hook of case type PostEventHook returned no response for event "
+            + "hookReturnsNull");
   }
 
   @SneakyThrows
