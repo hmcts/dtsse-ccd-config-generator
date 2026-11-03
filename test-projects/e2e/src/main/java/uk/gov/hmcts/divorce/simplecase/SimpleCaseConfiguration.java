@@ -236,9 +236,10 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
         AboutToStartOrSubmitResponse<SimpleCaseData, SimpleCaseState> response
     ) {
         var data = response.getData();
-        // A response without data leaves the case data as it was, which the hook preserves.
+        // A response without data leaves the case data as it was, so the hook records against that.
         if (data == null) {
-            return response;
+            data = details.getData();
+            response.setData(data);
         }
         if (POST_EVENT_HOOK_REFUSED_SUBJECT.equals(data.getSubject())) {
             response.setErrors(List.of(POST_EVENT_HOOK_REFUSAL));

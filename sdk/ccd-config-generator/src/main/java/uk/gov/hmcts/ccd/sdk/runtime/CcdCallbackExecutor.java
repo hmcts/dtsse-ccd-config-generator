@@ -159,6 +159,23 @@ public class CcdCallbackExecutor {
     return registry.applyPostEventHooks(caseType, request.getEventId(), details, detailsBefore, response);
   }
 
+  /**
+   * Runs the case type's post-event hooks for a submission whose event has no about-to-submit
+   * handler. The hooks start from a response carrying the event's own case data and no state, so
+   * a hook reads the state from the case details. Callers should check
+   * {@link ResolvedConfigRegistry#hasPostEventHooks(String)} first, as this converts the case data.
+   */
+  @SneakyThrows
+  public AboutToStartOrSubmitResponse postEventHooksWithoutHandler(CallbackRequest request) {
+    String caseType = request.getCaseDetails().getCaseTypeId();
+    CaseDetails details = convertCaseDetails(request.getCaseDetails());
+    CaseDetails detailsBefore = convertCaseDetails(request.getCaseDetailsBefore(), caseType);
+    AboutToStartOrSubmitResponse response = AboutToStartOrSubmitResponse.builder()
+        .data(details.getData())
+        .build();
+    return registry.applyPostEventHooks(caseType, request.getEventId(), details, detailsBefore, response);
+  }
+
   @SneakyThrows
   public SubmittedCallbackResponse submitted(CallbackRequest request) {
     log.info("Submitted event ID: {}", request.getEventId());

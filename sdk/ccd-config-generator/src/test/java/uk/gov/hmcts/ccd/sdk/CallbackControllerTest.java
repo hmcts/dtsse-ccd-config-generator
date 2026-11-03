@@ -47,6 +47,9 @@ public class CallbackControllerTest {
   @Autowired
   private ObjectMapper objectMapper;
 
+  @Autowired
+  private ResolvedConfigRegistry registry;
+
   @Test
   public void usesJackson2ForHttpContracts() {
     assertThat(objectMapper.version().getMajorVersion()).isEqualTo(2);
@@ -84,6 +87,9 @@ public class CallbackControllerTest {
         .contains("\"data_classification\":{\"field1\":\"PUBLIC\"}")
         .contains("\"security_classification\":\"PRIVATE\"")
         .doesNotContain("dataClassification", "securityClassification");
+    assertThat(response.getErrors()).isNull();
+    assertThat(response.getWarnings()).isNull();
+    assertThat(response.getState()).isNull();
   }
 
   @SneakyThrows
@@ -261,19 +267,29 @@ public class CallbackControllerTest {
 
   @SneakyThrows
   @Test
-  public void aCaseTypeWithoutPostEventHooksReturnsTheHandlersResponse() {
-    MvcResult result = this.makeRequest("about-to-submit", "CARE_SUPERVISION_EPO", "setDataAndSecurityClassification",
-            Maps.newHashMap())
+  public void postEventHooksReceiveAnEmptyResponseWhenTheHandlerReturnsNone() {
+    MvcResult result = this.makeRequest("about-to-submit", "PostEventHook", "handlerReturnsNull")
         .andExpect(status().isOk())
         .andReturn();
 
     AboutToStartOrSubmitCallbackResponse response = getCallbackResponse(result);
-    assertThat(response.getDataClassification()).containsExactly(Map.entry("field1", "PUBLIC"));
-    assertThat(response.getSecurityClassification()).isEqualTo("PRIVATE");
+    assertThat(response.getData()).containsEntry("hookTrail", "first:handlerReturnsNull:null:null|second");
     assertThat(response.getErrors()).isNull();
-    assertThat(response.getWarnings()).isNull();
     assertThat(response.getState()).isNull();
-    assertThat(response.getData()).doesNotContainKey("hookTrail");
+  }
+
+  @Test
+  public void aCaseTypeWithoutPostEventHooksPassesOnANullResponse() {
+    assertThat(registry.applyPostEventHooks("CARE_SUPERVISION_EPO", "addFamilyManCaseNumber", null, null, null))
+        .isNull();
+  }
+
+  @Test
+  public void aPostEventHookReturningNoResponseFailsTheCallback() {
+    assertThatThrownBy(() -> this.makeRequest("about-to-submit", "PostEventHook", "hookReturnsNull"))
+        .hasRootCauseInstanceOf(IllegalStateException.class)
+        .hasRootCauseMessage("A post-event hook of case type PostEventHook returned no response for event "
+            + "hookReturnsNull");
   }
 
   @SneakyThrows

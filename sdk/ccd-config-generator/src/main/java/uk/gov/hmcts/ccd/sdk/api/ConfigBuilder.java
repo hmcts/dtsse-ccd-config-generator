@@ -195,10 +195,21 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
    * response. Hooks run in the order they are registered, each receiving the response the previous
    * one returned; the last hook's response is what CCD receives.
    *
-   * <p>A hook runs only for events whose about-to-submit callback the SDK serves, since CCD makes
-   * no about-to-submit callback for an event that declares none. It does not run for about-to-start,
-   * mid-event or submitted callbacks. It runs whether or not the handler's response carries errors,
-   * so a hook that should leave a rejected submission alone has to check for them.
+   * <p>On a case type that is not decentralised, a hook runs only for events with an about-to-submit
+   * callback the SDK serves, since CCD makes no about-to-submit callback for an event that declares
+   * none. On a decentralised case type CCD sends every submission to the SDK, and a hook runs for
+   * each one made through {@code event(...)}, with or without an about-to-submit callback. For an
+   * event without one, the hook receives a response carrying the event's case data and no state; the
+   * case details carry the state the event ends in. That includes {@code DocumentUpdated}, the
+   * system event CCD raises when a case document's metadata changes through CDAM, so a hook that
+   * refuses submissions should let it through. Hooks do not run for events built with
+   * {@code decentralisedEvent(...)} or {@code externalEvent(...)}, whose submit handlers return a
+   * different response type.
+   *
+   * <p>A hook does not run for about-to-start, mid-event or submitted callbacks. It runs whether or
+   * not the handler's response carries errors, so a hook that should leave a rejected submission
+   * alone has to check for them. A handler that returns no response reaches the first hook as an
+   * empty one, and a hook must not return null.
    *
    * <p>To refuse a submission, return the response with errors set; CCD shows them and the event is
    * not saved. Unlike a hook registered with {@link #addPreEventHook(Function)}, whose exceptions are
@@ -209,8 +220,10 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
    */
   default void addPostEventHook(PostEventHook<T, S> hook) {
     // Defaulted rather than abstract so this stays source compatible for anything implementing
-    // ConfigBuilder itself. Such an implementation discards the hook, so a case type relying on
-    // one has to be tested against the SDK's own builder rather than a stub.
+    // ConfigBuilder itself. It throws rather than discarding the hook, since a hook may enforce a
+    // check, such as the caller's role, that must not be silently lost.
+    throw new UnsupportedOperationException(getClass().getName()
+        + " does not support post-event hooks; register them through the SDK's own ConfigBuilder");
   }
 
   CaseRoleToAccessProfileBuilder<R> caseRoleToAccessProfile(R caseRole);
