@@ -200,9 +200,12 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
    * mid-event or submitted callbacks. It runs whether or not the handler's response carries errors,
    * so a hook that should leave a rejected submission alone has to check for them.
    *
-   * <p>Unlike a hook registered with {@link #addPreEventHook(Function)}, whose exceptions are logged
-   * and ignored, an exception thrown by a post-event hook propagates and fails the callback, so a
-   * hook may reject a submission by throwing.
+   * <p>To refuse a submission, return the response with errors set; CCD shows them and the event is
+   * not saved. Unlike a hook registered with {@link #addPreEventHook(Function)}, whose exceptions are
+   * logged and ignored, an exception thrown by a post-event hook propagates and fails the callback
+   * with a server error. That also stops the submission, but on a decentralised case type it leaves
+   * behind the case pointer CCD created for a new case, because ccd-data-store-api only rolls a
+   * pointer back on a client error. Keep throwing for failures the hook cannot report.
    */
   default void addPostEventHook(PostEventHook<T, S> hook) {
     // Defaulted rather than abstract so 7.x stays source compatible for anything implementing
