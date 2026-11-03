@@ -11,6 +11,7 @@ import uk.gov.hmcts.ccd.sdk.api.NoticeOfChange.NoticeOfChangeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
+import uk.gov.hmcts.ccd.sdk.api.callback.PostEventHook;
 
 public interface ConfigBuilder<T, S, R extends HasRole> {
 
@@ -188,6 +189,42 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   void hmctsServiceId(String value);
 
   void addPreEventHook(Function<Map<String, Object>, Map<String, Object>> hook);
+
+  /**
+   * Register a hook that runs after every about-to-submit handler of this case type and sees its
+   * response. Hooks run in the order they are registered, each receiving the response the previous
+   * one returned; the last hook's response is what CCD receives.
+   *
+   * <p>On a case type that is not decentralised, a hook runs only for events with an about-to-submit
+   * callback the SDK serves, since CCD makes no about-to-submit callback for an event that declares
+   * none. On a decentralised case type CCD sends every submission to the SDK, and a hook runs for
+   * each one made through {@code event(...)}, with or without an about-to-submit callback. For an
+   * event without one, the hook receives a response carrying the event's case data and no state; the
+   * case details carry the state the event ends in. That includes {@code DocumentUpdated}, the
+   * system event CCD raises when a case document's metadata changes through CDAM, so a hook that
+   * refuses submissions should let it through. Hooks do not run for events built with
+   * {@code decentralisedEvent(...)} or {@code externalEvent(...)}, whose submit handlers return a
+   * different response type.
+   *
+   * <p>A hook does not run for about-to-start, mid-event or submitted callbacks. It runs whether or
+   * not the handler's response carries errors, so a hook that should leave a rejected submission
+   * alone has to check for them. A handler that returns no response reaches the first hook as an
+   * empty one, and a hook must not return null.
+   *
+   * <p>To refuse a submission, return the response with errors set; CCD shows them and the event is
+   * not saved. Unlike a hook registered with {@link #addPreEventHook(Function)}, whose exceptions are
+   * logged and ignored, an exception thrown by a post-event hook propagates and fails the callback
+   * with a server error. That also stops the submission, but on a decentralised case type it leaves
+   * behind the case pointer CCD created for a new case, because ccd-data-store-api only rolls a
+   * pointer back on a client error. Keep throwing for failures the hook cannot report.
+   */
+  default void addPostEventHook(PostEventHook<T, S> hook) {
+    // Defaulted rather than abstract so 7.x stays source compatible for anything implementing
+    // ConfigBuilder itself. It throws rather than discarding the hook, since a hook may enforce a
+    // check, such as the caller's role, that must not be silently lost.
+    throw new UnsupportedOperationException(getClass().getName()
+        + " does not support post-event hooks; register them through the SDK's own ConfigBuilder");
+  }
 
   CaseRoleToAccessProfileBuilder<R> caseRoleToAccessProfile(R caseRole);
 

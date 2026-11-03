@@ -8,6 +8,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -150,13 +151,73 @@ class LegacyCallbackSubmissionHandlerTest {
     verify(cdamAttachService, never()).attachNewDocumentsAndStripHashes(any(), any(), any(), any());
   }
 
+  @Test
+  void keepsTheEventDataWhenTheCallbackReturnsNone() throws Exception {
+    setupEventConfig();
+    DecentralisedCaseEvent event = event();
+    event.getCaseDetails().setData(MAPPER.convertValue(read("{\"subject\": \"kept\"}"), JSON_NODE_MAP));
+    when(executor.aboutToSubmit(any())).thenReturn(
+        AboutToStartOrSubmitResponse.<Map<String, JsonNode>, Object>builder().state("Closed").build());
+
+    var result = handler.apply(event, USER);
+
+    assertThat(result.dataUpdate().orElseThrow().path("subject").asText()).isEqualTo("kept");
+    assertThat(result.state()).contains("Closed");
+  }
+
+  @Test
+  void appliesPostEventHooksToAnEventWithoutAnAboutToSubmitCallback() throws Exception {
+    setupEventConfig(Map.class, false);
+    when(registry.hasPostEventHooks("TestCase")).thenReturn(true);
+    DecentralisedCaseEvent event = event();
+    AboutToStartOrSubmitResponse<Map<String, JsonNode>, Object> hookResponse =
+        callbackResponse("{\"outcome\": \"recorded\"}", null);
+    hookResponse.setState("Closed");
+    hookResponse.setWarnings(List.of("hook warning"));
+    when(executor.postEventHooksWithoutHandler(any())).thenReturn(hookResponse);
+
+    var result = handler.apply(event, USER);
+
+    assertThat(result.dataUpdate().orElseThrow().path("outcome").asText()).isEqualTo("recorded");
+    assertThat(result.state()).contains("Closed");
+    assertThat(result.responseSupplier().get().getWarnings()).containsExactly("hook warning");
+    verify(executor, never()).aboutToSubmit(any());
+  }
+
+  @Test
+  void refusesAnEventWithoutAnAboutToSubmitCallbackWhenAPostEventHookReturnsErrors() throws Exception {
+    setupEventConfig(Map.class, false);
+    when(registry.hasPostEventHooks("TestCase")).thenReturn(true);
+    when(executor.postEventHooksWithoutHandler(any()))
+        .thenReturn(callbackResponse("{}", List.of("hook error")));
+
+    assertThatThrownBy(() -> handler.apply(event(), USER))
+        .isInstanceOf(CallbackValidationException.class);
+  }
+
+  @Test
+  void leavesAnEventWithoutAnAboutToSubmitCallbackAloneWhenNoPostEventHooksAreRegistered() {
+    setupEventConfig(Map.class, false);
+    DecentralisedCaseEvent event = event();
+
+    var result = handler.apply(event, USER);
+
+    assertThat(result.state()).contains("Submitted");
+    verifyNoInteractions(executor);
+  }
+
   private void setupEventConfig() {
     setupEventConfig(Map.class);
   }
 
   private void setupEventConfig(Class<?> caseClass) {
+    setupEventConfig(caseClass, true);
+  }
+
+  private void setupEventConfig(Class<?> caseClass, boolean hasAboutToSubmitCallback) {
     Event<?, ?, ?> eventConfig = mock(Event.class);
-    when(eventConfig.getAboutToSubmitCallback()).thenReturn(mock(AboutToSubmit.class));
+    when(eventConfig.getAboutToSubmitCallback())
+        .thenReturn(hasAboutToSubmitCallback ? mock(AboutToSubmit.class) : null);
     when(eventConfig.getSubmittedCallback()).thenReturn(null);
     doReturn(eventConfig).when(registry).getRequiredEvent("TestCase", "submit");
 

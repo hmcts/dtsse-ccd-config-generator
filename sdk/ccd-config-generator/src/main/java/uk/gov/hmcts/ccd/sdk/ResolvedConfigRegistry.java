@@ -13,7 +13,10 @@ import java.util.function.Function;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
+import uk.gov.hmcts.ccd.sdk.api.callback.PostEventHook;
 
 /**
  * Simple catalogue for resolved CCD configurations so other components can access
@@ -65,6 +68,39 @@ public class ResolvedConfigRegistry {
     Function<Map<String, Object>, Map<String, Object>> pipeline =
         config.getPreEventHooks().stream().reduce(Function.identity(), Function::andThen);
     return pipeline.apply(data);
+  }
+
+  public boolean hasPostEventHooks(String caseType) {
+    return !getRequired(caseType).getPostEventHooks().isEmpty();
+  }
+
+  /**
+   * Passes an about-to-submit handler's response through the case type's post-event hooks in
+   * registration order. A hook's exception propagates to the caller.
+   *
+   * <p>With no hooks registered the response is returned as it is, null included. Otherwise a null
+   * response reaches the first hook as an empty one, which CCD treats as no change, and a hook that
+   * returns null fails the submission.
+   */
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  public AboutToStartOrSubmitResponse applyPostEventHooks(String caseType, String eventId,
+                                                          CaseDetails details, CaseDetails detailsBefore,
+                                                          AboutToStartOrSubmitResponse response) {
+    List<PostEventHook> hooks = (List) getRequired(caseType).getPostEventHooks();
+    if (hooks.isEmpty()) {
+      return response;
+    }
+    AboutToStartOrSubmitResponse result = response == null
+        ? AboutToStartOrSubmitResponse.builder().build()
+        : response;
+    for (PostEventHook hook : hooks) {
+      result = hook.handle(eventId, details, detailsBefore, result);
+      if (result == null) {
+        throw new IllegalStateException("A post-event hook of case type " + caseType
+            + " returned no response for event " + eventId);
+      }
+    }
+    return result;
   }
 
   public Event<?, ?, ?> getRequiredEvent(String caseType, String eventId) {
