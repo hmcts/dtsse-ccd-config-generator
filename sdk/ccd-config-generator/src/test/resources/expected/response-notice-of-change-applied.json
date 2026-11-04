@@ -53,9 +53,7 @@
             "code": "[APPONESOLICITOR]",
             "label": "APPLICANT_1_SOLICITOR"
           }
-        ],
-        "caseTypePermissions": "APPLICANT_1_SOLICITOR",
-        "role": "[APPONESOLICITOR]"
+        ]
       },
       "ApprovalStatus": "1",
       "RequestTimestamp": "2024-05-28T17:40:14.857926",
