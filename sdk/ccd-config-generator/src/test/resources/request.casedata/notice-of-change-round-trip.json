@@ -1,0 +1,172 @@
+{
+  "raisedByService": {
+    "CaseRoleId": {
+      "value": {
+        "code": "[APPONESOLICITOR]",
+        "label": "Applicant 1 solicitor"
+      },
+      "list_items": [
+        {
+          "code": "[APPONESOLICITOR]",
+          "label": "Applicant 1 solicitor"
+        }
+      ]
+    },
+    "RequestTimestamp": "2024-05-28T17:40:14.857926",
+    "ApprovalStatus": "1"
+  },
+  "requestedThroughAac": {
+    "OrganisationToAdd": {
+      "OrganisationID": "QUK822N",
+      "OrganisationName": "New Solicitors LLP"
+    },
+    "OrganisationToRemove": {
+      "OrganisationID": "HEBFGBR",
+      "OrganisationName": "Old Solicitors LLP"
+    },
+    "CaseRoleId": {
+      "value": {
+        "code": "[APPONESOLICITOR]",
+        "label": "Applicant 1 solicitor"
+      },
+      "list_items": [
+        {
+          "code": "[APPONESOLICITOR]",
+          "label": "Applicant 1 solicitor"
+        },
+        {
+          "code": "[APPTWOSOLICITOR]",
+          "label": "Applicant 2 solicitor"
+        }
+      ]
+    },
+    "RequestTimestamp": "2024-05-29T08:12:03.271849",
+    "ApprovalStatus": "0",
+    "CreatedBy": "new.solicitor@example.com"
+  },
+  "appliedByAac": {
+    "OrganisationToAdd": {
+      "OrganisationID": null,
+      "OrganisationName": null
+    },
+    "OrganisationToRemove": {
+      "OrganisationID": null,
+      "OrganisationName": null
+    },
+    "CaseRoleId": null,
+    "Reason": null,
+    "NotesReason": null,
+    "ApprovalStatus": null,
+    "RequestTimestamp": null,
+    "ApprovalRejectionTimestamp": null,
+    "CreatedBy": null
+  },
+  "organisationPolicyAfterNoticesOfChange": {
+    "Organisation": {
+      "OrganisationID": "QUK822N",
+      "OrganisationName": "New Solicitors LLP"
+    },
+    "OrgPolicyReference": "Our ref 123",
+    "PrepopulateToUsersOrganisation": "No",
+    "OrgPolicyCaseAssignedRole": "CCD_SOLICITOR",
+    "LastNoCRequestedBy": "new.solicitor@example.com",
+    "PreviousOrganisations": [
+      {
+        "id": "e2b0c6a1-7d1f-4f0e-9c55-1c1b0f6f5a01",
+        "value": {
+          "FromTimestamp": "2024-05-01T09:15:42.123457",
+          "ToTimestamp": "2024-06-03T16:04:11.654321",
+          "OrganisationName": "Previous Organisation 5",
+          "OrganisationAddress": {
+            "AddressLine1": "5 High Street",
+            "AddressLine2": null,
+            "AddressLine3": null,
+            "PostTown": "London",
+            "County": null,
+            "PostCode": "SW1A 1AA",
+            "Country": "United Kingdom"
+          }
+        }
+      },
+      {
+        "id": "0b6e9f3c-2a44-4d8e-8b1a-77f1c9d0e502",
+        "value": {
+          "FromTimestamp": "2024-04-01T09:15:42.123457",
+          "ToTimestamp": "2024-05-03T16:04:11.654321",
+          "OrganisationName": "Previous Organisation 4",
+          "OrganisationAddress": {
+            "AddressLine1": "4 High Street",
+            "AddressLine2": null,
+            "AddressLine3": null,
+            "PostTown": "London",
+            "County": null,
+            "PostCode": "SW1A 1AA",
+            "Country": "United Kingdom"
+          }
+        }
+      },
+      {
+        "id": "9f1d2c3b-4a5e-4f60-8172-93a4b5c6d703",
+        "value": {
+          "FromTimestamp": "2024-03-01T09:15:42.123457",
+          "ToTimestamp": "2024-04-03T16:04:11.654321",
+          "OrganisationName": "Previous Organisation 3",
+          "OrganisationAddress": {
+            "AddressLine1": "3 High Street",
+            "AddressLine2": null,
+            "AddressLine3": null,
+            "PostTown": "London",
+            "County": null,
+            "PostCode": "SW1A 1AA",
+            "Country": "United Kingdom"
+          }
+        }
+      },
+      {
+        "id": "31c4e5f6-0718-4293-a4b5-c6d7e8f90a04",
+        "value": {
+          "FromTimestamp": "2024-02-01T09:15:42.123457",
+          "ToTimestamp": "2024-03-03T16:04:11.654321",
+          "OrganisationName": "Previous Organisation 2",
+          "OrganisationAddress": {
+            "AddressLine1": "2 High Street",
+            "AddressLine2": null,
+            "AddressLine3": null,
+            "PostTown": "London",
+            "County": null,
+            "PostCode": "SW1A 1AA",
+            "Country": "United Kingdom"
+          }
+        }
+      },
+      {
+        "id": "c7d8e9f0-1a2b-4c3d-8e4f-5a6b7c8d9e05",
+        "value": {
+          "FromTimestamp": "2024-01-01T09:15:42.123457",
+          "ToTimestamp": "2024-02-03T16:04:11.654321",
+          "OrganisationName": "Previous Organisation 1",
+          "OrganisationAddress": {
+            "AddressLine1": "1 High Street",
+            "AddressLine2": null,
+            "AddressLine3": null,
+            "PostTown": "London",
+            "County": null,
+            "PostCode": "SW1A 1AA",
+            "Country": "United Kingdom"
+          }
+        }
+      }
+    ]
+  },
+  "caseRoleIdEmpty": {
+    "CaseRoleId": {}
+  },
+  "caseRoleIdWithoutListItems": {
+    "CaseRoleId": {
+      "value": {
+        "code": "[APPONESOLICITOR]",
+        "label": "Applicant 1 solicitor"
+      }
+    }
+  }
+}

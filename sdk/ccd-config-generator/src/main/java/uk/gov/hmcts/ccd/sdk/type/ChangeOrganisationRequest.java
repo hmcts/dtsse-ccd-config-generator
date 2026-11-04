@@ -15,6 +15,12 @@ import lombok.NoArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
+/**
+ * CCD's predefined ChangeOrganisationRequest complex type.
+ *
+ * <p>Declare it as {@code ChangeOrganisationRequest<DynamicListCaseRole>}: the type argument is the
+ * type of {@code CaseRoleId}, which CCD stores as a DynamicList.</p>
+ */
 @NoArgsConstructor
 @Builder
 @Data
@@ -28,6 +34,11 @@ public class ChangeOrganisationRequest<R extends HasRole> {
   @JsonProperty("OrganisationToRemove")
   private Organisation organisationToRemove;
 
+  /**
+   * CCD stores {@code CaseRoleId} as a DynamicList for every service, so the type argument must be
+   * able to hold one: declare {@code ChangeOrganisationRequest<DynamicListCaseRole>}. An enum role
+   * type argument fails to read stored data.
+   */
   @JsonProperty("CaseRoleId")
   private R caseRoleId;
 
