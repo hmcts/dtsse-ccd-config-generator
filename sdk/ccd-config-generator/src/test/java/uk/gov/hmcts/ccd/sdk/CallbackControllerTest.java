@@ -43,6 +43,9 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.CCD_SOLICITOR;
 @SpringBootTest
 @AutoConfigureMockMvc
 public class CallbackControllerTest {
+  private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final JsonNode NOC_FIXTURES = readNocFixtures();
+
   @Autowired
   private MockMvc mockMvc;
 
@@ -203,24 +206,39 @@ public class CallbackControllerTest {
     assertThat(roundTrip("organisationPolicy", stored)).isEqualTo(stored);
   }
 
+  @Test
+  public void anEmptyCaseRoleIdRoundTrips() {
+    JsonNode stored = nocFixture("caseRoleIdEmpty");
+
+    assertThat(roundTrip("changeOrganisationRequestField", stored)).isEqualTo(stored);
+  }
+
+  @Test
+  public void aCaseRoleIdWithoutListItemsRoundTrips() {
+    JsonNode stored = nocFixture("caseRoleIdWithoutListItems");
+
+    assertThat(roundTrip("changeOrganisationRequestField", stored)).isEqualTo(stored);
+  }
+
   @SneakyThrows
   private JsonNode roundTrip(String field, JsonNode value) {
-    ObjectMapper mapper = new ObjectMapper();
     Map<String, Object> data = Maps.newHashMap();
-    data.put(field, mapper.convertValue(value, Object.class));
+    data.put(field, MAPPER.convertValue(value, Object.class));
 
     MvcResult result = this.makeRequest("about-to-start", "CARE_SUPERVISION_EPO", "noticeOfChangeApplied", data)
         .andExpect(status().isOk())
         .andReturn();
 
-    return mapper.readTree(result.getResponse().getContentAsString()).path("data").path(field);
+    return MAPPER.readTree(result.getResponse().getContentAsString()).path("data").path(field);
+  }
+
+  private JsonNode nocFixture(String name) {
+    return NOC_FIXTURES.get(name).deepCopy();
   }
 
   @SneakyThrows
-  private JsonNode nocFixture(String name) {
-    return new ObjectMapper()
-        .readTree(Resources.getResource("request.casedata/notice-of-change-round-trip.json"))
-        .get(name);
+  private static JsonNode readNocFixtures() {
+    return MAPPER.readTree(Resources.getResource("request.casedata/notice-of-change-round-trip.json"));
   }
 
   @SneakyThrows

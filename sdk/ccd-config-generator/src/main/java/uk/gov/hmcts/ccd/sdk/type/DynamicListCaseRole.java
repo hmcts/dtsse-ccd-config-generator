@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk.type;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import lombok.Builder;
@@ -18,13 +19,19 @@ import uk.gov.hmcts.ccd.sdk.api.HasRole;
  * <p>CCD defines {@code ChangeOrganisationRequest.CaseRoleId} as a DynamicList whose codes are case
  * roles such as {@code [APPLICANTSOLICITOR]}, so declare the field as
  * {@code ChangeOrganisationRequest<DynamicListCaseRole>}. Only {@code value} and {@code list_items}
- * are read and written; the {@link HasRole} view is derived from the selected item.</p>
+ * are read and written, and neither is written when null; the {@link HasRole} view is derived from
+ * the selected item.</p>
+ *
+ * <p>It carries a role stored in case data, not a role a case type declares, so it is not for
+ * grants, tab roles or permissions: {@link #getRole()} is null when nothing is selected and
+ * {@link #getCaseTypePermissions()} is empty.</p>
  */
 @NoArgsConstructor
 @Builder
 @Data
 @ComplexType(generate = false)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class DynamicListCaseRole implements HasRole {
 
   private DynamicListItem value;

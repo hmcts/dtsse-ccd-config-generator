@@ -23,8 +23,9 @@ public class OrganisationPolicy<R extends HasRole> {
   private Organisation organisation;
 
   /**
-   * Newest first, as Notice of Change stores them; read into a {@link LinkedHashSet} to keep that
-   * order.
+   * Newest first, as Notice of Change stores them. Jackson reads them into a {@link LinkedHashSet},
+   * which keeps that order; code that builds or copies this set should also use a
+   * {@link LinkedHashSet} so the newest-first order CCD stores is kept.
    */
   @JsonProperty("PreviousOrganisations")
   @JsonDeserialize(as = LinkedHashSet.class)
@@ -60,8 +61,7 @@ public class OrganisationPolicy<R extends HasRole> {
   @JsonCreator
   public OrganisationPolicy(
       @JsonProperty("Organisation") Organisation organisation,
-      @JsonProperty("PreviousOrganisations")
-      @JsonDeserialize(as = LinkedHashSet.class) Set<PreviousOrganisationCollectionItem> previousOrganisations,
+      @JsonProperty("PreviousOrganisations") Set<PreviousOrganisationCollectionItem> previousOrganisations,
       @JsonProperty("OrgPolicyReference") String orgPolicyReference,
       @JsonProperty("PrepopulateToUsersOrganisation") YesOrNo prepopulateToUsersOrganisation,
       @JsonProperty("OrgPolicyCaseAssignedRole") R orgPolicyCaseAssignedRole,

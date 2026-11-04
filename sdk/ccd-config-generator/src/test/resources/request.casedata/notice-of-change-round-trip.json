@@ -87,8 +87,7 @@
             "Country": "United Kingdom"
           }
         }
-      }
-,
+      },
       {
         "id": "0b6e9f3c-2a44-4d8e-8b1a-77f1c9d0e502",
         "value": {
@@ -105,8 +104,7 @@
             "Country": "United Kingdom"
           }
         }
-      }
-,
+      },
       {
         "id": "9f1d2c3b-4a5e-4f60-8172-93a4b5c6d703",
         "value": {
@@ -123,8 +121,7 @@
             "Country": "United Kingdom"
           }
         }
-      }
-,
+      },
       {
         "id": "31c4e5f6-0718-4293-a4b5-c6d7e8f90a04",
         "value": {
@@ -141,8 +138,7 @@
             "Country": "United Kingdom"
           }
         }
-      }
-,
+      },
       {
         "id": "c7d8e9f0-1a2b-4c3d-8e4f-5a6b7c8d9e05",
         "value": {
@@ -161,5 +157,16 @@
         }
       }
     ]
+  },
+  "caseRoleIdEmpty": {
+    "CaseRoleId": {}
+  },
+  "caseRoleIdWithoutListItems": {
+    "CaseRoleId": {
+      "value": {
+        "code": "[APPONESOLICITOR]",
+        "label": "Applicant 1 solicitor"
+      }
+    }
   }
 }
