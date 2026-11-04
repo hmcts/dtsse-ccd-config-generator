@@ -15,6 +15,7 @@ import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.type.CaseAccessGroup;
 import uk.gov.hmcts.ccd.sdk.type.ChangeOrganisationRequest;
 import uk.gov.hmcts.ccd.sdk.type.DynamicList;
+import uk.gov.hmcts.ccd.sdk.type.DynamicListCaseRole;
 import uk.gov.hmcts.ccd.sdk.type.DynamicMultiSelectList;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.type.OrganisationPolicy;
@@ -438,7 +439,7 @@ public class CaseData {
   @CCD(
           access = {NoticeOfChangeAccess.class}
   )
-  private ChangeOrganisationRequest<CaseRoleID> changeOrganisationRequestField;
+  private ChangeOrganisationRequest<DynamicListCaseRole> changeOrganisationRequestField;
 
   @JsonProperty("TTL")
   @CCD(

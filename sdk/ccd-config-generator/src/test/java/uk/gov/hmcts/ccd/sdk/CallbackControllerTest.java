@@ -1,7 +1,9 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.Maps;
 import com.google.common.io.Resources;
 import lombok.SneakyThrows;
@@ -169,6 +171,56 @@ public class CallbackControllerTest {
         .contains("\"errors\":null")
         .contains("\"data_classification\":null")
         .contains("\"security_classification\":null");
+  }
+
+  @Test
+  public void aChangeOrganisationRequestRaisedByAServiceRoundTrips() {
+    JsonNode stored = nocFixture("raisedByService");
+
+    assertThat(roundTrip("changeOrganisationRequestField", stored)).isEqualTo(stored);
+  }
+
+  @Test
+  public void aNoticeOfChangeRequestWrittenByAacRoundTrips() {
+    JsonNode stored = nocFixture("requestedThroughAac");
+
+    assertThat(roundTrip("changeOrganisationRequestField", stored)).isEqualTo(stored);
+  }
+
+  @Test
+  public void aChangeOrganisationRequestClearedByAacRoundTripsWithoutItsNullMembers() {
+    JsonNode stored = nocFixture("appliedByAac");
+    ObjectNode expected = stored.deepCopy();
+    expected.retain("OrganisationToAdd", "OrganisationToRemove");
+
+    assertThat(roundTrip("changeOrganisationRequestField", stored)).isEqualTo(expected);
+  }
+
+  @Test
+  public void anOrganisationPolicyKeepsLastNoCRequestedByAndThePreviousOrganisationsInOrder() {
+    JsonNode stored = nocFixture("organisationPolicyAfterNoticesOfChange");
+
+    assertThat(roundTrip("organisationPolicy", stored)).isEqualTo(stored);
+  }
+
+  @SneakyThrows
+  private JsonNode roundTrip(String field, JsonNode value) {
+    ObjectMapper mapper = new ObjectMapper();
+    Map<String, Object> data = Maps.newHashMap();
+    data.put(field, mapper.convertValue(value, Object.class));
+
+    MvcResult result = this.makeRequest("about-to-start", "CARE_SUPERVISION_EPO", "noticeOfChangeApplied", data)
+        .andExpect(status().isOk())
+        .andReturn();
+
+    return mapper.readTree(result.getResponse().getContentAsString()).path("data").path(field);
+  }
+
+  @SneakyThrows
+  private JsonNode nocFixture(String name) {
+    return new ObjectMapper()
+        .readTree(Resources.getResource("request.casedata/notice-of-change-round-trip.json"))
+        .get(name);
   }
 
   @SneakyThrows
