@@ -1,7 +1,9 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.Maps;
 import com.google.common.io.Resources;
 import lombok.SneakyThrows;
@@ -41,6 +43,9 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.CCD_SOLICITOR;
 @SpringBootTest
 @AutoConfigureMockMvc
 public class CallbackControllerTest {
+  private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final JsonNode NOC_FIXTURES = readNocFixtures();
+
   @Autowired
   private MockMvc mockMvc;
 
@@ -153,6 +158,71 @@ public class CallbackControllerTest {
                     (Resources.getResource("expected/response-notice-of-change-applied.json").getPath()),
             StandardCharsets.UTF_8);
     JSONAssert.assertEquals(responseString, result.getResponse().getContentAsString() , false);
+  }
+
+  @Test
+  public void aChangeOrganisationRequestRaisedByAServiceRoundTrips() {
+    JsonNode stored = nocFixture("raisedByService");
+
+    assertThat(roundTrip("changeOrganisationRequestField", stored)).isEqualTo(stored);
+  }
+
+  @Test
+  public void aNoticeOfChangeRequestWrittenByAacRoundTrips() {
+    JsonNode stored = nocFixture("requestedThroughAac");
+
+    assertThat(roundTrip("changeOrganisationRequestField", stored)).isEqualTo(stored);
+  }
+
+  @Test
+  public void aChangeOrganisationRequestClearedByAacRoundTripsWithoutItsNullMembers() {
+    JsonNode stored = nocFixture("appliedByAac");
+    ObjectNode expected = stored.deepCopy();
+    expected.retain("OrganisationToAdd", "OrganisationToRemove");
+
+    assertThat(roundTrip("changeOrganisationRequestField", stored)).isEqualTo(expected);
+  }
+
+  @Test
+  public void anOrganisationPolicyKeepsLastNoCRequestedByAndThePreviousOrganisationsInOrder() {
+    JsonNode stored = nocFixture("organisationPolicyAfterNoticesOfChange");
+
+    assertThat(roundTrip("organisationPolicy", stored)).isEqualTo(stored);
+  }
+
+  @Test
+  public void anEmptyCaseRoleIdRoundTrips() {
+    JsonNode stored = nocFixture("caseRoleIdEmpty");
+
+    assertThat(roundTrip("changeOrganisationRequestField", stored)).isEqualTo(stored);
+  }
+
+  @Test
+  public void aCaseRoleIdWithoutListItemsRoundTrips() {
+    JsonNode stored = nocFixture("caseRoleIdWithoutListItems");
+
+    assertThat(roundTrip("changeOrganisationRequestField", stored)).isEqualTo(stored);
+  }
+
+  @SneakyThrows
+  private JsonNode roundTrip(String field, JsonNode value) {
+    Map<String, Object> data = Maps.newHashMap();
+    data.put(field, MAPPER.convertValue(value, Object.class));
+
+    MvcResult result = this.makeRequest("about-to-start", "CARE_SUPERVISION_EPO", "noticeOfChangeApplied", data)
+        .andExpect(status().isOk())
+        .andReturn();
+
+    return MAPPER.readTree(result.getResponse().getContentAsString()).path("data").path(field);
+  }
+
+  private JsonNode nocFixture(String name) {
+    return NOC_FIXTURES.get(name).deepCopy();
+  }
+
+  @SneakyThrows
+  private static JsonNode readNocFixtures() {
+    return MAPPER.readTree(Resources.getResource("request.casedata/notice-of-change-round-trip.json"));
   }
 
   @SneakyThrows
