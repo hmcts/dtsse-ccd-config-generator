@@ -779,6 +779,16 @@ public class Document {
 }
 ```
 
+### Objects nested in a prefixed unwrapped class
+
+Jackson 2 also applies an unwrapped property's prefix to the fields of objects nested in the unwrapped class, so they
+come back empty ([jackson-databind#3178](https://github.com/FasterXML/jackson-databind/issues/3178)). From
+jackson-databind 2.19 this includes objects with a `@JsonCreator` constructor, such as the SDK's `AddressUK` and
+`Document`. The SDK auto-configures `UnwrappedPrefixModule` on every Jackson `ObjectMapper` bean, Spring Boot's or one
+the service declares itself, including one a `FactoryBean` produces, so the prefix applies only to the unwrapped
+class's own fields. A mapper created outside the Spring context, such as a `new ObjectMapper()` in a static field,
+does not get it and should not be used for case data.
+
 ### Jackson configuration
 
 Jackson does require some configuration in order to handle dates and the `HasRole` enum:

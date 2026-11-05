@@ -1,12 +1,10 @@
 package uk.gov.hmcts.ccd.sdk.config;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.BeansException;
-import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
+import uk.gov.hmcts.ccd.sdk.jackson.CcdObjectMapperCustomizer;
 
 @AutoConfiguration
 public class CcdWireFormatConfiguration {
@@ -16,16 +14,8 @@ public class CcdWireFormatConfiguration {
    * by mixing in a @JsonIgnoreProperties during deserialisation.
    */
   @Bean
-  public static BeanPostProcessor ccdCaseDetailsUnknownFieldsObjectMapperPostProcessor() {
-    return new BeanPostProcessor() {
-      @Override
-      public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
-        if (bean instanceof ObjectMapper mapper) {
-          mapper.addMixIn(CaseDetails.class, IgnoreUnknownCcdCaseDetails.class);
-        }
-        return bean;
-      }
-    };
+  public static CcdObjectMapperCustomizer ccdCaseDetailsUnknownFieldsObjectMapperCustomizer() {
+    return mapper -> mapper.addMixIn(CaseDetails.class, IgnoreUnknownCcdCaseDetails.class);
   }
 
   @JsonIgnoreProperties(ignoreUnknown = true)

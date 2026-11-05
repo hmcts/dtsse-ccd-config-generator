@@ -32,6 +32,7 @@ import uk.gov.hmcts.ccd.sdk.api.external.ClientContext;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalRejection;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalStartResponse;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalUser;
+import uk.gov.hmcts.ccd.sdk.jackson.UnwrappedPrefixModule;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
@@ -48,11 +49,11 @@ public class CcdCallbackExecutor {
   public CcdCallbackExecutor(ResolvedConfigRegistry registry, ObjectMapper mapper,
                              ObjectProvider<ExternalUserResolver> users) {
     this.registry = registry;
-    this.mapper = mapper;
+    this.mapper = UnwrappedPrefixModule.ensureRegistered(mapper);
     this.users = users;
     for (ResolvedCCDConfig<?, ?, ?> config : registry.getAll()) {
       this.caseTypeToJavaType.put(config.getCaseType(),
-          mapper.getTypeFactory().constructParametricType(CaseDetails.class, config.getCaseClass(),
+          this.mapper.getTypeFactory().constructParametricType(CaseDetails.class, config.getCaseClass(),
               config.getStateClass()));
     }
   }
