@@ -4,7 +4,7 @@ import java.util.EnumSet;
 import java.util.Optional;
 import java.util.Set;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleErrorCode;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderException;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderException;
 
 /**
  * Which failures are worth retrying: resolution, conversion and cover-page failures, unless a

@@ -7,6 +7,11 @@ page, cover sheets, bookmarks and page numbers. The rendering code is ported fro
 `em-stitching-api` (same PDFBox version) and its output is checked against goldens generated from
 that service, so a default bundle looks the same as one from the shared service today.
 
+The per-document conversions (PDF validation, image-to-PDF, the Docmosis client and media type
+detection) live in [`document-conversion`](../document-conversion/document-conversion.md), which
+this module depends on. Use that module on its own to convert documents outside a bundle, for
+example for bulk print.
+
 ## Getting started
 
 ```groovy
@@ -97,7 +102,7 @@ it was down, gets the `UNAVAILABLE` reason.
 | Media type | Handling |
 |---|---|
 | `application/pdf` | Checked and passed through; its own bookmarks are kept under the document's bookmark |
-| PNG, JPEG, TIFF, BMP, GIF | Placed on a page of the right size |
+| PNG, JPEG, TIFF, BMP, GIF | Placed on a page of the right size; a multi-frame TIFF gives one page per frame |
 | Word, Excel, PowerPoint, RTF, plain text | Converted through the shared Docmosis service |
 | audio (`audio/mpeg`, ...) and video (`video/mp4`, ...) | Never fetched: a generated link page built from the document's `MediaPlaceholder` (access URL, media type, duration, note) |
 | anything else | The bundle fails, naming the type and the types that are supported |

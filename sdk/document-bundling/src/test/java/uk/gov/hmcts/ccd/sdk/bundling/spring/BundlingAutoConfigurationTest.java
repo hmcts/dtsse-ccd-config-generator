@@ -42,8 +42,8 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResolver;
 import uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocuments;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderService;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.HttpDocmosisRenderService;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderService;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.HttpDocmosisRenderService;
 
 class BundlingAutoConfigurationTest {
   private static final String CONVERT_ENDPOINT =
