@@ -1,0 +1,65 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "CaseFieldID": "reasons",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "CaseFieldID": "evidenceOption",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "CaseFieldID": "evidenceUpload",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "CaseFieldID": "transferObjection",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "CaseFieldID": "interpreterNeeded",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "CaseFieldID": "interpreterLabel",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "CaseFieldID": "languageCategory",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "CaseFieldID": "spokenLanguage",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "CaseFieldID": "spokenLanguageOther",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  }
+]

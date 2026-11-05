@@ -1,0 +1,52 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "Channel": "CaseWorker",
+    "TabID": "grounds",
+    "TabLabel": "grounds",
+    "TabDisplayOrder": 2,
+    "CaseFieldID": "evidenceOption",
+    "TabFieldDisplayOrder": 2
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "Channel": "CaseWorker",
+    "TabID": "grounds",
+    "TabLabel": "grounds",
+    "TabDisplayOrder": 2,
+    "CaseFieldID": "reasons",
+    "TabFieldDisplayOrder": 1
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "Channel": "CaseWorker",
+    "TabID": "summary",
+    "TabLabel": "summary",
+    "TabDisplayOrder": 1,
+    "CaseFieldID": "transferObjection",
+    "TabFieldDisplayOrder": 1
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "Channel": "CaseWorker",
+    "TabID": "interpreter",
+    "TabLabel": "interpreter",
+    "TabDisplayOrder": 2,
+    "CaseFieldID": "interpreterNeeded",
+    "TabFieldDisplayOrder": 1
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "Channel": "CaseWorker",
+    "TabID": "interpreter",
+    "TabLabel": "interpreter",
+    "TabDisplayOrder": 2,
+    "CaseFieldID": "languageCategory",
+    "TabFieldDisplayOrder": 1
+  }
+]

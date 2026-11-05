@@ -12,6 +12,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import uk.gov.hmcts.ccd.sdk.converter.api.ConversionOptions;
 import uk.gov.hmcts.ccd.sdk.converter.api.DefinitionLinker;
@@ -126,18 +127,18 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
         buildCaseFields(ir, caseTypeId, options, gaps, enumResolver, complexResolver);
     final List<StateModel> states = buildStates(ir, caseTypeId, gaps);
     List<EventModel> events = buildEvents(ir, caseTypeId, options, gaps);
-    List<TabModel> tabs = buildTabs(ir, caseTypeId, options);
+    List<TabModel> tabs = buildTabs(ir, caseTypeId, options, gaps);
 
     List<SearchFieldModel> searchInput =
-        buildSearchFields(ir, caseTypeId, SheetName.SEARCH_INPUT_FIELD, false, options);
+        buildSearchFields(ir, caseTypeId, SheetName.SEARCH_INPUT_FIELD, false, options, gaps);
     List<SearchFieldModel> searchResult =
-        buildSearchFields(ir, caseTypeId, SheetName.SEARCH_RESULT_FIELD, false, options);
+        buildSearchFields(ir, caseTypeId, SheetName.SEARCH_RESULT_FIELD, false, options, gaps);
     List<SearchFieldModel> workBasketInput =
-        buildSearchFields(ir, caseTypeId, SheetName.WORK_BASKET_INPUT_FIELD, false, options);
+        buildSearchFields(ir, caseTypeId, SheetName.WORK_BASKET_INPUT_FIELD, false, options, gaps);
     List<SearchFieldModel> workBasketResult =
-        buildSearchFields(ir, caseTypeId, SheetName.WORK_BASKET_RESULT_FIELDS, false, options);
+        buildSearchFields(ir, caseTypeId, SheetName.WORK_BASKET_RESULT_FIELDS, false, options, gaps);
     final List<SearchFieldModel> searchCasesResult =
-        buildSearchFields(ir, caseTypeId, SheetName.SEARCH_CASES_RESULT_FIELDS, true, options);
+        buildSearchFields(ir, caseTypeId, SheetName.SEARCH_CASES_RESULT_FIELDS, true, options, gaps);
 
     final List<RoleModel> roles = buildRoles(ir, caseTypeId, options, gaps);
 
@@ -1166,6 +1167,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
               Columns.RETRIES_TIMEOUT_URL_SUBMITTED_EVENT, gaps))
           .grants(grantsByEvent.getOrDefault(eventId, Map.of()))
           .pages(buildPages(
+              caseTypeId,
               eventId,
               fieldRowsByEvent.getOrDefault(eventId, List.of()),
               complexRowsByEvent.getOrDefault(eventId, List.of()),
@@ -1437,7 +1439,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     return text.isBlank() ? null : text;
   }
 
-  private List<PageModel> buildPages(String eventId, List<SheetRow> fieldRows,
+  private List<PageModel> buildPages(String caseTypeId, String eventId, List<SheetRow> fieldRows,
                                      List<SheetRow> complexRows, GapCollector gaps) {
     Map<String, List<SheetRow>> byPage = new LinkedHashMap<>();
     for (SheetRow row : fieldRows) {
@@ -1447,11 +1449,28 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
 
     Map<String, List<SheetRow>> complexByField = groupBy(complexRows, Columns.CASE_FIELD_ID);
 
+    String eventScope = caseTypeId + " event " + eventId;
+    List<Map.Entry<String, List<SheetRow>>> pageGroups = new ArrayList<>(byPage.entrySet());
+    // The definition store reads a page's order from its first row only.
+    Function<Map.Entry<String, List<SheetRow>>, Integer> pageOrder =
+        group -> group.getValue().get(0).getInteger(Columns.PAGE_DISPLAY_ORDER).orElse(null);
+    DisplayOrders.reportCollisions(pageGroups, pageOrder, Map.Entry::getKey,
+        "CaseEventToFields", Columns.PAGE_DISPLAY_ORDER, eventScope, "pages",
+        "CCD's order for them is undefined: the definition store groups pages through a HashMap"
+            + " and reads them back with an unstable SQL sort.", gaps);
+    Function<SheetRow, Integer> fieldOrder =
+        row -> row.getInteger(Columns.PAGE_FIELD_DISPLAY_ORDER).orElse(null);
+    Function<SheetRow, String> fieldIdOf = row -> row.getString(Columns.CASE_FIELD_ID).orElse("");
+
     List<PageModel> pages = new ArrayList<>();
-    for (Map.Entry<String, List<SheetRow>> entry : byPage.entrySet()) {
+    for (Map.Entry<String, List<SheetRow>> entry : DisplayOrders.sorted(pageGroups, pageOrder)) {
       List<SheetRow> rows = entry.getValue();
+      DisplayOrders.reportCollisions(rows, fieldOrder, fieldIdOf, "CaseEventToFields",
+          Columns.PAGE_FIELD_DISPLAY_ORDER, eventScope + " page " + entry.getKey(), "fields",
+          "CCD's order for them is undefined: the definition store returns a page's fields as a"
+              + " HashSet, so they arrive in no fixed order.", gaps);
       List<PageModel.PageField> fields = new ArrayList<>();
-      for (SheetRow row : rows) {
+      for (SheetRow row : DisplayOrders.sorted(rows, fieldOrder)) {
         String fieldId = row.getString(Columns.CASE_FIELD_ID).orElse("");
         fields.add(PageModel.PageField.builder()
             .caseFieldId(fieldId)
@@ -1532,17 +1551,32 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
   }
 
   private List<TabModel> buildTabs(
-      DefinitionIr ir, String caseTypeId, ConversionOptions options) {
+      DefinitionIr ir, String caseTypeId, ConversionOptions options, GapCollector gaps) {
     // Tabs are static builder calls, so an inactive overlay half must not place a field on a tab
     // the active build never renders — see OverlayResolver.isActiveRow.
     Map<String, List<SheetRow>> byTab =
         groupBy(activeRows(ir, SheetName.CASE_TYPE_TAB, caseTypeId, options), Columns.TAB_ID);
+    List<Map.Entry<String, List<SheetRow>>> tabGroups = new ArrayList<>(byTab.entrySet());
+    // The definition store reads a tab's order from its first row only.
+    Function<Map.Entry<String, List<SheetRow>>, Integer> tabOrder =
+        group -> group.getValue().get(0).getInteger(Columns.TAB_DISPLAY_ORDER).orElse(null);
+    DisplayOrders.reportCollisions(tabGroups, tabOrder, Map.Entry::getKey, "CaseTypeTab",
+        Columns.TAB_DISPLAY_ORDER, caseTypeId + " tabs", "tabs",
+        "CCD's order for them is undefined: the definition store groups tabs through a HashMap"
+            + " and reads them back with no ORDER BY.", gaps);
+    Function<SheetRow, Integer> fieldOrder =
+        row -> row.getInteger(Columns.TAB_FIELD_DISPLAY_ORDER).orElse(null);
     List<TabModel> tabs = new ArrayList<>();
-    for (Map.Entry<String, List<SheetRow>> entry : byTab.entrySet()) {
+    for (Map.Entry<String, List<SheetRow>> entry : DisplayOrders.sorted(tabGroups, tabOrder)) {
       List<SheetRow> rows = entry.getValue();
-      SheetRow first = rows.get(0);
+      DisplayOrders.reportCollisions(rows, fieldOrder,
+          row -> row.getString(Columns.CASE_FIELD_ID).orElse(""), "CaseTypeTab",
+          Columns.TAB_FIELD_DISPLAY_ORDER, caseTypeId + " tab " + entry.getKey(), "fields",
+          "The definition store keeps a tab's fields in row order, so CCD shows them in"
+              + " definition order today, but the shared value leaves the intended order unstated.",
+          gaps);
       List<TabModel.TabField> fields = new ArrayList<>();
-      for (SheetRow row : rows) {
+      for (SheetRow row : DisplayOrders.sorted(rows, fieldOrder)) {
         fields.add(TabModel.TabField.builder()
             .caseFieldId(row.getString(Columns.CASE_FIELD_ID).orElse(""))
             .displayOrder(row.getInteger(Columns.TAB_FIELD_DISPLAY_ORDER).orElse(null))
@@ -1562,7 +1596,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       tabs.add(TabModel.builder()
           .tabId(entry.getKey())
           .label(firstPresentDisplayText(rows, Columns.TAB_LABEL))
-          .displayOrder(first.getInteger(Columns.TAB_DISPLAY_ORDER).orElse(null))
+          .displayOrder(tabOrder.apply(entry))
           .showCondition(firstPresent(rows, Columns.TAB_SHOW_CONDITION))
           .userRole(tabRole)
           .fields(fields)
@@ -1573,14 +1607,32 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
 
   private List<SearchFieldModel> buildSearchFields(
       DefinitionIr ir, String caseTypeId, SheetName sheet, boolean cases,
-      ConversionOptions options) {
+      ConversionOptions options, GapCollector gaps) {
+    // These sheets are emitted from static SearchBuilder calls, so an inactive overlay half must
+    // not contribute a field the active build never shows — see OverlayResolver.isActiveRow.
+    List<SheetRow> active = ir.rowsForCaseType(sheet, caseTypeId).stream()
+        .filter(row -> OverlayResolver.isActiveRow(row.getOverlayTags(), options))
+        .toList();
+    Function<SheetRow, Integer> order = row -> row.getInteger(Columns.DISPLAY_ORDER).orElse(null);
+    // The generator numbers the fields in declaration order across the whole sheet; a stable sort
+    // keeps each (use case, role) scope's own sequence, which is what a user is shown.
+    Map<String, List<SheetRow>> byScope = new LinkedHashMap<>();
+    for (SheetRow row : active) {
+      String useCase = row.getString(Columns.USE_CASE).orElse(null);
+      String role = row.getString(Columns.ACCESS_PROFILE, Columns.USER_ROLE).orElse(null);
+      String scope = caseTypeId + " " + sheet.getName()
+          + (useCase == null ? "" : " use case " + useCase)
+          + (role == null ? "" : " role " + role);
+      byScope.computeIfAbsent(scope, k -> new ArrayList<>()).add(row);
+    }
+    byScope.forEach((scope, rows) -> DisplayOrders.reportCollisions(rows, order,
+        row -> row.getString(Columns.CASE_FIELD_ID).orElse("")
+            + row.getString(Columns.LIST_ELEMENT_CODE).map(code -> "." + code).orElse(""),
+        sheet.getName(), Columns.DISPLAY_ORDER, scope, "fields",
+        "The definition store returns these rows with no ORDER BY, so CCD shows them in row"
+            + " order today, but the shared value leaves the intended order unstated.", gaps));
     List<SearchFieldModel> fields = new ArrayList<>();
-    for (SheetRow row : ir.rowsForCaseType(sheet, caseTypeId)) {
-      // These sheets are emitted from static SearchBuilder calls, so an inactive overlay half must
-      // not contribute a field the active build never shows — see OverlayResolver.isActiveRow.
-      if (!OverlayResolver.isActiveRow(row.getOverlayTags(), options)) {
-        continue;
-      }
+    for (SheetRow row : DisplayOrders.sorted(active, order)) {
       // Both the four SearchBuilder sheets (cases=false) and SearchCasesResultFields (cases=true)
       // now carry ListElementCode / ResultsOrdering / DisplayContextParameter (and, for cases, a
       // role/UserRole scope and the UseCase) via their per-field lambda, so every row is emitted as

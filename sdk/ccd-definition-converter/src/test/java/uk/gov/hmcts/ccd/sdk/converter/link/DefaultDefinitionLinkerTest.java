@@ -2510,4 +2510,123 @@ class DefaultDefinitionLinkerTest {
         .anySatisfy(g -> assertThat(g.getDetail())
             .contains("the model exposes no compilable getter chain to this field"));
   }
+
+  /**
+   * Modelled on Bail's editBailApplication: the grounds-for-bail pages are declared before the
+   * interpreter pages but share their PageDisplayOrder values, so CCD interleaves them.
+   */
+  @Test
+  void ordersPagesAndPageFieldsByDisplayOrderBreakingTiesByDefinitionOrder() {
+    GapCollector gaps = new GapCollector();
+    IrBuilder builder = minimal("Bail")
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Bail", "ID", "editBailApplication", "Name", "Edit",
+                "PostConditionState", "*"));
+    Object[][] pages = {
+        {"groundsForBailReasons", 71, "groundsForBailReasons", 1},
+        {"groundsForBailProvideEvidence", 72, "groundsForBailProvideEvidenceOption", 1},
+        {"groundsForBailEvidenceDocumentUpload", 73, "uploadTheBailEvidenceLabel", 1},
+        {"transferBailManagement", 74, "transferBailManagementObjectionYesOrNo", 1},
+        {"interpreter", 72, "interpreterYesNo", 2},
+        {"interpreter", 72, "interpreterLabel", 1},
+        {"applicantInterpreterLanguageCategory", 73, "applicantInterpreterLanguageCategory", 1},
+        {"applicantInterpreterSpokenLanguage", 74, "applicantInterpreterSpokenLanguage", 1},
+        {"applicantInterpreterSpokenLanguage", 74, "applicantInterpreterSpokenLanguageOther", 1},
+        {"applicantInterpreterSignLanguage", 75, "applicantInterpreterSignLanguage", 1},
+    };
+    for (Object[] page : pages) {
+      builder.row(SheetName.CASE_EVENT_TO_FIELDS,
+          cols("CaseTypeID", "Bail", "CaseEventID", "editBailApplication",
+              "CaseFieldID", page[2], "DisplayContext", "OPTIONAL", "PageID", page[0],
+              "PageDisplayOrder", page[1], "PageFieldDisplayOrder", page[3]));
+    }
+
+    CaseTypeModel model = linker.link(builder.build(), options("Bail"), gaps);
+
+    EventModel event = model.getEvents().get(0);
+    assertThat(event.getPages()).extracting(PageModel::getPageId).containsExactly(
+        "groundsForBailReasons",
+        "groundsForBailProvideEvidence",
+        "interpreter",
+        "groundsForBailEvidenceDocumentUpload",
+        "applicantInterpreterLanguageCategory",
+        "transferBailManagement",
+        "applicantInterpreterSpokenLanguage",
+        "applicantInterpreterSignLanguage");
+    assertThat(event.getPages().get(2).getFields())
+        .extracting(PageModel.PageField::getCaseFieldId)
+        .containsExactly("interpreterLabel", "interpreterYesNo");
+    assertThat(event.getPages().get(6).getFields())
+        .extracting(PageModel.PageField::getCaseFieldId)
+        .containsExactly("applicantInterpreterSpokenLanguage",
+            "applicantInterpreterSpokenLanguageOther");
+
+    assertThat(gaps.getEntries())
+        .filteredOn(g -> g.getAction() == GapAction.ADVISORY)
+        .extracting(GapEntry::getSheet, GapEntry::getColumn, GapEntry::getValue,
+            GapEntry::getRowKey)
+        .containsExactly(
+            tuple("CaseEventToFields", "PageDisplayOrder", "72",
+                "Bail event editBailApplication: groundsForBailProvideEvidence, interpreter"),
+            tuple("CaseEventToFields", "PageDisplayOrder", "73",
+                "Bail event editBailApplication: groundsForBailEvidenceDocumentUpload,"
+                    + " applicantInterpreterLanguageCategory"),
+            tuple("CaseEventToFields", "PageDisplayOrder", "74",
+                "Bail event editBailApplication: transferBailManagement,"
+                    + " applicantInterpreterSpokenLanguage"),
+            tuple("CaseEventToFields", "PageFieldDisplayOrder", "1",
+                "Bail event editBailApplication page applicantInterpreterSpokenLanguage:"
+                    + " applicantInterpreterSpokenLanguage, applicantInterpreterSpokenLanguageOther"));
+    assertThat(gaps.getEntries())
+        .filteredOn(g -> "72".equals(g.getValue()))
+        .singleElement()
+        .satisfies(g -> {
+          assertThat(g.getCategory()).isEqualTo(GapCategory.UNSUPPORTED_VALUE);
+          assertThat(g.getDetail())
+              .contains("CCD's order for them is undefined")
+              .contains("HashMap")
+              .contains("fixes them in definition order"
+                  + " (groundsForBailProvideEvidence, interpreter)");
+        });
+    assertThat(gaps.hasBlockingGaps()).isFalse();
+  }
+
+  @Test
+  void ordersTabsTabFieldsAndSearchFieldsByDisplayOrderBreakingTiesByDefinitionOrder() {
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_TYPE_TAB, cols("CaseTypeID", "Minimal", "TabID", "grounds",
+            "TabLabel", "Grounds", "TabDisplayOrder", 2, "CaseFieldID", "b",
+            "TabFieldDisplayOrder", 2))
+        .row(SheetName.CASE_TYPE_TAB, cols("CaseTypeID", "Minimal", "TabID", "grounds",
+            "TabDisplayOrder", 2, "CaseFieldID", "a", "TabFieldDisplayOrder", 1))
+        .row(SheetName.CASE_TYPE_TAB, cols("CaseTypeID", "Minimal", "TabID", "summary",
+            "TabLabel", "Summary", "TabDisplayOrder", 1, "CaseFieldID", "c",
+            "TabFieldDisplayOrder", 1))
+        .row(SheetName.CASE_TYPE_TAB, cols("CaseTypeID", "Minimal", "TabID", "interpreter",
+            "TabLabel", "Interpreter", "TabDisplayOrder", 2, "CaseFieldID", "d",
+            "TabFieldDisplayOrder", 1))
+        .row(SheetName.SEARCH_INPUT_FIELD,
+            cols("CaseTypeID", "Minimal", "CaseFieldID", "b", "DisplayOrder", 2))
+        .row(SheetName.SEARCH_INPUT_FIELD,
+            cols("CaseTypeID", "Minimal", "CaseFieldID", "a", "DisplayOrder", 1))
+        .row(SheetName.SEARCH_INPUT_FIELD,
+            cols("CaseTypeID", "Minimal", "CaseFieldID", "c", "DisplayOrder", 1))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    assertThat(model.getTabs()).extracting(t -> t.getTabId())
+        .containsExactly("summary", "grounds", "interpreter");
+    assertThat(model.getTabs().get(1).getFields()).extracting(f -> f.getCaseFieldId())
+        .containsExactly("a", "b");
+    assertThat(model.getSearchInputFields()).extracting(f -> f.getCaseFieldId())
+        .containsExactly("a", "c", "b");
+    assertThat(gaps.getEntries())
+        .filteredOn(g -> g.getAction() == GapAction.ADVISORY)
+        .extracting(GapEntry::getSheet, GapEntry::getColumn, GapEntry::getRowKey)
+        .containsExactly(
+            tuple("CaseTypeTab", "TabDisplayOrder", "Minimal tabs: grounds, interpreter"),
+            tuple("SearchInputFields", "DisplayOrder", "Minimal SearchInputFields: a, c"));
+  }
 }
