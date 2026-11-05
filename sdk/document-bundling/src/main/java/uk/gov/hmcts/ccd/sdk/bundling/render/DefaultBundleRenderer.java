@@ -50,13 +50,14 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocumentReason;
 import uk.gov.hmcts.ccd.sdk.bundling.api.RenderAttempt;
 import uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.api.WatermarkPreset;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderException;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderService;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.AssemblyContent;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.AssemblyResult;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.MissingDocumentPage;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.PdfBundleAssembler;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.PdfSource;
+import uk.gov.hmcts.ccd.sdk.conversion.detect.MediaTypeDetection;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderException;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderService;
 
 public final class DefaultBundleRenderer implements BundleRenderer {
   public static final String WARNING_MEDIA_TYPE_MISMATCH = "MEDIA_TYPE_MISMATCH";
@@ -286,7 +287,7 @@ public final class DefaultBundleRenderer implements BundleRenderer {
       request.coverPage().ifPresent(this::validateCoverPage);
       for (BundleDocument document : request.allDocuments()) {
         document.media().ifPresent(media -> {
-          String type = MediaTypes.normalise(media.mediaType().orElse(""));
+          String type = MediaTypeDetection.normalise(media.mediaType().orElse(""));
           if (BuiltInMediaTypes.PDF.equals(type) || BuiltInMediaTypes.IMAGES.contains(type)
               || BuiltInMediaTypes.OFFICE.contains(type)) {
             throw new BundleGenerationException(
@@ -440,7 +441,7 @@ public final class DefaultBundleRenderer implements BundleRenderer {
       String effectiveType;
       String sourceSha = null;
       if (document.media().isPresent()) {
-        effectiveType = MediaTypes.normalise(document.media().get().mediaType().orElse(""));
+        effectiveType = MediaTypeDetection.normalise(document.media().get().mediaType().orElse(""));
         source = new SyntheticMediaSource(effectiveType, document.id());
       } else {
         Resolution.Spooled spool = spooled.get(document.reference());
@@ -512,17 +513,17 @@ public final class DefaultBundleRenderer implements BundleRenderer {
     }
 
     private String routeMediaType(BundleDocument document, Resolution.Spooled spool) {
-      byte[] head = new byte[MediaTypes.DETECTION_PREFIX_BYTES];
+      byte[] head = new byte[MediaTypeDetection.DETECTION_PREFIX_BYTES];
       int length;
       try (InputStream in = Files.newInputStream(spool.file())) {
         length = in.readNBytes(head, 0, head.length);
       } catch (IOException e) {
         throw new UncheckedIOException("Could not re-read a spooled source file", e);
       }
-      MediaTypes.Routing routing = MediaTypes.route(spool.declaredMediaType(), head, length);
+      MediaTypeDetection.Routing routing = MediaTypeDetection.route(spool.declaredMediaType(), head, length);
       String effectiveType = switch (routing) {
-        case MediaTypes.Routing.Route route -> route.mediaType();
-        case MediaTypes.Routing.RouteWithMismatch mismatch -> {
+        case MediaTypeDetection.Routing.Route route -> route.mediaType();
+        case MediaTypeDetection.Routing.RouteWithMismatch mismatch -> {
           addWarning(BundleWarning.forDocument(WARNING_MEDIA_TYPE_MISMATCH,
               "Document '" + document.id() + "' declares media type '" + mismatch.declared()
                   + "' but its content was detected as '" + mismatch.detected() + "'; the "
@@ -530,7 +531,7 @@ public final class DefaultBundleRenderer implements BundleRenderer {
               document.id()));
           yield mismatch.mediaType();
         }
-        case MediaTypes.Routing.Irreconcilable mismatch ->
+        case MediaTypeDetection.Routing.Irreconcilable mismatch ->
             throw contentInvalid(document, "declares media type '" + mismatch.declared()
                 + "' but its content was detected as " + mismatch.detectedDescription());
       };

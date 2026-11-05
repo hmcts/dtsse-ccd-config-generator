@@ -17,9 +17,9 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRenderer;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRendererBuilder;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundlingExtension;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResolver;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderService;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.HttpDocmosisRenderService;
 import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobAutoConfiguration;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderService;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.HttpDocmosisRenderService;
 
 /**
  * Opt-in auto-configuration: a {@link BundleRenderer} assembled from every {@link DocumentResolver}

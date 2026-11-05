@@ -1,0 +1,23 @@
+dependencies {
+    api 'org.slf4j:slf4j-api'
+
+    // Same PDFBox version as document-bundling, which consumes this module's conversions.
+    implementation 'org.apache.pdfbox:pdfbox:3.0.8'
+    // The Docmosis client serialises template data; java.time and Optional values must round-trip.
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jdk8'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    // Rendering and image decoding must not depend on a display, locally or in CI.
+    systemProperty 'java.awt.headless', 'true'
+    // ./gradlew -p sdk :document-conversion:test -PupdateGoldens rewrites the golden files.
+    systemProperty 'conversion.updateGoldens', project.hasProperty('updateGoldens')
+    systemProperty 'conversion.goldenDir', file('src/test/resources/golden').absolutePath
+}
