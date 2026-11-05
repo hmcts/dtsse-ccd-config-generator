@@ -1,0 +1,31 @@
+plugins {
+    id 'java'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'hmcts.ccd.sdk'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom 'org.springframework.boot:spring-boot-dependencies:4.1.1'
+    }
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.github.hmcts:decentralised-runtime'
+    implementation 'com.github.hmcts:ccd-data-migration-support'
+    implementation 'com.github.hmcts:document-bundling'
+    implementation 'com.github.hmcts:docweave'
+}
+
+if (providers.gradleProperty('ownTask').isPresent()) {
+    tasks.register('migratePostgresDatabase') {
+        doLast {
+            println 'The application migrated its own database'
+        }
+    }
+}
