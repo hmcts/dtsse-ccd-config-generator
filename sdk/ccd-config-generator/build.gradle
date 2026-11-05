@@ -59,3 +59,40 @@ tasks.register('ccdConfigDiff', JavaExec) {
         setArgs([expected, actual])
     }
 }
+
+// UnwrappedPrefixModule depends on jackson-databind internals, so its tests also run against the
+// newest Jackson 2 release, which a service may resolve ahead of the version this build manages.
+def unwrappedPrefixModuleTest = 'uk.gov.hmcts.ccd.sdk.jackson.UnwrappedPrefixModuleTest'
+
+['2.22.4'].each { jacksonVersion ->
+    def suffix = jacksonVersion.replace('.', '_')
+    def jackson = configurations.create("jackson${suffix}") {
+        canBeConsumed = false
+    }
+    ['com.fasterxml.jackson.core:jackson-databind',
+     'com.fasterxml.jackson.datatype:jackson-datatype-jdk8',
+     'com.fasterxml.jackson.datatype:jackson-datatype-jsr310',
+     'com.fasterxml.jackson.module:jackson-module-parameter-names'].each {
+        dependencies.add(jackson.name, "${it}:${jacksonVersion}")
+    }
+    dependencyManagement {
+        configurations(jackson) {
+            imports {
+                mavenBom "com.fasterxml.jackson:jackson-bom:${jacksonVersion}"
+            }
+        }
+    }
+
+    def jacksonTest = tasks.register("unwrappedPrefixTestJackson${suffix}", Test) {
+        group = 'verification'
+        description = "Runs UnwrappedPrefixModuleTest against jackson-databind ${jacksonVersion}."
+        testClassesDirs = sourceSets.test.output.classesDirs
+        classpath = jackson + sourceSets.test.runtimeClasspath.filter {
+            !(it.name ==~ /jackson-(annotations|core|databind|datatype-.+|module-.+)-2\.[0-9].*\.jar/)
+        }
+        filter {
+            includeTestsMatching unwrappedPrefixModuleTest
+        }
+    }
+    tasks.named('check') { dependsOn jacksonTest }
+}
