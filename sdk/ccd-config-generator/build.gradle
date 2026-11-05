@@ -52,17 +52,11 @@ tasks.register('ccdConfigDiff', JavaExec) {
     }
 }
 
-// UnwrappedPrefixModule only acts on jackson-databind 2.19 and later, and this build resolves 2.18,
-// so its tests run against the newer versions services use instead.
+// The build resolves jackson-databind 2.18, which reaches UnwrappedPrefixModule by a different
+// path from 2.19+, so its tests also run against the newer versions services use.
 def unwrappedPrefixModuleTest = 'uk.gov.hmcts.ccd.sdk.jackson.UnwrappedPrefixModuleTest'
 
-tasks.named('test') {
-    filter {
-        excludeTestsMatching unwrappedPrefixModuleTest
-    }
-}
-
-['2.19.4', '2.21.5'].each { jacksonVersion ->
+['2.19.4', '2.21.5', '2.22.4'].each { jacksonVersion ->
     def suffix = jacksonVersion.replace('.', '_')
     def jackson = configurations.create("jackson${suffix}") {
         canBeConsumed = false

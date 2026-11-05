@@ -11,7 +11,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import com.fasterxml.jackson.databind.cfg.PackageVersion;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.Data;
 import org.junit.Before;
 import org.junit.Test;
@@ -20,10 +19,9 @@ import uk.gov.hmcts.ccd.sdk.type.Document;
 import uk.gov.hmcts.ccd.sdk.type.DynamicList;
 
 /**
- * On jackson-databind 2.18, which this build resolves, Jackson never calls the method
- * {@link UnwrappedPrefixModule} overrides, so the module changes nothing. The SDK's own types
- * survive a prefixed {@code @JsonUnwrapped} there anyway, through their {@code @JsonCreator}
- * constructors, but an object without one is still emptied.
+ * On jackson-databind 2.18, which this build resolves, Jackson unwraps a prefixed group through
+ * {@code BeanPropertyMap} rather than {@code SettableBeanProperty.unwrapped}, and without the
+ * module empties an object nested in the group that has no {@code @JsonCreator}.
  */
 public class UnwrappedPrefixModuleOnJackson218Test {
 
@@ -54,26 +52,13 @@ public class UnwrappedPrefixModuleOnJackson218Test {
   }
 
   @Test
-  public void theModuleChangesNothing() throws Exception {
-    assertThat(roundTrip(mapper().registerModule(new UnwrappedPrefixModule()))).isEqualTo(roundTrip(mapper()));
+  public void keepsEveryObjectInAPrefixedGroupIncludingOneWithoutACreator() throws Exception {
+    assertThat(roundTrip(mapper().registerModule(new UnwrappedPrefixModule()))).isEqualTo(mapper().readTree(STORED));
   }
 
   @Test
-  public void sdkTypesInAPrefixedGroupRoundTrip() throws Exception {
-    ObjectNode expected = (ObjectNode) mapper().readTree(STORED);
-    expected.remove("applicantContact");
-
-    ObjectNode actual = (ObjectNode) roundTrip(mapper().registerModule(new UnwrappedPrefixModule()));
-    actual.remove("applicantContact");
-
-    assertThat(actual).isEqualTo(expected);
-  }
-
-  @Test
-  public void anObjectWithoutACreatorInAPrefixedGroupIsStillEmptied() throws Exception {
-    JsonNode actual = roundTrip(mapper().registerModule(new UnwrappedPrefixModule()));
-
-    assertThat(actual.get("applicantContact")).isEqualTo(mapper().createObjectNode());
+  public void jacksonEmptiesAnObjectWithoutACreatorWhenTheModuleIsAbsent() throws Exception {
+    assertThat(roundTrip(mapper()).get("applicantContact")).isEqualTo(mapper().createObjectNode());
   }
 
   private static JsonNode roundTrip(ObjectMapper mapper) throws Exception {

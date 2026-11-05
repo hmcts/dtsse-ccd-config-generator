@@ -781,15 +781,13 @@ public class Document {
 
 ### Objects nested in a prefixed unwrapped class
 
-From jackson-databind 2.19 Jackson also applies an unwrapped property's prefix to the fields of objects nested in the
-unwrapped class, including those with a `@JsonCreator` constructor, so the SDK's types such as `AddressUK` and
-`Document` come back empty ([jackson-databind#3178](https://github.com/FasterXML/jackson-databind/issues/3178)).
-The SDK auto-configures `UnwrappedPrefixModule` on every Jackson `ObjectMapper` bean, Spring Boot's or one the service
-declares itself, so the prefix applies only to the unwrapped class's own fields. A mapper created outside the Spring
-context, such as a `new ObjectMapper()` in a static field, does not get it and should not be used for case data.
-
-On Jackson 2.18 the module has no effect. There, a setter-based object nested in a prefixed group is not covered and
-is still read as empty; give it a `@JsonCreator` constructor as above, or move to Jackson 2.19+.
+Jackson 2 also applies an unwrapped property's prefix to the fields of objects nested in the unwrapped class, so they
+come back empty ([jackson-databind#3178](https://github.com/FasterXML/jackson-databind/issues/3178)). From
+jackson-databind 2.19 this includes objects with a `@JsonCreator` constructor, such as the SDK's `AddressUK` and
+`Document`. The SDK auto-configures `UnwrappedPrefixModule` on every Jackson `ObjectMapper` bean, Spring Boot's or one
+the service declares itself, including one a `FactoryBean` produces, so the prefix applies only to the unwrapped
+class's own fields. A mapper created outside the Spring context, such as a `new ObjectMapper()` in a static field,
+does not get it and should not be used for case data.
 
 ### Jackson configuration
 
