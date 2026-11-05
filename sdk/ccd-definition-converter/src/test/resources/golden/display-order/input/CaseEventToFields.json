@@ -1,0 +1,92 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "CaseEventID": "editApplication",
+    "CaseFieldID": "reasons",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "groundsReasons",
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 1
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "CaseEventID": "editApplication",
+    "CaseFieldID": "evidenceOption",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "groundsProvideEvidence",
+    "PageDisplayOrder": 2,
+    "PageFieldDisplayOrder": 1
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "CaseEventID": "editApplication",
+    "CaseFieldID": "evidenceUpload",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "groundsEvidenceUpload",
+    "PageDisplayOrder": 3,
+    "PageFieldDisplayOrder": 1
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "CaseEventID": "editApplication",
+    "CaseFieldID": "transferObjection",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "transferManagement",
+    "PageDisplayOrder": 4,
+    "PageFieldDisplayOrder": 1
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "CaseEventID": "editApplication",
+    "CaseFieldID": "interpreterNeeded",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "interpreter",
+    "PageDisplayOrder": 2,
+    "PageFieldDisplayOrder": 2
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "CaseEventID": "editApplication",
+    "CaseFieldID": "interpreterLabel",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "interpreter",
+    "PageDisplayOrder": 2,
+    "PageFieldDisplayOrder": 1
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "CaseEventID": "editApplication",
+    "CaseFieldID": "languageCategory",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "interpreterLanguageCategory",
+    "PageDisplayOrder": 3,
+    "PageFieldDisplayOrder": 1
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "CaseEventID": "editApplication",
+    "CaseFieldID": "spokenLanguage",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "interpreterSpokenLanguage",
+    "PageDisplayOrder": 4,
+    "PageFieldDisplayOrder": 1
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "CaseEventID": "editApplication",
+    "CaseFieldID": "spokenLanguageOther",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "interpreterSpokenLanguage",
+    "PageDisplayOrder": 4,
+    "PageFieldDisplayOrder": 1
+  }
+]

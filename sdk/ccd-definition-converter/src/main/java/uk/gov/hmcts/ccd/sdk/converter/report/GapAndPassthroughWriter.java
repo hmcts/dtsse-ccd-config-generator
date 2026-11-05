@@ -197,7 +197,7 @@ public class GapAndPassthroughWriter implements ReportWriter {
     sb.append("| `PASSTHROUGH_COLUMN` | Only inexpressible columns grafted onto generated row |\n");
     sb.append("| `CONDITIONAL_CODE` | Expressed as environment-guarded Java code |\n");
     sb.append("| `MANUAL_CALLBACK` | Generated code differs; a callback must be changed by hand |\n");
-    sb.append("| `ADVISORY` | Redundant input declaration; no output, safe to delete |\n");
+    sb.append("| `ADVISORY` | Informational: nothing passed through; review the detail |\n");
     sb.append("| `OMITTED_FAIL` | Could not be expressed; conversion fails unless --allow-gaps |\n\n");
 
     List<GapEntry> entries = gaps.getEntries();

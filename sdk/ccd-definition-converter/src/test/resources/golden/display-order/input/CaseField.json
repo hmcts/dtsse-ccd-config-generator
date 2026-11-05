@@ -1,0 +1,74 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "ID": "reasons",
+    "Label": "reasons",
+    "FieldType": "Text",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "ID": "evidenceOption",
+    "Label": "evidenceOption",
+    "FieldType": "Text",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "ID": "evidenceUpload",
+    "Label": "evidenceUpload",
+    "FieldType": "Text",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "ID": "transferObjection",
+    "Label": "transferObjection",
+    "FieldType": "Text",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "ID": "interpreterNeeded",
+    "Label": "interpreterNeeded",
+    "FieldType": "Text",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "ID": "interpreterLabel",
+    "Label": "interpreterLabel",
+    "FieldType": "Text",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "ID": "languageCategory",
+    "Label": "languageCategory",
+    "FieldType": "Text",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "ID": "spokenLanguage",
+    "Label": "spokenLanguage",
+    "FieldType": "Text",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "ID": "spokenLanguageOther",
+    "Label": "spokenLanguageOther",
+    "FieldType": "Text",
+    "SecurityClassification": "Public"
+  }
+]

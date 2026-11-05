@@ -1,0 +1,23 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "CaseFieldID": "evidenceOption",
+    "Label": "evidenceOption",
+    "DisplayOrder": 2
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "CaseFieldID": "reasons",
+    "Label": "reasons",
+    "DisplayOrder": 1
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "CaseFieldID": "transferObjection",
+    "Label": "transferObjection",
+    "DisplayOrder": 1
+  }
+]

@@ -124,7 +124,9 @@ final class RoundTripRunner {
         NormalisingCcdConfigComparator.aggregateDirectory(defOut.resolve(fixture.caseTypeId()).toFile());
 
     ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
-    return normalise(result.getFailures(), work);
+    List<String> failures = new ArrayList<>(result.getFailures());
+    failures.addAll(DisplaySequences.differences(expected, actual));
+    return normalise(failures, work);
   }
 
   /**

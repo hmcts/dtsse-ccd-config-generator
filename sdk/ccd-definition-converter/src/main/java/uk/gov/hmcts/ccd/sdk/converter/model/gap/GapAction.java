@@ -23,17 +23,21 @@ public enum GapAction {
   /**
    * Purely informational: a divergence that produces no generated output and is neither passed
    * through nor separately reproduced — the comparator forgives it as an accepted semantic
-   * difference. Two shapes occur:
+   * difference. Three shapes occur:
    *
    * <ul>
    *   <li>a redundant input declaration safe to delete from the source (an orphan
    *       complex-type/fixed-list nothing reachable references, or a member-by-member redeclaration
-   *       of an SDK-predefined platform type); and</li>
+   *       of an SDK-predefined platform type);</li>
    *   <li>a display-only over-grant the SDK injects that no config-generator construct can subtract —
    *       notably the {@code AuthorisationCaseField} read the generator adds for a role that can see
    *       a field via an unrestricted tab/search. The field/role's intended grant is still derived
    *       into an {@code @CCD(access)} class; this record only notes the injected surplus (forgiven
-   *       by the {@code TAB_READ_INJECTION} comparator rule), so no row is passed through for it.</li>
+   *       by the {@code TAB_READ_INJECTION} comparator rule), so no row is passed through for it;
+   *       and</li>
+   *   <li>a display order that several pages, tabs or fields share, which the definition leaves
+   *       unresolved; the converter fixes them in definition order and asks the team to confirm
+   *       it.</li>
    * </ul>
    *
    * <p>Non-blocking — it never fails the conversion.

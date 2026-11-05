@@ -1,0 +1,13 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Ordered",
+    "ID": "editApplication",
+    "Name": "Edit application",
+    "Description": "Edit",
+    "DisplayOrder": 1,
+    "PreConditionState(s)": "*",
+    "PostConditionState": "Open",
+    "SecurityClassification": "Public"
+  }
+]

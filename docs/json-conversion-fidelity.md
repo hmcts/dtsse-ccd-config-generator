@@ -65,7 +65,7 @@ conscious decision instead of inheriting invisible JSON — see
 | Injected/widened read (`R`) on unrestricted-tab fields | **Semantic, accepted** | `TAB_READ_INJECTION` | Roles already event-granted gain tab-field visibility; each (field, role) is an `AUTH_NOT_DERIVABLE`/`ADVISORY` report-only record — **no row is passed through** ([detail](#authorisationcasefield-injected-read-records)) |
 | Surplus `⊆ {C,R}` grants on `Label`/`READONLY` fields | **Semantic, accepted** | `IMMUTABLE_FIELD_CR` | Display permission on data-free fields |
 | Uniform vestigial `AuthorisationCaseState LiveTo` (probate's `01/01/2020` on every row) | **Semantic, accepted** | `LIVE_TO_VESTIGIAL` | Dead sheet-wide end-of-life the SDK can't emit; per-row divergent `LiveTo` still fails ([detail](#3-uniform-vestigial-authorisationcasestate-liveto-live_to_vestigial)) |
-| Display-order renumbering (`*DisplayOrder`/`PageColumnNumber` never compared, any sheet) | **Semantic, accepted** | `DEFAULTS` + `CASE_TYPE_TAB` strips | Relative order preserved by row order (FixedLists actively sorted); `PageColumnNumber=2` flattened. Includes `EventToComplexTypes` `FieldDisplayOrder` (SDK uses a per-event counter; relative member order preserved by emission order) |
+| Display-order renumbering (`*DisplayOrder`/`PageColumnNumber` never compared, any sheet) | **Semantic, accepted** | `DEFAULTS` + `CASE_TYPE_TAB` strips | Values not compared, but the effective sequence of pages, page fields, tabs, tab fields and search/work-basket fields is (`DisplaySequences` in the round-trip test); the converter sorts those by display order, ties in definition order (FixedLists sorted too); `PageColumnNumber=2` flattened. Includes `EventToComplexTypes` `FieldDisplayOrder` (SDK uses a per-event counter; relative member order preserved by emission order) |
 | `EventToComplexTypes` `ID` (declaring complex type) | **Semantic, accepted** | `EVENT_COMPLEX_TYPE_ID_IGNORED` | The importer never reads `ID` on this sheet — `EventCaseFieldComplexTypeParser` maps `ListElementCode`/labels/order/context but not `ColumnName.ID`, it is not a required column, and `EventComplexTypeEntity.id` is a DB-generated sequence — so it is arbitrary author metadata dropped from both sides. Scoped to this sheet only (`ID` is a real key on `CaseField`/`ComplexTypes`/…) |
 | Orphan ComplexTypes (nothing reachable references) | **Semantic, accepted** | `ORPHAN_COMPLEX_TYPE` | Not in `config.getTypes()`; the SDK generates no class/rows, so the input rows are dropped (advisory gap, "safe to delete") |
 | Orphan-path FixedLists (reachable only via an orphan complex type) | **Semantic, accepted** | `ORPHAN_FIXED_LIST` | The SDK generates no enum; the input rows are dropped (advisory gap) |
@@ -320,9 +320,11 @@ Two mechanical consequences worth knowing:
   unmatched no-match/unexpected *row* pair rather than a precise column diff, and two identical rows
   collapse to one. (`SearchParty` *is* keyed, on `(CaseTypeID, SearchPartyName,
   SearchPartyCollectionFieldName)`.)
-- **Row order within a sheet is never compared** — matching is purely key-based and generated rows are
-  read in sorted-path order. Any sheet whose on-screen order the store derives from row position (see
-  [accepted difference 2](#2-display-order-renumbering)) is therefore unverified for ordering.
+- **Row order within a sheet is never compared by the comparator** — matching is purely key-based and
+  generated rows are read in sorted-path order. The round-trip test adds a separate check
+  (`DisplaySequences`) of the sequence users see on `CaseEventToFields`, `CaseTypeTab` and the five
+  search/work-basket sheets; every other sheet is unverified for ordering (see
+  [accepted difference 2](#2-display-order-renumbering)).
 - **The `CaseType` sheet's `Name` is compared un-substituted.** Every other interpreted column has its
   `${CCD_DEF_*}` placeholders resolved on the expected side before comparison, because the importer
   reads a resolved value (`Publish` also holds a placeholder in sscs, but is parsed through
@@ -371,10 +373,14 @@ superset-forgiveness — the numbering values are **never compared on any sheet*
 **Full scope**: because the bare header `DisplayOrder` is stripped on *every* sheet, ordering is
 unverified not just for fields/pages/tabs but for **State**, **CaseEvent**, **FixedLists** option
 order, all four **Search/WorkBasket** field sheets, **SearchCasesResultFields**, **ChallengeQuestion**
-and **Categories**. For most of these the converter has no builder API and emits in **sheet row
-order**, capturing the numbers into its models but not sorting by them — so relative order is
-preserved only when the input's row order agrees with its numbering (the overwhelmingly common case),
-and a definition whose rows are listed out of display order regenerates reordered and still passes.
+and **Categories**. For wizard pages, page fields, tabs, tab fields and the five search/work-basket
+sheets the converter has no builder API for the number, so it **sorts** them by display order before
+emitting (nulls last, ties in definition order, a page or tab taking its order from its first row as
+the definition store does), and the round-trip test compares the resulting sequence. Ties get an
+`ADVISORY` gap each: CCD itself leaves tied pages and page fields in no defined order (the definition
+store groups pages through a `HashMap` and reads them back with an unstable SQL sort, and returns a
+page's fields as a `HashSet`), so the converted config fixes them in definition order and the team
+should confirm it. `State` is still emitted in sheet row order without a sequence check.
 Three sheets are different in that the converter *does* re-emit the number via a real builder API —
 `CaseEvent` (`.displayOrder()`), NoC `ChallengeQuestion` (`.displayOrder()`) and `Categories`
 (`.displayOrder()`) — so they would round-trip the value faithfully, yet it is stripped and compared
@@ -384,9 +390,9 @@ constants by the captured input `DisplayOrder`, so a list whose JSON rows are ou
 renumbers). Two-column page layouts (`PageColumnNumber=2` — used by e.g. civil's `generalapplication`
 case type) are flattened to a single column, with no SDK API to express them.
 
-**What to check after migration**: eyeball any wizard pages/tabs whose JSON row order you suspect
-diverges from their `*DisplayOrder` numbering, and any page using `PageColumnNumber=2` — both need
-manual reordering (or an SDK feature) rather than trust in the round-trip.
+**What to check after migration**: every display-order `ADVISORY` gap (the converted order for those
+items is a choice, not a reproduction), and any page using `PageColumnNumber=2`, which needs manual
+reordering (or an SDK feature).
 
 ### 3. Uniform vestigial `AuthorisationCaseState LiveTo` (`LIVE_TO_VESTIGIAL`)
 

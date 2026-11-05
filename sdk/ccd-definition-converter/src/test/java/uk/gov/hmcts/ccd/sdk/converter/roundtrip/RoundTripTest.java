@@ -64,6 +64,17 @@ class RoundTripTest {
   }
 
   /**
+   * Pages, page fields, tabs, tab fields and search fields declared out of display order and with
+   * colliding display orders, modelled on Bail's editBailApplication: the regenerated definition
+   * must present them in the sequence the input does.
+   */
+  @Test
+  void displayOrderCollisionsKeepTheEffectiveSequence(@TempDir Path work) {
+    Path input = Path.of("src/test/resources/golden/display-order/input").toAbsolutePath();
+    assertGoldenRoundTrips(input, "Ordered", work, Map.of("CCD_DEF_ENV", "nonprod"));
+  }
+
+  /**
    * Every real fixture: convert, compile, generate, diff and assert the surviving residuals equal
    * the fixture's checked-in baseline exactly. This genuinely gates CI — a regression on any fixture
    * fails the build.
@@ -147,6 +158,11 @@ class RoundTripTest {
     if (!result.matches()) {
       throw new AssertionError(
           "Round-trip diff for " + caseTypeId + " (env=" + env + "):\n" + result.report());
+    }
+    List<String> sequences = DisplaySequences.differences(expected, actual);
+    if (!sequences.isEmpty()) {
+      throw new AssertionError("Display-order diff for " + caseTypeId + " (env=" + env + "):\n"
+          + String.join("\n", sequences));
     }
   }
 }
