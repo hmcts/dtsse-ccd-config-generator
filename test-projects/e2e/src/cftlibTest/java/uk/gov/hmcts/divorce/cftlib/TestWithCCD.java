@@ -125,6 +125,8 @@ import uk.gov.hmcts.divorce.sow014.nfd.ExternalGreetingEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
+import uk.gov.hmcts.ccd.sdk.jackson.UnwrappedPrefixModule;
+import uk.gov.hmcts.divorce.roundtrip.RoundTripFixture;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerRoundTripData;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCancelEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCompleteEvent;
@@ -3464,6 +3466,42 @@ public class TestWithCCD extends CftlibTest {
             extractSubset(latestCaseData, expectedPersistedData), equalTo(expectedPersistedData));
         assertThat("Datastore JSON should retain the round-trip payload plus callback fields",
             extractSubset(datastoreSnapshot, expectedPersistedData), equalTo(expectedPersistedData));
+    }
+
+    @SneakyThrows
+    @Order(24)
+    @Test
+    void sdkComplexTypesSurviveCaseLifecycle() {
+        // The fix for nested values behind a prefixed @JsonUnwrapped is auto-configured by the SDK.
+        // It must reach the running service's mapper, not only the test contexts that import it.
+        assertThat("SDK Jackson auto-configuration must reach the running service",
+            mapper.getRegisteredModuleIds(), hasItem(UnwrappedPrefixModule.class.getName()));
+
+        // A case of its own, so any damage done to it cannot affect the tests sharing caseRef.
+        long reference = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+        String user = "TEST_CASE_WORKER_USER@mailinator.com";
+        Map<String, Object> payload = RoundTripFixture.loadAsMap(
+            mapper, RoundTripFixture.SDK_COMPLEX_TYPES, reference);
+        submitRoundTripEvent(reference, payload);
+
+        JsonNode expected = mapper.valueToTree(payload);
+        JsonNode caseView = mapper.valueToTree(ccdApi.getCase(
+            getAuthorisation(user),
+            getServiceAuth(),
+            String.valueOf(reference)
+        ).getData());
+        JsonNode datastore = mapper.valueToTree(readCaseDataFromDb(reference));
+
+        List<String> differences = new ArrayList<>();
+        RoundTripFixture.lostOrChanged(expected, datastore).forEach(d -> differences.add("datastore " + d));
+        RoundTripFixture.lostOrChanged(expected, caseView).forEach(d -> differences.add("case view " + d));
+        try {
+            ccdApi.startEvent(getAuthorisation(user), getServiceAuth(), String.valueOf(reference),
+                CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA);
+        } catch (Exception e) {
+            differences.add("BROKEN  case can no longer start events: " + e.getMessage());
+        }
+        assertThat(RoundTripFixture.describe(differences), differences, empty());
     }
 
     @SneakyThrows
