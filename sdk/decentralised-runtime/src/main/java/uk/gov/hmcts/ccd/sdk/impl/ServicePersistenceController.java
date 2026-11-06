@@ -70,7 +70,10 @@ class ServicePersistenceController {
         authorisation,
         idempotencyKey
     );
-    return ResponseEntity.ok(response);
+    var ok = ResponseEntity.ok();
+    ClientContextPassthrough.returned()
+        .ifPresent(clientContext -> ok.header(ClientContextPassthrough.CLIENT_CONTEXT, clientContext));
+    return ok.body(response);
   }
 
   /**

@@ -74,6 +74,24 @@ return new JsonBackedCCDConfig<MyCaseData, MyState, MyRole>(
 ) {};
 ```
 
+A `classpath:` location works too, including from inside the service's jar.
+
+The definition is read as ccd-definition-processor reads it. Each sheet is either a file (`CaseType.json`) or a folder
+(`CaseEvent/`) whose JSON files, in subfolders at any depth, are read together. A file may hold an array of rows or a
+single row object.
+
+A definition that keeps per-environment variants, such as `*-prod.json` and `*-nonprod.json`, passes the file name
+patterns this environment leaves out. They work like ccd-definition-processor's `-e` option:
+
+```java
+return new JsonBackedCCDConfig<MyCaseData, MyState, MyRole>(
+    support,
+    "case-type-a",
+    "classpath:ccd-definitions/case-type-a",
+    List.of("*-nonprod.json", "*-testing*.json")
+) {};
+```
+
 ### Sharing and overriding events in Java
 
 A Java `CCDConfig` can apply to multiple JSON-backed case types by overriding `caseTypeIds()`, for example:
@@ -114,7 +132,8 @@ into its domain models, so the bridge duplicates an existing conversion path wit
 
 ### Local and external callbacks
 
-`JsonCallbackBridge` indexes Spring MVC `POST` routes from `RequestMappingHandlerMapping`.
+`JsonCallbackBridge` indexes Spring MVC `POST` routes from `RequestMappingHandlerMapping`. A service can instead
+register a [`JsonCallbackHandler`][jch] bean; see [Service callback handlers](#service-callback-handlers).
 
 Local callback URLs are invoked directly against the resolved controller method. This avoids HTTP loopback and keeps
 `about-to-submit` inside the same transaction as case persistence.
@@ -148,9 +167,22 @@ Callback paths are normalised before route matching:
 * query strings and fragments are stripped
 * duplicate slashes and trailing slashes are normalised
 
-If a JSON callback is classified as local, startup/config construction validates that exactly one supported Spring
-`POST` handler exists for the normalised path. Missing or ambiguous local handlers fail fast. External callbacks are
-not required to have local handlers.
+If a JSON callback is classified as local, startup/config construction validates that a `JsonCallbackHandler` handles
+the normalised path, or else that exactly one supported Spring `POST` handler exists for it. Missing or ambiguous
+local handlers fail fast. External callbacks are not required to have local handlers.
+
+### Service callback handlers
+
+A service whose callbacks share templated paths, or that dispatches callbacks itself, registers a
+[`JsonCallbackHandler`][jch] bean. For example, Civil maps every event to `/cases/callbacks/{callback-type}` and
+`/cases/callbacks/version/{version}/{callback-type}`, and dispatches them to its own handlers.
+
+* The bridge asks registered handlers first for every local callback, both at startup validation and at submission.
+  It falls back to the Spring route lookup only when no handler claims the path.
+* More than one handler claiming a path fails.
+* `handle` receives the normalised path, the CCD callback request, and the `Authorization`, `ServiceAuthorization` and
+  `Client-Context` headers.
+* It returns the callback response body, or a `ResponseEntity` around it to send a `Client-Context` header back.
 
 ### Supported controller method shape
 
@@ -161,6 +193,7 @@ Supported parameters are:
 * `@RequestBody` on a CCD callback request type or another type Jackson can build from the callback payload
 * `@RequestHeader("Authorization") String`
 * `@RequestHeader("ServiceAuthorization") String`
+* `@RequestHeader(value = "Client-Context", required = false) String`
 
 Supported return shapes are:
 
@@ -185,6 +218,23 @@ The submit flow remains the standard decentralised runtime flow:
 9. The deferred response supplier invokes the `submitted` callback and applies confirmation header/body values.
 
 For events without a Java override, a phase with no JSON callback URL is a no-op.
+
+### Client-Context
+
+ExUI and WA use the `Client-Context` header, for example for a callback to ask ExUI to complete a task. The runtime
+carries it as data-store does for centralised callbacks:
+
+* data-store forwards the submission's `Client-Context` to the runtime.
+* Every JSON callback is sent the current context: service handlers, local controllers and external URLs.
+* A context a callback returns is merged into the one it was sent, replacing top-level fields, as data-store's
+  `ClientContextUtil` does. Later callbacks are sent the merged context.
+* A returned context that is not a base64-encoded JSON object is ignored.
+* The submit response carries the merged context back for data-store to merge and return to the frontend. If no
+  callback returned one, no header is sent.
+* The final context is saved with the event, so an idempotent replay of the submission returns the same context.
+
+This needs data-store to forward and merge the header for decentralised submissions
+([hmcts/ccd-data-store-api#3077](https://github.com/hmcts/ccd-data-store-api/pull/3077)).
 
 ## ET compatibility notes
 
@@ -215,7 +265,11 @@ Covered behaviour includes:
 * `about-to-submit` validation errors rolling back persistence
 * submitted retry behaviour using SDK event retry metadata
 * ET-style shared domain model projection via explicit case type IDs
+* definitions read from subfolders, single-row files, excluded variants and classpath jars
+* `JsonCallbackHandler` precedence and ambiguity
+* `Client-Context` carry and merge through data-store, callbacks and idempotent replays
 
 [rcr]: ../sdk/ccd-config-generator/src/main/java/uk/gov/hmcts/ccd/sdk/ResolvedConfigRegistry.java
+[jch]: ../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/json/JsonCallbackHandler.java
 [jbcc]: ../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/json/JsonBackedCCDConfig.java
 [jcb]: ../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/json/JsonCallbackBridge.java

@@ -60,6 +60,8 @@ class IdempotentReplayIntegrationTest {
   private static final long LIVE_UPDATE_AFTER_REINDEX_CASE_REFERENCE = 6666000000000000L;
   private static final long CONFLICT_CASE_ID = 7777L;
   private static final long CONFLICT_CASE_REFERENCE = 7777000000007777L;
+  private static final long CLIENT_CONTEXT_CASE_ID = 6060L;
+  private static final long CLIENT_CONTEXT_CASE_REFERENCE = 6060000000006060L;
   private static final long STALE_NOOP_CASE_ID = 8888L;
   private static final long STALE_NOOP_CASE_REFERENCE = 8888000000008888L;
 
@@ -88,6 +90,20 @@ class IdempotentReplayIntegrationTest {
     DecentralisedCaseDetails latest = repository.getCase(CASE_REFERENCE);
     assertThat(latest.getCaseDetails().getVersion()).isEqualTo(3);
     assertThat(latest.getCaseDetails().getRevision()).isEqualTo(5L);
+  }
+
+  @Test
+  void keepsAnEventsClientContextUntilTheEventIsDeleted() {
+    seedCaseData(CLIENT_CONTEXT_CASE_ID, CLIENT_CONTEXT_CASE_REFERENCE, 1, 1);
+    long eventId = insertEvent(CLIENT_CONTEXT_CASE_ID, "reply", 1, 1, UUID.randomUUID());
+
+    assertThat(repository.clientContextAtEvent(eventId)).isEmpty();
+    repository.saveClientContext(eventId, "first");
+    repository.saveClientContext(eventId, "second");
+    assertThat(repository.clientContextAtEvent(eventId)).contains("second");
+
+    jdbc.update("delete from ccd.case_event where id = :id", Map.of("id", eventId));
+    assertThat(repository.clientContextAtEvent(eventId)).isEmpty();
   }
 
   @Test

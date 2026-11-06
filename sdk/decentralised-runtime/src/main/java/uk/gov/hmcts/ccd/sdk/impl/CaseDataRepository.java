@@ -79,6 +79,26 @@ class CaseDataRepository {
     return cases.get(0);
   }
 
+  /** Records the Client-Context an event's submission returned, so a replay of it can return it too. */
+  void saveClientContext(long eventId, String clientContext) {
+    ndb.update(
+        """
+        insert into ccd.case_event_client_context (case_event_id, client_context)
+        values (:eventId, :clientContext)
+        on conflict (case_event_id) do update set client_context = excluded.client_context
+        """,
+        Map.of("eventId", eventId, "clientContext", clientContext)
+    );
+  }
+
+  Optional<String> clientContextAtEvent(long eventId) {
+    return ndb.queryForList(
+        "select client_context from ccd.case_event_client_context where case_event_id = :eventId",
+        Map.of("eventId", eventId),
+        String.class
+    ).stream().findFirst();
+  }
+
   DecentralisedCaseDetails caseDetailsAtEvent(long caseRef, long eventId) {
     var params = Map.of("caseRef", caseRef, "eventId", eventId);
 
