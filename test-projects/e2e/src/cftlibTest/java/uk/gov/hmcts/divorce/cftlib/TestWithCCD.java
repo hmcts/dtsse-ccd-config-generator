@@ -164,6 +164,7 @@ import uk.gov.hmcts.rse.ccd.lib.test.CftlibTest;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestPropertySource(properties = {
     "spring.jms.servicebus.enabled=true",
+    "ccd.messaging.enabled=true",
     "ccd.servicebus.destination=ccd-case-events-test",
     "ccd.servicebus.scheduler-enabled=true",
     "ccd.servicebus.schedule=*/1 * * * * *",
