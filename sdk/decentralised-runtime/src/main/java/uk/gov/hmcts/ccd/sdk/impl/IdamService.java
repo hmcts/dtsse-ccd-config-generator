@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalUser;
 import uk.gov.hmcts.reform.idam.client.IdamClient;
+import uk.gov.hmcts.reform.idam.client.models.TokenResponse;
 import uk.gov.hmcts.reform.idam.client.models.UserInfo;
 
 @Service("CcdSdkIdamService")
@@ -39,16 +40,18 @@ public class IdamService {
   /**
    * Signs a service-owned user, such as a system user, in to IDAM with a password grant.
    *
-   * @throws IllegalStateException if IDAM returns no token or a user without an ID
+   * @throws InvalidSignInException if IDAM returns no token or a user without an ID
    */
   public User signIn(String username, String password) {
-    String token = idamClient.getAccessToken(username, password);
-    if (!StringUtils.hasText(token)) {
-      throw new IllegalStateException("IDAM returned an empty access token for the system user");
+    // Not getAccessToken: it prefixes "Bearer " to a missing token, so the result is never blank.
+    TokenResponse response = idamClient.getAccessTokenResponse(username, password);
+    if (response == null || !StringUtils.hasText(response.accessToken)) {
+      throw new InvalidSignInException("IDAM returned an empty access token for the system user");
     }
+    String token = BEARER_PREFIX + response.accessToken;
     UserInfo userInfo = idamClient.getUserInfo(token);
     if (userInfo == null || !StringUtils.hasText(userInfo.getUid())) {
-      throw new IllegalStateException("IDAM returned no user ID for the system user");
+      throw new InvalidSignInException("IDAM returned no user ID for the system user");
     }
     return new User(token, userInfo);
   }
@@ -61,6 +64,14 @@ public class IdamService {
       return BEARER_PREFIX.concat(token.substring(BEARER_PREFIX.length()));
     }
     return BEARER_PREFIX.concat(token);
+  }
+
+  /** IDAM accepted a sign-in but returned a token or user that cannot be used. */
+  public static class InvalidSignInException extends IllegalStateException {
+
+    public InvalidSignInException(String message) {
+      super(message);
+    }
   }
 
   public record User(String authToken, UserInfo userDetails) {

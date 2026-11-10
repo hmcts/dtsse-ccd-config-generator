@@ -44,6 +44,20 @@ class SystemEventExecutorConfigurationTest {
   }
 
   @Test
+  void configuredIdTakesPrecedenceOverPassword() {
+    contextRunner
+        .withPropertyValues(
+            "ccd.decentralised-runtime.system-user.id=system-id",
+            "ccd.decentralised-runtime.system-user.username=system-user",
+            "ccd.decentralised-runtime.system-user.password=secret"
+        )
+        // Only a configured id requires names at startup; the IDAM lookup would default them. So this
+        // failure shows the password was ignored in favour of the id.
+        .run(context -> assertThat(context.getStartupFailure())
+            .hasRootCauseMessage("System user first name is required"));
+  }
+
+  @Test
   void createsExecutorFromUsernameAndPasswordWithoutCallingIdamAtStartup() {
     contextRunner
         .withPropertyValues(

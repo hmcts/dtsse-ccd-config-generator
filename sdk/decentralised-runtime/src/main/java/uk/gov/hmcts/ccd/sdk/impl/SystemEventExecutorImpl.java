@@ -73,7 +73,7 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
           systemUserPassword,
           systemUserFirstName,
           systemUserLastName,
-          this::validateSystemIdentity
+          SystemEventExecutorImpl::validateSystemIdentity
       );
     }
     this.transactionCoordinator = transactionCoordinator;
@@ -206,7 +206,7 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
     });
   }
 
-  private void validateSystemIdentity(SystemIdentity identity) {
+  private static void validateSystemIdentity(SystemIdentity identity) {
     requireText(identity.id(), "System user ID", USER_ID_MAX_LENGTH);
     requireText(identity.username(), "System username", USER_NAME_MAX_LENGTH);
     requireText(identity.firstName(), "System user first name", USER_NAME_MAX_LENGTH);
@@ -227,18 +227,18 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
     );
   }
 
-  private void requireText(String value, String field, int maxLength) {
+  private static void requireText(String value, String field, int maxLength) {
     requireText(value, field);
     requireMaxLength(value, field, maxLength);
   }
 
-  private void requireText(String value, String field) {
+  private static void requireText(String value, String field) {
     if (!hasText(value)) {
       throw new IllegalArgumentException(field + " is required");
     }
   }
 
-  private void requireMaxLength(String value, String field, int maxLength) {
+  private static void requireMaxLength(String value, String field, int maxLength) {
     if (value.codePointCount(0, value.length()) > maxLength) {
       throw new IllegalArgumentException(field + " exceeds " + maxLength + " characters");
     }

@@ -84,11 +84,14 @@ ccd:
 With no `id`, `username` and `password` are required at startup, but IDAM is not called then. The
 first `execute(...)` call signs in as the system user, reads its `uid` and names from IDAM's
 `/o/userinfo`, and caches them for the life of the application. The lookup runs before the case
-transaction opens, so it never holds the case lock, and only one lookup runs at a time.
+transaction opens, so it never holds the case lock. Only one lookup runs at a time: a system event
+that arrives while one is running waits up to five seconds for it, then fails rather than queueing
+behind a slow IDAM.
 
 A failed lookup is remembered, so system events fail fast rather than each signing in again:
 
-- If IDAM rejects the sign-in (400, 401 or 403), or the user it returns has no ID or name, the
+- If IDAM rejects the sign-in (400, 401 or 403), returns no token or a user with no ID, or returns
+  a user with no given or family name when `first-name` or `last-name` isn't configured, the
   lookup is never retried. Every system event fails until the configuration is fixed and the
   application restarted. This stops a wrong password from locking the shared system account.
 - Any other failure, such as IDAM being unavailable, is retried on the first call after one

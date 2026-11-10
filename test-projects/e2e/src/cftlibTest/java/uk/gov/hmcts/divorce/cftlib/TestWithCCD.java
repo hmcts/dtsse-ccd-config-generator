@@ -93,6 +93,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jms.core.JmsTemplate;
@@ -148,6 +149,7 @@ import uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy;
 import uk.gov.hmcts.ccd.sdk.SystemEventExecutionResult;
 import uk.gov.hmcts.ccd.sdk.SystemEventExecutor;
 import uk.gov.hmcts.ccd.sdk.SystemEventResult;
+import uk.gov.hmcts.ccd.sdk.impl.ConfiguredSystemEventExecutor;
 import uk.gov.hmcts.ccd.sdk.retention.RetainAndDisposeProperties;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
@@ -171,7 +173,8 @@ import uk.gov.hmcts.rse.ccd.lib.test.CftlibTest;
     "ccd.decentralised-runtime.retain-and-dispose.cron=-",
     "ccd.decentralised-runtime.retain-and-dispose.system-user.username=dummysystemupdate@test.com",
     "ccd.decentralised-runtime.retain-and-dispose.system-user.password=password",
-    // The executor looks this user's IDAM ID up on first use; SystemEventExecutorImplTest covers a configured id.
+    // The executor looks this user's IDAM ID up on first use. A configured id is covered by
+    // systemEventRecordsAConfiguredSystemUserIdWithoutLookingItUp.
     "ccd.decentralised-runtime.system-user.username=" + TestWithCCD.SYSTEM_USER,
     "ccd.decentralised-runtime.system-user.password=password",
     "ccd.decentralised-runtime.system-user.first-name=E2E",
@@ -203,6 +206,9 @@ public class TestWithCCD extends CftlibTest {
 
     @Autowired
     private SystemEventExecutor systemEventExecutor;
+
+    @Autowired
+    private ApplicationContext applicationContext;
 
     @Autowired
     private ExternalGreetingEvent greetingEvent;
@@ -2866,6 +2872,66 @@ public class TestWithCCD extends CftlibTest {
                 assertThat(StreamSupport.stream(indexed.path("data").path("notes").spliterator(), false)
                     .anyMatch(value -> note.equals(value.path("value").path("note").asText())), is(true));
             });
+    }
+
+    @SneakyThrows
+    @Order(19)
+    @Test
+    void systemEventRecordsAConfiguredSystemUserIdWithoutLookingItUp() {
+        // No IDAM user has this ID, and the executor has no password, so it cannot have been looked up.
+        String configuredId = "00000000-0000-0000-0000-000000000042";
+        SystemEventExecutor configuredExecutor = ConfiguredSystemEventExecutor.create(
+            applicationContext, configuredId, "e2e-configured-system-user", "Configured", "System"
+        );
+        String eventId = "configuredSystemNoteAdded";
+        long reference = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+
+        SystemEventExecutionResult executed = configuredExecutor.execute(
+            reference,
+            UUID.randomUUID(),
+            context -> SystemEventResult.withoutStateTransition(eventId, "Configured system note")
+        );
+        var actor = idam.getUserInfo(getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"));
+        String attributedEventId = "configuredSystemNoteForActor";
+        configuredExecutor.execute(
+            reference,
+            new ActorAttribution(actor.getUid(), actor.getGivenName(), actor.getFamilyName()),
+            UUID.randomUUID(),
+            context -> SystemEventResult.withoutStateTransition(attributedEventId, "Configured system note")
+        );
+
+        Map<String, Object> history = configuredSystemEvent(reference, eventId);
+        assertThat(executed.outcome(), equalTo(SystemEventExecutionResult.Outcome.EXECUTED));
+        assertThat(executed.eventId(), equalTo(((Number) history.get("id")).longValue()));
+        assertThat(history.get("user_id"), equalTo(configuredId));
+        assertThat(history.get("user_first_name"), equalTo("Configured"));
+        assertThat(history.get("user_last_name"), equalTo("System"));
+        assertThat(history.get("proxied_by"), nullValue());
+
+        Map<String, Object> attributed = configuredSystemEvent(reference, attributedEventId);
+        assertThat(attributed.get("user_id"), equalTo(actor.getUid()));
+        assertThat(attributed.get("proxied_by"), equalTo(configuredId));
+        assertThat(attributed.get("proxied_by_first_name"), equalTo("Configured"));
+        assertThat(attributed.get("proxied_by_last_name"), equalTo("System"));
+    }
+
+    private Map<String, Object> configuredSystemEvent(long reference, String eventId) {
+        return db.queryForMap(
+            """
+            select ce.id,
+                   ce.user_id,
+                   ce.user_first_name,
+                   ce.user_last_name,
+                   ce.proxied_by,
+                   ce.proxied_by_first_name,
+                   ce.proxied_by_last_name
+              from ccd.case_event ce
+              join ccd.case_data cd on cd.id = ce.case_data_id
+             where cd.reference = :reference
+               and ce.event_id = :eventId
+            """,
+            Map.of("reference", reference, "eventId", eventId)
+        );
     }
 
     @SneakyThrows
