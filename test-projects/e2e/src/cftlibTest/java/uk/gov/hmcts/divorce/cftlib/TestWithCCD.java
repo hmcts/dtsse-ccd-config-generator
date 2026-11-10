@@ -171,14 +171,17 @@ import uk.gov.hmcts.rse.ccd.lib.test.CftlibTest;
     "ccd.decentralised-runtime.retain-and-dispose.cron=-",
     "ccd.decentralised-runtime.retain-and-dispose.system-user.username=dummysystemupdate@test.com",
     "ccd.decentralised-runtime.retain-and-dispose.system-user.password=password",
-    "ccd.decentralised-runtime.system-user.id=00000000-0000-0000-0000-000000000042",
-    "ccd.decentralised-runtime.system-user.username=e2e-system-user",
+    // No system-user.id: the executor looks the system user's ID up from IDAM on first use.
+    "ccd.decentralised-runtime.system-user.username=" + TestWithCCD.SYSTEM_USER,
+    "ccd.decentralised-runtime.system-user.password=password",
     "ccd.decentralised-runtime.system-user.first-name=E2E",
     "ccd.decentralised-runtime.system-user.last-name=System",
     "spring.autoconfigure.exclude=com.azure.spring.cloud.autoconfigure.implementation.jms.ServiceBusJmsAutoConfiguration"
 })
 @Slf4j
 public class TestWithCCD extends CftlibTest {
+
+    static final String SYSTEM_USER = "test-system-user@hmcts.net";
 
     @Autowired
     private IdamClient idam;
@@ -2317,6 +2320,10 @@ public class TestWithCCD extends CftlibTest {
         return idam.getAccessToken(user, "");
     }
 
+    private String systemUserIdamId() {
+        return idam.getUserInfo(getAuthorisation(SYSTEM_USER)).getUid();
+    }
+
     @SneakyThrows
     private String getIdamAccessTokenFromSimulator(String user, String password) {
         String baseUrl = Optional.ofNullable(System.getenv("IDAM_API_BASEURL")).orElse("http://localhost:5062");
@@ -2801,7 +2808,7 @@ public class TestWithCCD extends CftlibTest {
         assertThat(executed.eventId(), equalTo(((Number) history.get("id")).longValue()));
         assertThat(history.get("event_name"), equalTo(summary));
         assertThat(history.get("summary"), equalTo(summary));
-        assertThat(history.get("user_id"), equalTo("00000000-0000-0000-0000-000000000042"));
+        assertThat(history.get("user_id"), equalTo(systemUserIdamId()));
         assertThat(history.get("user_first_name"), equalTo("E2E"));
         assertThat(history.get("user_last_name"), equalTo("System"));
         assertThat(history.get("proxied_by"), nullValue());
@@ -2947,7 +2954,7 @@ public class TestWithCCD extends CftlibTest {
         assertThat(history.get("user_id"), equalTo(userInfo.getUid()));
         assertThat(history.get("user_first_name"), equalTo(userInfo.getGivenName()));
         assertThat(history.get("user_last_name"), equalTo(userInfo.getFamilyName()));
-        assertThat(history.get("proxied_by"), equalTo("00000000-0000-0000-0000-000000000042"));
+        assertThat(history.get("proxied_by"), equalTo(systemUserIdamId()));
         assertThat(history.get("proxied_by_first_name"), equalTo("E2E"));
         assertThat(history.get("proxied_by_last_name"), equalTo("System"));
         assertThat(db.queryForObject(

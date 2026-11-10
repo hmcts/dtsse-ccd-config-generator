@@ -3,8 +3,11 @@ package uk.gov.hmcts.ccd.sdk.impl;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.AnyNestedCondition;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,10 +20,12 @@ import uk.gov.hmcts.ccd.sdk.SystemEventExecutionContext;
 import uk.gov.hmcts.ccd.sdk.SystemEventExecutionResult;
 import uk.gov.hmcts.ccd.sdk.SystemEventExecutor;
 import uk.gov.hmcts.ccd.sdk.SystemEventResult;
+import uk.gov.hmcts.ccd.sdk.impl.SystemIdentityResolver.SystemIdentity;
+import uk.gov.hmcts.reform.idam.client.IdamClient;
 import uk.gov.hmcts.reform.idam.client.models.UserInfo;
 
 @Service
-@ConditionalOnProperty(prefix = SystemEventExecutorImpl.SYSTEM_USER_PREFIX, name = "id")
+@Conditional(SystemEventExecutorImpl.SystemUserConfigured.class)
 @Transactional(propagation = Propagation.NEVER)
 class SystemEventExecutorImpl implements SystemEventExecutor {
 
@@ -33,7 +38,7 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
   private static final int USER_ID_MAX_LENGTH = 64;
   private static final int USER_NAME_MAX_LENGTH = 255;
 
-  private final SystemIdentity systemIdentity;
+  private final SystemIdentityResolver systemIdentity;
   private final CaseEventTransactionCoordinator transactionCoordinator;
   private final CaseDataRepository caseDataRepository;
 
@@ -42,16 +47,38 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
       @Value("${ccd.decentralised-runtime.system-user.username:}") String systemUsername,
       @Value("${ccd.decentralised-runtime.system-user.first-name:}") String systemUserFirstName,
       @Value("${ccd.decentralised-runtime.system-user.last-name:}") String systemUserLastName,
+      @Value("${ccd.decentralised-runtime.system-user.password:}") String systemUserPassword,
       CaseEventTransactionCoordinator transactionCoordinator,
-      CaseDataRepository caseDataRepository
+      CaseDataRepository caseDataRepository,
+      ObjectProvider<IdamClient> idamClient
   ) {
-    this.systemIdentity = new SystemIdentity(
-        systemUserId,
-        systemUsername,
-        systemUserFirstName,
-        systemUserLastName
-    );
-    validateSystemIdentity(systemIdentity);
+    if (hasText(systemUserId)) {
+      var identity = new SystemIdentity(
+          systemUserId,
+          systemUsername,
+          systemUserFirstName,
+          systemUserLastName
+      );
+      validateSystemIdentity(identity);
+      this.systemIdentity = SystemIdentityResolver.fixed(identity);
+    } else {
+      requireText(systemUsername, "System username", USER_NAME_MAX_LENGTH);
+      requireText(systemUserPassword, "System user password");
+      IdamClient client = idamClient.getIfAvailable();
+      if (client == null) {
+        throw new IllegalStateException(
+            "An IdamClient bean is required to look up the system user ID from IDAM; "
+                + "configure " + SYSTEM_USER_PREFIX + ".id instead"
+        );
+      }
+      this.systemIdentity = SystemIdentityResolver.fromIdam(
+          client,
+          systemUsername,
+          systemUserPassword,
+          systemUserFirstName,
+          systemUserLastName
+      );
+    }
     this.transactionCoordinator = transactionCoordinator;
     this.caseDataRepository = caseDataRepository;
   }
@@ -85,11 +112,13 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
       SystemEventAction action
   ) {
     validateRequest(actor, idempotencyKey, action);
+    // Resolved before the transaction opens, so a first-use IDAM lookup never holds the case lock.
+    SystemIdentity identity = systemIdentity.get(this::validateSystemIdentity);
     var transactionResult = transactionCoordinator.execute(
         caseReference,
         idempotencyKey,
         null,
-        () -> prepareSystemEvent(caseReference, actor, idempotencyKey, action)
+        () -> prepareSystemEvent(caseReference, actor, idempotencyKey, action, identity)
     );
     return new SystemEventExecutionResult(
         transactionResult.eventId(),
@@ -103,7 +132,8 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
       long caseReference,
       Optional<ActorAttribution> actor,
       UUID idempotencyKey,
-      SystemEventAction action
+      SystemEventAction action,
+      SystemIdentity identity
   ) {
     CaseDetails currentCase = caseDataRepository.getCase(caseReference).getCaseDetails();
     final String previousState = currentCase.getState();
@@ -143,7 +173,7 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
 
     return new CaseEventTransactionCoordinator.CaseEventWrite<>(
         event,
-        systemUser(),
+        systemUser(identity),
         Optional.empty(),
         Optional.empty(),
         null
@@ -186,15 +216,15 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
     requireText(identity.lastName(), "System user last name", USER_NAME_MAX_LENGTH);
   }
 
-  private IdamService.User systemUser() {
+  private IdamService.User systemUser(SystemIdentity identity) {
     return new IdamService.User(
         null,
         new UserInfo(
-            systemIdentity.id(),
-            systemIdentity.id(),
-            systemIdentity.username(),
-            systemIdentity.firstName(),
-            systemIdentity.lastName(),
+            identity.id(),
+            identity.id(),
+            identity.username(),
+            identity.firstName(),
+            identity.lastName(),
             List.of("system")
         )
     );
@@ -206,9 +236,13 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
   }
 
   private void requireText(String value, String field) {
-    if (value == null || value.isBlank()) {
+    if (!hasText(value)) {
       throw new IllegalArgumentException(field + " is required");
     }
+  }
+
+  private static boolean hasText(String value) {
+    return value != null && !value.isBlank();
   }
 
   private void requireMaxLength(String value, String field, int maxLength) {
@@ -217,6 +251,21 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
     }
   }
 
-  private record SystemIdentity(String id, String username, String firstName, String lastName) {
+  /**
+   * Matches when the system user is configured by {@code id}, or by {@code password} for IDAM lookup.
+   */
+  static class SystemUserConfigured extends AnyNestedCondition {
+
+    SystemUserConfigured() {
+      super(ConfigurationPhase.REGISTER_BEAN);
+    }
+
+    @ConditionalOnProperty(prefix = SYSTEM_USER_PREFIX, name = "id")
+    static class IdConfigured {
+    }
+
+    @ConditionalOnProperty(prefix = SYSTEM_USER_PREFIX, name = "password")
+    static class PasswordConfigured {
+    }
   }
 }

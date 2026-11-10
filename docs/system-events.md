@@ -63,8 +63,30 @@ ccd:
       last-name: System
 ```
 
-The executor bean is only created when `id` is configured. If it is present, all four values are
-required and are validated when the application starts.
+The executor bean is only created when `id` or `password` is configured. If `id` is present, all four
+values are required and are validated when the application starts.
+
+### Look the system user up from IDAM
+
+A service that already holds the system user's IDAM credentials can configure those instead of
+storing the user's ID separately:
+
+```yaml
+ccd:
+  decentralised-runtime:
+    system-user:
+      username: ${SYSTEM_USER}
+      password: ${SYSTEM_USER_PASSWORD}
+      first-name: Case Service   # optional; defaults to the IDAM given name
+      last-name: System          # optional; defaults to the IDAM family name
+```
+
+With no `id`, `username` and `password` are required at startup, but IDAM is not called then. The
+first `execute(...)` call signs in as the system user, reads its `uid` and names from IDAM's
+`/o/userinfo`, and caches them for the life of the application. The lookup runs before the case
+transaction opens, so it never holds the case lock. If it fails, that call fails and the next call
+retries. This needs an `IdamClient` bean, which the decentralised runtime already uses. A
+configured `id` takes precedence, and a blank `id` counts as not configured.
 
 For work performed solely by the service, the configured system identity is recorded as the event
 user. When an `ActorAttribution` is supplied, the actor is recorded as the event user and the system
