@@ -10,10 +10,10 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionOperations;
 import uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy;
 import uk.gov.hmcts.ccd.sdk.config.DecentralisedFlywayAutoConfiguration;
+import uk.gov.hmcts.ccd.sdk.impl.IdamService;
 import uk.gov.hmcts.ccd.sdk.impl.PostgresAdvisoryLock;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
-import uk.gov.hmcts.reform.idam.client.IdamClient;
 
 @AutoConfiguration(after = DecentralisedFlywayAutoConfiguration.class)
 @ConditionalOnSingleCandidate(RetainAndDisposePolicy.class)
@@ -27,14 +27,14 @@ public class RetainAndDisposeAutoConfiguration {
   CoreCaseDataRetainAndDisposeClient ccdRetainAndDisposeClient(
       CoreCaseDataApi coreCaseDataApi,
       AuthTokenGenerator authTokenGenerator,
-      IdamClient idamClient,
+      IdamService idamService,
       RetainAndDisposeProperties properties
   ) {
     RetainAndDisposeProperties.SystemUser systemUser = properties.getSystemUser();
     return new CoreCaseDataRetainAndDisposeClient(
         coreCaseDataApi,
         authTokenGenerator,
-        idamClient,
+        idamService,
         systemUser.getUsername(),
         systemUser.getPassword()
     );

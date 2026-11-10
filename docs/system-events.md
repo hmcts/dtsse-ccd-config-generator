@@ -84,9 +84,18 @@ ccd:
 With no `id`, `username` and `password` are required at startup, but IDAM is not called then. The
 first `execute(...)` call signs in as the system user, reads its `uid` and names from IDAM's
 `/o/userinfo`, and caches them for the life of the application. The lookup runs before the case
-transaction opens, so it never holds the case lock. If it fails, that call fails and the next call
-retries. This needs an `IdamClient` bean, which the decentralised runtime already uses. A
-configured `id` takes precedence, and a blank `id` counts as not configured.
+transaction opens, so it never holds the case lock, and only one lookup runs at a time.
+
+A failed lookup is remembered, so system events fail fast rather than each signing in again:
+
+- If IDAM rejects the sign-in (400, 401 or 403), or the user it returns has no ID or name, the
+  lookup is never retried. Every system event fails until the configuration is fixed and the
+  application restarted. This stops a wrong password from locking the shared system account.
+- Any other failure, such as IDAM being unavailable, is retried on the first call after one
+  minute.
+
+A configured `id` takes precedence. A blank `id` or `password`, such as an unset `${VAR:}`
+placeholder, counts as not configured.
 
 For work performed solely by the service, the configured system identity is recorded as the event
 user. When an `ActorAttribution` is supplied, the actor is recorded as the event user and the system

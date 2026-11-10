@@ -171,7 +171,7 @@ import uk.gov.hmcts.rse.ccd.lib.test.CftlibTest;
     "ccd.decentralised-runtime.retain-and-dispose.cron=-",
     "ccd.decentralised-runtime.retain-and-dispose.system-user.username=dummysystemupdate@test.com",
     "ccd.decentralised-runtime.retain-and-dispose.system-user.password=password",
-    // No system-user.id: the executor looks the system user's ID up from IDAM on first use.
+    // The executor looks this user's IDAM ID up on first use; SystemEventExecutorImplTest covers a configured id.
     "ccd.decentralised-runtime.system-user.username=" + TestWithCCD.SYSTEM_USER,
     "ccd.decentralised-runtime.system-user.password=password",
     "ccd.decentralised-runtime.system-user.first-name=E2E",

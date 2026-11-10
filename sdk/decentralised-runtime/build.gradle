@@ -33,6 +33,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-jackson2'
     runtimeOnly 'org.flywaydb:flyway-database-postgresql'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'io.github.openfeign:feign-core:13.17'
     testImplementation group: 'org.testcontainers', name: 'testcontainers'
     testImplementation group: 'org.testcontainers', name: 'testcontainers-junit-jupiter'
     testImplementation group: 'org.testcontainers', name: 'testcontainers-postgresql'

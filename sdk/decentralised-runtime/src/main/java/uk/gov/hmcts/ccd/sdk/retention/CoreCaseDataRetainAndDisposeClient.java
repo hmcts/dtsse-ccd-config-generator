@@ -9,20 +9,20 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import feign.FeignException;
 import java.time.Duration;
 import lombok.RequiredArgsConstructor;
+import uk.gov.hmcts.ccd.sdk.impl.IdamService;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDataContent;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 import uk.gov.hmcts.reform.ccd.client.model.Event;
 import uk.gov.hmcts.reform.ccd.client.model.StartEventResponse;
-import uk.gov.hmcts.reform.idam.client.IdamClient;
 
 @RequiredArgsConstructor
 class CoreCaseDataRetainAndDisposeClient {
 
   private final CoreCaseDataApi coreCaseDataApi;
   private final AuthTokenGenerator authTokenGenerator;
-  private final IdamClient idamClient;
+  private final IdamService idamService;
   private final String username;
   private final String password;
   private final Cache<String, SystemUser> systemUsers = Caffeine.newBuilder()
@@ -105,15 +105,8 @@ class CoreCaseDataRetainAndDisposeClient {
   }
 
   private SystemUser loadSystemUser() {
-    String authorization = idamClient.getAccessToken(username, password);
-    if (authorization == null || authorization.isBlank()) {
-      throw new IllegalStateException("IDAM returned an empty retain and dispose system user token");
-    }
-    String userId = idamClient.getUserInfo(authorization).getUid();
-    if (userId == null || userId.isBlank()) {
-      throw new IllegalStateException("Retain and dispose system user has no IDAM user ID");
-    }
-    return new SystemUser(authorization, userId);
+    IdamService.User user = idamService.signIn(username, password);
+    return new SystemUser(user.authToken(), user.userDetails().getUid());
   }
 
   private record SystemUser(String authorization, String userId) {

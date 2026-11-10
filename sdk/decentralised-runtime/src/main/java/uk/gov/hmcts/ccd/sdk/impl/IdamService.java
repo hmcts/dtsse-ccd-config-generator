@@ -5,6 +5,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalUser;
 import uk.gov.hmcts.reform.idam.client.IdamClient;
 import uk.gov.hmcts.reform.idam.client.models.UserInfo;
@@ -33,6 +34,23 @@ public class IdamService {
         getBearerToken(authorisation),
         token -> new User(token, idamClient.getUserInfo(token))
     );
+  }
+
+  /**
+   * Signs a service-owned user, such as a system user, in to IDAM with a password grant.
+   *
+   * @throws IllegalStateException if IDAM returns no token or a user without an ID
+   */
+  public User signIn(String username, String password) {
+    String token = idamClient.getAccessToken(username, password);
+    if (!StringUtils.hasText(token)) {
+      throw new IllegalStateException("IDAM returned an empty access token for the system user");
+    }
+    UserInfo userInfo = idamClient.getUserInfo(token);
+    if (userInfo == null || !StringUtils.hasText(userInfo.getUid())) {
+      throw new IllegalStateException("IDAM returned no user ID for the system user");
+    }
+    return new User(token, userInfo);
   }
 
   private String getBearerToken(String token) {

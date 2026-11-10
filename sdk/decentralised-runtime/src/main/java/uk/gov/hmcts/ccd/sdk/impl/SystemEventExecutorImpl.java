@@ -1,13 +1,17 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
+import static org.springframework.util.StringUtils.hasText;
+
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.AnyNestedCondition;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionOutcome;
+import org.springframework.boot.autoconfigure.condition.SpringBootCondition;
+import org.springframework.context.annotation.ConditionContext;
 import org.springframework.context.annotation.Conditional;
+import org.springframework.core.env.Environment;
+import org.springframework.core.type.AnnotatedTypeMetadata;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,7 +25,6 @@ import uk.gov.hmcts.ccd.sdk.SystemEventExecutionResult;
 import uk.gov.hmcts.ccd.sdk.SystemEventExecutor;
 import uk.gov.hmcts.ccd.sdk.SystemEventResult;
 import uk.gov.hmcts.ccd.sdk.impl.SystemIdentityResolver.SystemIdentity;
-import uk.gov.hmcts.reform.idam.client.IdamClient;
 import uk.gov.hmcts.reform.idam.client.models.UserInfo;
 
 @Service
@@ -50,7 +53,7 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
       @Value("${ccd.decentralised-runtime.system-user.password:}") String systemUserPassword,
       CaseEventTransactionCoordinator transactionCoordinator,
       CaseDataRepository caseDataRepository,
-      ObjectProvider<IdamClient> idamClient
+      IdamService idamService
   ) {
     if (hasText(systemUserId)) {
       var identity = new SystemIdentity(
@@ -64,19 +67,13 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
     } else {
       requireText(systemUsername, "System username", USER_NAME_MAX_LENGTH);
       requireText(systemUserPassword, "System user password");
-      IdamClient client = idamClient.getIfAvailable();
-      if (client == null) {
-        throw new IllegalStateException(
-            "An IdamClient bean is required to look up the system user ID from IDAM; "
-                + "configure " + SYSTEM_USER_PREFIX + ".id instead"
-        );
-      }
       this.systemIdentity = SystemIdentityResolver.fromIdam(
-          client,
+          idamService,
           systemUsername,
           systemUserPassword,
           systemUserFirstName,
-          systemUserLastName
+          systemUserLastName,
+          this::validateSystemIdentity
       );
     }
     this.transactionCoordinator = transactionCoordinator;
@@ -113,7 +110,7 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
   ) {
     validateRequest(actor, idempotencyKey, action);
     // Resolved before the transaction opens, so a first-use IDAM lookup never holds the case lock.
-    SystemIdentity identity = systemIdentity.get(this::validateSystemIdentity);
+    SystemIdentity identity = systemIdentity.get();
     var transactionResult = transactionCoordinator.execute(
         caseReference,
         idempotencyKey,
@@ -241,10 +238,6 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
     }
   }
 
-  private static boolean hasText(String value) {
-    return value != null && !value.isBlank();
-  }
-
   private void requireMaxLength(String value, String field, int maxLength) {
     if (value.codePointCount(0, value.length()) > maxLength) {
       throw new IllegalArgumentException(field + " exceeds " + maxLength + " characters");
@@ -252,20 +245,19 @@ class SystemEventExecutorImpl implements SystemEventExecutor {
   }
 
   /**
-   * Matches when the system user is configured by {@code id}, or by {@code password} for IDAM lookup.
+   * Matches when the system user is configured by {@code id}, or by {@code password} for IDAM
+   * lookup. A blank value, such as an unset {@code ${VAR:}} placeholder, does not count.
    */
-  static class SystemUserConfigured extends AnyNestedCondition {
+  static class SystemUserConfigured extends SpringBootCondition {
 
-    SystemUserConfigured() {
-      super(ConfigurationPhase.REGISTER_BEAN);
-    }
-
-    @ConditionalOnProperty(prefix = SYSTEM_USER_PREFIX, name = "id")
-    static class IdConfigured {
-    }
-
-    @ConditionalOnProperty(prefix = SYSTEM_USER_PREFIX, name = "password")
-    static class PasswordConfigured {
+    @Override
+    public ConditionOutcome getMatchOutcome(ConditionContext context, AnnotatedTypeMetadata metadata) {
+      Environment environment = context.getEnvironment();
+      if (hasText(environment.getProperty(SYSTEM_USER_PREFIX + ".id"))
+          || hasText(environment.getProperty(SYSTEM_USER_PREFIX + ".password"))) {
+        return ConditionOutcome.match("System user id or password is configured");
+      }
+      return ConditionOutcome.noMatch("System user id and password are not configured");
     }
   }
 }
