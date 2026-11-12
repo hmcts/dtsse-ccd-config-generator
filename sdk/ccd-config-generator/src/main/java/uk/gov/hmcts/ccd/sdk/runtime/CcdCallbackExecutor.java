@@ -21,6 +21,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
+import uk.gov.hmcts.ccd.sdk.api.AfterCommit;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
@@ -30,6 +31,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
 import uk.gov.hmcts.ccd.sdk.api.external.ClientContext;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalRejection;
+import uk.gov.hmcts.ccd.sdk.api.external.ExternalRejectionException;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalStartResponse;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalUser;
 import uk.gov.hmcts.ccd.sdk.jackson.UnwrappedPrefixModule;
@@ -70,18 +72,26 @@ public class CcdCallbackExecutor {
       // An external event's start handler loads what it needs itself, so the case is not read here.
       var domainClass = event.isExternal() ? null
           : mapper.convertValue(data, registry.getRequired(request.getCaseDetails().getCaseTypeId()).getCaseClass());
+      ClientContext context = clientContext(clientContext);
       EventPayload payload = new EventPayload<>(
           request.getCaseDetails().getId(),
           domainClass,
-          new LinkedMultiValueMap<>()
+          new LinkedMultiValueMap<>(),
+          new AfterCommit(),
+          context
       );
 
       if (!event.isExternal()) {
-        return AboutToStartOrSubmitResponse.builder()
-            .data(event.start(payload, null, ClientContext.none())).build();
+        try {
+          return AboutToStartOrSubmitResponse.builder()
+              .data(event.start(payload, null, context)).build();
+        } catch (ExternalRejectionException rejected) {
+          // As for an external event, a client context the handler cannot read is the frontend's mistake.
+          return AboutToStartOrSubmitResponse.builder().errors(rejected.errors()).build();
+        }
       }
-      // Only an external event's start is told who started it and what the frontend said.
-      Object response = event.start(payload, externalUser(authorisation), clientContext(clientContext));
+      // Only an external event's start is told who started it.
+      Object response = event.start(payload, externalUser(authorisation), context);
       return switch ((ExternalStartResponse<?>) response) {
         case ExternalRejection<?> rejected ->
             AboutToStartOrSubmitResponse.builder().errors(rejected.errors()).build();
