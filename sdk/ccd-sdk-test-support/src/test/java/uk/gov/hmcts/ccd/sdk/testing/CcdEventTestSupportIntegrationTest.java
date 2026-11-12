@@ -358,8 +358,6 @@ class CcdEventTestSupportIntegrationTest {
         .rawData().path("value").asText()).isEqualTo("Sam");
     assertThat(events.start(reference, "address").startExpectingSuccess().rawData().path("value").asText())
         .isEqualTo("original");
-    assertThat(events.start(reference, "address").withClientContext(Map.of("name", List.of("Sam"))).start()
-        .errors()).containsExactly("The client context is not a valid Addressee");
   }
 
   @Test

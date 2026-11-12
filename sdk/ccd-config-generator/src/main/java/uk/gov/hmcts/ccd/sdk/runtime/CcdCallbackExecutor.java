@@ -31,7 +31,6 @@ import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
 import uk.gov.hmcts.ccd.sdk.api.external.ClientContext;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalRejection;
-import uk.gov.hmcts.ccd.sdk.api.external.ExternalRejectionException;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalStartResponse;
 import uk.gov.hmcts.ccd.sdk.api.external.ExternalUser;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
@@ -81,13 +80,8 @@ public class CcdCallbackExecutor {
       );
 
       if (!event.isExternal()) {
-        try {
-          return AboutToStartOrSubmitResponse.builder()
-              .data(event.start(payload, null, context)).build();
-        } catch (ExternalRejectionException rejected) {
-          // As for an external event, a client context the handler cannot read is the frontend's mistake.
-          return AboutToStartOrSubmitResponse.builder().errors(rejected.errors()).build();
-        }
+        return AboutToStartOrSubmitResponse.builder()
+            .data(event.start(payload, null, context)).build();
       }
       // Only an external event's start is told who started it.
       Object response = event.start(payload, externalUser(authorisation), context);
