@@ -3469,7 +3469,7 @@ public class TestWithCCD extends CftlibTest {
     }
 
     @SneakyThrows
-    @Order(24)
+    @Order(40)
     @Test
     void sdkComplexTypesSurviveCaseLifecycle() {
         // The fix for nested values behind a prefixed @JsonUnwrapped is auto-configured by the SDK.
