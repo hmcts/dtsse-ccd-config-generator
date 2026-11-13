@@ -8,8 +8,7 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.PDPageContentStream.AppendMode;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
-import org.apache.pdfbox.pdmodel.font.PDType1Font;
-import org.apache.pdfbox.pdmodel.font.encoding.WinAnsiEncoding;
+import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.interactive.action.PDActionGoTo;
 import org.apache.pdfbox.pdmodel.interactive.action.PDActionURI;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationLink;
@@ -30,7 +29,7 @@ final class PdfUtility {
   }
 
   static void addCenterText(PDDocument document, PDPage page, String text, int yyOffset,
-      PDType1Font font, float fontSize) throws IOException {
+      PDFont font, float fontSize) throws IOException {
     if (text == null) {
       return;
     }
@@ -49,7 +48,7 @@ final class PdfUtility {
   }
 
   static void addText(PDDocument document, PDPage page, String text, float xxOffset,
-      float yyOffset, PDType1Font font, float fontSize, int lineWidth) throws IOException {
+      float yyOffset, PDFont font, float fontSize, int lineWidth) throws IOException {
     if (text == null) {
       return;
     }
@@ -57,13 +56,13 @@ final class PdfUtility {
         new PDPageContentStream(document, page, AppendMode.APPEND, true, true)) {
       PDRectangle box = page.getCropBox();
       final float baseline = box.getUpperRightY() - yyOffset;
-      writeText(stream, sanitizeText(text), box.getLowerLeftX() + xxOffset, baseline, font,
+      writeText(stream, sanitizeText(text, font), box.getLowerLeftX() + xxOffset, baseline, font,
           fontSize, lineWidth);
     }
   }
 
   static void addPageNumber(PDDocument document, PageNumbers preset, int pageIndex,
-      int totalPages, PDType1Font font) throws IOException {
+      int totalPages, PDFont font) throws IOException {
     PDPage page = document.getPage(pageIndex);
     PDRectangle box = page.getCropBox();
     float pageWidth = box.getWidth();
@@ -89,10 +88,10 @@ final class PdfUtility {
     addText(document, page, label, xxOffset, yyOffset, font, 13, lineWidthFor(page));
   }
 
-  static float getStringWidth(String string, PDType1Font font, float fontSize) {
+  static float getStringWidth(String string, PDFont font, float fontSize) {
     try {
-      // The text must be sanitised: getStringWidth() rejects characters outside WinAnsi.
-      return font.getStringWidth(sanitizeText(string)) / 1000 * fontSize;
+      // The text must be sanitised: getStringWidth() rejects characters the font cannot draw.
+      return font.getStringWidth(sanitizeText(string, font)) / 1000 * fontSize;
     } catch (IOException e) {
       log.info("Error getting string width information");
       return 0;
@@ -100,7 +99,7 @@ final class PdfUtility {
   }
 
   static void addLink(PDDocument document, PDPage from, PDPage to, String text, float xxOffset,
-      float yyOffset, PDType1Font font, float fontSize, int lineWidth, int noOfLines)
+      float yyOffset, PDFont font, float fontSize, int lineWidth, int noOfLines)
       throws IOException {
     PDAnnotationLink link = generateLink(to, from, xxOffset, yyOffset, noOfLines);
     removeLinkBorder(link);
@@ -108,7 +107,7 @@ final class PdfUtility {
   }
 
   static void addRightLink(PDDocument document, PDPage from, PDPage to, String text,
-      float yyOffset, PDType1Font font, float fontSize) throws IOException {
+      float yyOffset, PDFont font, float fontSize) throws IOException {
     final float pageWidth = from.getCropBox().getWidth();
     final float stringWidth = getStringWidth(text, font, fontSize);
     final float xxOffset = pageWidth - stringWidth - 53;
@@ -116,7 +115,7 @@ final class PdfUtility {
   }
 
   static void addUriLink(PDDocument document, PDPage page, String uri, String text,
-      float xxOffset, float yyOffset, PDType1Font font, float fontSize, int lineWidth)
+      float xxOffset, float yyOffset, PDFont font, float fontSize, int lineWidth)
       throws IOException {
     int noOfLines = Math.max(splitString(text, lineWidth, font, fontSize).length, 1);
     final PDActionURI action = new PDActionURI();
@@ -129,21 +128,26 @@ final class PdfUtility {
     addText(document, page, text, xxOffset, yyOffset, font, fontSize, lineWidth);
   }
 
-  static String sanitizeText(String rawString) {
+  // Drops the characters the font has no glyph for, which it would otherwise refuse to draw.
+  static String sanitizeText(String rawString, PDFont font) {
     StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < rawString.length(); i++) {
-      if (WinAnsiEncoding.INSTANCE.contains(rawString.charAt(i))) {
-        sb.append(rawString.charAt(i));
+    rawString.codePoints().forEach(codePoint -> {
+      String character = Character.toString(codePoint);
+      try {
+        font.encode(character);
+        sb.append(character);
+      } catch (IllegalArgumentException | IOException e) {
+        // No glyph in this font: drop the character.
       }
-    }
+    });
     return sb.toString();
   }
 
-  static boolean isRenderableTitle(String title) {
-    return !sanitizeText(title).isBlank();
+  static boolean isRenderableTitle(String title, PDFont font) {
+    return !sanitizeText(title, font).isBlank();
   }
 
-  static String[] splitString(String text, int lineWidth, PDType1Font font, float fontSize) {
+  static String[] splitString(String text, int lineWidth, PDFont font, float fontSize) {
     if (text == null || text.isEmpty()) {
       return new String[0];
     }
@@ -207,13 +211,13 @@ final class PdfUtility {
   }
 
   private static void writeText(PDPageContentStream contentStream, String text, float positionX,
-      float positionY, PDType1Font font, float fontSize, int lineWidth) throws IOException {
+      float positionY, PDFont font, float fontSize, int lineWidth) throws IOException {
     String[] lines = splitString(text, lineWidth, font, fontSize);
     for (String line : lines) {
       contentStream.beginText();
       contentStream.setFont(font, fontSize);
       contentStream.newLineAtOffset(positionX, positionY);
-      contentStream.showText(sanitizeText(line));
+      contentStream.showText(sanitizeText(line, font));
       contentStream.endText();
       positionY = positionY - LINE_HEIGHT;
     }

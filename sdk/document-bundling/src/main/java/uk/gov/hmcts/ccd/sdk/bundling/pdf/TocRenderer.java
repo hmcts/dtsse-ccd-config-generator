@@ -34,7 +34,7 @@ final class TocRenderer {
     this.document = document;
     this.fonts = fonts;
     String description = request.description().orElse("");
-    int noOfPages = estimatePages(request);
+    int noOfPages = estimatePages(request, fonts);
     for (int i = 0; i < noOfPages; i++) {
       PDPage page = new PDPage();
       pages.add(page);
@@ -42,20 +42,20 @@ final class TocRenderer {
     }
 
     if (!description.isEmpty()) {
-      PdfUtility.addText(document, getPage(), description, 50, 80, fonts.helvetica(), 12,
+      PdfUtility.addText(document, getPage(), description, 50, 80, fonts.regular(), 12,
           SPACE_PER_LINE);
     }
     int descriptionLines =
-        PdfUtility.splitString(description, SPACE_PER_LINE, fonts.helvetica(), 12).length;
+        PdfUtility.splitString(description, SPACE_PER_LINE, fonts.regular(), 12).length;
     int indexVerticalOffset = Math.max(descriptionLines * 20 + 70, 90);
     PdfUtility.addCenterText(document, getPage(), INDEX_PAGE, indexVerticalOffset,
-        fonts.helveticaBold(), 14);
+        fonts.bold(), 14);
 
     int headerVerticalOffset = indexVerticalOffset + 30;
     PdfUtility.addText(document, getPage(), "Date", DATE_XX_OFFSET, headerVerticalOffset,
-        fonts.helvetica(), 12, SPACE_PER_LINE);
+        fonts.regular(), 12, SPACE_PER_LINE);
     PdfUtility.addText(document, getPage(), "Page", PAGE_XX_OFFSET, headerVerticalOffset,
-        fonts.helvetica(), 12, SPACE_PER_LINE);
+        fonts.regular(), 12, SPACE_PER_LINE);
 
     numLinesAdded = initialLines(description, fonts);
   }
@@ -65,15 +65,15 @@ final class TocRenderer {
     float yyOffset = getVerticalOffset();
     PDPage destination = document.getPage(pageIndex);
     int noOfLines =
-        PdfUtility.splitString(title, SPACE_PER_TITLE_LINE, fonts.helvetica(), 12).length;
+        PdfUtility.splitString(title, SPACE_PER_TITLE_LINE, fonts.regular(), 12).length;
     PdfUtility.addLink(document, getPage(), destination, title, TITLE_XX_OFFSET, yyOffset,
-        fonts.helvetica(), 12, SPACE_PER_TITLE_LINE, noOfLines);
+        fonts.regular(), 12, SPACE_PER_TITLE_LINE, noOfLines);
     if (date.isPresent()) {
       PdfUtility.addText(document, getPage(), DATE_FORMAT.format(date.get()), DATE_XX_OFFSET,
-          yyOffset - 3, fonts.helvetica(), 12, SPACE_PER_LINE);
+          yyOffset - 3, fonts.regular(), 12, SPACE_PER_LINE);
     }
     PdfUtility.addText(document, getPage(), String.valueOf(pageIndex + 1), PAGE_XX_OFFSET,
-        yyOffset - 3, fonts.helvetica(), 12, SPACE_PER_LINE);
+        yyOffset - 3, fonts.regular(), 12, SPACE_PER_LINE);
     numLinesAdded += noOfLines;
     endOfFolder = false;
   }
@@ -81,10 +81,10 @@ final class TocRenderer {
   void addFolder(String title, int pageIndex) throws IOException {
     PDPage destination = document.getPage(pageIndex);
     float yyOffset = getVerticalOffset() + PdfUtility.LINE_HEIGHT;
-    int noOfLines = PdfUtility.splitString(title, SPACE_PER_TITLE_LINE, fonts.helveticaBold(),
+    int noOfLines = PdfUtility.splitString(title, SPACE_PER_TITLE_LINE, fonts.bold(),
         FOLDER_FONT_SIZE).length;
     PdfUtility.addLink(document, getPage(), destination, title, TITLE_XX_OFFSET, yyOffset,
-        fonts.helveticaBold(), FOLDER_FONT_SIZE, SPACE_PER_TITLE_LINE, noOfLines);
+        fonts.bold(), FOLDER_FONT_SIZE, SPACE_PER_TITLE_LINE, noOfLines);
     numLinesAdded += noOfLines + 2;
     endOfFolder = false;
   }
@@ -102,8 +102,7 @@ final class TocRenderer {
     return pages.size();
   }
 
-  static int estimatePages(AssemblyRequest request) {
-    PdfFonts fonts = new PdfFonts();
+  static int estimatePages(AssemblyRequest request, PdfFonts fonts) {
     int lines = initialLines(request.description().orElse(""), fonts);
     lines = countLines(request.items(), request.presentation().sectionCoverSheets(), lines,
         new boolean[] {false}, new int[] {0}, fonts);
@@ -117,8 +116,8 @@ final class TocRenderer {
     return ((AssemblyFolder) node).children().stream().anyMatch(TocRenderer::hasRenderableItems);
   }
 
-  static String drawnItemTitle(String title, int ordinal) {
-    return PdfUtility.isRenderableTitle(title) ? title : "Document " + ordinal;
+  static String drawnItemTitle(String title, int ordinal, PdfFonts fonts) {
+    return PdfUtility.isRenderableTitle(title, fonts.regular()) ? title : "Document " + ordinal;
   }
 
   private static int countLines(List<AssemblyNode> nodes, boolean sectionCoverSheets, int lines,
@@ -130,7 +129,7 @@ final class TocRenderer {
         }
         if (sectionCoverSheets) {
           lines += PdfUtility.splitString(folder.title(), SPACE_PER_TITLE_LINE,
-              fonts.helveticaBold(), FOLDER_FONT_SIZE).length + 2;
+              fonts.bold(), FOLDER_FONT_SIZE).length + 2;
           endOfFolder[0] = false;
         }
         lines = countLines(folder.children(), sectionCoverSheets, lines, endOfFolder,
@@ -142,8 +141,8 @@ final class TocRenderer {
           endOfFolder[0] = false;
         }
         itemOrdinal[0]++;
-        String drawnTitle = drawnItemTitle(node.title(), itemOrdinal[0]);
-        lines += PdfUtility.splitString(drawnTitle, SPACE_PER_TITLE_LINE, fonts.helvetica(),
+        String drawnTitle = drawnItemTitle(node.title(), itemOrdinal[0], fonts);
+        lines += PdfUtility.splitString(drawnTitle, SPACE_PER_TITLE_LINE, fonts.regular(),
             12).length;
       }
     }
@@ -152,7 +151,7 @@ final class TocRenderer {
 
   private static int initialLines(String description, PdfFonts fonts) {
     int descriptionLines =
-        PdfUtility.splitString(description, SPACE_PER_LINE, fonts.helvetica(), 12).length;
+        PdfUtility.splitString(description, SPACE_PER_LINE, fonts.regular(), 12).length;
     int indexVerticalOffset = Math.max(descriptionLines * 20 + 70, 90);
     int headerVerticalOffset = indexVerticalOffset + 30;
     return (int) ((headerVerticalOffset - TOP_MARGIN_OFFSET) / 20) + 2;
