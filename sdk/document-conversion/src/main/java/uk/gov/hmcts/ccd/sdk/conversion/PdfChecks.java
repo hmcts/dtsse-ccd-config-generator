@@ -12,10 +12,8 @@ import uk.gov.hmcts.ccd.sdk.conversion.ConversionException.Reason;
 
 /**
  * Checks that a file is a PDF that can be opened and has pages.
- *
- * <p>Public only so document-bundling can use it; services should use {@link DocumentConverter}.
  */
-public final class PdfChecks {
+final class PdfChecks {
   static final long MAX_CACHE_HEAP_BYTES = 16L * 1024 * 1024;
 
   private static final int SIGNATURE_SCAN_BYTES = 1024;
@@ -32,7 +30,7 @@ public final class PdfChecks {
    * @return the page count
    * @throws ConversionException with {@link Reason#INVALID_CONTENT} or {@link Reason#ENCRYPTED}
    */
-  public static int requireUsablePdf(Path file, Path scratchDirectory)
+  static int requireUsablePdf(Path file, Path scratchDirectory)
       throws ConversionException {
     try (PDDocument document = openUsablePdf(file, scratchDirectory)) {
       return document.getNumberOfPages();

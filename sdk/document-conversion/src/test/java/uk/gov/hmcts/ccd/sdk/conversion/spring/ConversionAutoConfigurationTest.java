@@ -3,11 +3,14 @@ package uk.gov.hmcts.ccd.sdk.conversion.spring;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,9 +18,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import uk.gov.hmcts.ccd.sdk.conversion.ConversionContext;
 import uk.gov.hmcts.ccd.sdk.conversion.ConversionSource;
 import uk.gov.hmcts.ccd.sdk.conversion.ConvertedPdf;
 import uk.gov.hmcts.ccd.sdk.conversion.DocumentConverter;
+import uk.gov.hmcts.ccd.sdk.conversion.PdfConverter;
 import uk.gov.hmcts.ccd.sdk.conversion.PrintOptions;
 import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderService;
 import uk.gov.hmcts.ccd.sdk.conversion.testsupport.Fixtures;
@@ -76,6 +81,25 @@ class ConversionAutoConfigurationTest {
           assertThat(requests).singleElement().asString()
               .contains("secret-key", "filename=\"letter.docx\"", "Content-Type: " + DOCX);
         });
+  }
+
+  @Test
+  void pdfConverterBeansAddMediaTypes() {
+    PdfConverter outlook = new PdfConverter() {
+      @Override
+      public Set<String> mediaTypes() {
+        return Set.of("application/vnd.ms-outlook");
+      }
+
+      @Override
+      public void convert(ConversionSource source, Path output, ConversionContext context)
+          throws IOException {
+        Files.write(output, Fixtures.pdfSaying("e-mail"));
+      }
+    };
+    runner.withBean("outlookConverter", PdfConverter.class, () -> outlook)
+        .run(context -> assertThat(context.getBean(DocumentConverter.class)
+            .supportedMediaTypes()).contains("application/vnd.ms-outlook", "application/pdf"));
   }
 
   @Test

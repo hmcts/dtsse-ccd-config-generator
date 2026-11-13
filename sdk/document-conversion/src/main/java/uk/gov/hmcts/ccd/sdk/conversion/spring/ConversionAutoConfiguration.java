@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.core.env.Environment;
 import uk.gov.hmcts.ccd.sdk.conversion.DocumentConverter;
+import uk.gov.hmcts.ccd.sdk.conversion.PdfConverter;
 import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderService;
 import uk.gov.hmcts.ccd.sdk.conversion.docmosis.HttpDocmosisRenderService;
 
@@ -19,7 +20,8 @@ import uk.gov.hmcts.ccd.sdk.conversion.docmosis.HttpDocmosisRenderService;
  * {@link DocmosisRenderService} bean when there is one that converts files (document bundling's,
  * for example), and otherwise builds one from {@code ccd.conversion.docmosis.*} when the convert
  * endpoint and access key are set. A bundling client set up only to render cover pages is not
- * used for conversion. Every bean is {@code @ConditionalOnMissingBean}.
+ * used for conversion. Every {@link PdfConverter} bean is registered on the converter, in
+ * {@code @Order} order. Every bean is {@code @ConditionalOnMissingBean}.
  */
 @AutoConfiguration(
     afterName = "uk.gov.hmcts.ccd.sdk.bundling.spring.BundlingAutoConfiguration")
@@ -37,9 +39,11 @@ public class ConversionAutoConfiguration {
   @Bean
   @ConditionalOnMissingBean
   public DocumentConverter documentConverter(ConversionProperties properties,
-      ObjectProvider<DocmosisRenderService> docmosis, Environment environment) {
+      ObjectProvider<DocmosisRenderService> docmosis, ObjectProvider<PdfConverter> converters,
+      Environment environment) {
     DocumentConverter.Builder builder = DocumentConverter.builder()
         .tempDirectory(tempDirectory(properties));
+    converters.orderedStream().forEach(builder::converter);
     Optional<DocmosisRenderService> converting =
         docmosis.orderedStream().filter(DocmosisRenderService::convertsFiles).findFirst();
     if (converting.isPresent()) {
