@@ -61,7 +61,7 @@ class MissingDocumentPlaceholderTest {
   @Test
   void documentsThatCannotBeFetchedAreReplacedByPlaceholderPages() throws IOException {
     BundleRequest request = placeholderRequest(doc("d1", "Claim form", "good"),
-        doc("d2", "Witness statement", "deleted"), doc("d3", "Tenancy agreement", "denied"));
+        doc("d2", "Witness statement", "deleted"));
 
     try (BundleResult result = renderer.render(request, BundleExecutionContext.empty())) {
       assertThat(result.documents()).extracting(DocumentResult::documentId).containsExactly("d1");
@@ -69,17 +69,15 @@ class MissingDocumentPlaceholderTest {
               MissingDocument::code)
           .containsExactly(
               org.assertj.core.groups.Tuple.tuple("d2", MissingDocumentReason.NOT_FOUND,
-                  BundleErrorCode.DOCUMENT_NOT_FOUND),
-              org.assertj.core.groups.Tuple.tuple("d3", MissingDocumentReason.ACCESS_DENIED,
-                  BundleErrorCode.DOCUMENT_ACCESS_DENIED));
+                  BundleErrorCode.DOCUMENT_NOT_FOUND));
       assertThat(result.missingDocuments()).first().extracting(MissingDocument::detail)
           .isEqualTo("No such document");
       assertThat(result.outcome()).isEqualTo(BundleOutcome.COMPLETED_WITH_WARNINGS);
       assertThat(result.warnings())
           .filteredOn(warning -> warning.code().equals(DefaultBundleRenderer.WARNING_DOCUMENT_MISSING))
           .extracting(warning -> warning.message())
-          .hasSize(2)
-          .allSatisfy(message -> assertThat(message).doesNotContain("No such document", "Not permitted"))
+          .hasSize(1)
+          .allSatisfy(message -> assertThat(message).doesNotContain("No such document"))
           .first().asString().contains(MissingDocumentReason.NOT_FOUND.message());
 
       try (PDDocument pdf = RenderTestSupport.loadPdf(result)) {
@@ -90,9 +88,23 @@ class MissingDocumentPlaceholderTest {
             .contains(MissingDocumentReason.NOT_FOUND.message())
             .doesNotContain("No such document");
         assertThat(RenderTestSupport.outlineTitles(pdf))
-            .contains("Claim form", "Witness statement (missing)", "Tenancy agreement (missing)");
+            .contains("Claim form", "Witness statement (missing)");
       }
     }
+  }
+
+  @Test
+  void aDocumentTheResolverMayNotReadFailsTheBundleEvenOnTheFinalAttempt() {
+    BundleRequest request = placeholderRequest(doc("d1", "Claim form", "good"),
+        doc("d2", "Witness statement", "deleted"), doc("d3", "Tenancy agreement", "denied"));
+
+    BundleGenerationException failure = catchThrowableOfType(BundleGenerationException.class,
+        () -> renderer.render(request, BundleExecutionContext.empty(), RenderAttempt.FINAL));
+
+    assertThat(failure).as("no bundle is produced").isNotNull();
+    assertThat(failure.code()).isEqualTo(BundleErrorCode.DOCUMENT_ACCESS_DENIED);
+    assertThat(failure.documentFailures()).extracting(f -> f.documentId()).containsExactly("d2", "d3");
+    RenderTestSupport.assertNothingLeftBehind(work);
   }
 
   @Test

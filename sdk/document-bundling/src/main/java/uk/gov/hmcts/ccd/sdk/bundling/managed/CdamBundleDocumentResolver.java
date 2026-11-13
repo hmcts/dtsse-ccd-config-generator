@@ -89,10 +89,15 @@ public class CdamBundleDocumentResolver implements DocumentResolver {
         || e.status() < 0) {
       return new ResolutionFailure(ResolutionFailureReason.TRANSIENT_FAILURE, "CDAM unavailable");
     }
+    // A 401 rejects our own credentials (e.g. an expired system-user token), not the document.
+    if (e.status() == 401) {
+      return new ResolutionFailure(
+          ResolutionFailureReason.CREDENTIALS_REJECTED, "CDAM rejected the service credentials");
+    }
     if (e.status() == 404) {
       return new ResolutionFailure(ResolutionFailureReason.NOT_FOUND, "Not found in CDAM");
     }
-    if (e.status() == 401 || e.status() == 403) {
+    if (e.status() == 403) {
       return new ResolutionFailure(ResolutionFailureReason.ACCESS_DENIED, "CDAM refused access");
     }
     return new ResolutionFailure(

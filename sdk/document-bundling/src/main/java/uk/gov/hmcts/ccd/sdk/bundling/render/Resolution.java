@@ -33,6 +33,13 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocuments;
 final class Resolution {
   private static final Logger log = LoggerFactory.getLogger(Resolution.class);
 
+  /**
+   * Authorisation failures, most decisive first. Bundling runs as a system process, so a document
+   * it may not read is a fault to surface, never a page to cover with a placeholder.
+   */
+  private static final List<BundleErrorCode> AUTHORISATION_FAILURES = List.of(
+      BundleErrorCode.DOCUMENT_ACCESS_DENIED, BundleErrorCode.CREDENTIALS_REJECTED);
+
   record Spooled(
       Path file,
       long size,
@@ -91,10 +98,22 @@ final class Resolution {
       resolveBatch(resolver, batch.getValue(), context, jobDirectory, limits, spooled, failures);
     }
 
-    if (!failures.isEmpty() && !tolerates(tolerance, failures)) {
+    Optional<BundleErrorCode> authorisation = authorisationFailure(failures);
+    if (authorisation.isPresent()) {
+      log.error("{} document reference(s) could not be read because of {}; failing the bundle "
+          + "rather than substituting placeholders", failures.size(), authorisation.get());
+    }
+    if (!failures.isEmpty() && (authorisation.isPresent() || !tolerates(tolerance, failures))) {
       throw aggregateFailure(fetched, failures, unique.size());
     }
     return new Resolved(spooled, failures);
+  }
+
+  private static Optional<BundleErrorCode> authorisationFailure(
+      Map<DocumentReference, Failure> failures) {
+    return AUTHORISATION_FAILURES.stream()
+        .filter(code -> failures.values().stream().anyMatch(failure -> failure.code() == code))
+        .findFirst();
   }
 
   private static boolean tolerates(Tolerance tolerance, Map<DocumentReference, Failure> failures) {
@@ -239,9 +258,9 @@ final class Resolution {
     }
     Set<BundleErrorCode> codes = new LinkedHashSet<>();
     documentFailures.forEach(failure -> codes.add(failure.code()));
-    BundleErrorCode code = codes.size() == 1
+    BundleErrorCode code = authorisationFailure(failures).orElse(codes.size() == 1
         ? codes.iterator().next()
-        : BundleErrorCode.DOCUMENT_RESOLUTION_FAILED;
+        : BundleErrorCode.DOCUMENT_RESOLUTION_FAILED);
     return new BundleGenerationException(
         code,
         BundleStage.RESOLVE,
@@ -257,6 +276,7 @@ final class Resolution {
     return switch (reason) {
       case NOT_FOUND -> BundleErrorCode.DOCUMENT_NOT_FOUND;
       case ACCESS_DENIED -> BundleErrorCode.DOCUMENT_ACCESS_DENIED;
+      case CREDENTIALS_REJECTED -> BundleErrorCode.CREDENTIALS_REJECTED;
       case UNSUPPORTED_MEDIA_TYPE -> BundleErrorCode.MEDIA_TYPE_UNSUPPORTED;
       case INVALID_CONTENT -> BundleErrorCode.DOCUMENT_CONTENT_INVALID;
       case TOO_LARGE -> BundleErrorCode.LIMIT_EXCEEDED;
