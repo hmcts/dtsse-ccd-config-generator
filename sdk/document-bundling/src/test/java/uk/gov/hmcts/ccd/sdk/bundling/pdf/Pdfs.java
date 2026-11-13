@@ -19,6 +19,8 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.graphics.PDXObject;
 import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
 import org.apache.pdfbox.pdmodel.interactive.action.PDAction;
@@ -77,7 +79,7 @@ final class Pdfs {
         document.addPage(page);
         try (PDPageContentStream contents = new PDPageContentStream(document, page)) {
           contents.beginText();
-          contents.setFont(new PdfFonts().helvetica(), 12);
+          contents.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
           contents.newLineAtOffset(100, 700);
           contents.showText(text);
           contents.endText();
