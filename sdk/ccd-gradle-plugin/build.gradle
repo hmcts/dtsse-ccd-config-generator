@@ -63,6 +63,11 @@ sourceSets {
 gradlePlugin.testSourceSets(sourceSets.functionalTest)
 configurations.functionalTestImplementation.extendsFrom(configurations.testImplementation)
 
+dependencies {
+    functionalTestImplementation 'org.testcontainers:testcontainers-postgresql:2.0.5'
+    functionalTestRuntimeOnly 'org.postgresql:postgresql:42.7.14'
+}
+
 // Add a task to run the functional tests
 task functionalTest(type: Test) {
     testClassesDirs = sourceSets.functionalTest.output.classesDirs
@@ -75,6 +80,8 @@ functionalTest.dependsOn(
     project(':ccd-config-generator').tasks.named('publishToMavenLocal'),
     project(':decentralised-runtime').tasks.named('publishToMavenLocal'),
     project(':ccd-data-migration-support').tasks.named('publishToMavenLocal'),
+    project(':document-bundling').tasks.named('publishToMavenLocal'),
+    project(':docweave').tasks.named('publishToMavenLocal'),
     project(':ccd-servicebus-support').tasks.named('publishToMavenLocal')
 )
 

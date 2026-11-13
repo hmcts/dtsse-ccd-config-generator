@@ -75,3 +75,4 @@ See [Routing configuration](./routing-configuration.md) for full details, includ
 - [Concurrency considerations](./concurrency.md)
 - [Migrating existing services](./fdw-data-migration.md)
 - [Retain and dispose](./retain-and-dispose.md)
+- [Migrating the database in the pipeline](./database-migration.md)
