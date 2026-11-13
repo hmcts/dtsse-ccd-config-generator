@@ -3,31 +3,27 @@ package uk.gov.hmcts.ccd.sdk.bundling.api;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
-import uk.gov.hmcts.ccd.sdk.bundling.convert.DocmosisOfficeHandler;
-import uk.gov.hmcts.ccd.sdk.bundling.convert.ImageHandler;
-import uk.gov.hmcts.ccd.sdk.bundling.convert.MediaLinkHandler;
-import uk.gov.hmcts.ccd.sdk.bundling.convert.PdfPassthroughHandler;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderService;
 import uk.gov.hmcts.ccd.sdk.bundling.render.DefaultBundleRenderer;
+import uk.gov.hmcts.ccd.sdk.conversion.DocumentConverter;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderService;
 
 /**
  * Builds a {@link BundleRenderer}.
  *
  * <p>Defaults reproduce the output of the current stitching microservice: PDF passthrough, image
  * conversion, Docmosis-backed office conversion when Docmosis is configured, generated media link
- * pages, and the court-default presentation. Extensions apply in registration order on top of the
- * built-ins.
+ * pages, and the court-default presentation. Documents are converted to PDF by document-conversion's
+ * {@link DocumentConverter}; to bundle more file types, give the renderer a converter with extra
+ * {@code PdfConverter}s registered.
  */
 public final class BundleRendererBuilder {
 
   private final Map<String, DocumentResolver> resolvers = new LinkedHashMap<>();
-  private final List<BundlingExtension> extensions = new ArrayList<>();
   private final Map<String, Path> watermarkImages = new LinkedHashMap<>();
   private DocmosisRenderService docmosis;
+  private DocumentConverter converter;
   private BundleLimits limits = BundleLimits.defaults();
   private int maxConcurrentRenders = 2;
   private MeterRegistry meterRegistry;
@@ -49,20 +45,20 @@ public final class BundleRendererBuilder {
 
 
   /**
-   * Registers an extension module. Repeatable; extensions apply in registration order, so the
-   * last registration for a media type wins.
+   * The converter that turns each fetched document into PDF. Optional: by default the renderer
+   * builds one with the built-in converters, using the {@link #docmosis Docmosis client} for
+   * office formats and the renderer's {@link #tempDirectory temp directory}. Supply one to bundle
+   * file types that need a registered {@code PdfConverter}.
    */
-  public BundleRendererBuilder extension(BundlingExtension extension) {
-    Validate.requireNonNull(extension, "extension");
-    Validate.requireNonBlank(extension.name(), "extension.name()");
-    extensions.add(extension);
+  public BundleRendererBuilder converter(DocumentConverter converter) {
+    this.converter = Validate.requireNonNull(converter, "converter");
     return this;
   }
 
   /**
-   * Configures the shared Docmosis render service, enabling the default office-format handlers.
-   * Without it, office media types have no handler and a bundle containing one fails with a
-   * descriptive error.
+   * Configures the shared Docmosis render service. It renders cover-page templates and, unless a
+   * {@link #converter converter} is supplied, converts office formats. Without it, a bundle with
+   * an office document or a cover page fails with a descriptive error.
    */
   public BundleRendererBuilder docmosis(DocmosisRenderService docmosis) {
     this.docmosis = Validate.requireNonNull(docmosis, "docmosis");
@@ -124,8 +120,7 @@ public final class BundleRendererBuilder {
   }
 
   /**
-   * Builds the renderer, validating the required ports and applying extensions to the built-in
-   * handler registry.
+   * Builds the renderer, validating the required ports.
    */
   public BundleRenderer build() {
     if (resolvers.isEmpty()) {
@@ -133,29 +128,19 @@ public final class BundleRendererBuilder {
           "A DocumentResolver is required: call resolver(...) with the port that turns your "
               + "DocumentReferences into content");
     }
-    HandlerRegistry registry = HandlerRegistry.create(builtInHandlers(), extensions);
     return new DefaultBundleRenderer(
-        resolvers, docmosis, registry, limits, maxConcurrentRenders, meterRegistry,
-        tempDirectory, watermarkImages);
+        resolvers, docmosis, converter != null ? converter : defaultConverter(), limits,
+        maxConcurrentRenders, meterRegistry, tempDirectory, watermarkImages);
   }
 
-  private Map<String, DocumentHandler> builtInHandlers() {
-    Map<String, DocumentHandler> builtIns = new LinkedHashMap<>();
-    builtIns.put(BuiltInMediaTypes.PDF, new PdfPassthroughHandler());
-    ImageHandler imageHandler = new ImageHandler();
-    for (String type : BuiltInMediaTypes.IMAGES) {
-      builtIns.put(type, imageHandler);
+  private DocumentConverter defaultConverter() {
+    DocumentConverter.Builder builder = DocumentConverter.builder();
+    if (docmosis != null) {
+      builder.docmosis(docmosis);
     }
-    if (docmosis != null && docmosis.convertsFiles()) {
-      DocmosisOfficeHandler officeHandler = new DocmosisOfficeHandler();
-      for (String type : BuiltInMediaTypes.OFFICE) {
-        builtIns.put(type, officeHandler);
-      }
+    if (tempDirectory != null) {
+      builder.tempDirectory(tempDirectory);
     }
-    MediaLinkHandler mediaLinkHandler = new MediaLinkHandler();
-    for (String type : BuiltInMediaTypes.MEDIA) {
-      builtIns.put(type, mediaLinkHandler);
-    }
-    return builtIns;
+    return builder.build();
   }
 }
