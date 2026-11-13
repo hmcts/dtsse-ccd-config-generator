@@ -31,6 +31,6 @@ public interface BundleRenderer {
     return render(request, context);
   }
 
-  /** The media types with a registered handler, after extensions have applied. */
+  /** The media types the renderer can bundle: those its converter converts, and audio/video. */
   Set<String> handledMediaTypes();
 }

@@ -7,6 +7,12 @@ page, cover sheets, bookmarks and page numbers. The rendering code is ported fro
 `em-stitching-api` (same PDFBox version) and its output is checked against goldens generated from
 that service, so a default bundle looks the same as one from the shared service today.
 
+Each fetched document is converted to PDF by
+[`document-conversion`](../document-conversion/document-conversion.md)'s `DocumentConverter`,
+which this module depends on. That module owns media type detection, the Docmosis client and the
+list of convertible types, and it is where you add a file type. Use it on its own to convert
+documents outside a bundle, for example for bulk print.
+
 ## Getting started
 
 ```groovy
@@ -24,7 +30,8 @@ ccd:
 
 Then define one bean: a `DocumentResolver` that fetches your documents (see below). The
 auto-configuration builds a `BundleRenderer` from every resolver bean, the Docmosis client when
-configured, and any `BundlingExtension` beans. Outside Spring, build one yourself:
+configured, and the auto-configured `DocumentConverter` (with any `PdfConverter` beans). Outside
+Spring, build one yourself:
 
 ```java
 BundleRenderer renderer = BundleRenderer.builder().resolver(myResolver).build();
@@ -97,7 +104,7 @@ it was down, gets the `UNAVAILABLE` reason.
 | Media type | Handling |
 |---|---|
 | `application/pdf` | Checked and passed through; its own bookmarks are kept under the document's bookmark |
-| PNG, JPEG, TIFF, BMP, GIF | Placed on a page of the right size |
+| PNG, JPEG, TIFF, BMP, GIF | Placed on a page of the right size; a multi-frame TIFF gives one page per frame |
 | Word, Excel, PowerPoint, RTF, plain text | Converted through the shared Docmosis service |
 | audio (`audio/mpeg`, ...) and video (`video/mp4`, ...) | Never fetched: a generated link page built from the document's `MediaPlaceholder` (access URL, media type, duration, note) |
 | anything else | The bundle fails, naming the type and the types that are supported |
@@ -105,8 +112,11 @@ it was down, gets the `UNAVAILABLE` reason.
 The media type is detected from the content and wins over what the resolver declared: a
 mislabelled document is converted as what it really is, with a `MEDIA_TYPE_MISMATCH` warning,
 and content that flatly contradicts its label (a ZIP archive declared as PDF) fails with
-`DOCUMENT_CONTENT_INVALID` naming both types. Each converted PDF is checked before assembly: an
-encrypted, empty or corrupt one fails with `DOCUMENT_INSPECTION_FAILED`, and one with no
+`DOCUMENT_CONTENT_INVALID` naming both types. A document with no declared type is typed from its
+file name's extension. An encrypted, empty or corrupt PDF, or a converter that produces one, fails
+with `DOCUMENT_CONVERSION_FAILED`. This is a problem with the document, so under the placeholder
+policy it is replaced at once rather than retried. Each converted PDF is also inspected before
+assembly: one with no
 extractable text (scanned evidence) is bundled with a `NO_EXTRACTABLE_TEXT` warning, because
 stitching cannot make it searchable. A source whose bookmark tree is circular or absurdly deep
 is bundled with `OUTLINE_TRUNCATED`.
@@ -288,47 +298,22 @@ public class CaseDocumentResolver implements DocumentResolver {
 stream, media type, file name, optional length and checksum, and `close()`). Several resolvers can
 coexist, one per provider name, so a bundle can mix documents from CDAM and from a local store.
 
-### Handling more file types: `BundlingExtension`
+### Handling more file types
 
-Each media type maps to a `DocumentHandler` that turns a fetched document into a PDF. An extension
-adds, replaces or removes handlers. Register it as a bean (or `.extension(...)` on the builder).
+Register a `PdfConverter` for the type with document-conversion: see
+[Adding file types](../document-conversion/document-conversion.md#adding-file-types). In Spring,
+declare it as a bean: the auto-configured `DocumentConverter` picks it up, and the renderer uses
+that converter. Outside Spring, build a converter with it and pass it to the renderer:
 
 ```java
-@Component
-public class OutlookMessages implements BundlingExtension {
-
-  @Override
-  public String name() {
-    return "outlook-messages";
-  }
-
-  @Override
-  public void configure(BundlingExtensionContext context) {
-    context.addHandler("application/vnd.ms-outlook", new MsgHandler());
-  }
-
-  static final class MsgHandler implements DocumentHandler {
-    @Override
-    public HandledDocument handle(ResolvedDocument source, HandlerContext context) throws DocumentHandlingException {
-      Path pdf;
-      try {
-        pdf = context.createTempFile(".pdf");
-        MsgToPdf.convert(source.content(), pdf);          // your conversion
-      } catch (IOException e) {
-        throw new DocumentHandlingException("Could not convert the message", e);
-      }
-      return HandledDocument.of(pdf);
-    }
-  }
-}
+BundleRenderer renderer = BundleRenderer.builder()
+    .resolver(myResolver)
+    .converter(DocumentConverter.builder().docmosis(docmosis).converter(new OutlookMessages()).build())
+    .build();
 ```
 
-`addHandler` refuses a type that already has a handler and `replaceHandler` refuses one that does
-not, so you cannot override a built-in by accident; use `replaceHandler` to swap the image handler
-for one that adds a caption, say, and `removeHandler` to forbid a type. `HandlerContext` gives a
-handler temp files inside the render's directory (cleaned up with the render), the Docmosis client
-when configured, and the `BundleDocument` being handled. The PDF a handler returns must live in that
-directory. Several extensions apply in bean order; the last registration for a type wins.
+Audio and video are not converted. They are represented by a link page built from the document's
+`MediaPlaceholder`, for the types in `BuiltInMediaTypes.MEDIA`.
 
 ### Cover pages and watermarks
 

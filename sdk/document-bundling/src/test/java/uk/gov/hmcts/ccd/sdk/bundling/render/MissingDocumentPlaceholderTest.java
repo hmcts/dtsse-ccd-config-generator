@@ -31,8 +31,8 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocumentPolicy;
 import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocumentReason;
 import uk.gov.hmcts.ccd.sdk.bundling.api.RenderAttempt;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderException;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderService;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderException;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderService;
 
 class MissingDocumentPlaceholderTest {
 
@@ -148,12 +148,30 @@ class MissingDocumentPlaceholderTest {
     RenderTestSupport.assertNothingLeftBehind(work);
   }
 
+  /**
+   * A corrupt file will be just as corrupt on the next attempt, so it is replaced at once rather
+   * than retried until the job gives up.
+   */
   @Test
-  void aConversionFailureThatMightBeTransientFailsARetryableAttempt() {
+  void aCorruptDocumentIsReplacedEvenOnARetryableAttempt() {
     BundleRequest request = placeholderRequest(doc("d1", "Broken", "broken"));
 
+    try (BundleResult result =
+        renderer.render(request, BundleExecutionContext.empty(), RenderAttempt.RETRYABLE)) {
+      assertThat(result.missingDocuments()).singleElement().satisfies(missing -> {
+        assertThat(missing.code()).isEqualTo(BundleErrorCode.DOCUMENT_CONVERSION_FAILED);
+        assertThat(missing.reason()).isEqualTo(MissingDocumentReason.CONVERSION_FAILED);
+      });
+    }
+  }
+
+  @Test
+  void aConversionThatFailedBecauseDocmosisWasDownFailsARetryableAttempt() {
+    BundleRequest request = placeholderRequest(doc("d1", "Witness statement", "word"));
+
     BundleGenerationException failure = catchThrowableOfType(BundleGenerationException.class,
-        () -> renderer.render(request, BundleExecutionContext.empty(), RenderAttempt.RETRYABLE));
+        () -> withDocmosis(new DocmosisRenderException("Docmosis returned HTTP 503", true))
+            .render(request, BundleExecutionContext.empty(), RenderAttempt.RETRYABLE));
 
     assertThat(failure.code()).isEqualTo(BundleErrorCode.DOCUMENT_CONVERSION_FAILED);
   }

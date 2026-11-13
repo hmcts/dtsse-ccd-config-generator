@@ -18,13 +18,11 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.Consumer;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import org.springframework.core.Ordered;
 import org.springframework.core.env.SystemEnvironmentPropertySource;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleErrorCode;
@@ -36,14 +34,16 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleResult;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleSection;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleStage;
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundlingExtension;
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundlingExtensionContext;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResolver;
 import uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocuments;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderService;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.HttpDocmosisRenderService;
+import uk.gov.hmcts.ccd.sdk.conversion.ConversionContext;
+import uk.gov.hmcts.ccd.sdk.conversion.ConversionSource;
+import uk.gov.hmcts.ccd.sdk.conversion.PdfConverter;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderService;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.HttpDocmosisRenderService;
+import uk.gov.hmcts.ccd.sdk.conversion.spring.ConversionAutoConfiguration;
 
 class BundlingAutoConfigurationTest {
   private static final String CONVERT_ENDPOINT =
@@ -54,7 +54,8 @@ class BundlingAutoConfigurationTest {
 
   private final FixturePdfResolver caseDocuments = new FixturePdfResolver("case-documents");
   private final ApplicationContextRunner runner = new ApplicationContextRunner()
-      .withConfiguration(AutoConfigurations.of(BundlingAutoConfiguration.class))
+      .withConfiguration(AutoConfigurations.of(
+          BundlingAutoConfiguration.class, ConversionAutoConfiguration.class))
       .withBean("caseDocumentsResolver", DocumentResolver.class, () -> caseDocuments);
 
   @Test
@@ -68,7 +69,7 @@ class BundlingAutoConfigurationTest {
   }
 
   @Test
-  void officeHandlersRegisterOnlyWhenBothDocmosisPropertiesAreSet() {
+  void officeConversionOnlyWhenBothDocmosisPropertiesAreSet() {
     runner.run(context -> {
       assertThat(context).doesNotHaveBean(DocmosisRenderService.class);
       assertThat(context.getBean(BundleRenderer.class).handledMediaTypes())
@@ -144,25 +145,25 @@ class BundlingAutoConfigurationTest {
         });
   }
 
+  /** A file type added to document conversion can be bundled too. */
   @Test
-  void extensionBeansApplyInOrder() {
-    // The handlers are never invoked: only their registration order matters here.
-    Consumer<BundlingExtensionContext> adds = registry -> registry.addHandler("application/x-custom", (s, c) -> null);
-    Consumer<BundlingExtensionContext> replaces =
-        registry -> registry.replaceHandler("application/x-custom", (s, c) -> null);
-    runner.withBean("adds", BundlingExtension.class, () -> new OrderedExtension("adds-custom", 1, adds))
-        .withBean("replaces", BundlingExtension.class, () -> new OrderedExtension("replaces-custom", 2, replaces))
+  void pdfConverterBeansAddBundleableMediaTypes() {
+    PdfConverter outlook = new PdfConverter() {
+      @Override
+      public Set<String> mediaTypes() {
+        return Set.of("application/vnd.ms-outlook");
+      }
+
+      @Override
+      public void convert(ConversionSource source, Path output, ConversionContext context) {
+        throw new UnsupportedOperationException("registration only");
+      }
+    };
+    runner.withBean("outlookConverter", PdfConverter.class, () -> outlook)
         .run(context -> {
           assertThat(context).hasNotFailed();
-          assertThat(context.getBean(BundleRenderer.class).handledMediaTypes()).contains("application/x-custom");
-        });
-    // Reversing the orders makes replaceHandler run before addHandler, which the registry rejects:
-    // extensions apply in @Order order rather than by registration accident.
-    runner.withBean("adds", BundlingExtension.class, () -> new OrderedExtension("adds-custom", 2, adds))
-        .withBean("replaces", BundlingExtension.class, () -> new OrderedExtension("replaces-custom", 1, replaces))
-        .run(context -> {
-          assertThat(context).hasFailed();
-          assertThat(context.getStartupFailure()).rootCause().hasMessageContaining("replaces-custom");
+          assertThat(context.getBean(BundleRenderer.class).handledMediaTypes())
+              .contains("application/vnd.ms-outlook", "application/pdf", "audio/mpeg");
         });
   }
 
@@ -214,19 +215,6 @@ class BundlingAutoConfigurationTest {
         .fileName("auto-configured-bundle.pdf").root(root.build()).build();
   }
 
-  // An extension bean whose position in the extension order is its {@link Ordered} value.
-  private record OrderedExtension(String name, int order, Consumer<BundlingExtensionContext> body)
-      implements BundlingExtension, Ordered {
-    @Override
-    public void configure(BundlingExtensionContext context) {
-      body.accept(context);
-    }
-
-    @Override
-    public int getOrder() {
-      return order;
-    }
-  }
 
   // Serves the one-page PDF fixture for every reference, recording each batch.
   private record FixturePdfResolver(String provider, List<List<DocumentReference>> batches)
