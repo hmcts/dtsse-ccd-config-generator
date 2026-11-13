@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk.conversion.detect;
+package uk.gov.hmcts.ccd.sdk.conversion;
 
 import java.util.Locale;
 import java.util.Map;
@@ -6,18 +6,19 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Content-based media type detection shared by document conversion and bundling.
+ * Content-based media type detection, run by {@link DocumentConverter} before it picks a
+ * {@link PdfConverter}.
  *
  * <p>Declared media types come from document-store metadata and are often wrong. {@link #route}
  * checks a declared type against the first {@link #DETECTION_PREFIX_BYTES} bytes of content and
  * decides what the content should be converted as. {@link #fromFileName} infers a type from a
  * file extension for content uploaded without a usable declared type.
  */
-public final class MediaTypeDetection {
+final class MediaTypeDetection {
   /**
    * How many leading bytes {@link #route} needs to see.
    */
-  public static final int DETECTION_PREFIX_BYTES = 1024;
+  static final int DETECTION_PREFIX_BYTES = 1024;
 
   private static final String PDF = "application/pdf";
 
@@ -80,7 +81,7 @@ public final class MediaTypeDetection {
   }
 
   /** The outcome of checking a declared media type against content. */
-  public sealed interface Routing {
+  sealed interface Routing {
     /** The content agrees with the declared type, or nothing contradicts it. */
     record Route(String mediaType) implements Routing {
     }
@@ -100,7 +101,7 @@ public final class MediaTypeDetection {
    * {@code text/rtf} and {@code image/tif} to the name the SDK routes by; null becomes the empty
    * string.
    */
-  public static String normalise(String mediaType) {
+  static String normalise(String mediaType) {
     if (mediaType == null) {
       return "";
     }
@@ -117,7 +118,7 @@ public final class MediaTypeDetection {
    * The media type a file name's extension implies, if it is one the SDK knows. Used only when
    * content arrives with no usable declared type.
    */
-  public static Optional<String> fromFileName(String fileName) {
+  static Optional<String> fromFileName(String fileName) {
     if (fileName == null) {
       return Optional.empty();
     }
@@ -133,7 +134,7 @@ public final class MediaTypeDetection {
    * Checks a declared, {@linkplain #normalise normalised} media type against the first
    * {@code length} bytes of content.
    */
-  public static Routing route(String declared, byte[] head, int length) {
+  static Routing route(String declared, byte[] head, int length) {
     // Anchored offset-0 signatures decide first: a ZIP/OLE2/image whose body happens to
     // contain the bytes %PDF- inside the first kilobyte (a zip entry name, a PNG tEXt
     // comment) must never be mistaken for a PDF.

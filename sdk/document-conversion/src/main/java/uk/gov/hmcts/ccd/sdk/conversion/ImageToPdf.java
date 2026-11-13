@@ -13,10 +13,8 @@ import uk.gov.hmcts.ccd.sdk.conversion.ConversionException.Reason;
 /**
  * Draws an image onto PDF pages the way em-stitching-api does: one Letter page per image,
  * centred, scaled down to fit but never enlarged. A multi-page TIFF becomes one page per frame.
- *
- * <p>Public only so document-bundling can use it; services should use {@link DocumentConverter}.
  */
-public final class ImageToPdf {
+final class ImageToPdf {
 
   private ImageToPdf() {
   }
@@ -28,7 +26,7 @@ public final class ImageToPdf {
    * @throws ConversionException with {@link Reason#INVALID_CONTENT} when the image cannot be
    *     decoded
    */
-  public static int write(Path image, Path output) throws ConversionException {
+  static int write(Path image, Path output) throws ConversionException {
     try (PDDocument document = new PDDocument()) {
       // One page at a time, so only one decoded page is held in memory.
       int pages = ImageFrames.tiffPages(image,

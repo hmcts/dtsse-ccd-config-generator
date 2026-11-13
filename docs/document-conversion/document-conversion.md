@@ -139,11 +139,10 @@ produced it. This is the conversion document bundling uses.
 | PPT/POT/PPS/PPA, PPTX, POTX, PPSX | PowerPoint types | Docmosis |
 | TXT, RTF, CSV | `text/plain`, `application/rtf`, `text/csv` | Docmosis |
 
-The converter checks the declared media type against the content first, using the same detection
-as document bundling. Content that is clearly another type is converted as that type, with a
+The converter checks the declared media type against the content first. Content that is clearly another type is converted as that type, with a
 `MEDIA_TYPE_MISMATCH` warning. A missing or `application/octet-stream` type is inferred from the
 file extension, with a `MEDIA_TYPE_INFERRED` warning. Common store aliases, such as `text/rtf`
-and `image/x-ms-bmp`, are accepted as they are, in bundles too. Binary content declared or named
+and `image/x-ms-bmp`, are accepted as they are. Binary content declared or named
 as text, RTF or CSV fails with `MEDIA_TYPE_CONFLICT` rather than reaching Docmosis, which would
 print it as garbage. A failure throws `ConversionException` with a `reason()`:
 
@@ -162,7 +161,8 @@ conversion could succeed later, so it is worth retrying. It is true when:
 - Docmosis was unavailable: a timeout, a connection failure, an interruption, or a 5xx response;
 - Docmosis was busy: 408 or 429;
 - Docmosis rejected the access key: 401 or 403, which needs the key fixing, not a new document;
-- local disk I/O failed (`IO_FAILURE`).
+- local disk I/O failed (`IO_FAILURE`), including an `IOException` from a registered converter;
+- a registered converter said so in the `ConversionException` it threw.
 
 Everything else is a problem with the document itself, and retrying it will fail the same way.
 
@@ -172,6 +172,59 @@ behind, even when it fails with an `Error` such as running out of memory.
 
 Images ImageIO cannot read, such as CMYK JPEGs, are decoded at full size by PDFBox instead. Above
 50 million pixels these fail with `INVALID_CONTENT`, so that one upload cannot exhaust the heap.
+
+## Adding file types
+
+Implement `PdfConverter` to convert a type the built-ins don't, or to change how a built-in type
+is converted. A converter only writes a PDF. `DocumentConverter` does the rest:
+
+- before calling it, checks the declared type against the content, so `source.mediaType()` is the
+  type the source was routed as;
+- after it returns, checks the output is a readable, unencrypted PDF with pages (otherwise the
+  conversion fails, naming the file);
+- for print, renders that PDF to the print standard, so the converter never deals with margins,
+  colour or resolution;
+- in a letter that falls back to greyscale, reuses the converter's first PDF rather than
+  converting again.
+
+```java
+@Component
+public class OutlookMessages implements PdfConverter {
+
+  @Override
+  public Set<String> mediaTypes() {
+    return Set.of("application/vnd.ms-outlook");
+  }
+
+  @Override
+  public void convert(ConversionSource source, Path output, ConversionContext context)
+      throws ConversionException, IOException {
+    MsgToPdf.convert(source.file(), output);   // your conversion
+  }
+}
+```
+
+In Spring, a `PdfConverter` bean is registered on the auto-configured `DocumentConverter`.
+Outside Spring, register it on the builder:
+
+```java
+DocumentConverter converter = DocumentConverter.builder()
+    .docmosis(docmosis)
+    .converter(new OutlookMessages())
+    .build();
+```
+
+A registered converter takes precedence over a built-in for the same type, which is logged at
+startup. Two registered converters cannot claim the same type. `context.createTempFile` gives
+scratch files in the conversion's private directory, deleted with it. Throw `ConversionException`
+for a document that cannot be converted, and say whether a retry could succeed. Any other
+exception counts as a problem with the document and is reported without its message.
+
+Document bundling converts through the same `DocumentConverter`, so a type you register here can
+also be bundled.
+
+A type is only inferred from a file name for the built-in extensions. A source of a registered
+type needs its media type declared.
 
 ## Upgrading from document-bundling 8.x
 
@@ -183,13 +236,34 @@ The Docmosis client moved from `uk.gov.hmcts.ccd.sdk.bundling.docmosis` to
 - `HttpDocmosisRenderService`
 - `DocmosisRenderException`
 
-Code that imports them, such as a stub `DocmosisRenderService` bean, a custom `DocumentHandler`
-that calls `context.docmosis()`, or a `catch` of `DocmosisRenderException`, needs its imports
-updating. Bundling's built-in office types now also include Word and Excel templates, XLSB and
-CSV.
+Code that imports them, such as a stub `DocmosisRenderService` bean or a `catch` of
+`DocmosisRenderException`, needs its imports updating. Bundling's built-in office types now also
+include Word and Excel templates, XLSB and CSV.
 
-`ImageToPdf` and `PdfChecks` are public only so that document-bundling can use them. Services
-should use `DocumentConverter`.
+Bundling's per-media-type extension point has been removed in favour of `PdfConverter`. These
+types no longer exist:
+
+- `BundlingExtension`
+- `BundlingExtensionContext`
+- `DocumentHandler`
+- `HandlerContext`
+- `HandledDocument`
+- `HandlerRegistry`
+- `DocumentHandlingException`
+- the `uk.gov.hmcts.ccd.sdk.bundling.convert` package
+
+To move a handler, rewrite it as a `PdfConverter`:
+
+- Write to the `output` you are given instead of returning a path.
+- Read `source.file()` instead of `source.content()`.
+- Throw `ConversionException` instead of `DocumentHandlingException`.
+- Replace `addHandler` and `replaceHandler` by registering the converter: it takes precedence over
+  a built-in.
+- `removeHandler` has no replacement.
+
+`BundleRendererBuilder.extension(...)` is replaced by `converter(DocumentConverter)`.
+`BuiltInMediaTypes` keeps only `MEDIA`. The PDF, image and office lists are
+`SupportedMediaTypes` here.
 
 ## Testing
 
