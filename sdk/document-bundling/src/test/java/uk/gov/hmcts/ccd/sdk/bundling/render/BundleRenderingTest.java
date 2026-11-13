@@ -240,6 +240,72 @@ class BundleRenderingTest {
     }
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void everyFrameOfAMultiPageTiffBecomesItsOwnPageInOrder(boolean ccittScan) throws Exception {
+    // Each frame has a distinct width so the output pages can be matched back to their frames.
+    int[] frameWidths = {200, 250, 300};
+    resolver.source("ref-scan", RenderTestSupport.Source.of(
+        multiPageTiff(ccittScan, frameWidths), "image/tiff", "scan.tiff"));
+
+    try (BundleResult result = renderer.render(
+        request(doc("d1", "Cover letter", "ref-cover"), doc("d2", "Scanned statement", "ref-scan")), context);
+        PDDocument document = RenderTestSupport.loadPdf(result)) {
+      DocumentResult scan = result.documents().get(1);
+      assertThat(scan.mediaType()).isEqualTo("image/tiff");
+      assertThat(scan.pageCount()).isEqualTo(frameWidths.length);
+      assertThat(document.getNumberOfPages()).isEqualTo(result.pageCount());
+
+      List<Integer> widths = new java.util.ArrayList<>();
+      for (int i = 0; i < scan.pageCount(); i++) {
+        widths.addAll(imageWidths(document.getPage(scan.startPage() - 1 + i).getResources()));
+      }
+      assertThat(widths).containsExactly(200, 250, 300);
+    }
+  }
+
+  // Colour frames are stored uncompressed; bilevel frames use CCITT T.6, as office scanners do.
+  private static byte[] multiPageTiff(boolean ccitt, int... widths) throws Exception {
+    javax.imageio.ImageWriter writer = javax.imageio.ImageIO.getImageWritersByFormatName("tiff").next();
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    try (javax.imageio.stream.ImageOutputStream stream = javax.imageio.ImageIO.createImageOutputStream(out)) {
+      writer.setOutput(stream);
+      writer.prepareWriteSequence(null);
+      java.awt.Color[] colours = {java.awt.Color.RED, java.awt.Color.GREEN, java.awt.Color.BLUE};
+      for (int i = 0; i < widths.length; i++) {
+        java.awt.image.BufferedImage frame = new java.awt.image.BufferedImage(widths[i], 120,
+            ccitt ? java.awt.image.BufferedImage.TYPE_BYTE_BINARY : java.awt.image.BufferedImage.TYPE_INT_RGB);
+        java.awt.Graphics2D graphics = frame.createGraphics();
+        graphics.setColor(colours[i % colours.length]);
+        graphics.fillRect(0, 0, widths[i], 120);
+        graphics.dispose();
+        javax.imageio.ImageWriteParam param = writer.getDefaultWriteParam();
+        if (ccitt) {
+          param.setCompressionMode(javax.imageio.ImageWriteParam.MODE_EXPLICIT);
+          param.setCompressionType("CCITT T.6");
+        }
+        writer.writeToSequence(new javax.imageio.IIOImage(frame, null, null), param);
+      }
+      writer.endWriteSequence();
+    } finally {
+      writer.dispose();
+    }
+    return out.toByteArray();
+  }
+
+  private static List<Integer> imageWidths(org.apache.pdfbox.pdmodel.PDResources resources) throws Exception {
+    List<Integer> widths = new java.util.ArrayList<>();
+    for (org.apache.pdfbox.cos.COSName name : resources.getXObjectNames()) {
+      var xobject = resources.getXObject(name);
+      if (xobject instanceof org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject image) {
+        widths.add(image.getWidth());
+      } else if (xobject instanceof org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject form) {
+        widths.addAll(imageWidths(form.getResources()));
+      }
+    }
+    return widths;
+  }
+
   @Test
   void registeredWatermarkPresetStampsEverySourcePageAndNoGeneratedPage() throws Exception {
     Path logo = Files.write(work.resolveSibling(work.getFileName() + "-logo.png"), png);
