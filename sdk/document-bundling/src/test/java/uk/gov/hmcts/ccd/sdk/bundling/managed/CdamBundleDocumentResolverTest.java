@@ -5,10 +5,14 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,31 +30,39 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleExecutionContext;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleGenerationException;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRenderer;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundleResult;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleSection;
+import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentFailure;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference;
-import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocumentPolicy;
-import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocumentReason;
 import uk.gov.hmcts.ccd.sdk.bundling.api.RenderAttempt;
 import uk.gov.hmcts.reform.ccd.document.am.feign.CaseDocumentClientApi;
 
-/** Renders through the real CDAM Feign client against a stub CDAM answering with a fixed status. */
+/**
+ * Renders through the real CDAM Feign client against a stub CDAM that serves good PDFs and
+ * refuses one document with a fixed status.
+ */
 class CdamBundleDocumentResolverTest {
 
-  private static final UUID REJECTED = UUID.randomUUID();
+  private static final UUID REFUSED = UUID.randomUUID();
 
   @TempDir
   Path work;
 
   private HttpServer cdam;
-  private int status;
+  private int refusal;
 
   @BeforeEach
   void startStubCdam() throws IOException {
+    byte[] pdf = onePagePdf();
     cdam = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     cdam.createContext("/cases/documents/", exchange -> {
-      exchange.sendResponseHeaders(status, -1);
+      if (exchange.getRequestURI().getPath().contains(REFUSED.toString())) {
+        exchange.sendResponseHeaders(refusal, -1);
+      } else {
+        exchange.getResponseHeaders().add("Content-Type", "application/pdf");
+        exchange.sendResponseHeaders(200, pdf.length);
+        exchange.getResponseBody().write(pdf);
+      }
       exchange.close();
     });
     cdam.start();
@@ -62,38 +74,44 @@ class CdamBundleDocumentResolverTest {
   }
 
   @Test
-  void aCdamUnauthorisedFailsARetryableAttemptInsteadOfPublishingPlaceholders() {
-    status = 401;
+  void aCdamUnauthorisedFailsARetryableAttemptSoTheJobRetries() {
+    refusal = 401;
     withRenderer(renderer -> {
       BundleGenerationException failure = catchThrowableOfType(BundleGenerationException.class,
           () -> renderer.render(request(), BundleExecutionContext.empty(), RenderAttempt.RETRYABLE));
 
       assertThat(failure).isNotNull();
-      assertThat(failure.code()).isEqualTo(BundleErrorCode.DOCUMENT_RESOLUTION_FAILED);
+      assertThat(failure.code()).isEqualTo(BundleErrorCode.CREDENTIALS_REJECTED);
     });
   }
 
   @Test
-  void aCdamUnauthorisedIsReplacedAsUnavailableOnTheFinalAttempt() {
-    status = 401;
+  void aCdamUnauthorisedStillFailsTheBundleOnTheFinalAttempt() {
+    refusal = 401;
     withRenderer(renderer -> {
-      try (BundleResult result =
-          renderer.render(request(), BundleExecutionContext.empty(), RenderAttempt.FINAL)) {
-        assertThat(result.missingDocuments()).extracting(MissingDocument::reason)
-            .containsExactly(MissingDocumentReason.UNAVAILABLE);
-      }
+      BundleGenerationException failure = catchThrowableOfType(BundleGenerationException.class,
+          () -> renderer.render(request(), BundleExecutionContext.empty(), RenderAttempt.FINAL));
+
+      assertThat(failure).as("no bundle of placeholders is produced").isNotNull();
+      assertThat(failure.code()).isEqualTo(BundleErrorCode.CREDENTIALS_REJECTED);
+      assertThat(failure.documentFailures()).extracting(DocumentFailure::documentId)
+          .containsExactly("refused");
+      assertThat(entries(work)).as("nothing left behind").isEmpty();
     });
   }
 
   @Test
-  void aCdamForbiddenIsAPermanentAccessDenial() {
-    status = 403;
+  void aCdamForbiddenFailsTheBundleEvenWhenTheCallerWouldRetry() {
+    refusal = 403;
     withRenderer(renderer -> {
-      try (BundleResult result =
-          renderer.render(request(), BundleExecutionContext.empty(), RenderAttempt.RETRYABLE)) {
-        assertThat(result.missingDocuments()).extracting(MissingDocument::reason)
-            .containsExactly(MissingDocumentReason.ACCESS_DENIED);
-      }
+      BundleGenerationException failure = catchThrowableOfType(BundleGenerationException.class,
+          () -> renderer.render(request(), BundleExecutionContext.empty(), RenderAttempt.RETRYABLE));
+
+      assertThat(failure).as("no bundle of placeholders is produced").isNotNull();
+      assertThat(failure.code()).isEqualTo(BundleErrorCode.DOCUMENT_ACCESS_DENIED);
+      assertThat(failure.documentFailures()).extracting(DocumentFailure::documentId)
+          .containsExactly("refused");
+      assertThat(entries(work)).as("nothing left behind").isEmpty();
     });
   }
 
@@ -114,10 +132,31 @@ class CdamBundleDocumentResolverTest {
     return BundleRequest.builder().externalId(UUID.randomUUID()).title("Bundle")
         .fileName("bundle.pdf").missingDocuments(MissingDocumentPolicy.PLACEHOLDER)
         .root(BundleSection.builder("Case file")
-            .document(BundleDocument.builder().id("d1").title("Witness statement")
-                .reference(new DocumentReference("cdam", REJECTED.toString())).build())
+            .document(document("claim", UUID.randomUUID()))
+            .document(document("refused", REFUSED))
+            .document(document("statement", UUID.randomUUID()))
             .build())
         .build();
+  }
+
+  private static BundleDocument document(String id, UUID cdamId) {
+    return BundleDocument.builder().id(id).title("Document " + id)
+        .reference(new DocumentReference("cdam", cdamId.toString())).build();
+  }
+
+  private static byte[] onePagePdf() throws IOException {
+    try (InputStream in = CdamBundleDocumentResolverTest.class
+        .getResourceAsStream("/fixtures/em-stitching/one-page.pdf")) {
+      return in.readAllBytes();
+    }
+  }
+
+  private static java.util.List<Path> entries(Path directory) {
+    try (Stream<Path> listed = Files.list(directory)) {
+      return listed.toList();
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
   }
 
   @Configuration(proxyBeanMethods = false)

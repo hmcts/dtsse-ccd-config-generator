@@ -15,6 +15,12 @@ public enum ResolutionFailureReason {
    */
   ACCESS_DENIED,
 
+  /**
+   * The provider rejected the service's own credentials, for example an expired token. Retried
+   * while the job has attempts left, and never replaced by a placeholder.
+   */
+  CREDENTIALS_REJECTED,
+
   /** A transient infrastructure failure. */
   TRANSIENT_FAILURE,
 
