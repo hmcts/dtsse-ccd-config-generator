@@ -101,11 +101,8 @@ public class ManagedCaseBundles
   public void refresh(String refreshKey) {
     TransactionTemplate transaction = new TransactionTemplate(transactions);
     for (CaseBundleDefinition definition : definitions.values()) {
-      String sql;
-      try {
-        sql = definition.caseKeysSql();
-      } catch (UnsupportedOperationException unsupported) {
-        log.warn("Bundle refresh {} skips {}: {}", refreshKey, definition.name(), unsupported.getMessage());
+      String sql = definition.caseKeysSql();
+      if (sql.isBlank()) {
         continue;
       }
       Integer queued = transaction.execute(status -> repository.insertRefresh(

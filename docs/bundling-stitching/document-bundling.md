@@ -455,6 +455,6 @@ Set a fresh key after deploying rendering changes to the workers.
 At startup each definition's selected cases, including published and rendering ones, are queued at
 background priority in one transaction with a record of the key and definition. A recorded key does
 nothing on later starts or other pods; unset or blank disables it. A failure rolls back that
-definition's jobs and record and fails startup, so a restart retries it. Definitions without
-`caseKeysSql` are skipped with a warning. Live changes promote waiting refresh jobs. Recorded means
+definition's jobs and record and fails startup, so a restart retries it. Definitions with
+an empty `caseKeysSql` are skipped. Live changes promote waiting refresh jobs. Recorded means
 **queued, not rendered**; existing PDFs stay current until their replacements publish.

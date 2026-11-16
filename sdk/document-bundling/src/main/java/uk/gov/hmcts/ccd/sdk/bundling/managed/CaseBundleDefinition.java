@@ -9,9 +9,9 @@ public interface CaseBundleDefinition {
 
   /**
    * Override to support bulk refresh: trusted, constant SQL returning a text column {@code case_key}
-   * for every case to refresh, using the same keys as select. Never build it from external input.
+   * for every case to refresh, using the same keys as select. Empty opts out. Never use external input.
    */
   default String caseKeysSql() {
-    throw new UnsupportedOperationException("Implement caseKeysSql to refresh " + name());
+    return "";
   }
 }

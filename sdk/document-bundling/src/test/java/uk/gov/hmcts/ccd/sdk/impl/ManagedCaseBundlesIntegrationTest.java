@@ -347,7 +347,7 @@ create table if not exists bundle_test_source(case_key text primary key, referen
   }
 
   @Test
-  void startupRefreshesOnANonBlankKeySkipsUnsupportedDefinitionsAndFailsOnError() throws Exception {
+  void startupRefreshesOnANonBlankKeySkipsEmptyDefinitionsAndFailsOnError() throws Exception {
     String key = fixture();
     var legacy = new CaseBundleDefinition() {
       @Override
