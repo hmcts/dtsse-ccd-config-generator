@@ -43,7 +43,6 @@ import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobAutoConfiguration;
 import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobFlywayAutoConfiguration;
 import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobRepository;
 import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobWorker;
-import uk.gov.hmcts.ccd.sdk.bundling.job.CaseBundleAutoConfiguration;
 import uk.gov.hmcts.ccd.sdk.bundling.job.ManagedCaseBundles;
 import uk.gov.hmcts.ccd.sdk.bundling.job.StoredBundleDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.BundleSystemUser;
@@ -82,7 +81,6 @@ import uk.gov.hmcts.reform.ccd.document.am.feign.CaseDocumentClientApi;
       "ccd.decentralised-runtime.system-user.last-name=Worker"
     })
 @ImportAutoConfiguration({
-  CaseBundleAutoConfiguration.class,
   BundlingAutoConfiguration.class,
   BundleJobAutoConfiguration.class,
   BundleJobFlywayAutoConfiguration.class,
@@ -153,7 +151,7 @@ create table if not exists bundle_test_source(case_key text primary key, referen
         .startsWith("%PDF".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
     UUID job = jobs.findLatest("case-file", key).orElseThrow().externalId();
     assertThat(jobs.findBundleForJob(job).orElseThrow().caseReference())
-        .hasValue(String.valueOf(reference));
+        .isEqualTo(reference);
     changed(key);
     assertThat(bundles.view("case-file", key).lifecycle())
         .isEqualTo(CaseBundleView.Lifecycle.UPDATING);

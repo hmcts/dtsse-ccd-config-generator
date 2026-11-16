@@ -42,7 +42,7 @@ public record BundleMetadata(
     UUID jobId,
     String definition,
     String caseKey,
-    Optional<String> caseReference,
+    long caseReference,
     Instant selectedAt,
     Instant recordedAt,
     BundleRequest request,
@@ -62,7 +62,6 @@ public record BundleMetadata(
     Objects.requireNonNull(jobId, "BundleMetadata.jobId");
     Objects.requireNonNull(definition, "BundleMetadata.definition");
     Objects.requireNonNull(caseKey, "BundleMetadata.caseKey");
-    Objects.requireNonNull(caseReference, "BundleMetadata.caseReference");
     Objects.requireNonNull(selectedAt, "BundleMetadata.selectedAt");
     Objects.requireNonNull(recordedAt, "BundleMetadata.recordedAt");
     Objects.requireNonNull(request, "BundleMetadata.request");

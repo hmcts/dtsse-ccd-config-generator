@@ -381,6 +381,9 @@ transaction, and returns the number queued. Live changes are claimed first and p
 refresh job; a case with a job already waiting is left to that job. An existing PDF stays current
 until its replacement publishes.
 
+Put a large refresh in a migration of its own. Until that migration commits, a live change to one
+of its cases waits for it, so keep the transaction short.
+
 Ship the migration in the release **after** the rendering change. In the same release, pods still
 running the old code claim refresh jobs during the rollout and render the old layout. The
 definition must match a `CaseBundleDefinition.name()`: the function cannot check it, and a job for

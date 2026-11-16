@@ -13,7 +13,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleResult;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.BundleDocumentStore;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundleDefinition;
@@ -66,24 +65,18 @@ public class ManagedCaseBundles
   }
 
   @Override
-  public BundleRequest select(BundleJobContext context) {
-    CaseBundleDefinition definition = definition(context.definition());
+  public SelectedCaseBundle select(BundleJob job) {
+    CaseBundleDefinition definition = definition(job.definition());
     // One snapshot, so the documents and whatever decides their visibility agree.
-    SelectedCaseBundle selected = snapshot.execute(status -> definition.select(context.caseKey()));
-    // The job records which case it rendered for: the bundle row's case reference, and where
-    // onCompleted attaches the PDF.
-    repository.recordCase(context.externalId(), selected.caseReference(), selected.caseType(),
-        selected.jurisdiction());
-    return selected.request().withExternalId(context.externalId());
+    SelectedCaseBundle selected = snapshot.execute(status -> definition.select(job.caseKey()));
+    return new SelectedCaseBundle(selected.caseReference(), selected.caseType(),
+        selected.jurisdiction(), selected.request().withExternalId(job.externalId()));
   }
 
   @Override
-  public Object onCompleted(
-      BundleJob job, BundleJobContext context, BundleRequest request, BundleResult result)
-      throws Exception {
-    BundleJobRepository.CaseTarget target = repository.findCase(job.externalId());
-    return store.store(new SelectedCaseBundle(target.caseReference(), target.caseType(),
-        target.jurisdiction(), request), result.artifact());
+  public StoredBundleDocument onCompleted(BundleJob job, SelectedCaseBundle selected,
+      BundleResult result) throws Exception {
+    return store.store(selected, result.artifact());
   }
 
   @Override
@@ -96,8 +89,8 @@ public class ManagedCaseBundles
   }
 
   @Override
-  public void discarded(BundleJob job, Object summary) {
-    if (summary instanceof StoredBundleDocument stored) {
+  public void discarded(BundleJob job, StoredBundleDocument stored) {
+    if (stored != null) {
       store.delete(stored.id());
     }
   }

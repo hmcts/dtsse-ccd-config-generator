@@ -1,9 +1,9 @@
 package uk.gov.hmcts.ccd.sdk.bundling.job;
 
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
+import uk.gov.hmcts.ccd.sdk.bundling.managed.SelectedCaseBundle;
 
-/** Compiles a job's bundle request when the worker executes it. */
+/** Selects a job's case and documents when the worker executes it. */
 @FunctionalInterface
 public interface BundleDocumentSelector {
-  BundleRequest select(BundleJobContext context);
+  SelectedCaseBundle select(BundleJob job);
 }

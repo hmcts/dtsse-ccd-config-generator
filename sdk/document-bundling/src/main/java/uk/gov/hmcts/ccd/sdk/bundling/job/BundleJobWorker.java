@@ -25,6 +25,7 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleResult;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentFailure;
 import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocumentReason;
 import uk.gov.hmcts.ccd.sdk.bundling.api.RenderAttempt;
+import uk.gov.hmcts.ccd.sdk.bundling.managed.SelectedCaseBundle;
 
 /**
  * The scheduled worker: each poll fails stale jobs that exhausted their attempts, claims a batch
@@ -143,10 +144,9 @@ public class BundleJobWorker implements AutoCloseable {
   private void execute(ClaimedBundleJob claimed) {
     BundleJob job = claimed.job();
     UUID id = job.externalId();
-    BundleRequest request;
-    BundleJobContext jobContext = new BundleJobContext(id, job.definition(), job.caseKey());
+    SelectedCaseBundle selected;
     try {
-      request = selector.select(jobContext);
+      selected = selector.select(job);
     } catch (BundleGenerationException e) {
       handleGenerationFailure(claimed, e, 0);
       return;
@@ -158,6 +158,7 @@ public class BundleJobWorker implements AutoCloseable {
       return;
     }
 
+    BundleRequest request = selected.request();
     int total = request.allDocuments().size();
     emit(id, BundleJobState.IN_PROGRESS, 0, total);
     // A source that is only temporarily unavailable fails the render while retries remain, and
@@ -165,9 +166,9 @@ public class BundleJobWorker implements AutoCloseable {
     RenderAttempt attempt = retryPolicy.nextAttemptAt(job.attempts(), Instant.now()).isPresent()
         ? RenderAttempt.RETRYABLE : RenderAttempt.FINAL;
     try (BundleResult result = renderer.render(request, BundleExecutionContext.empty(), attempt)) {
-      Object value;
+      StoredBundleDocument stored;
       try {
-        value = completionHandler.onCompleted(job, jobContext, request, result);
+        stored = completionHandler.onCompleted(job, selected, result);
       } catch (Exception e) {
         completionFailed(claimed, e, total);
         return;
@@ -176,13 +177,12 @@ public class BundleJobWorker implements AutoCloseable {
           ? BundleJobState.COMPLETED_WITH_WARNINGS : BundleJobState.COMPLETED;
       log.info("Bundle job {} completed as {} after {} attempt(s)", id, terminal, job.attempts());
       boolean completed = repository.markCompleted(id, terminal,
-          value == null ? null : json.write(value), bundleRecord(request, result, value),
-          claimed.leaseOwner());
+          bundleRecord(selected, result, stored), claimed.leaseOwner());
       record(completed, id, terminal, total, total, "completion");
       if (completed) {
         requeueIfUnavailable(claimed, result);
       } else {
-        discard(job, value);
+        discard(job, stored);
       }
     } catch (BundleGenerationException e) {
       handleGenerationFailure(claimed, e, total);
@@ -198,14 +198,13 @@ public class BundleJobWorker implements AutoCloseable {
   }
 
   /** The rendered bundle as recorded in bundling.bundle, with the job's completed state. */
-  private BundleJobRepository.BundleRecord bundleRecord(BundleRequest request, BundleResult result,
-      Object completion) {
-    return new BundleJobRepository.BundleRecord(result.outcome().name(),
+  private BundleJobRepository.BundleRecord bundleRecord(SelectedCaseBundle selected,
+      BundleResult result, StoredBundleDocument stored) {
+    return new BundleJobRepository.BundleRecord(selected.caseReference(), result.outcome().name(),
         result.artifact().fileName(), result.artifact().mediaType(), result.artifact().size(),
-        result.artifact().sha256(), result.pageCount(), json.write(request),
+        result.artifact().sha256(), result.pageCount(), json.write(selected.request()),
         json.write(result.documents()), json.write(result.missingDocuments()),
-        json.write(result.warnings()),
-        completion instanceof StoredBundleDocument stored ? stored : null);
+        json.write(result.warnings()), stored);
   }
 
   private void completionFailed(ClaimedBundleJob claimed, Exception failure, int total) {
@@ -224,9 +223,9 @@ public class BundleJobWorker implements AutoCloseable {
         + "completion handler threw " + failure.getClass().getName() + LOG_ONLY, List.of(), total);
   }
 
-  private void discard(BundleJob job, Object completion) {
+  private void discard(BundleJob job, StoredBundleDocument stored) {
     try {
-      completionHandler.discarded(job, completion);
+      completionHandler.discarded(job, stored);
     } catch (Exception e) {
       log.warn("Bundle job {} could not discard what its completion handler stored", job.externalId(),
           e);
