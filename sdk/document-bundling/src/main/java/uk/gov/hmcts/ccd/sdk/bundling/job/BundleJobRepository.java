@@ -114,21 +114,31 @@ public class BundleJobRepository {
   }
 
   /**
-   * Queues a background job unless the key has active work or a stored bundle. A job claimed
-   * concurrently can slip past the check and produce an extra render, with its own result/status.
+   * Records the refresh key for the definition and queues a background job for every distinct
+   * case_key the trusted caseKeysSql returns, in the caller's transaction. Waiting jobs are joined
+   * without lowering their priority. Returns the jobs queued or joined, or -1 if already recorded.
    */
-  boolean insertBackfill(UUID externalId, String coalesceKey, String parametersJson) {
+  int insertRefresh(String refreshKey, String definition, String keyPrefix, String caseKeysSql) {
+    var marker = params("refreshKey", refreshKey, "definition", definition);
+    if (jdbc.update("""
+        insert into bundling.bundle_refresh (refresh_key, definition) values (:refreshKey, :definition)
+        on conflict do nothing
+        """, marker) == 0) {
+      return -1;
+    }
     return jdbc.update("""
         insert into bundling.bundle_job
           (external_id, coalesce_key, state, request_version, selector_parameters, execution_context, priority)
-        select :externalId, :key, 'QUEUED', :version, :parameters::jsonb, '{}'::jsonb, -1
-        where not exists (select 1 from bundling.bundle_job where coalesce_key = :key
-                          and state in ('QUEUED', 'IN_PROGRESS'))
-          and not exists (select 1 from bundling.bundle where bundle_key = :key
-                          and document_id is not null and deleted_at is null)
-        on conflict do nothing
-        """, params("externalId", externalId, "key", coalesceKey,
-            "version", BundleJobJson.REQUEST_VERSION, "parameters", parametersJson)) == 1;
+        select gen_random_uuid(), :prefix || case_key, 'QUEUED', :version,
+          jsonb_build_object('definition', cast(:definition as text), 'caseKey', case_key), '{}'::jsonb, -1
+        from (select distinct source.case_key::text as case_key from (%s) source) cases
+        where case_key is not null
+        on conflict (coalesce_key)
+          where coalesce_key is not null and state = 'QUEUED' and attempts = 0
+        do update set coalesced_submissions = bundle_job.coalesced_submissions + 1,
+          last_coalesced_at = clock_timestamp(), updated_at = clock_timestamp()
+        """.formatted(caseKeysSql),
+        marker.addValue("prefix", keyPrefix).addValue("version", BundleJobJson.REQUEST_VERSION));
   }
 
   /** The job a coalesced submission landed on, and the parameters that job keeps. */

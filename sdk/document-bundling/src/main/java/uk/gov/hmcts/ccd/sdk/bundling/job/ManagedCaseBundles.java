@@ -44,6 +44,7 @@ public class ManagedCaseBundles
   private final BundleDocumentStore store;
   private final Map<String, CaseBundleDefinition> definitions;
   private final TransactionTemplate snapshot;
+  private final PlatformTransactionManager transactions;
   private final BundleJobJson json = new BundleJobJson();
 
   public ManagedCaseBundles(
@@ -69,6 +70,7 @@ public class ManagedCaseBundles
                     "Bundle definition name must contain only letters, digits, ., _ or -");
               }
             });
+    this.transactions = transactions;
     snapshot = new TransactionTemplate(transactions);
     snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
     snapshot.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -93,13 +95,24 @@ public class ManagedCaseBundles
   }
 
   /**
-   * Queues a missing bundle at background priority in the caller's transaction, skipping active
-   * jobs and stored bundles.
+   * Queues every case each definition's caseKeysSql returns at background priority, once per
+   * refresh key and definition. Each definition commits or rolls back in its own transaction.
    */
-  boolean backfill(String definition, String caseKey) {
-    definition(definition);
-    return repository.insertBackfill(UUID.randomUUID(), key(definition, caseKey),
-        json.write(Map.of("definition", definition, "caseKey", caseKey)));
+  public void refresh(String refreshKey) {
+    TransactionTemplate transaction = new TransactionTemplate(transactions);
+    for (CaseBundleDefinition definition : definitions.values()) {
+      String sql;
+      try {
+        sql = definition.caseKeysSql();
+      } catch (UnsupportedOperationException unsupported) {
+        log.warn("Bundle refresh {} skips {}: {}", refreshKey, definition.name(), unsupported.getMessage());
+        continue;
+      }
+      Integer queued = transaction.execute(status -> repository.insertRefresh(
+          refreshKey, definition.name(), key(definition.name(), ""), sql));
+      log.info("Bundle refresh {} for {}: {}", refreshKey, definition.name(),
+          queued < 0 ? "already queued" : queued + " cases queued");
+    }
   }
 
   @Override

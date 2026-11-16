@@ -22,19 +22,19 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
+import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.http.converter.autoconfigure.HttpMessageConvertersAutoConfiguration;
 import org.springframework.boot.jackson2.autoconfigure.Jackson2AutoConfiguration;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.cloud.openfeign.FeignAutoConfiguration;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.SystemEnvironmentPropertySource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import uk.gov.hmcts.ccd.sdk.CaseView;
 import uk.gov.hmcts.ccd.sdk.CaseViewRequest;
@@ -47,9 +47,8 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleSection;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference;
 import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocumentPolicy;
-import uk.gov.hmcts.ccd.sdk.bundling.job.BundleBackfillAutoConfiguration;
-import uk.gov.hmcts.ccd.sdk.bundling.job.BundleBackfillRunner;
 import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobAutoConfiguration;
+import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobRepository;
 import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobFlywayAutoConfiguration;
 import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobWorker;
 import uk.gov.hmcts.ccd.sdk.bundling.job.ManagedCaseBundleAutoConfiguration;
@@ -59,6 +58,7 @@ import uk.gov.hmcts.ccd.sdk.bundling.job.StoredBundleDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.BundleSystemUser;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundleDefinition;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundleView;
+import uk.gov.hmcts.ccd.sdk.bundling.managed.CdamBundleDocumentResolver;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.CdamBundleDocumentStore;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.SelectedCaseBundle;
 import uk.gov.hmcts.ccd.sdk.bundling.spring.BundlingAutoConfiguration;
@@ -111,6 +111,7 @@ class ManagedCaseBundlesIntegrationTest {
   @Autowired TestDocuments documents;
   @Autowired Store store;
   @Autowired Selection definition;
+  @Autowired CdamBundleDocumentResolver resolver;
 
   @BeforeEach
   void prepare() {
@@ -120,12 +121,14 @@ class ManagedCaseBundlesIntegrationTest {
 create table if not exists bundle_test_source(case_key text primary key, reference bigint,
   document_id uuid, title text)
 """);
-    jdbc.update("delete from bundling.bundle_backfill", Map.of());
+    jdbc.update("delete from bundling.bundle_refresh", Map.of());
+    jdbc.update("delete from bundle_test_source", Map.of());
     jdbc.update("delete from bundling.bundle_job", Map.of());
     jdbc.update("delete from bundling.bundle", Map.of());
     store.failOnce.set(false);
     store.deleted.set(0);
     definition.calls.set(0);
+    definition.caseKeysSql = Selection.CASE_KEYS;
   }
 
   @Test
@@ -258,171 +261,94 @@ create table if not exists bundle_test_source(case_key text primary key, referen
   }
 
   @Test
-  void scansResumeAfterRestartsAndAFreshTriggerScansAgain() throws Exception {
-    var keys = new ArrayList<>(List.of(fixture(), fixture(), fixture()));
-    var scanner = scanner("first", keys);
-    scanner.poll();
-    assertThat(jobCount(keys)).isEqualTo(2);
-    assertThat(markers()).isZero();
-    // An unfinished scan resumes after the last committed case.
-    scanner = scanner("first", keys);
-    scanner.poll();
-    assertThat(jobCount(keys)).isEqualTo(3);
-    scanner.poll();
-    assertThat(markers()).isEqualTo(1);
-    // Completion means queue population, not rendering.
-    assertThat(bundles.view("case-file", keys.getFirst()).lifecycle()).isEqualTo(CaseBundleView.Lifecycle.PREPARING);
-    keys.add(fixture());
-    scanner("first", keys).poll();
-    assertThat(jobCount(keys)).isEqualTo(3);
-    scanner = scanner("second", keys);
-    scanner.poll();
-    scanner.poll();
-    scanner.poll();
-    assertThat(jobCount(keys)).isEqualTo(4);
-    assertThat(markers()).isEqualTo(2);
-    keys.forEach(this::run);
-    assertThat(bundles.view("case-file", keys.getLast()).current()).isPresent();
-  }
-
-  @Test
-  void podsShareOneScanAndStopOnceAnyOfThemCompletesIt() throws Exception {
-    var keys = new ArrayList<>(List.of(fixture(), fixture(), fixture()));
-    var slow = scanner("shared", keys);
-    slow.poll();
-    var fast = scanner("shared", keys);
-    fast.poll(); // Continues from the other pod's position.
-    assertThat(jobCount(keys)).isEqualTo(3);
-    fast.poll();
-    keys.add(fixture()); // A completed scan must not pick up this new key.
-    slow.poll();
-    assertThat(markers()).isEqualTo(1);
-    assertThat(jobCount(keys)).isEqualTo(3);
-  }
-
-  @Test
-  void backfillSkipsPublicationsAndActiveJobsEvenWithAFreshToken() throws Exception {
+  void refreshQueuesPublishedRenderingAndWaitingCasesAndPublishesReplacements() throws Exception {
     String published = fixture();
     changed(published);
     run(published);
-    // Publication alone is enough to skip a case, even after job retention.
-    jdbc.update("delete from bundling.bundle_job where coalesce_key = :key",
-        Map.of("key", ManagedCaseBundles.key("case-file", published)));
-    String pending = fixture();
-    changed(pending);
-    String running = fixture();
-    changed(running);
+    String before = document(bundles.view("case-file", published)).getUrl();
+    String rendering = fixture();
+    changed(rendering);
     jdbc.update("update bundling.bundle_job set state = 'IN_PROGRESS' where coalesce_key = :key",
-        Map.of("key", ManagedCaseBundles.key("case-file", running)));
-    var keys = List.of(published, pending, running);
-    var scanner = scanner("skip-active", keys);
-    scanner.poll();
-    scanner.poll();
-    assertThat(jobCount(keys)).isEqualTo(2);
-    assertThat(jobCount(List.of(published))).isZero();
+        Map.of("key", ManagedCaseBundles.key("case-file", rendering)));
+    String waiting = fixture();
+    changed(waiting);
+    String untouched = fixture();
+    var keys = List.of(published, rendering, waiting, untouched);
+
+    bundles.refresh("layout-v1");
+    // A rendering job may use old parameters, so it gets a queued successor; the live job is joined.
+    assertThat(jobCount(keys)).isEqualTo(6);
+    assertThat(jdbc.queryForList("""
+        select coalesce_key, selector_parameters::text as parameters, priority from bundling.bundle_job
+        where state = 'QUEUED' and coalesce_key in (:keys)
+        """, Map.of("keys", keys.stream().map(key -> ManagedCaseBundles.key("case-file", key)).toList())))
+        .extracting(row -> keys.stream()
+            .filter(key -> row.get("coalesce_key").equals(ManagedCaseBundles.key("case-file", key)))
+            .findFirst().orElseThrow() + " " + row.get("parameters") + " " + row.get("priority"))
+        .containsExactlyInAnyOrderElementsOf(keys.stream().map(key -> key
+            + " {\"caseKey\": \"" + key + "\", \"definition\": \"case-file\"} "
+            + (key.equals(waiting) ? 0 : -1)).toList());
+    assertThat(refreshes()).isEqualTo(1);
+    // The published PDF stays current until its replacement publishes.
+    assertThat(bundles.view("case-file", published).lifecycle()).isEqualTo(CaseBundleView.Lifecycle.UPDATING);
+    assertThat(document(bundles.view("case-file", published)).getUrl()).isEqualTo(before);
+    keys.forEach(this::run);
+    assertThat(document(bundles.view("case-file", published)).getUrl()).isNotEqualTo(before);
+
+    int total = jobCount(keys);
+    bundles.refresh("layout-v1");
+    assertThat(jobCount(keys)).isEqualTo(total);
+    bundles.refresh("layout-v2");
+    assertThat(jobCount(keys)).isGreaterThan(total);
+    assertThat(jdbc.queryForObject("""
+        select count(distinct coalesce_key) from bundling.bundle_job
+        where state = 'QUEUED' and coalesce_key in (:keys)
+        """, Map.of("keys", keys.stream().map(key -> ManagedCaseBundles.key("case-file", key)).toList()),
+        Integer.class)).isEqualTo(4);
+    assertThat(refreshes()).isEqualTo(2);
+    keys.forEach(this::run);
   }
 
   @Test
-  void freshTokensRetryFailedAndUnpublishedCasesButSameTokenRestartsDoNot() throws Exception {
-    String failed = fixture();
-    var keys = List.of(failed);
-    scanner("first-attempt", keys).poll();
-    jdbc.update("update bundling.bundle_job set state = 'FAILED' where coalesce_key = :key",
-        Map.of("key", ManagedCaseBundles.key("case-file", failed)));
-    scanner("first-attempt", keys).poll(); // The same token never requeues this case.
-    assertThat(jobCount(keys)).isEqualTo(1);
-    scanner("retry", keys).poll();
-    assertThat(jobCount(keys)).isEqualTo(2);
-    jdbc.update("update bundling.bundle_job set state = 'COMPLETED' where coalesce_key = :key",
-        Map.of("key", ManagedCaseBundles.key("case-file", failed)));
-    // A terminal job with no stored publication also qualifies under a new trigger.
-    scanner("retry-unpublished", keys).poll();
-    assertThat(jobCount(keys)).isEqualTo(3);
-  }
-
-  @Test
-  void aFailedCaseKeepsCommittedProgressAndRetriesAfterRestart() throws Exception {
+  void aFailedRefreshRollsBackItsJobsAndRecordSoARestartRetries() throws Exception {
     String key = fixture();
-    var keys = new ArrayList<>(List.of(key, "x".repeat(300)));
-    var scanner = scanner("rollback", keys);
-    scanner.poll(); // Only the oversized second key fails; the first case is already committed.
+    definition.caseKeysSql = "select case_key from no_such_table";
+    assertThatThrownBy(() -> bundles.refresh("retry")).isInstanceOf(RuntimeException.class);
+    definition.caseKeysSql = "select case_key from bundle_test_source union all select repeat('x', 300)";
+    assertThatThrownBy(() -> bundles.refresh("retry")).isInstanceOf(RuntimeException.class);
+    assertThat(jobCount(List.of(key))).isZero();
+    assertThat(refreshes()).isZero();
+    definition.caseKeysSql = Selection.CASE_KEYS;
+    bundles.refresh("retry");
     assertThat(jobCount(List.of(key))).isEqualTo(1);
-    assertThat(jdbc.queryForObject("select after_key from bundling.bundle_backfill where token = 'rollback'",
-        Map.of(), String.class)).isEqualTo(key);
-    assertThat(markers()).isZero();
-    keys.set(1, fixture());
-    scanner("rollback", keys).poll();
-    assertThat(jobCount(keys)).isEqualTo(2);
-    assertThat(markers()).isEqualTo(1);
+    assertThat(refreshes()).isEqualTo(1);
   }
 
   @Test
-  void concurrentScannersDeduplicateAndEmptySourcesComplete() throws Exception {
+  void concurrentPodsQueueOneRefreshOnce() throws Exception {
     String key = fixture();
     try (var pool = Executors.newFixedThreadPool(2)) {
       var start = new CountDownLatch(1);
-      List<Future<?>> submissions = new ArrayList<>();
+      List<Future<?>> pods = new ArrayList<>();
       for (int i = 0; i < 2; i++) {
-        submissions.add(pool.submit(() -> {
+        pods.add(pool.submit(() -> {
           assertThat(start.await(10, TimeUnit.SECONDS)).isTrue();
-          var scanner = scanner("concurrent", List.of(key));
-          scanner.poll();
-          scanner.poll();
+          bundles.refresh("shared");
           return null;
         }));
       }
       start.countDown();
-      for (var submitted : submissions) {
-        submitted.get(10, TimeUnit.SECONDS);
+      for (var pod : pods) {
+        pod.get(20, TimeUnit.SECONDS);
       }
     }
     assertThat(jobCount(List.of(key))).isEqualTo(1);
-    assertThat(markers()).isEqualTo(1);
-    scanner("empty", List.of()).poll();
-    assertThat(markers()).isEqualTo(2);
-    run(key);
+    assertThat(refreshes()).isEqualTo(1);
   }
 
   @Test
-  void absentOrBlankTriggerDisablesBackfillAndOneFluxVariableEnablesIt() throws Exception {
-    var context = new ApplicationContextRunner()
-        .withConfiguration(AutoConfigurations.of(BundleBackfillAutoConfiguration.class));
-    for (String trigger : List.of("", "   ")) {
-      context.withPropertyValues("ccd.bundling.backfill=" + trigger).run(app -> {
-        assertThat(app).hasNotFailed();
-        assertThat(app).doesNotHaveBean(BundleBackfillRunner.class);
-      });
-    }
-    context.run(app -> assertThat(app).doesNotHaveBean(BundleBackfillRunner.class));
+  void startupRefreshesOnANonBlankKeySkipsUnsupportedDefinitionsAndFailsOnError() throws Exception {
     String key = fixture();
-    context.withBean(NamedParameterJdbcTemplate.class, () -> jdbc)
-        .withBean(PlatformTransactionManager.class, transaction::getTransactionManager)
-        .withBean(ManagedCaseBundles.class, () -> bundles)
-        .withBean(CaseBundleDefinition.class, () -> backfillDefinition("case-file", List.of(key)))
-        .withInitializer(app -> app.getEnvironment().getPropertySources().addFirst(
-            new SystemEnvironmentPropertySource("systemEnvironment", Map.of("CCD_BUNDLING_BACKFILL", "flux-1"))))
-        .withPropertyValues("ccd.bundling.backfill.poll-delay=1h")
-        .run(app -> {
-          assertThat(app).hasNotFailed();
-          assertThat(app).hasSingleBean(BundleBackfillRunner.class);
-          app.getBean(BundleBackfillRunner.class).poll();
-          assertThat(jobCount(List.of(key))).isEqualTo(1);
-        });
-  }
-
-  @Test
-  void backfillRequiresADefinition() {
-    assertThatThrownBy(() -> new BundleBackfillRunner(jdbc, transaction.getTransactionManager(),
-        bundles, List.of(), "one-trigger", 2))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("at least one CaseBundleDefinition");
-  }
-
-  @Test
-  void oneTriggerScansAllDefinitionsAndMissingEnumerationDoesNotBlockAnother() throws Exception {
-    String key = fixture();
-    var healthy = backfillDefinition("case-file", List.of(key));
-    var empty = backfillDefinition("empty", List.of());
     var legacy = new CaseBundleDefinition() {
       @Override
       public String name() {
@@ -434,46 +360,46 @@ create table if not exists bundle_test_source(case_key text primary key, referen
         return definition.select(caseKey);
       }
     };
-    var managed = new ManagedCaseBundles(jdbc, jobs,
-        new uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobRepository(jdbc), store,
-        transaction.getTransactionManager(), List.of(healthy, empty, legacy));
-    var scanner = new BundleBackfillRunner(jdbc, transaction.getTransactionManager(), managed,
-        List.of(healthy, empty, legacy), "all-definitions", 2);
-    scanner.poll();
+    for (String blank : List.of("", "   ")) {
+      start(blank, legacy).close();
+    }
+    assertThat(jobCount(List.of(key))).isZero();
+    start(" flux-1 ", legacy).close();
     assertThat(jobCount(List.of(key))).isEqualTo(1);
-    assertThat(markers()).isEqualTo(2);
-    scanner.poll();
-    assertThat(markers()).isEqualTo(2); // No false completion for the unimplemented legacy definition.
+    // Only the supported definition is recorded.
+    assertThat(jdbc.queryForList("select refresh_key || '/' || definition from bundling.bundle_refresh",
+        Map.of(), String.class)).containsExactly("flux-1/case-file");
+    start("#{1 + 1}", legacy).close();
+    assertThat(jdbc.queryForList("select refresh_key from bundling.bundle_refresh", Map.of(), String.class))
+        .containsExactlyInAnyOrder("flux-1", "#{1 + 1}"); // Refresh keys are data, never expressions.
+    definition.caseKeysSql = "select case_key from no_such_table";
+    assertThatThrownBy(() -> start("flux-2", legacy)).isInstanceOf(RuntimeException.class);
+    assertThat(refreshes()).isEqualTo(2);
   }
 
-  private BundleBackfillRunner scanner(String token, List<String> keys) {
-    return new BundleBackfillRunner(jdbc, transaction.getTransactionManager(), bundles,
-        List.of(backfillDefinition("case-file", keys)), token, 2);
+  /** Starts an application with the managed auto-configuration and CCD_BUNDLING_REFRESH set. */
+  private ConfigurableApplicationContext start(String refreshKey, CaseBundleDefinition other) {
+    return new SpringApplicationBuilder(ManagedCaseBundleAutoConfiguration.class)
+        .web(WebApplicationType.NONE)
+        .properties("ccd.bundling.managed.enabled=true")
+        .initializers(app -> {
+          app.getEnvironment().getPropertySources().addFirst(new SystemEnvironmentPropertySource(
+              "fluxEnvironment", Map.of("CCD_BUNDLING_REFRESH", refreshKey)));
+          var beans = app.getBeanFactory();
+          beans.registerSingleton("jdbc", jdbc);
+          beans.registerSingleton("transactions", transaction.getTransactionManager());
+          beans.registerSingleton("jobs", jobs);
+          beans.registerSingleton("repository", new BundleJobRepository(jdbc));
+          beans.registerSingleton("store", store);
+          beans.registerSingleton("resolver", resolver);
+          beans.registerSingleton("selection", definition);
+          beans.registerSingleton("other", other);
+        })
+        .run();
   }
 
-  private CaseBundleDefinition backfillDefinition(String name, List<String> keys) {
-    return new CaseBundleDefinition() {
-      @Override
-      public String name() {
-        return name;
-      }
-
-      @Override
-      public SelectedCaseBundle select(String caseKey) {
-        return definition.select(caseKey);
-      }
-
-      @Override
-      public List<String> caseKeysAfter(String after, int limit) {
-        int start = after == null ? 0 : keys.indexOf(after) + 1;
-        return keys.subList(start, Math.min(start + limit, keys.size()));
-      }
-    };
-  }
-
-  private int markers() {
-    return jdbc.queryForObject("select count(*) from bundling.bundle_backfill where completed_at is not null",
-        Map.of(), Integer.class);
+  private int refreshes() {
+    return jdbc.queryForObject("select count(*) from bundling.bundle_refresh", Map.of(), Integer.class);
   }
 
   private int jobCount(List<String> keys) {
@@ -576,8 +502,10 @@ create table if not exists bundle_test_source(case_key text primary key, referen
   }
 
   static class Selection implements CaseBundleDefinition {
+    static final String CASE_KEYS = "select case_key from bundle_test_source";
     final NamedParameterJdbcTemplate jdbc;
     final AtomicInteger calls = new AtomicInteger();
+    volatile String caseKeysSql = CASE_KEYS;
 
     Selection(NamedParameterJdbcTemplate jdbc) {
       this.jdbc = jdbc;
@@ -586,6 +514,11 @@ create table if not exists bundle_test_source(case_key text primary key, referen
     @Override
     public String name() {
       return "case-file";
+    }
+
+    @Override
+    public String caseKeysSql() {
+      return caseKeysSql;
     }
 
     @Override

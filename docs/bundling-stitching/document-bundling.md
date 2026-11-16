@@ -432,30 +432,29 @@ can implement `BundleDocumentStore`, whose `store` must leave nothing stored whe
 handler; do not register another, or submit other jobs to that worker. A
 `CdamBundleDocumentResolver` bean of your own replaces the default one.
 
-### Backfilling existing cases through Flux
+### Refreshing all bundles through Flux
 
-Implement `caseKeysAfter(after, limit)` on the existing `CaseBundleDefinition`.
-Return at most `limit` eligible keys in stable keyset order, using the same identifiers as
-`select`. Start at `after == null`; return an empty list to finish. Do not use offsets or filter
-on job/bundle state. Cases added behind the cursor need normal change notifications or a new scan.
+To re-render existing cases, for example after a layout change, override `caseKeysSql()` on the
+`CaseBundleDefinition`. Return constant, trusted SQL with a text column `case_key`, using the same keys
+as `select`; no named parameters or trailing semicolon. Never build it from external input.
 
-With managed bundling and the job outbox enabled, trigger through Flux:
-
-```yaml
-CCD_BUNDLING_BACKFILL: "2026-11-16-1"
+```java
+@Override
+public String caseKeysSql() {
+  return "select id::text as case_key from pcs_case where case_reference is not null";
+}
 ```
 
-Use 1-128 letters, digits, dots, underscores or hyphens. Invalid tokens or missing definitions
-fail startup. A fresh token scans all definitions; a completed token does nothing.
-Unset or blank disables scanning; queued jobs still finish.
-Enabling backfill also enables Spring scheduling in the host.
-Definitions without enumeration are warned once and skipped until restart; normal bundling is unaffected.
+With managed bundling and the job outbox enabled, set a new opaque value through Flux:
 
-The scanner queues 25 cases per definition every ten seconds, skipping stored bundles and active
-jobs where possible. Each case commits separately. A fresh token can retry failed or unpublished
-cases. Live changes take priority and promote waiting jobs; automatic follow-ups retain their priority.
-A racing submission can cause an extra render; its failure or missing-document placeholders can
-affect the displayed status or bundle.
+```yaml
+CCD_BUNDLING_REFRESH: "render-layout-v2"
+```
 
-Completion means **queued, not rendered**. Each scan's position is stored per token and
-definition, so pods share one scan and a restart resumes it.
+Set a fresh key after deploying rendering changes to the workers.
+At startup each definition's selected cases, including published and rendering ones, are queued at
+background priority in one transaction with a record of the key and definition. A recorded key does
+nothing on later starts or other pods; unset or blank disables it. A failure rolls back that
+definition's jobs and record and fails startup, so a restart retries it. Definitions without
+`caseKeysSql` are skipped with a warning. Live changes promote waiting refresh jobs. Recorded means
+**queued, not rendered**; existing PDFs stay current until their replacements publish.

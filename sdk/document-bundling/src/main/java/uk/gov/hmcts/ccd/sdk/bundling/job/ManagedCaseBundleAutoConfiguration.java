@@ -1,12 +1,15 @@
 package uk.gov.hmcts.ccd.sdk.bundling.job;
 
 import java.util.List;
+import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.util.StringUtils;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.BundleDocumentStore;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.BundleSystemUser;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundleDefinition;
@@ -43,5 +46,16 @@ public class ManagedCaseBundleAutoConfiguration {
       PlatformTransactionManager transactions,
       List<CaseBundleDefinition> definitions) {
     return new ManagedCaseBundles(jdbc, jobs, repository, store, transactions, definitions);
+  }
+
+  /** A new CCD_BUNDLING_REFRESH value queues a bulk refresh at startup; a failure fails startup. */
+  @Bean
+  ApplicationRunner caseBundleRefresh(ManagedCaseBundles bundles, Environment environment) {
+    return args -> {
+      String refreshKey = environment.getProperty("ccd.bundling.refresh");
+      if (StringUtils.hasText(refreshKey)) {
+        bundles.refresh(refreshKey.trim());
+      }
+    };
   }
 }

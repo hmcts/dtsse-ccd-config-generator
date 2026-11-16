@@ -100,13 +100,13 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
-  void liveChangesJumpAheadOfBackfillAndPromoteAnExistingWaitingJob() {
-    UUID background = UUID.randomUUID();
-    UUID promoted = UUID.randomUUID();
-    UUID live = UUID.randomUUID();
-    assertThat(repository.insertBackfill(background, "background", "{}")).isTrue();
-    assertThat(repository.insertBackfill(promoted, "hot", "{}")).isTrue();
-    repository.insertOrJoin(live, "live", "{}", "{}");
+  void liveChangesJumpAheadOfRefreshesAndRefreshesNeverDowngradeWaitingLiveJobs() {
+    UUID live = repository.insertOrJoin(UUID.randomUUID(), "live", "{}", "{}").externalId();
+    assertThat(repository.insertRefresh(UUID.randomUUID().toString(), "test", "",
+        "select unnest(array['live', 'background', 'hot', 'hot']) as case_key")).isEqualTo(3);
+    UUID background = queued("background").externalId();
+    UUID promoted = queued("hot").externalId();
+    assertThat(column(live, "priority")).isEqualTo("0");
     // Joining a waiting background job promotes it, rather than adding another render.
     assertThat(repository.insertOrJoin(UUID.randomUUID(), "hot", "{}", "{}").externalId())
         .isEqualTo(promoted);
@@ -120,9 +120,8 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
-  void unavailableBackfillFollowupsStayBehindLiveJobsUntilARealChangePromotesThem() {
-    UUID initial = UUID.randomUUID();
-    repository.insertBackfill(initial, "background", "{}");
+  void unavailableRefreshFollowupsStayBehindLiveJobsUntilARealChangePromotesThem() {
+    repository.insertRefresh("followup", "test", "", "select 'background' as case_key");
     var renderer = new FakeRenderer(tempDir).onNextRender(request ->
         renderer(tempDir).success(request, List.of(), List.of(), List.of("doc-gone")));
     var worker = new BundleJobWorker(repository, renderer, twoDocumentSelector(), summaryHandler(),
@@ -904,7 +903,7 @@ class BundleJobOutboxIntegrationTest {
 
     // The outbox lives in its own schema with its own history; the runtime's ccd schema came
     // with it, and the application's history and tables in public are exactly as they were.
-    assertThat(tables(consumer, "bundling")).containsExactly("bundle", "bundle_backfill", "bundle_job", "flyway_schema_history");
+    assertThat(tables(consumer, "bundling")).containsExactly("bundle", "bundle_job", "bundle_refresh", "flyway_schema_history");
     assertThat(history(consumer, "bundling")).extracting(row -> row.get("version"))
         .contains("0001", "0002");
     assertThat(consumer.queryForList("select schema_name from information_schema.schemata "
