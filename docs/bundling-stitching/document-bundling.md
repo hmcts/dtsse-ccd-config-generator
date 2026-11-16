@@ -434,12 +434,20 @@ handler; do not register another, or submit other jobs to that worker. A
 
 ### Backfilling existing cases through Flux
 
-Register a `CaseBundleBackfillSource` bean for each managed bundle definition to backfill. Its
-`caseKeysAfter(after, limit)` returns eligible application case keys in a stable keyset order,
-starting with `after == null` and ending with an empty list. Use the identifiers accepted by
-`CaseBundleDefinition.select`, not necessarily CCD case references. Eligibility stays with the
-application: for example, exclude draft or deleted cases. Do not filter this query on job or
-bundle state, and do not use offsets.
+Implement `caseKeysAfter(after, limit)` on the application's existing `CaseBundleDefinition`.
+No extra bean is needed. Return eligible case keys in stable keyset order, starting with
+`after == null` and ending with an empty list. Use the same identifiers as `select`, not
+necessarily CCD references. For example, delegate to a repository query on the case's primary key:
+
+```java
+@Override
+public List<String> caseKeysAfter(String after, int limit) {
+    return cases.findBundleCaseKeys(after, limit);
+}
+```
+
+Eligibility stays with the application: exclude drafts or deleted cases as appropriate.
+Do not use offsets or filter this query on job/bundle state; the library skips handled cases.
 
 With managed bundling and the job outbox enabled, set one environment variable in Flux:
 
@@ -448,19 +456,21 @@ CCD_BUNDLING_BACKFILL: "2026-11-16-1"
 ```
 
 Absent, empty or whitespace-only disables backfill. A non-blank token scans every registered
-source; definitions without a source are ignored. Use 1-128 letters, digits, dots, underscores or
-hyphens. Deploying a fresh value starts another scan; reusing a completed value does nothing.
-Enabling backfill with no sources, duplicate source definitions or an unknown managed definition
-fails startup, as does an invalid token. The opt-in auto-configuration enables Spring scheduling
-in the host application.
+definition. Use 1-128 letters, digits, dots, underscores or hyphens. Deploying a fresh value starts
+another scan; reusing a completed value does nothing. No definitions or an invalid token fails
+startup. The opt-in configuration enables Spring scheduling in the host application.
+Existing definitions remain compatible for normal bundling. Implement enumeration before
+triggering backfill; the default method throws rather than falsely recording an empty scan as
+complete. Unsupported definitions are logged once per process and skipped until restart,
+without preventing other definitions from being backfilled.
 
-The scanner queues one page of 25 cases per source every ten seconds. Each page uses a short
-transaction; a failed page rolls back and retries without blocking other sources. Queue population
+The scanner queues one page of 25 cases per definition every ten seconds. Each page uses a short
+transaction; a failed page rolls back and retries without blocking other definitions. Queue population
 can run on API pods while rendering remains on separate worker pods. Existing worker settings
 still control render concurrency.
 
 `bundling.bundle_backfill` stores only a completion marker per token and definition, written when
-the source returns its final empty page. It means **queue population finished**, not that PDFs
+the definition returns its final empty page. It means **queue population finished**, not that PDFs
 have rendered. Each page checks for that marker, so pods stop scanning once another pod finishes.
 There are no claims, leases, running states or durable cursors. After a crash, an unfinished scan
 restarts from the beginning; deterministic job IDs prevent duplicate backfill submissions for the
@@ -469,7 +479,7 @@ same token, even after a job has been claimed or failed. Concurrent scans are sa
 Cases with stored publications or queued/running jobs are skipped. A fresh token can retry failed
 or unpublished cases, but never rebuilds a stored publication. Restarts with the same token do not
 reset exhausted jobs. New cases behind an active scan's position need the normal change
-notifications or a fresh trigger. The source must keep its ordering stable during a scan.
+notifications or a fresh trigger. The definition must keep its ordering stable during a scan.
 
 Backfill jobs have priority -1; normal submissions have priority 0. Workers claim normal work
 first, oldest first within each priority. A document change joining a waiting backfill job promotes

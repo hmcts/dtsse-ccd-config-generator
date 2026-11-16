@@ -56,7 +56,6 @@ import uk.gov.hmcts.ccd.sdk.bundling.job.ManagedCaseBundles;
 import uk.gov.hmcts.ccd.sdk.bundling.job.OutboxBundleJobService;
 import uk.gov.hmcts.ccd.sdk.bundling.job.StoredBundleDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.BundleSystemUser;
-import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundleBackfillSource;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundleDefinition;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundleView;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.CdamBundleDocumentStore;
@@ -291,16 +290,21 @@ create table if not exists bundle_test_source(case_key text primary key, referen
   void anotherPodsCompletionStopsAnUnfinishedScanBeforeReadingItsNextPage() throws Exception {
     var keys = List.of(fixture(), fixture(), fixture());
     var calls = new AtomicInteger();
-    var observed = new CaseBundleBackfillSource() {
+    var observed = new CaseBundleDefinition() {
       @Override
-      public String definition() {
+      public String name() {
         return "case-file";
+      }
+
+      @Override
+      public SelectedCaseBundle select(String caseKey) {
+        return definition.select(caseKey);
       }
 
       @Override
       public List<String> caseKeysAfter(String after, int limit) {
         calls.incrementAndGet();
-        return source("case-file", keys).caseKeysAfter(after, limit);
+        return backfillDefinition("case-file", keys).caseKeysAfter(after, limit);
       }
     };
     var slow = new BundleBackfillRunner(jdbc, transaction.getTransactionManager(), bundles,
@@ -415,8 +419,7 @@ create table if not exists bundle_test_source(case_key text primary key, referen
     context.withBean(NamedParameterJdbcTemplate.class, () -> jdbc)
         .withBean(PlatformTransactionManager.class, transaction::getTransactionManager)
         .withBean(ManagedCaseBundles.class, () -> bundles)
-        .withBean(CaseBundleDefinition.class, () -> definition)
-        .withBean(CaseBundleBackfillSource.class, () -> source("case-file", List.of(key)))
+        .withBean(CaseBundleDefinition.class, () -> backfillDefinition("case-file", List.of(key)))
         .withInitializer(app -> app.getEnvironment().getPropertySources().addFirst(
             new SystemEnvironmentPropertySource("systemEnvironment", Map.of("CCD_BUNDLING_BACKFILL", "flux-1"))))
         .withPropertyValues("ccd.bundling.backfill.poll-delay=1h")
@@ -429,28 +432,29 @@ create table if not exists bundle_test_source(case_key text primary key, referen
   }
 
   @Test
-  void enablingBackfillWithoutASourceFailsStartup() {
+  void enablingBackfillWithoutADefinitionFailsStartup() {
     new ApplicationContextRunner()
         .withConfiguration(AutoConfigurations.of(BundleBackfillAutoConfiguration.class))
         .withBean(NamedParameterJdbcTemplate.class, () -> jdbc)
         .withBean(PlatformTransactionManager.class, transaction::getTransactionManager)
         .withBean(ManagedCaseBundles.class, () -> bundles)
-        .withBean(CaseBundleDefinition.class, () -> definition)
         .withPropertyValues("ccd.bundling.backfill=one-trigger")
         .run(app -> {
           assertThat(app).hasFailed();
           assertThat(app.getStartupFailure()).rootCause()
-              .hasMessageContaining("at least one CaseBundleBackfillSource");
+              .hasMessageContaining("at least one CaseBundleDefinition");
         });
   }
 
   @Test
-  void oneTriggerScansAllSourcesAndOneFailingSourceDoesNotBlockAnother() throws Exception {
+  void oneTriggerScansAllDefinitionsAndMissingEnumerationDoesNotBlockAnother() throws Exception {
     String key = fixture();
-    var second = new CaseBundleDefinition() {
+    var healthy = backfillDefinition("case-file", List.of(key));
+    var empty = backfillDefinition("empty", List.of());
+    var legacy = new CaseBundleDefinition() {
       @Override
       public String name() {
-        return "other";
+        return "legacy";
       }
 
       @Override
@@ -460,48 +464,43 @@ create table if not exists bundle_test_source(case_key text primary key, referen
     };
     var managed = new ManagedCaseBundles(jdbc, jobs,
         new uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobRepository(jdbc), store,
-        transaction.getTransactionManager(), List.of(definition, second));
-    var broken = new CaseBundleBackfillSource() {
-      @Override
-      public String definition() {
-        return "other";
-      }
-
-      @Override
-      public List<String> caseKeysAfter(String after, int limit) {
-        throw new IllegalStateException("Temporarily unavailable");
-      }
-    };
+        transaction.getTransactionManager(), List.of(healthy, empty, legacy));
     new ApplicationContextRunner()
         .withConfiguration(AutoConfigurations.of(BundleBackfillAutoConfiguration.class))
         .withBean(NamedParameterJdbcTemplate.class, () -> jdbc)
         .withBean(PlatformTransactionManager.class, transaction::getTransactionManager)
         .withBean(ManagedCaseBundles.class, () -> managed)
-        .withBean("firstDefinition", CaseBundleDefinition.class, () -> definition)
-        .withBean("secondDefinition", CaseBundleDefinition.class, () -> second)
-        .withBean("brokenSource", CaseBundleBackfillSource.class, () -> broken)
-        .withBean("healthySource", CaseBundleBackfillSource.class, () -> source("case-file", List.of(key)))
-        .withPropertyValues("ccd.bundling.backfill=all-sources", "ccd.bundling.backfill.poll-delay=1h")
+        .withBean("healthy", CaseBundleDefinition.class, () -> healthy)
+        .withBean("empty", CaseBundleDefinition.class, () -> empty)
+        .withBean("legacy", CaseBundleDefinition.class, () -> legacy)
+        .withPropertyValues("ccd.bundling.backfill=all-definitions", "ccd.bundling.backfill.poll-delay=1h")
         .run(app -> {
           assertThat(app).hasNotFailed();
           var scanner = app.getBean(BundleBackfillRunner.class);
           scanner.poll();
           assertThat(jobCount(List.of(key))).isEqualTo(1);
-          scanner.poll();
           assertThat(markers()).isEqualTo(1);
+          scanner.poll();
+          assertThat(markers()).isEqualTo(2); // No false completion for the unimplemented legacy definition.
+          assertThat(legacy.select(key).caseReference()).isEqualTo(reference(key));
         });
   }
 
   private BundleBackfillRunner scanner(String token, List<String> keys) {
     return new BundleBackfillRunner(jdbc, transaction.getTransactionManager(), bundles,
-        List.of(source("case-file", keys)), token, 2);
+        List.of(backfillDefinition("case-file", keys)), token, 2);
   }
 
-  private CaseBundleBackfillSource source(String name, List<String> keys) {
-    return new CaseBundleBackfillSource() {
+  private CaseBundleDefinition backfillDefinition(String name, List<String> keys) {
+    return new CaseBundleDefinition() {
       @Override
-      public String definition() {
+      public String name() {
         return name;
+      }
+
+      @Override
+      public SelectedCaseBundle select(String caseKey) {
+        return definition.select(caseKey);
       }
 
       @Override
