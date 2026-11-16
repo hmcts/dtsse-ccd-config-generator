@@ -12,7 +12,6 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleErrorCode;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleOutcome;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
@@ -22,9 +21,8 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
 
 /**
  * JDBC access to the bundling.bundle_job outbox table, and to bundling.bundle, which describes the
- * bundles completed jobs rendered. Inserts join the caller's transaction; worker writes are
- * statement-atomic. Coalesced submissions share a per-key advisory lock with backfill so its
- * eligibility check sees competing commits before inserting. Claiming uses
+ * bundles completed jobs rendered. Every method is a single statement, so the
+ * insert joins the caller's transaction while worker writes are statement-atomic. Claiming uses
  * FOR UPDATE SKIP LOCKED plus a lease; every worker-side write is guarded by the lease owner, so a
  * worker that lost its lease gets false back and the lease holder's state stands.
  */
@@ -92,15 +90,11 @@ public class BundleJobRepository {
   CoalescedInsert insertOrJoin(UUID externalId, String coalesceKey,
       String selectorParametersJson, String executionContextJson, Instant notBefore, int priority) {
     return jdbc.queryForObject("""
-        with key_lock as materialized (
-          select pg_advisory_xact_lock(hashtextextended('bundling.job:' || :coalesceKey, 0))
-        )
         insert into bundling.bundle_job
           (external_id, coalesce_key, state, request_version, request, selector_parameters,
            execution_context, next_attempt_at, priority)
-        select :externalId, :coalesceKey, 'QUEUED', :requestVersion, null, :parameters::jsonb,
-          :context::jsonb, :notBefore, :priority
-        from key_lock where true
+        values (:externalId, :coalesceKey, 'QUEUED', :requestVersion, null, :parameters::jsonb,
+          :context::jsonb, :notBefore, :priority)
         on conflict (coalesce_key)
           where coalesce_key is not null and state = 'QUEUED' and attempts = 0
         do update set coalesced_submissions = bundle_job.coalesced_submissions + 1,
@@ -119,15 +113,11 @@ public class BundleJobRepository {
             rs.getString("selector_parameters")));
   }
 
-  /** A new trigger may retry failures, but never duplicates active work or a stored publication. */
+  /**
+   * Queues a background job unless the key has active work or a stored bundle. A job claimed
+   * while this statement runs can slip past the check; the cost is one redundant render.
+   */
   boolean insertBackfill(UUID externalId, String coalesceKey, String parametersJson) {
-    if (!TransactionSynchronizationManager.isActualTransactionActive()) {
-      throw new IllegalStateException("Backfill eligibility and insertion must share a transaction");
-    }
-    // Separate statements deliberately: READ COMMITTED takes a fresh snapshot after the lock wait.
-    jdbc.queryForObject("select pg_advisory_xact_lock(hashtextextended('bundling.job:' || :key, 0))",
-        params("key", coalesceKey), (rs, n) -> null);
-    // Both conflicts are expected: the per-token ID and the waiting coalesce key.
     return jdbc.update("""
         insert into bundling.bundle_job
           (external_id, coalesce_key, state, request_version, selector_parameters, execution_context, priority)

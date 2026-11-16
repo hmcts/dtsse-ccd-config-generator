@@ -104,8 +104,8 @@ class BundleJobOutboxIntegrationTest {
     UUID background = UUID.randomUUID();
     UUID promoted = UUID.randomUUID();
     UUID live = UUID.randomUUID();
-    tx.executeWithoutResult(status -> assertThat(repository.insertBackfill(background, "background", "{}")).isTrue());
-    tx.executeWithoutResult(status -> assertThat(repository.insertBackfill(promoted, "hot", "{}")).isTrue());
+    assertThat(repository.insertBackfill(background, "background", "{}")).isTrue();
+    assertThat(repository.insertBackfill(promoted, "hot", "{}")).isTrue();
     repository.insertOrJoin(live, "live", "{}", "{}");
     // Joining a waiting background job promotes it, rather than adding another render.
     assertThat(repository.insertOrJoin(UUID.randomUUID(), "hot", "{}", "{}").externalId())
@@ -120,54 +120,9 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
-  void backfillSeesCompetingSubmissionsClaimedWhileItWaitsForTheKeyLock() throws Exception {
-    for (boolean competingBackfill : List.of(false, true)) {
-      String key = "race-" + competingBackfill;
-      try (var connection = dataSource.getConnection(); var pool = Executors.newSingleThreadExecutor()) {
-        var session = new SingleConnectionDataSource(connection, true);
-        var owningJdbc = new NamedParameterJdbcTemplate(session);
-        var owningRepository = new BundleJobRepository(owningJdbc);
-        owningJdbc.queryForObject(
-            "select pg_advisory_lock(hashtextextended('bundling.job:' || :key, 0))",
-            Map.of("key", key), (rs, n) -> null);
-        try {
-          Future<Boolean> backfill = pool.submit(() -> tx.execute(status ->
-              repository.insertBackfill(UUID.randomUUID(), key, "{}")));
-          awaitSessionBlockedOnLock();
-          assertThat(backfill.isDone()).isFalse();
-          UUID competing = UUID.randomUUID();
-          if (competingBackfill) {
-            new TransactionTemplate(new DataSourceTransactionManager(session)).executeWithoutResult(status ->
-                assertThat(owningRepository.insertBackfill(competing, key, "{}")).isTrue());
-          } else {
-            owningRepository.insertOrJoin(competing, key, "{}", "{}");
-          }
-          // The competing job is committed and leaves the waiting-only unique index before the
-          // backfill proceeds. Its eligibility query must use a snapshot taken after the lock.
-          assertThat(repository.claim(1, "race-test", Duration.ofMinutes(1), 3))
-              .extracting(claim -> claim.job().externalId()).containsExactly(competing);
-          owningJdbc.queryForObject(
-              "select pg_advisory_unlock(hashtextextended('bundling.job:' || :key, 0))",
-              Map.of("key", key), Boolean.class);
-          assertThat(backfill.get(10, TimeUnit.SECONDS)).isFalse();
-          assertThat(jdbc.queryForObject("select count(*) from bundling.bundle_job where coalesce_key = :key",
-              Map.of("key", key), Integer.class)).isEqualTo(1);
-          // A real change after selection must still create a fresh follow-up.
-          assertThat(repository.insertOrJoin(UUID.randomUUID(), key, "{}", "{}").externalId())
-              .isNotEqualTo(competing);
-        } finally {
-          owningJdbc.queryForObject(
-              "select pg_advisory_unlock_all()", Map.of(), (rs, n) -> null);
-        }
-        jdbc.update("delete from bundling.bundle_job where coalesce_key = :key", Map.of("key", key));
-      }
-    }
-  }
-
-  @Test
   void unavailableBackfillFollowupsStayBehindLiveJobsUntilARealChangePromotesThem() {
     UUID initial = UUID.randomUUID();
-    tx.executeWithoutResult(status -> repository.insertBackfill(initial, "background", "{}"));
+    repository.insertBackfill(initial, "background", "{}");
     var renderer = new FakeRenderer(tempDir).onNextRender(request ->
         renderer(tempDir).success(request, List.of(), List.of(), List.of("doc-gone")));
     var worker = new BundleJobWorker(repository, renderer, twoDocumentSelector(), summaryHandler(),

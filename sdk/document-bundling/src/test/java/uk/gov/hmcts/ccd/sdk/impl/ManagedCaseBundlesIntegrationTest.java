@@ -258,16 +258,14 @@ create table if not exists bundle_test_source(case_key text primary key, referen
   }
 
   @Test
-  void completionSurvivesRestartsAndAFreshTriggerScansAgain() throws Exception {
+  void scansResumeAfterRestartsAndAFreshTriggerScansAgain() throws Exception {
     var keys = new ArrayList<>(List.of(fixture(), fixture(), fixture()));
     var scanner = scanner("first", keys);
     scanner.poll();
     assertThat(jobCount(keys)).isEqualTo(2);
     assertThat(markers()).isZero();
-    // An unfinished scan restarts from the beginning, without duplicating the committed page.
+    // An unfinished scan resumes after the last committed page.
     scanner = scanner("first", keys);
-    scanner.poll();
-    assertThat(jobCount(keys)).isEqualTo(2);
     scanner.poll();
     assertThat(jobCount(keys)).isEqualTo(3);
     scanner.poll();
@@ -288,15 +286,15 @@ create table if not exists bundle_test_source(case_key text primary key, referen
   }
 
   @Test
-  void anotherPodsCompletionStopsAnUnfinishedScanBeforeReadingItsNextPage() throws Exception {
+  void podsShareOneScanAndStopOnceAnyOfThemCompletesIt() throws Exception {
     var keys = new ArrayList<>(List.of(fixture(), fixture(), fixture()));
     var slow = scanner("shared", keys);
     slow.poll();
     var fast = scanner("shared", keys);
+    fast.poll(); // Continues from the other pod's page rather than rescanning it.
+    assertThat(jobCount(keys)).isEqualTo(3);
     fast.poll();
-    fast.poll();
-    fast.poll();
-    keys.add(fixture()); // The unfinished scan must not pick up this new key after another pod finishes.
+    keys.add(fixture()); // A completed scan must not pick up this new key.
     slow.poll();
     assertThat(markers()).isEqualTo(1);
     assertThat(jobCount(keys)).isEqualTo(3);
@@ -331,7 +329,7 @@ create table if not exists bundle_test_source(case_key text primary key, referen
     scanner("first-attempt", keys).poll();
     jdbc.update("update bundling.bundle_job set state = 'FAILED' where coalesce_key = :key",
         Map.of("key", ManagedCaseBundles.key("case-file", failed)));
-    scanner("first-attempt", keys).poll(); // No marker yet: per-token job ID prevents requeueing.
+    scanner("first-attempt", keys).poll(); // Not complete yet, but the scan is already past this case.
     assertThat(jobCount(keys)).isEqualTo(1);
     scanner("retry", keys).poll();
     assertThat(jobCount(keys)).isEqualTo(2);
@@ -471,7 +469,8 @@ create table if not exists bundle_test_source(case_key text primary key, referen
   }
 
   private int markers() {
-    return jdbc.queryForObject("select count(*) from bundling.bundle_backfill", Map.of(), Integer.class);
+    return jdbc.queryForObject("select count(*) from bundling.bundle_backfill where completed_at is not null",
+        Map.of(), Integer.class);
   }
 
   private int jobCount(List<String> keys) {

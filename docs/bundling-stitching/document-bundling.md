@@ -455,5 +455,5 @@ The scanner queues 25 cases per definition every ten seconds, skipping stored bu
 jobs. A fresh token can retry failed or unpublished cases. Live changes take priority over backfill
 and promote waiting jobs; automatic follow-ups retain their priority.
 
-Completion means **queued, not rendered**. A marker is stored per token and definition. Unfinished
-scans restart from the beginning after a crash; queue IDs deduplicate concurrent or repeated scans.
+Completion means **queued, not rendered**. Each scan's position is stored per token and
+definition, so pods share one scan and a restart resumes it.

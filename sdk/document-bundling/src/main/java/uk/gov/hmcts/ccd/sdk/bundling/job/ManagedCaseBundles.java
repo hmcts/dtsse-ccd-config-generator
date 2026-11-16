@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.bundling.job;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -95,14 +94,11 @@ public class ManagedCaseBundles
 
   /**
    * Queues a missing bundle at background priority in the caller's transaction, skipping active
-   * jobs and stored publications. Same-token calls are idempotent; fresh tokens can retry failures.
+   * jobs and stored bundles.
    */
-  public boolean backfill(String token, String definition, String caseKey) {
+  boolean backfill(String definition, String caseKey) {
     definition(definition);
-    // Encode the tuple so token/case-key delimiters cannot produce ambiguous IDs.
-    UUID id = UUID.nameUUIDFromBytes(
-        json.write(List.of("backfill", token, definition, caseKey)).getBytes(StandardCharsets.UTF_8));
-    return repository.insertBackfill(id, key(definition, caseKey),
+    return repository.insertBackfill(UUID.randomUUID(), key(definition, caseKey),
         json.write(Map.of("definition", definition, "caseKey", caseKey)));
   }
 

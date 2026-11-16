@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.bundling.job;
 
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -13,7 +12,11 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundleDefinition;
 
-/** Completion markers remember scans; the existing job queue deduplicates work after a crash. */
+/**
+ * Queues a page of each definition's cases per poll. The scan's position lives in
+ * bundling.bundle_backfill and advances with the page it queued, so pods share one scan and a
+ * restart resumes it.
+ */
 @Slf4j
 public class BundleBackfillRunner {
   private final NamedParameterJdbcTemplate jdbc;
@@ -22,8 +25,7 @@ public class BundleBackfillRunner {
   private final List<CaseBundleDefinition> definitions;
   private final String token;
   private final int batchSize;
-  private final Map<String, String> cursors = new HashMap<>();
-  private final Set<String> completed = new HashSet<>();
+  private final Set<String> unsupported = new HashSet<>();
 
   public BundleBackfillRunner(NamedParameterJdbcTemplate jdbc, PlatformTransactionManager transactions,
       ManagedCaseBundles bundles, List<CaseBundleDefinition> definitions, String token, int batchSize) {
@@ -49,18 +51,19 @@ public class BundleBackfillRunner {
   /** One short transaction per definition; a failed page retries without holding up other definitions. */
   @Scheduled(fixedDelayString = "${ccd.bundling.backfill.poll-delay:10s}",
       initialDelayString = "${ccd.bundling.backfill.poll-delay:10s}")
-  public synchronized void poll() {
+  public void poll() {
     for (var definition : definitions) {
-      if (!completed.contains(definition.name())) {
+      String name = definition.name();
+      if (!unsupported.contains(name)) {
         try {
-          scan(definition);
-        } catch (UnsupportedOperationException unsupported) {
-          completed.add(definition.name());
+          transaction.executeWithoutResult(status -> scan(definition));
+        } catch (UnsupportedOperationException failure) {
+          unsupported.add(name);
           log.warn("Bundle backfill token={} definition={} unsupported; skipping until restart: {}",
-              token, definition.name(), unsupported.getMessage());
+              token, name, failure.getMessage());
         } catch (RuntimeException failure) {
           log.warn("Bundle backfill token={} definition={} page failed; retrying next poll",
-              token, definition.name(), failure);
+              token, name, failure);
         }
       }
     }
@@ -68,38 +71,38 @@ public class BundleBackfillRunner {
 
   private void scan(CaseBundleDefinition definition) {
     String name = definition.name();
-    var run = Map.of("token", token, "definition", name);
-    List<String> keys = transaction.execute(status -> {
-      if (Boolean.TRUE.equals(jdbc.queryForObject("""
-          select exists (select 1 from bundling.bundle_backfill
-                         where token = :token and definition = :definition)
-          """, run, Boolean.class))) {
-        return List.of();
-      }
-      String after = cursors.get(name);
-      var page = List.copyOf(definition.caseKeysAfter(after, batchSize));
-      if (page.size() > batchSize || page.stream().anyMatch(String::isBlank)
-          || new HashSet<>(page).size() != page.size() || after != null && page.contains(after)) {
-        throw new IllegalArgumentException("Backfill definition must return a bounded, advancing page of case keys");
-      }
-      for (String key : page) {
-        bundles.backfill(token, name, key);
-      }
-      if (page.isEmpty()) {
-        jdbc.update("""
-            insert into bundling.bundle_backfill (token, definition) values (:token, :definition)
-            on conflict do nothing
-            """, run);
-      }
-      return page;
-    });
-    // Advance only after commit. A crash can rescan, but deterministic job IDs prevent repeat work.
-    if (keys.isEmpty()) {
-      completed.add(name);
-    } else {
-      cursors.put(name, keys.getLast());
+    var scan = Map.of("token", token, "definition", name);
+    jdbc.update("""
+        insert into bundling.bundle_backfill (token, definition) values (:token, :definition)
+        on conflict do nothing
+        """, scan);
+    // No row: the scan is complete, or another pod is queuing its next page.
+    List<String> position = jdbc.query("""
+        select after_key from bundling.bundle_backfill
+        where token = :token and definition = :definition and completed_at is null
+        for update skip locked
+        """, scan, (rs, n) -> rs.getString(1));
+    if (position.isEmpty()) {
+      return;
     }
-    log.info("Bundle backfill token={} definition={} scanned={} scanComplete={}",
-        token, name, keys.size(), keys.isEmpty());
+    String after = position.getFirst();
+    List<String> page = definition.caseKeysAfter(after, batchSize);
+    if (page.size() > batchSize || after != null && page.contains(after)) {
+      throw new IllegalArgumentException("Backfill definition must return a bounded, advancing page of case keys");
+    }
+    page.forEach(key -> bundles.backfill(name, key));
+    if (page.isEmpty()) {
+      jdbc.update("""
+          update bundling.bundle_backfill set completed_at = now()
+          where token = :token and definition = :definition
+          """, scan);
+    } else {
+      jdbc.update("""
+          update bundling.bundle_backfill set after_key = :last
+          where token = :token and definition = :definition
+          """, Map.of("token", token, "definition", name, "last", page.getLast()));
+    }
+    log.info("Bundle backfill token={} definition={} queued={} scanComplete={}",
+        token, name, page.size(), page.isEmpty());
   }
 }
