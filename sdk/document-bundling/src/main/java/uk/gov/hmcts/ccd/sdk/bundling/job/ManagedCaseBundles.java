@@ -94,19 +94,20 @@ public class ManagedCaseBundles
   }
 
   /**
-   * Queues an initial bundle at background priority unless this case already has a job or stored
-   * bundle. The deterministic id also deduplicates concurrent scanners after a job is claimed.
-   * Must run in a transaction. Failed jobs retain the worker's normal retry behaviour; backfill
-   * does not reset them. A subsequent document change promotes a waiting backfill to normal priority.
+   * Queues a missing bundle at background priority unless a job is queued/running or a stored
+   * publication exists. A fresh token can retry failures; the same token cannot queue a case
+   * twice, including after a crash. Must run in a transaction. Normal changes promote a waiting
+   * backfill job to normal priority.
    */
-  public boolean backfill(String definition, String caseKey) {
+  public boolean backfill(String token, String definition, String caseKey) {
     definition(definition);
     if (!TransactionSynchronizationManager.isActualTransactionActive()) {
       throw new IllegalStateException("Bundle backfill must run in a transaction");
     }
-    String key = key(definition, caseKey);
-    UUID id = UUID.nameUUIDFromBytes(("backfill:" + key).getBytes(StandardCharsets.UTF_8));
-    return repository.insertBackfill(id, key,
+    // Encode the tuple so token/case-key delimiters cannot produce ambiguous IDs.
+    UUID id = UUID.nameUUIDFromBytes(
+        json.write(List.of("backfill", token, definition, caseKey)).getBytes(StandardCharsets.UTF_8));
+    return repository.insertBackfill(id, key(definition, caseKey),
         json.write(Map.of("definition", definition, "caseKey", caseKey)));
   }
 

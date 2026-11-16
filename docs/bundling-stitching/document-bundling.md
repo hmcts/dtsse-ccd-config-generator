@@ -434,45 +434,49 @@ handler; do not register another, or submit other jobs to that worker. A
 
 ### Backfilling existing cases through Flux
 
-Backfill populates the existing job queue; it has no separate run table, durable cursor or run ID.
-Register one `CaseBundleBackfillSource` bean for the definition to backfill. Its
+Register a `CaseBundleBackfillSource` bean for each managed bundle definition to backfill. Its
 `caseKeysAfter(after, limit)` returns eligible application case keys in a stable keyset order,
-starting with `after == null` and ending with an empty list. Use the same identifiers as
-`CaseBundleDefinition.select`, not necessarily the CCD case references. Eligibility stays with
-the application: for example, it may exclude draft or deleted cases. Do not filter this query on
-job or bundle state, and do not use offsets.
+starting with `after == null` and ending with an empty list. Use the identifiers accepted by
+`CaseBundleDefinition.select`, not necessarily CCD case references. Eligibility stays with the
+application: for example, exclude draft or deleted cases. Do not filter this query on job or
+bundle state, and do not use offsets.
 
-With managed bundling and the job outbox enabled, set these environment variables in the service's
-Flux release:
+With managed bundling and the job outbox enabled, set one environment variable in Flux:
 
 ```yaml
-CCD_BUNDLING_BACKFILL_ENABLED: "true"
-CCD_BUNDLING_BACKFILL_DEFINITION: "case-bundle"
+CCD_BUNDLING_BACKFILL: "2026-11-16-1"
 ```
 
-Backfill is disabled by default. Enabling it without exactly one source for the named managed
-definition fails startup. The scanner queues one page per poll: `ccd.bundling.backfill.batch-size`
-defaults to 25 and `ccd.bundling.backfill.poll-delay` to `10s`. Their environment variable names
-are `CCD_BUNDLING_BACKFILL_BATCHSIZE` and `CCD_BUNDLING_BACKFILL_POLLDELAY`. These settings control
-queue population, not render concurrency, which remains controlled by the existing job worker.
-The scanner can run on API pods even when rendering is restricted to separate worker pods.
+Absent, empty or whitespace-only disables backfill. A non-blank token scans every registered
+source; definitions without a source are ignored. Use 1-128 letters, digits, dots, underscores or
+hyphens. Deploying a fresh value starts another scan; reusing a completed value does nothing.
+Enabling backfill with no sources, duplicate source definitions or an unknown managed definition
+fails startup, as does an invalid token. The opt-in auto-configuration enables Spring scheduling
+in the host application.
 
-Each process scans once. Restarting or deploying scans again from the beginning, skipping cases
-with any existing job or a currently stored publication. Deterministic backfill job IDs and the
-queue's coalescing constraint prevent duplicate backfill submissions across pods, including after
-a job is claimed. A page's inserts commit together; a failure retries the page on the next poll.
-There is no migration to run for each backfill: the library's one-time schema upgrade only adds
-job priority. The source must keep its ordering stable; cases added behind an active scan's
-position need the usual change notifications or a later scan.
+The scanner queues one page of 25 cases per source every ten seconds. Each page uses a short
+transaction; a failed page rolls back and retries without blocking other sources. Queue population
+can run on API pods while rendering remains on separate worker pods. Existing worker settings
+still control render concurrency.
+
+`bundling.bundle_backfill` stores only a completion marker per token and definition, written when
+the source returns its final empty page. It means **queue population finished**, not that PDFs
+have rendered. Each page checks for that marker, so pods stop scanning once another pod finishes.
+There are no claims, leases, running states or durable cursors. After a crash, an unfinished scan
+restarts from the beginning; deterministic job IDs prevent duplicate backfill submissions for the
+same token, even after a job has been claimed or failed. Concurrent scans are safe.
+
+Cases with stored publications or queued/running jobs are skipped. A fresh token can retry failed
+or unpublished cases, but never rebuilds a stored publication. Restarts with the same token do not
+reset exhausted jobs. New cases behind an active scan's position need the normal change
+notifications or a fresh trigger. The source must keep its ordering stable during a scan.
 
 Backfill jobs have priority -1; normal submissions have priority 0. Workers claim normal work
-first, then backfill, oldest first within each priority. If a document change joins a waiting
-backfill job, that job is promoted to normal priority in the change's transaction. Work already
-rendering is not interrupted. Sustained normal traffic can delay backfill.
+first, oldest first within each priority. A document change joining a waiting backfill job promotes
+it to normal priority in the change's transaction. Work already rendering is not interrupted;
+sustained normal traffic can delay backfill.
 
-Set `CCD_BUNDLING_BACKFILL_ENABLED` to `"false"` in Flux to stop further queue population after
-rollout. Already queued jobs continue to render. Leaving it enabled is also safe: once a process
-reaches the end, it stops scanning. Backfill does not regenerate published bundles or reset failed
-jobs; failures retain the worker's normal bounded retries and can be retriggered by a subsequent
-document change. An empty scan means population is finished, not that all PDFs have rendered;
-monitor the existing job states for completion.
+Remove the variable or set it to an empty value in Flux to stop further population after rollout.
+Already queued jobs finish normally. Monitor existing job states for rendering completion. Library
+migrations add job priority and the completion-marker table once; subsequent backfills need only a
+fresh Flux token.

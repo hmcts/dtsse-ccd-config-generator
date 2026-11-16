@@ -118,13 +118,15 @@ public class BundleJobRepository {
             rs.getString("selector_parameters")));
   }
 
-  /** Initial population only: jobs (including failures) and published bundles already count as handled. */
+  /** A new trigger may retry failures, but never duplicates active work or a stored publication. */
   boolean insertBackfill(UUID externalId, String coalesceKey, String parametersJson) {
+    // Both conflicts are expected: the per-token ID and the waiting coalesce key.
     return jdbc.update("""
         insert into bundling.bundle_job
           (external_id, coalesce_key, state, request_version, selector_parameters, execution_context, priority)
         select :externalId, :key, 'QUEUED', :version, :parameters::jsonb, '{}'::jsonb, -1
-        where not exists (select 1 from bundling.bundle_job where coalesce_key = :key)
+        where not exists (select 1 from bundling.bundle_job where coalesce_key = :key
+                          and state in ('QUEUED', 'IN_PROGRESS'))
           and not exists (select 1 from bundling.bundle where bundle_key = :key
                           and document_id is not null and deleted_at is null)
         on conflict do nothing

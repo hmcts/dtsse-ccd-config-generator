@@ -15,8 +15,9 @@ public interface CaseBundleBackfillSource {
    * definition's select method. Do not use offset pagination or filter on bundle/job state: the
    * library skips cases already handled. Called inside a short database transaction.
    *
-   * <p>Each process scans once while enabled; restarts scan again, using the queue to avoid repeat
-   * work. New cases behind the scan's position need normal change notifications or a later scan.
+   * <p>Completed trigger/definition pairs are remembered. Unfinished scans restart from the
+   * beginning, using the queue to avoid repeat work. New cases behind the scan's position need
+   * normal change notifications or a fresh backfill trigger.
    */
   List<String> caseKeysAfter(String after, int limit);
 }
