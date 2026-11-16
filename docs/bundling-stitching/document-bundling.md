@@ -123,7 +123,7 @@ many renders hold a PDFBox scratch buffer at once; extra renders wait their turn
 ## Logs and metrics
 
 Logs go through SLF4J with `externalId`, `stage` and `documentId` in the MDC (your own MDC values
-are restored afterwards): one INFO line per stage, one WARN per warning, and exactly one ERROR
+are restored afterwards): INFO per stage and empty section, WARN for other warnings, and one ERROR
 when a render fails, whose message is complete on its own. `result.timings()` has the time spent
 in each stage. If a Micrometer `MeterRegistry` bean exists (or you call `.meterRegistry(...)` on
 the builder) the renderer publishes `ccd.bundling.stage` timers and `ccd.bundling.documents`,
@@ -364,7 +364,7 @@ service's `CaseBundle` from `result.documents()`.
 ## Telemetry
 
 Logs go through SLF4J with the MDC keys `externalId`, `stage` and `documentId` (restored to the
-caller's values afterwards): one INFO per stage, one WARN per warning, exactly one ERROR at final
+caller's values afterwards): INFO per stage and empty section, WARN for other warnings, one ERROR at final
 failure whose message is complete on its own. `result.timings()` carries the wall-clock time per
 stage. When a Micrometer `MeterRegistry` bean exists (or `.meterRegistry(...)` is called on the
 builder) the renderer publishes `ccd.bundling.stage` timers and `ccd.bundling.documents`,
