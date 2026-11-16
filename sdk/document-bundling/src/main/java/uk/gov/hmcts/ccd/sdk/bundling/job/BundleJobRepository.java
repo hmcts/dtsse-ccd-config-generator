@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -29,7 +30,7 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
 public class BundleJobRepository {
   private static final String IN_PROGRESS = BundleJobState.IN_PROGRESS.name();
   private static final String JOB_COLUMNS = """
-      select external_id, state, attempts, created_at, updated_at, coalesce_key,
+      select external_id, state, attempts, created_at, updated_at, definition, case_key,
              coalesced_submissions, claimed_at, result::text as result, failure_code,
              failure_message,
              failure_documents::text as failure_documents
@@ -37,7 +38,7 @@ public class BundleJobRepository {
       """;
 
   private static final String BUNDLE_COLUMNS = """
-      select id, job_id, bundle_key, case_reference, selected_at, created_at, outcome, file_name,
+      select id, job_id, definition, case_key, case_reference, selected_at, created_at, outcome, file_name,
              media_type, size_bytes, sha256, page_count, request::text as request,
              documents::text as documents, missing_documents::text as missing_documents,
              warnings::text as warnings, document_id, document_url, binary_url
@@ -59,66 +60,36 @@ public class BundleJobRepository {
     this.jdbc = jdbc;
   }
 
-  /** Inserts the job unless its external id exists; a concurrent insert of the id waits. */
-  boolean insertIfAbsent(UUID externalId, String requestJson, String selectorParametersJson,
-      String executionContextJson) {
-    return jdbc.update("""
-        insert into bundling.bundle_job
-          (external_id, state, request_version, request, selector_parameters, execution_context)
-        values (:externalId, 'QUEUED', :requestVersion, :request::jsonb, :parameters::jsonb,
-          :context::jsonb)
-        on conflict (external_id) do nothing
-        """,
-        params("externalId", externalId, "requestVersion", BundleJobJson.REQUEST_VERSION,
-            "request", requestJson, "parameters", selectorParametersJson,
-            "context", executionContextJson)) == 1;
-  }
-
   /**
-   * Inserts a job under the coalesce key, or joins the key's job that is still waiting for its
-   * first claim. Joining updates that row, so the caller holds its lock until it commits and the
-   * worker's SKIP LOCKED claim passes over it: a joined job is never claimed before the change
-   * that joined it is visible. If the waiting job is being claimed concurrently, Postgres waits
-   * for the claim, finds the row no longer waiting, and inserts a follow-up instead.
+   * Inserts a job for the case, or joins the case's job that is still waiting for its first
+   * claim, and returns that job's id. Joining updates that row, so the caller holds its lock until
+   * it commits and the worker's SKIP LOCKED claim passes over it: a joined job is never claimed
+   * before the change that joined it is visible. If the waiting job is being claimed concurrently,
+   * Postgres waits for the claim, finds the row no longer waiting, and inserts a follow-up instead.
+   *
+   * <p>A newly inserted job is not claimable before notBefore (null for immediately) and carries
+   * the count of re-runs for unavailable documents. Joining a delayed job with an immediate
+   * submission makes it immediate, and joining a waiting refresh job promotes it.
    */
-  CoalescedInsert insertOrJoin(UUID externalId, String coalesceKey,
-      String selectorParametersJson, String executionContextJson) {
-    return insertOrJoin(externalId, coalesceKey, selectorParametersJson, executionContextJson,
-        null);
-  }
-
-  /**
-   * As {@link #insertOrJoin(UUID, String, String, String)}, but a newly inserted job is not
-   * claimable before notBefore (null for immediately). The job runs as soon as any submission
-   * wants it: joining a delayed job with an immediate submission makes it immediate.
-   */
-  CoalescedInsert insertOrJoin(UUID externalId, String coalesceKey,
-      String selectorParametersJson, String executionContextJson, Instant notBefore) {
+  UUID insertOrJoin(UUID externalId, String definition, String caseKey, Instant notBefore,
+      int unavailableRequeues) {
     return jdbc.queryForObject("""
         insert into bundling.bundle_job
-          (external_id, coalesce_key, state, request_version, request, selector_parameters,
-           execution_context, next_attempt_at)
-        values (:externalId, :coalesceKey, 'QUEUED', :requestVersion, null, :parameters::jsonb,
-          :context::jsonb, :notBefore)
-        on conflict (coalesce_key)
-          where coalesce_key is not null and state = 'QUEUED' and attempts = 0
+          (external_id, definition, case_key, next_attempt_at, unavailable_requeues)
+        values (:externalId, :definition, :caseKey, :notBefore, :requeues)
+        on conflict (definition, case_key) where state = 'QUEUED' and attempts = 0
         do update set coalesced_submissions = bundle_job.coalesced_submissions + 1,
           last_coalesced_at = clock_timestamp(), updated_at = clock_timestamp(),
+          priority = greatest(bundle_job.priority, excluded.priority),
           next_attempt_at = case
             when bundle_job.next_attempt_at is null or excluded.next_attempt_at is null then null
             else least(bundle_job.next_attempt_at, excluded.next_attempt_at) end
-        returning external_id, selector_parameters::text as selector_parameters
+        returning external_id
         """,
-        params("externalId", externalId, "coalesceKey", coalesceKey,
-            "requestVersion", BundleJobJson.REQUEST_VERSION, "parameters", selectorParametersJson,
-            "context", executionContextJson,
+        params("externalId", externalId, "definition", definition, "caseKey", caseKey,
+            "requeues", unavailableRequeues,
             "notBefore", notBefore == null ? null : OffsetDateTime.ofInstant(notBefore, ZoneOffset.UTC)),
-        (rs, n) -> new CoalescedInsert(rs.getObject("external_id", UUID.class),
-            rs.getString("selector_parameters")));
-  }
-
-  /** The job a coalesced submission landed on, and the parameters that job keeps. */
-  record CoalescedInsert(UUID externalId, String storedSelectorParametersJson) {
+        UUID.class);
   }
 
   public Optional<BundleJob> find(UUID externalId) {
@@ -127,21 +98,22 @@ public class BundleJobRepository {
   }
 
   /**
-   * The key's job reflecting the newest state: the one still waiting if there is one, otherwise
+   * The case's job reflecting the newest state: the one still waiting if there is one, otherwise
    * the most recently claimed, otherwise the most recently submitted. A delayed re-run is not
    * waiting until it is due, so the bundle it follows stays the latest until then. created_at
    * is the submitting transaction's start time, so it alone cannot order jobs from overlapping
    * transactions.
    */
-  Optional<BundleJob> findLatest(String coalesceKey) {
+  public Optional<BundleJob> findLatest(String definition, String caseKey) {
     return jdbc.query(JOB_COLUMNS + """
-         where coalesce_key = :coalesceKey
+         where definition = :definition and case_key = :caseKey
          order by (state = 'QUEUED' and attempts = 0
                    and (next_attempt_at is null or next_attempt_at <= now())) desc,
                   claimed_at desc nulls last,
                   created_at desc, external_id
          limit 1
-        """, params("coalesceKey", coalesceKey), (rs, n) -> map(rs)).stream().findFirst();
+        """, params("definition", definition, "caseKey", caseKey), (rs, n) -> map(rs)).stream()
+        .findFirst();
   }
 
   List<ClaimedBundleJob> claim(int limit, String leaseOwner, Duration leaseDuration,
@@ -150,10 +122,9 @@ public class BundleJobRepository {
         with claimable as (
           select external_id from bundling.bundle_job
           where attempts < :maxAttempts
-            and request_version <= :maxVersion
             and ((state = 'QUEUED' and (next_attempt_at is null or next_attempt_at <= now()))
                  or (state = :inProgress and lease_expires_at <= now()))
-          order by created_at, external_id
+          order by priority desc, created_at, external_id
           limit :limit
           for update skip locked
         )
@@ -163,24 +134,41 @@ public class BundleJobRepository {
             next_attempt_at = null, claimed_at = now(), updated_at = now()
         from claimable where job.external_id = claimable.external_id
         returning job.external_id, job.attempts, job.created_at, job.updated_at,
-            job.coalesce_key, job.coalesced_submissions, job.claimed_at,
-            job.request_version, job.request::text as request,
-            job.selector_parameters::text as selector_parameters,
-            job.execution_context::text as execution_context,
-            job.transient_history::text as transient_history
+            job.definition, job.case_key, job.coalesced_submissions, job.claimed_at,
+            job.unavailable_requeues, job.transient_history::text as transient_history
         """,
         params("limit", limit, "leaseOwner", leaseOwner, "leaseMillis", leaseDuration.toMillis(),
-            "maxAttempts", maxAttempts, "inProgress", IN_PROGRESS,
-            "maxVersion", BundleJobJson.REQUEST_VERSION),
+            "maxAttempts", maxAttempts, "inProgress", IN_PROGRESS),
         (rs, n) -> new ClaimedBundleJob(
             new BundleJob(rs.getObject("external_id", UUID.class), BundleJobState.IN_PROGRESS,
                 rs.getInt("attempts"), instant(rs, "created_at"), instant(rs, "updated_at"),
-                Optional.ofNullable(rs.getString("coalesce_key")),
+                rs.getString("definition"), rs.getString("case_key"),
                 rs.getInt("coalesced_submissions"), Optional.of(instant(rs, "claimed_at")),
                 Optional.empty(), Optional.empty()),
-            rs.getInt("request_version"), rs.getString("request"),
-            rs.getString("selector_parameters"), rs.getString("execution_context"),
-            rs.getString("transient_history"), leaseOwner));
+            rs.getInt("unavailable_requeues"), rs.getString("transient_history"), leaseOwner));
+  }
+
+  /** Records the case the job's documents were selected for. */
+  void recordCase(UUID externalId, long caseReference, String caseType, String jurisdiction) {
+    jdbc.update("""
+        update bundling.bundle_job
+        set case_reference = :caseReference, case_type = :caseType, jurisdiction = :jurisdiction
+        where external_id = :externalId
+        """, params("externalId", externalId, "caseReference", caseReference,
+        "caseType", caseType, "jurisdiction", jurisdiction));
+  }
+
+  /** The case the job's documents were selected for. */
+  CaseTarget findCase(UUID externalId) {
+    return jdbc.queryForObject("""
+        select case_reference, case_type, jurisdiction from bundling.bundle_job
+        where external_id = :externalId
+        """, params("externalId", externalId), (rs, n) -> new CaseTarget(
+        Objects.requireNonNull(rs.getObject("case_reference", Long.class), "No case was recorded"),
+        rs.getString("case_type"), rs.getString("jurisdiction")));
+  }
+
+  record CaseTarget(long caseReference, String caseType, String jurisdiction) {
   }
 
   List<UUID> failExhaustedStaleJobs(int maxAttempts) {
@@ -213,12 +201,12 @@ public class BundleJobRepository {
               failure_documents = null, lease_owner = null, lease_expires_at = null,
               next_attempt_at = null, updated_at = now()
           where external_id = :externalId and lease_owner = :leaseOwner and state = :inProgress
-          returning external_id, coalesce_key, claimed_at, created_at, execution_context
+          returning external_id, definition, case_key, case_reference, claimed_at, created_at
         )
-        insert into bundling.bundle (job_id, bundle_key, case_reference, selected_at, outcome,
+        insert into bundling.bundle (job_id, definition, case_key, case_reference, selected_at, outcome,
           file_name, media_type, size_bytes, sha256, page_count, request, documents,
           missing_documents, warnings, document_id, document_url, binary_url)
-        select external_id, coalesce_key, execution_context ->> 'caseReference',
+        select external_id, definition, case_key, case_reference::text,
           coalesce(claimed_at, created_at), :outcome, :fileName, :mediaType, :size, :sha256,
           :pageCount, :request::jsonb, :documents::jsonb, :missingDocuments::jsonb,
           :warnings::jsonb, :documentId, :documentUrl, :binaryUrl
@@ -242,22 +230,23 @@ public class BundleJobRepository {
       String warningsJson, StoredBundleDocument stored) {
   }
 
-  Optional<BundleMetadata> findBundleForJob(UUID jobId) {
+  public Optional<BundleMetadata> findBundleForJob(UUID jobId) {
     return jdbc.query(BUNDLE_COLUMNS + " where job_id = :jobId", params("jobId", jobId),
         (rs, n) -> mapBundle(rs)).stream().findFirst();
   }
 
-  /** The key's bundle whose documents were selected last. */
-  Optional<BundleMetadata> findLatestBundle(String bundleKey) {
+  /** The case's bundle whose documents were selected last. */
+  public Optional<BundleMetadata> findLatestBundle(String definition, String caseKey) {
     return jdbc.query(BUNDLE_COLUMNS + """
-         where bundle_key = :bundleKey
+         where definition = :definition and case_key = :caseKey
          order by selected_at desc, created_at desc, id
          limit 1
-        """, params("bundleKey", bundleKey), (rs, n) -> mapBundle(rs)).stream().findFirst();
+        """, params("definition", definition, "caseKey", caseKey), (rs, n) -> mapBundle(rs))
+        .stream().findFirst();
   }
 
   /**
-   * Stored PDFs of bundles that a bundle selected later under the same key replaced at least
+   * Stored PDFs of bundles that a bundle selected later for the same case replaced at least
    * {@code replacedFor} ago.
    */
   List<UUID> findReplacedDocuments(Duration replacedFor, int limit) {
@@ -265,7 +254,7 @@ public class BundleJobRepository {
         select document_id from bundling.bundle old
         where document_id is not null and deleted_at is null
           and exists (select 1 from bundling.bundle newer
-                      where newer.bundle_key = old.bundle_key
+                      where newer.definition = old.definition and newer.case_key = old.case_key
                         and (newer.selected_at, newer.created_at) > (old.selected_at, old.created_at)
                         and newer.created_at <= now() - (:replacedMillis * interval '1 millisecond'))
         order by created_at
@@ -328,7 +317,7 @@ public class BundleJobRepository {
         : Optional.of(new StoredBundleDocument(documentId, rs.getString("document_url"),
             rs.getString("binary_url")));
     return new BundleMetadata(rs.getObject("id", UUID.class), rs.getObject("job_id", UUID.class),
-        Optional.ofNullable(rs.getString("bundle_key")),
+        rs.getString("definition"), rs.getString("case_key"),
         Optional.ofNullable(rs.getString("case_reference")), instant(rs, "selected_at"),
         instant(rs, "created_at"),
         json.read(rs.getString("request"), BundleRequest.class, "bundle request"),
@@ -349,7 +338,7 @@ public class BundleJobRepository {
     return new BundleJob(rs.getObject("external_id", UUID.class),
         BundleJobState.valueOf(rs.getString("state")), rs.getInt("attempts"),
         instant(rs, "created_at"), instant(rs, "updated_at"),
-        Optional.ofNullable(rs.getString("coalesce_key")), rs.getInt("coalesced_submissions"),
+        rs.getString("definition"), rs.getString("case_key"), rs.getInt("coalesced_submissions"),
         Optional.ofNullable(rs.getObject("claimed_at", OffsetDateTime.class))
             .map(OffsetDateTime::toInstant),
         Optional.ofNullable(rs.getString("result")), failure);

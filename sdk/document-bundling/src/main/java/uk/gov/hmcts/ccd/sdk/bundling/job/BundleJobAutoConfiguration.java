@@ -14,8 +14,9 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRenderer;
 /**
  * Auto-configuration for the durable job runner, opt-in through ccd.bundling.job.enabled=true;
  * each bean backs off to a consumer-defined one, the outbox needs a
- * NamedParameterJdbcTemplate, and the worker additionally needs a BundleRenderer, exactly one
- * BundleJobCompletionHandler and ccd.bundling.job.worker.enabled. The outbox table
+ * NamedParameterJdbcTemplate, and the worker additionally needs a BundleRenderer, a
+ * BundleDocumentSelector (ManagedCaseBundles), exactly one BundleJobCompletionHandler and
+ * ccd.bundling.job.worker.enabled. The outbox table
  * bundling.bundle_job is created by the SDK's standard library migration, registered in
  * BundleJobFlywayAutoConfiguration.
  */
@@ -33,13 +34,6 @@ public class BundleJobAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  @ConditionalOnBean(NamedParameterJdbcTemplate.class)
-  public OutboxBundleJobService bundleJobService(BundleJobRepository repository) {
-    return new OutboxBundleJobService(repository);
-  }
-
-  @Bean
-  @ConditionalOnMissingBean
   public BundleJobRetryPolicy bundleJobRetryPolicy(BundleJobProperties properties) {
     BundleJobProperties.Retry retry = properties.getRetry();
     BundleJobProperties.Requeue requeue = properties.getRequeue();
@@ -50,13 +44,8 @@ public class BundleJobAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  public BundleDocumentSelector bundleDocumentSelector() {
-    return BundleDocumentSelector.asSubmitted();
-  }
-
-  @Bean
-  @ConditionalOnMissingBean
-  @ConditionalOnBean({NamedParameterJdbcTemplate.class, BundleRenderer.class})
+  @ConditionalOnBean({NamedParameterJdbcTemplate.class, BundleRenderer.class,
+      BundleDocumentSelector.class})
   @ConditionalOnProperty(prefix = "ccd.bundling.job.worker", name = "enabled",
       matchIfMissing = true)
   public BundleJobWorker bundleJobWorker(BundleJobRepository repository, BundleRenderer renderer,

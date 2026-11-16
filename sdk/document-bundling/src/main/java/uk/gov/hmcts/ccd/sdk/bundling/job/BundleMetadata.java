@@ -18,8 +18,9 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
  *
  * @param id the bundle's id
  * @param jobId the job that rendered it
- * @param bundleKey the job's coalesce key, if it had one
- * @param caseReference the case reference from the job's execution context, if it had one
+ * @param definition the bundle definition's name
+ * @param caseKey the definition's key for the case
+ * @param caseReference the reference of the case the documents were selected for
  * @param selectedAt when its documents were selected; of two bundles with the same key, the one
  *     selected later reflects the newer state
  * @param recordedAt when the bundle was recorded
@@ -39,7 +40,8 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
 public record BundleMetadata(
     UUID id,
     UUID jobId,
-    Optional<String> bundleKey,
+    String definition,
+    String caseKey,
     Optional<String> caseReference,
     Instant selectedAt,
     Instant recordedAt,
@@ -58,7 +60,8 @@ public record BundleMetadata(
   public BundleMetadata {
     Objects.requireNonNull(id, "BundleMetadata.id");
     Objects.requireNonNull(jobId, "BundleMetadata.jobId");
-    Objects.requireNonNull(bundleKey, "BundleMetadata.bundleKey");
+    Objects.requireNonNull(definition, "BundleMetadata.definition");
+    Objects.requireNonNull(caseKey, "BundleMetadata.caseKey");
     Objects.requireNonNull(caseReference, "BundleMetadata.caseReference");
     Objects.requireNonNull(selectedAt, "BundleMetadata.selectedAt");
     Objects.requireNonNull(recordedAt, "BundleMetadata.recordedAt");

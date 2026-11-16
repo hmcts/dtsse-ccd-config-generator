@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -25,6 +26,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import javax.sql.DataSource;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -65,9 +67,8 @@ class BundleJobOutboxIntegrationTest {
   @Container
   private static final PostgreSQLContainer<?> POSTGRES =
       new PostgreSQLContainer<>("postgres:16-alpine");
-  private static final BundleExecutionContext CONTEXT = BundleExecutionContext.builder()
-      .caseReference("1234567890123456").initiator("scheduler").attribute("hearingId", "H-77")
-      .build();
+  // What each test case's selection is, for the worker's selector to return.
+  private static final Map<String, BundleRequest> REQUESTS = new ConcurrentHashMap<>();
   // The application's own migrations, which the runtime's strategy runs after the libraries'.
   private static final String CONSUMER_MIGRATIONS =
       "spring.flyway.locations=classpath:consumer-db/migration";
@@ -75,7 +76,6 @@ class BundleJobOutboxIntegrationTest {
   private static DataSource dataSource;
   private static NamedParameterJdbcTemplate jdbc;
   private static BundleJobRepository repository;
-  private static OutboxBundleJobService service;
   private static TransactionTemplate tx;
 
   @TempDir
@@ -87,7 +87,6 @@ class BundleJobOutboxIntegrationTest {
     sdkMigrationRunner(dataSource).run(context -> assertThat(context).hasNotFailed());
     jdbc = new NamedParameterJdbcTemplate(dataSource);
     repository = new BundleJobRepository(jdbc);
-    service = new OutboxBundleJobService(repository);
     tx = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
   }
 
@@ -98,10 +97,27 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
+  void liveJobsAreClaimedBeforeRefreshJobsAndALiveChangePromotesAWaitingRefresh() {
+    assertThat(jdbc.queryForObject("select bundling.refresh('test', array['background', 'hot', 'hot', null])",
+        Map.of(), Integer.class)).isEqualTo(2);
+    UUID background = queued("test", "background").externalId();
+    UUID hot = queued("test", "hot").externalId();
+    UUID live = submit("test", "live").externalId();
+    // A live change joins the waiting refresh job and promotes it, rather than adding a render.
+    assertThat(submit("test", "hot").externalId()).isEqualTo(hot);
+    List<UUID> claimed = new ArrayList<>();
+    for (int i = 0; i < 3; i++) {
+      repository.claim(1, "priority-test", Duration.ofMinutes(1), 3)
+          .forEach(claim -> claimed.add(claim.job().externalId()));
+    }
+    assertThat(claimed).containsExactly(hot, live, background);
+  }
+
+  @Test
   void submitThenPollRunsThroughInProgressToCompletedPersistingTheHandlersSummary()
       throws Exception {
     UUID id = UUID.randomUUID();
-    BundleJob submitted = service.submit(fullRequest(id), CONTEXT);
+    BundleJob submitted = submit(fullRequest(id));
     assertThat(submitted.state()).isEqualTo(BundleJobState.QUEUED);
     assertThat(submitted.attempts()).isZero();
 
@@ -123,7 +139,7 @@ class BundleJobOutboxIntegrationTest {
     ExecutorService pool = Executors.newSingleThreadExecutor();
     try {
       BundleJobWorker worker = new BundleJobWorker(repository, renderer,
-          BundleDocumentSelector.asSubmitted(), handler, quickRetries(3), List.of(), pool, 5, 5,
+          asSubmitted(), handler, quickRetries(3), List.of(), pool, 5, 5,
           Duration.ofMinutes(5));
       worker.poll();
       assertThat(renderStarted.await(10, TimeUnit.SECONDS)).isTrue();
@@ -161,7 +177,7 @@ class BundleJobOutboxIntegrationTest {
 
     // A warning-carrying render lands in COMPLETED_WITH_WARNINGS.
     UUID warned = UUID.randomUUID();
-    service.submit(simpleRequest(warned), CONTEXT);
+    submit(simpleRequest(warned));
     directWorker(new FakeRenderer(tempDir).onNextRender(request -> renderer(tempDir)
         .success(request, List.of(BundleWarning.of("EMPTY_SECTION_PAGE_INCLUDED", "empty")))))
         .poll();
@@ -169,35 +185,22 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
-  void repeatedExternalIdReturnsTheExistingJobAndSubmitJoinsTheCallersTransaction() {
-    UUID id = UUID.randomUUID();
-    service.submit(simpleRequest(id), CONTEXT);
-    assertThat(service.submit(simpleRequest(id), CONTEXT).state()).isEqualTo(BundleJobState.QUEUED);
-    assertThat(jdbc.queryForObject("select count(*) from bundling.bundle_job", Map.of(), Integer.class))
-        .isEqualTo(1);
-    FakeRenderer renderer = new FakeRenderer(tempDir);
-    BundleJobWorker worker = directWorker(renderer);
-    worker.poll();
-    assertThat(service.submit(simpleRequest(id), CONTEXT).state())
-        .isEqualTo(BundleJobState.COMPLETED);
-    worker.poll();
-    assertThat(renderer.renders).hasSize(1);
-
+  void submitJoinsTheCallersTransaction() {
     UUID rolledBack = UUID.randomUUID();
     tx.execute(status -> {
-      service.submit(simpleRequest(rolledBack), CONTEXT);
-      assertThat(service.find(rolledBack)).isPresent();
+      submit(simpleRequest(rolledBack));
+      assertThat(repository.find(rolledBack)).isPresent();
       status.setRollbackOnly();
       return null;
     });
-    assertThat(service.find(rolledBack)).isEmpty();
+    assertThat(repository.find(rolledBack)).isEmpty();
   }
 
   @Test
   void contendingWorkersSkipEachOthersLockedRowsAndNeverDoubleClaim() throws Exception {
     List<UUID> ids = new ArrayList<>();
     for (int i = 0; i < 6; i++) {
-      ids.add(service.submit(simpleRequest(UUID.randomUUID()), CONTEXT).externalId());
+      ids.add(submit(simpleRequest(UUID.randomUUID())).externalId());
     }
     CountDownLatch firstClaimHeld = new CountDownLatch(1);
     CountDownLatch release = new CountDownLatch(1);
@@ -229,7 +232,7 @@ class BundleJobOutboxIntegrationTest {
 
   @Test
   void expiredLeaseIsReclaimedAndTheStaleWorkersLateWriteIsIgnored() throws Exception {
-    service.submit(simpleRequest(UUID.randomUUID()), CONTEXT);
+    submit(simpleRequest(UUID.randomUUID()));
     List<ClaimedBundleJob> first = repository.claim(1, "worker-a", Duration.ofMillis(100), 3);
     assertThat(first).hasSize(1);
     assertThat(first.get(0).job().attempts()).isEqualTo(1);
@@ -245,7 +248,7 @@ class BundleJobOutboxIntegrationTest {
     // The stale worker's completion, failure and requeue are all rejected; B's outcome stands.
     assertThat(repository.markCompleted(id, BundleJobState.COMPLETED, "{}", bundleRecord("a"),
         "worker-a")).isFalse();
-    assertThat(service.findBundleForJob(id)).isEmpty();
+    assertThat(repository.findBundleForJob(id)).isEmpty();
     assertThat(repository.markFailed(id, BundleErrorCode.ASSEMBLY_FAILED, "late", "[]", null,
         "worker-a")).isFalse();
     assertThat(repository.requeueForRetry(id, java.time.Instant.now(), "[]", "worker-a"))
@@ -255,7 +258,7 @@ class BundleJobOutboxIntegrationTest {
         bundleRecord("b"), "worker-b")).isTrue();
     assertThat(job(id).result()).contains("{\"by\": \"b\"}");
     // Only the lease holder's bundle is recorded.
-    assertThat(service.findBundleForJob(id).orElseThrow().sha256()).isEqualTo("sha-b");
+    assertThat(repository.findBundleForJob(id).orElseThrow().sha256()).isEqualTo("sha-b");
     assertThat(jdbc.queryForObject("select count(*) from bundling.bundle", Map.of(), Integer.class))
         .isEqualTo(1);
   }
@@ -263,7 +266,7 @@ class BundleJobOutboxIntegrationTest {
   @Test
   void aJobReclaimedByTheSameWorkerFencesOutItsEarlierAttempt() throws Exception {
     UUID id = UUID.randomUUID();
-    service.submit(simpleRequest(id), CONTEXT);
+    submit(simpleRequest(id));
     Map<Integer, CountDownLatch> started = Map.of(1, new CountDownLatch(1), 2, new CountDownLatch(1));
     Map<Integer, CountDownLatch> release = Map.of(1, new CountDownLatch(1), 2, new CountDownLatch(1));
     List<Object> discarded = new CopyOnWriteArrayList<>();
@@ -284,7 +287,7 @@ class BundleJobOutboxIntegrationTest {
     ExecutorService pool = Executors.newFixedThreadPool(2);
     try {
       BundleJobWorker worker = new BundleJobWorker(repository, new FakeRenderer(tempDir),
-          BundleDocumentSelector.asSubmitted(), handler, quickRetries(3), List.of(), pool, 5, 2,
+          asSubmitted(), handler, quickRetries(3), List.of(), pool, 5, 2,
           Duration.ofMinutes(5));
       worker.poll();
       assertThat(started.get(1).await(10, TimeUnit.SECONDS)).isTrue();
@@ -308,7 +311,7 @@ class BundleJobOutboxIntegrationTest {
   @Test
   void transientFailureRequeuesWithBackoffThenBoundedRetryFailsCarryingTheHistory()
       throws Exception {
-    UUID id = service.submit(simpleRequest(UUID.randomUUID()), CONTEXT).externalId();
+    UUID id = submit(simpleRequest(UUID.randomUUID())).externalId();
     BundleGenerationException transientFailure = new BundleGenerationException(
         BundleErrorCode.DOCUMENT_RESOLUTION_FAILED, BundleStage.RESOLVE,
         "The source store returned 503.", "Check dm-store health.",
@@ -350,7 +353,7 @@ class BundleJobOutboxIntegrationTest {
 
   @Test
   void nonTransientAndCompletionFailuresAreTerminalOnTheFirstAttempt() throws Exception {
-    UUID notFound = service.submit(simpleRequest(UUID.randomUUID()), CONTEXT).externalId();
+    UUID notFound = submit(simpleRequest(UUID.randomUUID())).externalId();
     FakeRenderer renderer = new FakeRenderer(tempDir)
         .onNextRender(FakeRenderer.failure(new BundleGenerationException(
             BundleErrorCode.DOCUMENT_NOT_FOUND, BundleStage.RESOLVE,
@@ -374,7 +377,7 @@ class BundleJobOutboxIntegrationTest {
 
     // A retryable code whose cause is a permanent Docmosis answer (a missing template) is
     // terminal too: retrying cannot fix it.
-    UUID missingTemplate = service.submit(simpleRequest(UUID.randomUUID()), CONTEXT).externalId();
+    UUID missingTemplate = submit(simpleRequest(UUID.randomUUID())).externalId();
     FakeRenderer coverFails = new FakeRenderer(tempDir).onNextRender(FakeRenderer.failure(
         new BundleGenerationException(BundleErrorCode.COVER_PAGE_FAILED, BundleStage.CONVERT,
             "The cover page template could not be rendered.", "Check the template exists.",
@@ -386,8 +389,8 @@ class BundleJobOutboxIntegrationTest {
 
     // A throwing completion handler fails the rendered job with COMPLETION_FAILED; the raw
     // exception message stays out of the row, and the result is still closed.
-    UUID unstored = service.submit(simpleRequest(UUID.randomUUID()), CONTEXT).externalId();
-    new BundleJobWorker(repository, new FakeRenderer(tempDir), BundleDocumentSelector.asSubmitted(),
+    UUID unstored = submit(simpleRequest(UUID.randomUUID())).externalId();
+    new BundleJobWorker(repository, new FakeRenderer(tempDir), asSubmitted(),
         (job, jobContext, request, result) -> {
           throw new IllegalStateException("signed-url=https://secret");
         }, quickRetries(3), List.of(), Runnable::run, 5, 5, Duration.ofMinutes(5)).poll();
@@ -398,68 +401,43 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
-  void unreadableStoredRequestFailsWithoutReachingTheRenderer() {
-    UUID corrupt = service.submit(simpleRequest(UUID.randomUUID()), CONTEXT).externalId();
-    jdbc.update("update bundling.bundle_job set request = '{\"title\":\"no root\"}'::jsonb "
-        + "where external_id = :id", Map.of("id", corrupt));
-    UUID futureVersion = service.submit(simpleRequest(UUID.randomUUID()), CONTEXT).externalId();
-    jdbc.update("update bundling.bundle_job set request_version = 99 where external_id = :id",
-        Map.of("id", futureVersion));
+  void aSelectorThatThrowsFailsTheJobWithoutReachingTheRenderer() {
+    BundleJob submitted = submit("bundle", "case-1");
     FakeRenderer renderer = new FakeRenderer(tempDir);
+    List<BundleJobContext> selected = new CopyOnWriteArrayList<>();
 
-    directWorker(renderer).poll();
+    new BundleJobWorker(repository, renderer, context -> {
+      selected.add(context);
+      throw new IllegalArgumentException("Unknown case bundle definition");
+    }, summaryHandler(), quickRetries(3), List.of(), Runnable::run, 5, 5, Duration.ofMinutes(5)).poll();
 
-    assertThat(job(corrupt).state()).isEqualTo(BundleJobState.FAILED);
-    assertThat(job(corrupt).failure().orElseThrow().code())
+    assertThat(selected).containsExactly(
+        new BundleJobContext(submitted.externalId(), "bundle", "case-1"));
+    assertThat(job(submitted.externalId()).failure().orElseThrow().code())
         .isEqualTo(BundleErrorCode.JOB_REQUEST_UNREADABLE);
-    assertThat(job(corrupt).failure().orElseThrow().message()).contains(corrupt.toString());
-    // A row written by a newer worker is left for that worker, never claimed by this one.
-    assertThat(job(futureVersion).state()).isEqualTo(BundleJobState.QUEUED);
-    assertThat(column(futureVersion, "lease_owner")).isNull();
     assertThat(renderer.renders).isEmpty();
   }
 
   @Test
-  void selectorParametersSubmissionCompilesTheRequestAtExecutionTime() {
-    UUID id = UUID.randomUUID();
-    service.submit(id, Map.of("bundleTitle", "Compiled at execution"), CONTEXT);
-    assertThat(column(id, "request")).isNull();
-    assertThat(column(id, "selector_parameters")).contains("bundleTitle");
-    BundleDocumentSelector selector = context -> {
-      assertThat(context.submittedRequest()).isEmpty();
-      assertThat(context.executionContext().attributes()).containsEntry("hearingId", "H-77");
-      return BundleRequest.builder().externalId(context.externalId())
-          .title(context.parameters().get("bundleTitle")).fileName("compiled.pdf")
-          .root(BundleSection.builder("Case file").document(document("doc-late")).build())
-          .build();
-    };
-    FakeRenderer renderer = new FakeRenderer(tempDir);
-
-    new BundleJobWorker(repository, renderer, selector, summaryHandler(), quickRetries(3),
-        List.of(), Runnable::run, 5, 5, Duration.ofMinutes(5)).poll();
-
-    assertThat(renderer.renders).extracting(BundleRequest::title)
-        .containsExactly("Compiled at execution");
-    assertThat(job(id).state()).isEqualTo(BundleJobState.COMPLETED);
-    assertThat(job(id).result().orElseThrow()).contains("Compiled at execution");
-  }
-
-  @Test
   void aCompletedJobRecordsTheBundleItRenderedFromTheRequestTheSelectorCompiled() {
-    BundleJob submitted = service.submitCoalesced("case-1:bundle", Map.of(), CONTEXT);
-    assertThat(service.findBundleForJob(submitted.externalId())).isEmpty();
-    assertThat(service.findLatestBundle("case-1:bundle")).isEmpty();
+    BundleJob submitted = submit("bundle", "case-1");
+    assertThat(repository.findBundleForJob(submitted.externalId())).isEmpty();
+    assertThat(repository.findLatestBundle("bundle", "case-1")).isEmpty();
     FakeRenderer renderer = new FakeRenderer(tempDir).onNextRender(request ->
         renderer(tempDir).success(request, List.of(), List.of("doc-gone")));
     List<BundleResult> handed = new CopyOnWriteArrayList<>();
     BundleJobCompletionHandler handler = (job, jobContext, request, result) -> {
       // The consumer still receives the full result, to store the PDF where it keeps documents.
       handed.add(result);
-      assertThat(service.findBundleForJob(job.externalId())).isEmpty();
+      assertThat(repository.findBundleForJob(job.externalId())).isEmpty();
       return Map.of("stored", true);
     };
 
-    new BundleJobWorker(repository, renderer, twoDocumentSelector(), handler, quickRetries(3),
+    BundleDocumentSelector selector = context -> {
+      repository.recordCase(context.externalId(), 1234567890123456L, "CaseType", "Jurisdiction");
+      return twoDocumentSelector().select(context);
+    };
+    new BundleJobWorker(repository, renderer, selector, handler, quickRetries(3),
         List.of(), Runnable::run, 5, 5, Duration.ofMinutes(5)).poll();
 
     assertThat(handed).singleElement().satisfies(result -> {
@@ -467,9 +445,10 @@ class BundleJobOutboxIntegrationTest {
       assertThat(result.missingDocuments()).extracting(MissingDocument::documentId)
           .containsExactly("doc-gone");
     });
-    BundleMetadata bundle = service.findBundleForJob(submitted.externalId()).orElseThrow();
+    BundleMetadata bundle = repository.findBundleForJob(submitted.externalId()).orElseThrow();
     assertThat(bundle.jobId()).isEqualTo(submitted.externalId());
-    assertThat(bundle.bundleKey()).contains("case-1:bundle");
+    assertThat(bundle.definition()).isEqualTo("bundle");
+    assertThat(bundle.caseKey()).isEqualTo("case-1");
     assertThat(bundle.caseReference()).contains("1234567890123456");
     assertThat(bundle.selectedAt()).isEqualTo(job(submitted.externalId()).claimedAt().orElseThrow());
     assertThat(bundle.request().title()).isEqualTo("Selected at execution");
@@ -487,16 +466,16 @@ class BundleJobOutboxIntegrationTest {
       assertThat(missing.startPage()).isEqualTo(2);
     });
     assertThat(bundle.warnings()).isEqualTo(handed.get(0).warnings());
-    assertThat(service.findLatestBundle("case-1:bundle").map(BundleMetadata::id))
+    assertThat(repository.findLatestBundle("bundle", "case-1").map(BundleMetadata::id))
         .contains(bundle.id());
     // Only an unavailable document is worth re-running for.
-    assertThat(service.findLatest("case-1:bundle").orElseThrow().externalId())
+    assertThat(repository.findLatest("bundle", "case-1").orElseThrow().externalId())
         .isEqualTo(submitted.externalId());
   }
 
   @Test
   void noBundleIsRecordedForAJobWhoseCompletionHandlerFailed() {
-    BundleJob submitted = service.submitCoalesced("case-1:bundle", Map.of(), CONTEXT);
+    BundleJob submitted = submit("bundle", "case-1");
     BundleJobCompletionHandler failing = (job, jobContext, request, result) -> {
       throw new IllegalStateException("document store down");
     };
@@ -505,15 +484,15 @@ class BundleJobOutboxIntegrationTest {
         quickRetries(3), List.of(), Runnable::run, 5, 5, Duration.ofMinutes(5)).poll();
 
     assertThat(job(submitted.externalId()).state()).isEqualTo(BundleJobState.FAILED);
-    assertThat(service.findBundleForJob(submitted.externalId())).isEmpty();
-    assertThat(service.findLatestBundle("case-1:bundle")).isEmpty();
+    assertThat(repository.findBundleForJob(submitted.externalId())).isEmpty();
+    assertThat(repository.findLatestBundle("bundle", "case-1")).isEmpty();
   }
 
   @Test
   void theLatestBundleForAKeyIsTheOneWhoseDocumentsWereSelectedLastWhateverOrderTheyFinished() {
-    UUID older = service.submitCoalesced("case-1:bundle", Map.of(), CONTEXT).externalId();
+    UUID older = submit("bundle", "case-1").externalId();
     List<ClaimedBundleJob> olderClaim = repository.claim(1, "worker-a", Duration.ofMinutes(5), 3);
-    UUID newer = service.submitCoalesced("case-1:bundle", Map.of(), CONTEXT).externalId();
+    UUID newer = submit("bundle", "case-1").externalId();
     List<ClaimedBundleJob> newerClaim = repository.claim(1, "worker-b", Duration.ofMinutes(5), 3);
     assertThat(olderClaim).extracting(claimed -> claimed.job().externalId()).containsExactly(older);
     assertThat(newerClaim).extracting(claimed -> claimed.job().externalId()).containsExactly(newer);
@@ -524,14 +503,14 @@ class BundleJobOutboxIntegrationTest {
     assertThat(repository.markCompleted(older, BundleJobState.COMPLETED, null, bundleRecord("older"),
         "worker-a")).isTrue();
 
-    assertThat(service.findLatestBundle("case-1:bundle").orElseThrow().jobId()).isEqualTo(newer);
-    assertThat(service.findBundleForJob(older).orElseThrow().sha256()).isEqualTo("sha-older");
-    assertThat(service.findLatestBundle("case-2:bundle")).isEmpty();
+    assertThat(repository.findLatestBundle("bundle", "case-1").orElseThrow().jobId()).isEqualTo(newer);
+    assertThat(repository.findBundleForJob(older).orElseThrow().sha256()).isEqualTo("sha-older");
+    assertThat(repository.findLatestBundle("bundle", "case-2")).isEmpty();
   }
 
   @Test
   void aBundleMissingTemporarilyUnavailableDocumentsIsReRunLaterUntilTheBound() {
-    BundleJob submitted = service.submitCoalesced("case-1:bundle", Map.of("caseId", "1"), CONTEXT);
+    BundleJob submitted = submit("bundle", "case-1");
     FakeRenderer renderer = new FakeRenderer(tempDir);
     for (int i = 0; i < 3; i++) {
       renderer.onNextRender(request -> renderer(tempDir).success(request, List.of(), List.of(),
@@ -543,13 +522,11 @@ class BundleJobOutboxIntegrationTest {
 
     worker.poll();
 
-    BundleJob reRun = queued("case-1:bundle");
+    BundleJob reRun = queued("bundle", "case-1");
     assertThat(reRun.externalId()).isNotEqualTo(submitted.externalId());
-    assertThat(service.findLatest("case-1:bundle").orElseThrow().externalId())
+    assertThat(repository.findLatest("bundle", "case-1").orElseThrow().externalId())
         .as("a delayed re-run is not shown as regenerating the bundle").isEqualTo(submitted.externalId());
-    assertThat(column(reRun.externalId(), "selector_parameters")).contains("caseId");
-    assertThat(column(reRun.externalId(), "execution_context"))
-        .contains("\"bundling.unavailableRequeues\": \"1\"").contains("hearingId");
+    assertThat(column(reRun.externalId(), "unavailable_requeues")).isEqualTo("1");
     assertThat(jdbc.queryForObject("select next_attempt_at > now() + interval '14 minutes' "
         + "from bundling.bundle_job where external_id = :id", Map.of("id", reRun.externalId()), Boolean.class))
         .isTrue();
@@ -557,27 +534,26 @@ class BundleJobOutboxIntegrationTest {
     assertThat(renderer.renders).as("the re-run waits for its delay").hasSize(1);
 
     // A change to the case wants a bundle now: joining the delayed re-run makes it immediate.
-    assertThat(service.submitCoalesced("case-1:bundle", Map.of("caseId", "1"), CONTEXT).externalId())
+    assertThat(submit("bundle", "case-1").externalId())
         .isEqualTo(reRun.externalId());
     assertThat(column(reRun.externalId(), "next_attempt_at")).isNull();
-    assertThat(service.findLatest("case-1:bundle").orElseThrow().externalId()).isEqualTo(reRun.externalId());
+    assertThat(repository.findLatest("bundle", "case-1").orElseThrow().externalId()).isEqualTo(reRun.externalId());
     worker.poll();
     assertThat(renderer.renders).hasSize(2);
-    BundleJob secondReRun = queued("case-1:bundle");
-    assertThat(column(secondReRun.externalId(), "execution_context"))
-        .contains("\"bundling.unavailableRequeues\": \"2\"");
+    BundleJob secondReRun = queued("bundle", "case-1");
+    assertThat(column(secondReRun.externalId(), "unavailable_requeues")).isEqualTo("2");
 
     jdbc.update("update bundling.bundle_job set next_attempt_at = null", Map.of());
     worker.poll();
     assertThat(renderer.renders).hasSize(3);
-    assertThat(service.findLatest("case-1:bundle").orElseThrow().externalId())
+    assertThat(repository.findLatest("bundle", "case-1").orElseThrow().externalId())
         .as("the bound of two re-runs is reached").isEqualTo(secondReRun.externalId());
   }
 
   @Test
   void aRenderMayRetryWhileAttemptsRemainAndIsFinalOnTheLastAttempt() {
     UUID id = UUID.randomUUID();
-    service.submit(simpleRequest(id), CONTEXT);
+    submit(simpleRequest(id));
     FakeRenderer renderer = new FakeRenderer(tempDir).onNextRender(FakeRenderer.failure(
         new BundleGenerationException(BundleErrorCode.DOCUMENT_RESOLUTION_FAILED, BundleStage.RESOLVE,
             "CDAM timed out", "Retry", List.of())));
@@ -593,9 +569,10 @@ class BundleJobOutboxIntegrationTest {
     assertThat(job(id).state()).isEqualTo(BundleJobState.COMPLETED);
   }
 
-  private BundleJob queued(String coalesceKey) {
-    UUID id = jdbc.queryForObject("select external_id from bundling.bundle_job "
-        + "where coalesce_key = :key and state = 'QUEUED'", Map.of("key", coalesceKey), UUID.class);
+  private BundleJob queued(String definition, String caseKey) {
+    UUID id = jdbc.queryForObject("select external_id from bundling.bundle_job where state = 'QUEUED' "
+        + "and definition = :definition and case_key = :caseKey",
+        Map.of("definition", definition, "caseKey", caseKey), UUID.class);
     return job(id);
   }
 
@@ -609,21 +586,16 @@ class BundleJobOutboxIntegrationTest {
 
   @Test
   void coalescedSubmissionsCollapseOntoTheWaitingJobUntilItIsClaimed() throws Exception {
-    BundleJob first = service.submitCoalesced("case-1:hearing", Map.of("n", "1"), CONTEXT);
-    BundleJob second = service.submitCoalesced("case-1:hearing", Map.of("n", "2"), CONTEXT);
-    BundleJob otherCase = service.submitCoalesced("case-2:hearing", Map.of(), CONTEXT);
+    BundleJob first = submit("hearing", "case-1");
+    BundleJob second = submit("hearing", "case-1");
+    BundleJob otherCase = submit("hearing", "case-2");
     assertThat(second.externalId()).isEqualTo(first.externalId());
     assertThat(otherCase.externalId()).isNotEqualTo(first.externalId());
-    assertThat(first.coalesceKey()).contains("case-1:hearing");
+    assertThat(submit("other", "case-1").externalId()).isNotEqualTo(first.externalId());
+    assertThat(first.definition()).isEqualTo("hearing");
+    assertThat(first.caseKey()).isEqualTo("case-1");
     assertThat(first.claimedAt()).isEmpty();
     assertThat(job(first.externalId()).coalescedSubmissions()).isEqualTo(1);
-    // The waiting job keeps what it was first submitted with.
-    assertThat(column(first.externalId(), "selector_parameters")).contains("\"1\"");
-    assertThatThrownBy(() -> service.submitCoalesced("k".repeat(256), Map.of(), CONTEXT))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("255");
-    // The limit is characters, as in the varchar(255) column: 255 emoji (510 UTF-16 units) fit.
-    String emojiKey = "\uD83D\uDCC4".repeat(255);
-    assertThat(service.submitCoalesced(emojiKey, Map.of(), CONTEXT).coalesceKey()).contains(emojiKey);
 
     CountDownLatch renderStarted = new CountDownLatch(1);
     CountDownLatch releaseRender = new CountDownLatch(1);
@@ -650,11 +622,11 @@ class BundleJobOutboxIntegrationTest {
       assertThat(renderStarted.await(10, TimeUnit.SECONDS)).isTrue();
 
       // A change while it renders queues one follow-up, which then absorbs later changes.
-      BundleJob followUp = service.submitCoalesced("case-1:hearing", Map.of(), CONTEXT);
+      BundleJob followUp = submit("hearing", "case-1");
       assertThat(followUp.externalId()).isNotEqualTo(first.externalId());
-      assertThat(service.submitCoalesced("case-1:hearing", Map.of(), CONTEXT).externalId())
+      assertThat(submit("hearing", "case-1").externalId())
           .isEqualTo(followUp.externalId());
-      assertThat(service.findLatest("case-1:hearing").orElseThrow().externalId())
+      assertThat(repository.findLatest("hearing", "case-1").orElseThrow().externalId())
           .isEqualTo(followUp.externalId());
 
       releaseRender.countDown();
@@ -665,14 +637,13 @@ class BundleJobOutboxIntegrationTest {
     }
 
     // The handler can tell which subject the job was for, and saw when the attempt was claimed.
-    assertThat(completedContexts.get(0).parameters()).containsEntry("n", "1");
-    assertThat(completedContexts.get(0).executionContext().caseReference())
-        .contains("1234567890123456");
+    assertThat(completedContexts.get(0))
+        .isEqualTo(new BundleJobContext(first.externalId(), "hearing", "case-1"));
     BundleJob handled = completedJobs.get(0);
     assertThat(handled.claimedAt()).isPresent();
     assertThat(job(first.externalId()).claimedAt()).isEqualTo(handled.claimedAt());
     assertThat(jdbc.queryForObject("select count(*) from bundling.bundle_job "
-        + "where coalesce_key = 'case-1:hearing'", Map.of(), Integer.class)).isEqualTo(2);
+        + "where definition = 'hearing' and case_key = 'case-1'", Map.of(), Integer.class)).isEqualTo(2);
   }
 
   @Test
@@ -681,8 +652,8 @@ class BundleJobOutboxIntegrationTest {
     BundleJob joined = tx.execute(status -> {
       jdbc.queryForObject("select now()", Map.of(), Object.class);
       UUID waiting = tx2().execute(inner ->
-          service.submitCoalesced("case-7:hearing", Map.of(), CONTEXT).externalId());
-      BundleJob result = service.submitCoalesced("case-7:hearing", Map.of(), CONTEXT);
+          submit("hearing", "case-7").externalId());
+      BundleJob result = submit("hearing", "case-7");
       assertThat(result.externalId()).isEqualTo(waiting);
       return result;
     });
@@ -696,7 +667,7 @@ class BundleJobOutboxIntegrationTest {
     ExecutorService pool = Executors.newFixedThreadPool(2);
     try {
       Future<UUID> first = pool.submit(() -> tx.execute(status -> {
-        UUID id = service.submitCoalesced("case-9:hearing", Map.of(), CONTEXT).externalId();
+        UUID id = submit("hearing", "case-9").externalId();
         firstSubmitted.countDown();
         awaitQuietly(commitFirst);
         return id;
@@ -704,7 +675,7 @@ class BundleJobOutboxIntegrationTest {
       assertThat(firstSubmitted.await(10, TimeUnit.SECONDS)).isTrue();
       // Cannot see the uncommitted row, so it inserts, blocks on the unique index, then joins.
       Future<UUID> second = pool.submit(() -> tx.execute(status ->
-          service.submitCoalesced("case-9:hearing", Map.of(), CONTEXT).externalId()));
+          submit("hearing", "case-9").externalId()));
       awaitSessionBlockedOnLock();
       assertThat(second.isDone()).isFalse();
       commitFirst.countDown();
@@ -719,7 +690,7 @@ class BundleJobOutboxIntegrationTest {
 
   @Test
   void aJoinedJobIsNotClaimedUntilTheJoiningTransactionCommits() throws Exception {
-    UUID waiting = service.submitCoalesced("case-5:hearing", Map.of(), CONTEXT).externalId();
+    UUID waiting = submit("hearing", "case-5").externalId();
     CountDownLatch joined = new CountDownLatch(1);
     CountDownLatch commitJoin = new CountDownLatch(1);
     FakeRenderer renderer = new FakeRenderer(tempDir);
@@ -732,7 +703,7 @@ class BundleJobOutboxIntegrationTest {
     try {
       // A change joins the waiting job and has not committed yet.
       Future<UUID> joining = pool.submit(() -> tx.execute(status -> {
-        UUID id = service.submitCoalesced("case-5:hearing", Map.of(), CONTEXT).externalId();
+        UUID id = submit("hearing", "case-5").externalId();
         joined.countDown();
         awaitQuietly(commitJoin);
         return id;
@@ -756,7 +727,7 @@ class BundleJobOutboxIntegrationTest {
 
   @Test
   void aSubmissionWhileTheJobAwaitsARetryQueuesAFreshJob() {
-    UUID retrying = service.submitCoalesced("case-6:hearing", Map.of(), CONTEXT).externalId();
+    UUID retrying = submit("hearing", "case-6").externalId();
     FakeRenderer renderer = new FakeRenderer(tempDir).onNextRender(FakeRenderer.failure(
         new BundleGenerationException(BundleErrorCode.DOCUMENT_RESOLUTION_FAILED,
             BundleStage.RESOLVE, "transient", "retry", List.of())));
@@ -769,16 +740,16 @@ class BundleJobOutboxIntegrationTest {
     assertThat(job(retrying).state()).isEqualTo(BundleJobState.QUEUED);
     assertThat(job(retrying).attempts()).isEqualTo(1);
 
-    UUID fresh = service.submitCoalesced("case-6:hearing", Map.of(), CONTEXT).externalId();
+    UUID fresh = submit("hearing", "case-6").externalId();
 
     assertThat(fresh).isNotEqualTo(retrying);
     // The fresh job reflects the newer state, so it is what a status read reports.
-    assertThat(service.findLatest("case-6:hearing").orElseThrow().externalId()).isEqualTo(fresh);
+    assertThat(repository.findLatest("hearing", "case-6").orElseThrow().externalId()).isEqualTo(fresh);
   }
 
   @Test
   void progressEventsArriveInOrderAndAThrowingListenerNeverBreaksTheJob() {
-    UUID id = service.submit(simpleRequest(UUID.randomUUID()), CONTEXT).externalId();
+    UUID id = submit(simpleRequest(UUID.randomUUID())).externalId();
     List<BundleProgressEvent> events = new CopyOnWriteArrayList<>();
     BundleProgressListener throwing = event -> {
       throw new IllegalStateException("listener bug");
@@ -791,6 +762,42 @@ class BundleJobOutboxIntegrationTest {
     assertThat(events).containsExactly(
         new BundleProgressEvent(id, BundleJobState.IN_PROGRESS, 0, 1),
         new BundleProgressEvent(id, BundleJobState.COMPLETED, 1, 1));
+  }
+
+  @Test
+  void upgradingKeepsManagedJobsAndBundlesUnderTheirDefinitionAndCaseKey() {
+    jdbc.getJdbcTemplate().execute("create database upgrade_db");
+    DataSource upgradeSource = dataSourceFor("upgrade_db");
+    // Start from the previously released schema, holding a managed and an unmanaged job.
+    Flyway.configure().dataSource(upgradeSource).defaultSchema("bundling").schemas("bundling")
+        .locations("classpath:bundling-db/migration").target("0004").load().migrate();
+    var upgradeJdbc = new NamedParameterJdbcTemplate(upgradeSource);
+    UUID managed = UUID.randomUUID();
+    for (var job : Map.of(managed, "managed:case-file:a:b", UUID.randomUUID(), "other").entrySet()) {
+      upgradeJdbc.update("""
+          insert into bundling.bundle_job (external_id, request_version, coalesce_key, execution_context)
+          values (:id, 3, :key, '{"caseReference": "1234567890123456", "bundling.caseType": "PCS",
+            "bundling.jurisdiction": "CIVIL", "bundling.unavailableRequeues": "2"}'::jsonb)
+          """, Map.of("id", job.getKey(), "key", job.getValue()));
+      upgradeJdbc.update("""
+          insert into bundling.bundle (job_id, bundle_key, selected_at, outcome, file_name, media_type,
+            size_bytes, sha256, page_count, request, documents, missing_documents, warnings)
+          values (:id, :key, now(), 'COMPLETED', 'b.pdf', 'application/pdf', 1, 'sha', 1, '{}', '[]',
+            '[]', '[]')
+          """, Map.of("id", job.getKey(), "key", job.getValue()));
+    }
+
+    sdkMigrationRunner(upgradeSource).run(context -> assertThat(context).hasNotFailed());
+
+    assertThat(upgradeJdbc.queryForList("""
+        select external_id, definition, case_key, case_reference, case_type, jurisdiction,
+          unavailable_requeues from bundling.bundle_job
+        """, Map.of())).containsExactly(Map.of("external_id", managed, "definition", "case-file",
+        "case_key", "a:b", "case_reference", 1234567890123456L, "case_type", "PCS",
+        "jurisdiction", "CIVIL", "unavailable_requeues", 2));
+    assertThat(upgradeJdbc.queryForList("select job_id, definition, case_key from bundling.bundle",
+        Map.of())).containsExactly(Map.of("job_id", managed, "definition", "case-file",
+        "case_key", "a:b"));
   }
 
   @Test
@@ -857,13 +864,29 @@ class BundleJobOutboxIntegrationTest {
         "sha-" + name, 1, new BundleJobJson().write(request), "[]", "[]", "[]", null);
   }
 
+  /** Queues a job, under the request's id, for a case whose selection is that request. */
+  private static BundleJob submit(BundleRequest request) {
+    String caseKey = request.externalId().toString();
+    REQUESTS.put(caseKey, request);
+    return job(repository.insertOrJoin(request.externalId(), "test", caseKey, null, 0));
+  }
+
+  /** Queues a job for the case, as a change to it does. */
+  private static BundleJob submit(String definition, String caseKey) {
+    return job(repository.insertOrJoin(UUID.randomUUID(), definition, caseKey, null, 0));
+  }
+
+  private static BundleDocumentSelector asSubmitted() {
+    return context -> REQUESTS.get(context.caseKey());
+  }
+
   private static BundleJobCompletionHandler summaryHandler() {
     return (job, jobContext, request, result) -> Map.of("title", request.title(), "pages", result.pageCount());
   }
 
   private static BundleJobWorker directWorker(FakeRenderer renderer, BundleJobRetryPolicy policy,
       List<BundleProgressListener> listeners) {
-    return new BundleJobWorker(repository, renderer, BundleDocumentSelector.asSubmitted(),
+    return new BundleJobWorker(repository, renderer, asSubmitted(),
         summaryHandler(), policy, listeners, Runnable::run, 5, 5, Duration.ofMinutes(5));
   }
 
@@ -894,7 +917,7 @@ class BundleJobOutboxIntegrationTest {
   }
 
   private static BundleJob job(UUID id) {
-    return service.find(id).orElseThrow();
+    return repository.find(id).orElseThrow();
   }
 
   private static String column(UUID id, String column) {

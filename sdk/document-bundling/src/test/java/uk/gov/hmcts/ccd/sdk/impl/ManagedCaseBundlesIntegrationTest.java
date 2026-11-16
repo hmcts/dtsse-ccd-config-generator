@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 
 import java.io.ByteArrayOutputStream;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -40,10 +41,10 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference;
 import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocumentPolicy;
 import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobAutoConfiguration;
 import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobFlywayAutoConfiguration;
+import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobRepository;
 import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobWorker;
-import uk.gov.hmcts.ccd.sdk.bundling.job.ManagedCaseBundleAutoConfiguration;
+import uk.gov.hmcts.ccd.sdk.bundling.job.CaseBundleAutoConfiguration;
 import uk.gov.hmcts.ccd.sdk.bundling.job.ManagedCaseBundles;
-import uk.gov.hmcts.ccd.sdk.bundling.job.OutboxBundleJobService;
 import uk.gov.hmcts.ccd.sdk.bundling.job.StoredBundleDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.BundleSystemUser;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundleDefinition;
@@ -68,7 +69,6 @@ import uk.gov.hmcts.reform.ccd.document.am.feign.CaseDocumentClientApi;
     })
 @TestPropertySource(
     properties = {
-      "ccd.bundling.managed.enabled=true",
       "ccd.bundling.job.enabled=true",
       "ccd.bundling.job.worker.poll-delay=1h",
       "ccd.bundling.job.worker.max-concurrent-renders=2",
@@ -82,7 +82,7 @@ import uk.gov.hmcts.reform.ccd.document.am.feign.CaseDocumentClientApi;
       "ccd.decentralised-runtime.system-user.last-name=Worker"
     })
 @ImportAutoConfiguration({
-  ManagedCaseBundleAutoConfiguration.class,
+  CaseBundleAutoConfiguration.class,
   BundlingAutoConfiguration.class,
   BundleJobAutoConfiguration.class,
   BundleJobFlywayAutoConfiguration.class,
@@ -93,7 +93,7 @@ import uk.gov.hmcts.reform.ccd.document.am.feign.CaseDocumentClientApi;
 class ManagedCaseBundlesIntegrationTest {
   @Autowired ManagedCaseBundles bundles;
   @Autowired BundleJobWorker worker;
-  @Autowired OutboxBundleJobService jobs;
+  @Autowired BundleJobRepository jobs;
   @Autowired NamedParameterJdbcTemplate jdbc;
   @Autowired TransactionTemplate transaction;
   @Autowired CcdEventTestSupport<CaseData, State> events;
@@ -130,8 +130,8 @@ create table if not exists bundle_test_source(case_key text primary key, referen
         });
     assertThat(
             jdbc.queryForObject(
-                "select count(*) from bundling.bundle_job where coalesce_key = :key",
-                Map.of("key", ManagedCaseBundles.key("case-file", key)),
+                "select count(*) from bundling.bundle_job where case_key = :key",
+                Map.of("key", key),
                 Integer.class))
         .isEqualTo(1);
     assertThat(bundles.view("case-file", key).lifecycle())
@@ -151,7 +151,7 @@ create table if not exists bundle_test_source(case_key text primary key, referen
     assertThat(documents.caseReference(first)).hasValue(reference);
     assertThat(documents.content(first))
         .startsWith("%PDF".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
-    UUID job = jobs.findLatest(ManagedCaseBundles.key("case-file", key)).orElseThrow().externalId();
+    UUID job = jobs.findLatest("case-file", key).orElseThrow().externalId();
     assertThat(jobs.findBundleForJob(job).orElseThrow().caseReference())
         .hasValue(String.valueOf(reference));
     changed(key);
@@ -180,7 +180,7 @@ create table if not exists bundle_test_source(case_key text primary key, referen
     Set<String> before = bundlePdfs();
     store.failOnce.set(true);
     changed(key);
-    UUID id = jobs.findLatest(ManagedCaseBundles.key("case-file", key)).orElseThrow().externalId();
+    UUID id = jobs.findLatest("case-file", key).orElseThrow().externalId();
     worker.poll();
     await()
         .atMost(Duration.ofSeconds(20))
@@ -202,7 +202,7 @@ create table if not exists bundle_test_source(case_key text primary key, referen
     store.storeStarted = new CountDownLatch(1);
     store.releaseStore = new CountDownLatch(1);
     changed(key);
-    UUID id = jobs.findLatest(ManagedCaseBundles.key("case-file", key)).orElseThrow().externalId();
+    UUID id = jobs.findLatest("case-file", key).orElseThrow().externalId();
     worker.poll();
     assertThat(store.storeStarted.await(20, TimeUnit.SECONDS)).isTrue();
     jdbc.update(
@@ -236,6 +236,32 @@ create table if not exists bundle_test_source(case_key text primary key, referen
     run(key);
     assertThat(bundles.view("case-file", key).current().orElseThrow().missingDocuments())
         .hasSize(1);
+  }
+
+  @Test
+  void aSqlRefreshRerendersPublishedBundlesAndLeavesWaitingJobsAlone() throws Exception {
+    String published = fixture();
+    changed(published);
+    run(published);
+    final String before = document(bundles.view("case-file", published)).getUrl();
+    String waiting = fixture();
+    changed(waiting);
+
+    // What an application's Flyway migration runs.
+    assertThat(jdbc.queryForObject("""
+        select bundling.refresh('case-file', array_agg(case_key)) from bundle_test_source
+        where case_key in (:keys)
+        """, Map.of("keys", List.of(published, waiting)), Integer.class)).isEqualTo(1);
+    assertThat(jdbc.queryForList("""
+        select priority from bundling.bundle_job where state = 'QUEUED' and case_key in (:keys)
+        order by priority
+        """, Map.of("keys", List.of(published, waiting)), Integer.class)).containsExactly(-1, 0);
+    // The published PDF stays current until its replacement publishes.
+    assertThat(bundles.view("case-file", published).lifecycle()).isEqualTo(CaseBundleView.Lifecycle.UPDATING);
+    assertThat(document(bundles.view("case-file", published)).getUrl()).isEqualTo(before);
+    run(waiting);
+    run(published);
+    assertThat(document(bundles.view("case-file", published)).getUrl()).isNotEqualTo(before);
   }
 
   private static Document document(CaseBundleView view) {
@@ -286,11 +312,14 @@ create table if not exists bundle_test_source(case_key text primary key, referen
   }
 
   private void run(String key) {
-    UUID id = jobs.findLatest(ManagedCaseBundles.key("case-file", key)).orElseThrow().externalId();
+    UUID id = jobs.findLatest("case-file", key).orElseThrow().externalId();
     worker.poll();
     await()
         .atMost(Duration.ofSeconds(20))
-        .until(() -> jobs.find(id).orElseThrow().state().terminal());
+        .until(() -> {
+          worker.poll();
+          return jobs.find(id).orElseThrow().state().terminal();
+        });
     assertThat(jobs.find(id).orElseThrow().failure()).isEmpty();
   }
 

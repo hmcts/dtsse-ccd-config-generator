@@ -14,10 +14,11 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRenderer;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResolver;
 import uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocuments;
+import uk.gov.hmcts.ccd.sdk.bundling.job.BundleDocumentSelector;
 import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobAutoConfiguration;
 import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobCompletionHandler;
+import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobRepository;
 import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobWorker;
-import uk.gov.hmcts.ccd.sdk.bundling.job.OutboxBundleJobService;
 
 class BundlingJobCompositionTest {
   // The job configuration is deliberately listed first; @AutoConfiguration(before = ...) must win.
@@ -31,7 +32,8 @@ class BundlingJobCompositionTest {
   private static final BundleJobCompletionHandler HANDLER = (job, jobContext, request, result) -> null;
 
   private ApplicationContextRunner withRenderer(ApplicationContextRunner base) {
-    return base.withBean("caseDocuments", DocumentResolver.class, () -> new DocumentResolver() {
+    return base.withBean(BundleDocumentSelector.class, () -> context -> null)
+        .withBean("caseDocuments", DocumentResolver.class, () -> new DocumentResolver() {
       @Override
       public String provider() {
         return "case-documents";
@@ -49,7 +51,7 @@ class BundlingJobCompositionTest {
   void rendererJdbcTemplateAndCompletionHandlerBringTheWorkerUp() {
     withRenderer(runner).withBean(BundleJobCompletionHandler.class, () -> HANDLER).run(context -> {
       assertThat(context).hasSingleBean(BundleRenderer.class);
-      assertThat(context).hasSingleBean(OutboxBundleJobService.class);
+      assertThat(context).hasSingleBean(BundleJobRepository.class);
       assertThat(context).hasSingleBean(BundleJobWorker.class);
     });
   }
@@ -58,7 +60,7 @@ class BundlingJobCompositionTest {
   void withoutARendererTheOutboxStillWorksAndTheWorkerBacksOff() {
     runner.withBean(BundleJobCompletionHandler.class, () -> HANDLER).run(context -> {
       assertThat(context).doesNotHaveBean(BundleRenderer.class);
-      assertThat(context).hasSingleBean(OutboxBundleJobService.class);
+      assertThat(context).hasSingleBean(BundleJobRepository.class);
       assertThat(context).doesNotHaveBean(BundleJobWorker.class);
     });
   }
@@ -77,13 +79,13 @@ class BundlingJobCompositionTest {
   void theJobOutboxIsOptIn() {
     withRenderer(runner).withPropertyValues("ccd.bundling.job.enabled=false").run(context -> {
       assertThat(context).hasSingleBean(BundleRenderer.class);
-      assertThat(context).doesNotHaveBean(OutboxBundleJobService.class);
+      assertThat(context).doesNotHaveBean(BundleJobRepository.class);
     });
     ApplicationContextRunner unset = new ApplicationContextRunner().withConfiguration(
         AutoConfigurations.of(BundleJobAutoConfiguration.class, BundlingAutoConfiguration.class));
     withRenderer(unset).run(context -> {
       assertThat(context).hasSingleBean(BundleRenderer.class);
-      assertThat(context).doesNotHaveBean(OutboxBundleJobService.class);
+      assertThat(context).doesNotHaveBean(BundleJobRepository.class);
       assertThat(context).doesNotHaveBean(BundleJobWorker.class);
     });
   }

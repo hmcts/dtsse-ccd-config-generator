@@ -5,19 +5,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import java.util.List;
-import java.util.Map;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentFailure;
 
 /**
  * The outbox wire format. The mapper is module-owned so the stored shape never varies with a
- * consumer's ObjectMapper customisations; the request version stamps every row so a worker that
- * cannot read an old request fails clearly instead of guessing.
+ * consumer's ObjectMapper customisations.
  */
 final class BundleJobJson {
-  static final int REQUEST_VERSION = 3;
-
-  private static final TypeReference<Map<String, String>> STRING_MAP = new TypeReference<>() {
-  };
   private static final TypeReference<List<DocumentFailure>> DOCUMENT_FAILURES =
       new TypeReference<>() {
       };
@@ -58,14 +52,6 @@ final class BundleJobJson {
       return mapper.readValue(json, type);
     } catch (Exception e) {
       throw new Unreadable("the stored " + what + " could not be read", e);
-    }
-  }
-
-  Map<String, String> readParameters(String json) {
-    try {
-      return mapper.readValue(json, STRING_MAP);
-    } catch (Exception e) {
-      throw new Unreadable("the stored selector parameters could not be read", e);
     }
   }
 

@@ -31,7 +31,7 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.RenderAttempt;
  * of executable rows under a lease, and for each one runs the document selector, renders, hands
  * the open result to the completion handler and records the terminal state. A completed job's
  * bundle is recorded in bundling.bundle with that state, so the consuming service stores only the
- * PDF and reads everything else about the bundle back through OutboxBundleJobService. Terminal writes are
+ * PDF and reads everything else about the bundle back through BundleJobRepository. Terminal writes are
  * lease-guarded, so a render that outlives its lease can never overwrite the reclaimer's state.
  * Only transient resolution and conversion failures are retried; untyped exception detail is
  * logged, never persisted. The consuming service enables scheduling for the poll to fire.
@@ -41,8 +41,6 @@ public class BundleJobWorker implements AutoCloseable {
 
   private static final String LOG_ONLY =
       ". The exception detail is in the service logs, not this record.";
-  // How many times a coalesced bundle has been re-run for temporarily unavailable documents.
-  static final String REQUEUES_ATTRIBUTE = "bundling.unavailableRequeues";
 
   private final BundleJobRepository repository;
   private final BundleRenderer renderer;
@@ -146,27 +144,9 @@ public class BundleJobWorker implements AutoCloseable {
     BundleJob job = claimed.job();
     UUID id = job.externalId();
     BundleRequest request;
-    BundleExecutionContext context;
-    BundleJobContext jobContext;
+    BundleJobContext jobContext = new BundleJobContext(id, job.definition(), job.caseKey());
     try {
-      if (claimed.requestVersion() > BundleJobJson.REQUEST_VERSION) {
-        throw new BundleJobJson.Unreadable("the job was stored with request version "
-            + claimed.requestVersion() + " but this worker reads up to version "
-            + BundleJobJson.REQUEST_VERSION, null);
-      }
-      Optional<BundleRequest> submitted = claimed.requestJson() == null ? Optional.empty()
-          : Optional.of(json.read(claimed.requestJson(), BundleRequest.class, "bundle request"));
-      context = json.read(claimed.executionContextJson(), BundleExecutionContext.class,
-          "execution context");
-      jobContext = new BundleJobContext(id, submitted,
-          json.readParameters(claimed.selectorParametersJson()), context);
       request = selector.select(jobContext);
-    } catch (BundleJobJson.Unreadable e) {
-      log.error("Bundle job {} is unreadable by this worker: {}", id, e.getMessage(), e);
-      failTerminally(claimed, BundleErrorCode.JOB_REQUEST_UNREADABLE, "Bundle job " + id
-          + " could not be read by this worker: " + e.getMessage()
-          + ". Re-submit the bundle under a new external id.", List.of(), 0);
-      return;
     } catch (BundleGenerationException e) {
       handleGenerationFailure(claimed, e, 0);
       return;
@@ -184,7 +164,7 @@ public class BundleJobWorker implements AutoCloseable {
     // becomes a placeholder on the last attempt.
     RenderAttempt attempt = retryPolicy.nextAttemptAt(job.attempts(), Instant.now()).isPresent()
         ? RenderAttempt.RETRYABLE : RenderAttempt.FINAL;
-    try (BundleResult result = renderer.render(request, context, attempt)) {
+    try (BundleResult result = renderer.render(request, BundleExecutionContext.empty(), attempt)) {
       Object value;
       try {
         value = completionHandler.onCompleted(job, jobContext, request, result);
@@ -200,7 +180,7 @@ public class BundleJobWorker implements AutoCloseable {
           claimed.leaseOwner());
       record(completed, id, terminal, total, total, "completion");
       if (completed) {
-        requeueIfUnavailable(claimed, context, result);
+        requeueIfUnavailable(claimed, result);
       } else {
         discard(job, value);
       }
@@ -254,48 +234,32 @@ public class BundleJobWorker implements AutoCloseable {
   }
 
   /**
-   * Queues a delayed re-run of a coalesced bundle that has placeholders for documents that were
-   * only temporarily unavailable, so it fills in once they can be fetched. A change to the
-   * bundle's inputs before then joins the re-run and makes it immediate.
+   * Queues a delayed re-run of a bundle that has placeholders for documents that were only
+   * temporarily unavailable, so it fills in once they can be fetched. A change to the bundle's
+   * inputs before then joins the re-run and makes it immediate.
    */
-  private void requeueIfUnavailable(ClaimedBundleJob claimed, BundleExecutionContext context,
-      BundleResult result) {
-    Optional<String> coalesceKey = claimed.job().coalesceKey();
-    boolean unavailable = result.missingDocuments().stream()
-        .anyMatch(missing -> missing.reason() == MissingDocumentReason.UNAVAILABLE);
-    if (coalesceKey.isEmpty() || !unavailable) {
+  private void requeueIfUnavailable(ClaimedBundleJob claimed, BundleResult result) {
+    if (result.missingDocuments().stream()
+        .noneMatch(missing -> missing.reason() == MissingDocumentReason.UNAVAILABLE)) {
       return;
     }
-    UUID id = claimed.job().externalId();
-    int requeues = requeuesSoFar(context);
+    BundleJob job = claimed.job();
+    UUID id = job.externalId();
+    int requeues = claimed.unavailableRequeues();
     Optional<Instant> runAt = retryPolicy.requeueAt(requeues, Instant.now());
     if (runAt.isEmpty()) {
       log.warn("Bundle job {} has placeholders for temporarily unavailable documents and has "
           + "been re-run {} time(s); not re-running it again", id, requeues);
       return;
     }
-    BundleExecutionContext.Builder next = BundleExecutionContext.builder();
-    context.caseReference().ifPresent(next::caseReference);
-    context.initiator().ifPresent(next::initiator);
-    context.attributes().forEach(next::attribute);
-    next.attribute(REQUEUES_ATTRIBUTE, String.valueOf(requeues + 1));
     try {
-      BundleJobRepository.CoalescedInsert landed = repository.insertOrJoin(UUID.randomUUID(),
-          coalesceKey.get(), claimed.selectorParametersJson(), json.write(next.build()),
-          runAt.get());
+      UUID landed = repository.insertOrJoin(UUID.randomUUID(), job.definition(), job.caseKey(),
+          runAt.get(), requeues + 1);
       log.info("Bundle job {} has placeholders for temporarily unavailable documents; job {} "
-          + "re-runs it from {}", id, landed.externalId(), runAt.get());
+          + "re-runs it from {}", id, landed, runAt.get());
     } catch (RuntimeException e) {
       log.error("Bundle job {} could not queue a re-run for its temporarily unavailable "
           + "documents; they are included when the bundle is next submitted", id, e);
-    }
-  }
-
-  private static int requeuesSoFar(BundleExecutionContext context) {
-    try {
-      return Integer.parseInt(context.attributes().getOrDefault(REQUEUES_ATTRIBUTE, "0"));
-    } catch (NumberFormatException e) {
-      return 0;
     }
   }
 
