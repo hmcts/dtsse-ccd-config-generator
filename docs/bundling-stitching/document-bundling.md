@@ -452,8 +452,10 @@ Enabling backfill also enables Spring scheduling in the host.
 Definitions without enumeration are warned once and skipped until restart; normal bundling is unaffected.
 
 The scanner queues 25 cases per definition every ten seconds, skipping stored bundles and active
-jobs. A fresh token can retry failed or unpublished cases. Live changes take priority over backfill
-and promote waiting jobs; automatic follow-ups retain their priority.
+jobs where possible. Each case commits separately. A fresh token can retry failed or unpublished
+cases. Live changes take priority and promote waiting jobs; automatic follow-ups retain their priority.
+A racing submission can cause an extra render; its failure or missing-document placeholders can
+affect the displayed status or bundle.
 
 Completion means **queued, not rendered**. Each scan's position is stored per token and
 definition, so pods share one scan and a restart resumes it.

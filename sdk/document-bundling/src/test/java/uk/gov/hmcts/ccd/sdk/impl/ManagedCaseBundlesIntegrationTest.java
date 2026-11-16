@@ -264,7 +264,7 @@ create table if not exists bundle_test_source(case_key text primary key, referen
     scanner.poll();
     assertThat(jobCount(keys)).isEqualTo(2);
     assertThat(markers()).isZero();
-    // An unfinished scan resumes after the last committed page.
+    // An unfinished scan resumes after the last committed case.
     scanner = scanner("first", keys);
     scanner.poll();
     assertThat(jobCount(keys)).isEqualTo(3);
@@ -291,7 +291,7 @@ create table if not exists bundle_test_source(case_key text primary key, referen
     var slow = scanner("shared", keys);
     slow.poll();
     var fast = scanner("shared", keys);
-    fast.poll(); // Continues from the other pod's page rather than rescanning it.
+    fast.poll(); // Continues from the other pod's position.
     assertThat(jobCount(keys)).isEqualTo(3);
     fast.poll();
     keys.add(fixture()); // A completed scan must not pick up this new key.
@@ -329,7 +329,7 @@ create table if not exists bundle_test_source(case_key text primary key, referen
     scanner("first-attempt", keys).poll();
     jdbc.update("update bundling.bundle_job set state = 'FAILED' where coalesce_key = :key",
         Map.of("key", ManagedCaseBundles.key("case-file", failed)));
-    scanner("first-attempt", keys).poll(); // Not complete yet, but the scan is already past this case.
+    scanner("first-attempt", keys).poll(); // The same token never requeues this case.
     assertThat(jobCount(keys)).isEqualTo(1);
     scanner("retry", keys).poll();
     assertThat(jobCount(keys)).isEqualTo(2);
@@ -341,16 +341,19 @@ create table if not exists bundle_test_source(case_key text primary key, referen
   }
 
   @Test
-  void aFailedPageRollsBackAndRetriesWithoutWritingCompletion() throws Exception {
+  void aFailedCaseKeepsCommittedProgressAndRetriesAfterRestart() throws Exception {
     String key = fixture();
     var keys = new ArrayList<>(List.of(key, "x".repeat(300)));
     var scanner = scanner("rollback", keys);
-    scanner.poll(); // Second insert exceeds the queue's key limit, rolling back the whole page.
-    assertThat(jobCount(List.of(key))).isZero();
+    scanner.poll(); // Only the oversized second key fails; the first case is already committed.
+    assertThat(jobCount(List.of(key))).isEqualTo(1);
+    assertThat(jdbc.queryForObject("select after_key from bundling.bundle_backfill where token = 'rollback'",
+        Map.of(), String.class)).isEqualTo(key);
     assertThat(markers()).isZero();
     keys.set(1, fixture());
-    scanner.poll();
+    scanner("rollback", keys).poll();
     assertThat(jobCount(keys)).isEqualTo(2);
+    assertThat(markers()).isEqualTo(1);
   }
 
   @Test
@@ -438,7 +441,7 @@ create table if not exists bundle_test_source(case_key text primary key, referen
         List.of(healthy, empty, legacy), "all-definitions", 2);
     scanner.poll();
     assertThat(jobCount(List.of(key))).isEqualTo(1);
-    assertThat(markers()).isEqualTo(1);
+    assertThat(markers()).isEqualTo(2);
     scanner.poll();
     assertThat(markers()).isEqualTo(2); // No false completion for the unimplemented legacy definition.
   }

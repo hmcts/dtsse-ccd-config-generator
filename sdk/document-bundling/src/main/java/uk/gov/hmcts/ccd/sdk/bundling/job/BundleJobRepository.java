@@ -115,7 +115,7 @@ public class BundleJobRepository {
 
   /**
    * Queues a background job unless the key has active work or a stored bundle. A job claimed
-   * while this statement runs can slip past the check; the cost is one redundant render.
+   * concurrently can slip past the check and produce an extra render, with its own result/status.
    */
   boolean insertBackfill(UUID externalId, String coalesceKey, String parametersJson) {
     return jdbc.update("""
