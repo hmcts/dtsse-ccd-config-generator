@@ -104,6 +104,7 @@ public class BundleJobRepository {
           where coalesce_key is not null and state = 'QUEUED' and attempts = 0
         do update set coalesced_submissions = bundle_job.coalesced_submissions + 1,
           last_coalesced_at = clock_timestamp(), updated_at = clock_timestamp(),
+          priority = greatest(bundle_job.priority, excluded.priority),
           next_attempt_at = case
             when bundle_job.next_attempt_at is null or excluded.next_attempt_at is null then null
             else least(bundle_job.next_attempt_at, excluded.next_attempt_at) end
@@ -115,6 +116,20 @@ public class BundleJobRepository {
             "notBefore", notBefore == null ? null : OffsetDateTime.ofInstant(notBefore, ZoneOffset.UTC)),
         (rs, n) -> new CoalescedInsert(rs.getObject("external_id", UUID.class),
             rs.getString("selector_parameters")));
+  }
+
+  /** Initial population only: jobs (including failures) and published bundles already count as handled. */
+  boolean insertBackfill(UUID externalId, String coalesceKey, String parametersJson) {
+    return jdbc.update("""
+        insert into bundling.bundle_job
+          (external_id, coalesce_key, state, request_version, selector_parameters, execution_context, priority)
+        select :externalId, :key, 'QUEUED', :version, :parameters::jsonb, '{}'::jsonb, -1
+        where not exists (select 1 from bundling.bundle_job where coalesce_key = :key)
+          and not exists (select 1 from bundling.bundle where bundle_key = :key
+                          and document_id is not null and deleted_at is null)
+        on conflict do nothing
+        """, params("externalId", externalId, "key", coalesceKey,
+            "version", BundleJobJson.REQUEST_VERSION, "parameters", parametersJson)) == 1;
   }
 
   /** The job a coalesced submission landed on, and the parameters that job keeps. */
@@ -153,7 +168,7 @@ public class BundleJobRepository {
             and request_version <= :maxVersion
             and ((state = 'QUEUED' and (next_attempt_at is null or next_attempt_at <= now()))
                  or (state = :inProgress and lease_expires_at <= now()))
-          order by created_at, external_id
+          order by priority desc, created_at, external_id
           limit :limit
           for update skip locked
         )

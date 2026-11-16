@@ -98,6 +98,26 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
+  void liveChangesJumpAheadOfBackfillAndPromoteAnExistingWaitingJob() {
+    UUID background = UUID.randomUUID();
+    UUID promoted = UUID.randomUUID();
+    UUID live = UUID.randomUUID();
+    assertThat(repository.insertBackfill(background, "background", "{}")).isTrue();
+    assertThat(repository.insertBackfill(promoted, "hot", "{}")).isTrue();
+    repository.insertOrJoin(live, "live", "{}", "{}");
+    // Joining a waiting background job promotes it, rather than adding another render.
+    assertThat(repository.insertOrJoin(UUID.randomUUID(), "hot", "{}", "{}").externalId())
+        .isEqualTo(promoted);
+    assertThat(repository.claim(1, "priority-test", Duration.ofMinutes(1), 3))
+        .hasSize(1).extracting(claim -> claim.job().externalId()).doesNotContain(background);
+    assertThat(repository.claim(1, "priority-test", Duration.ofMinutes(1), 3))
+        .hasSize(1).extracting(claim -> claim.job().externalId()).doesNotContain(background);
+    assertThat(repository.claim(1, "priority-test", Duration.ofMinutes(1), 3))
+        .extracting(claim -> claim.job().externalId()).containsExactly(background);
+    assertThat(repository.find(promoted).orElseThrow().coalescedSubmissions()).isEqualTo(1);
+  }
+
+  @Test
   void submitThenPollRunsThroughInProgressToCompletedPersistingTheHandlersSummary()
       throws Exception {
     UUID id = UUID.randomUUID();

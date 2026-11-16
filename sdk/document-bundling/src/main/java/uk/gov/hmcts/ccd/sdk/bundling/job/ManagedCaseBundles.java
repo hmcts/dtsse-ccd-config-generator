@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.bundling.job;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -90,6 +91,23 @@ public class ManagedCaseBundles
         key(definition, caseKey),
         Map.of("definition", definition, "caseKey", caseKey),
         BundleExecutionContext.empty());
+  }
+
+  /**
+   * Queues an initial bundle at background priority unless this case already has a job or stored
+   * bundle. The deterministic id also deduplicates concurrent scanners after a job is claimed.
+   * Must run in a transaction. Failed jobs retain the worker's normal retry behaviour; backfill
+   * does not reset them. A subsequent document change promotes a waiting backfill to normal priority.
+   */
+  public boolean backfill(String definition, String caseKey) {
+    definition(definition);
+    if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+      throw new IllegalStateException("Bundle backfill must run in a transaction");
+    }
+    String key = key(definition, caseKey);
+    UUID id = UUID.nameUUIDFromBytes(("backfill:" + key).getBytes(StandardCharsets.UTF_8));
+    return repository.insertBackfill(id, key,
+        json.write(Map.of("definition", definition, "caseKey", caseKey)));
   }
 
   @Override

@@ -431,3 +431,48 @@ must grant that service CREATE, ATTACH and DELETE for the destination case type.
 can implement `BundleDocumentStore`, whose `store` must leave nothing stored when it fails. Managed mode owns the worker's selector and completion
 handler; do not register another, or submit other jobs to that worker. A
 `CdamBundleDocumentResolver` bean of your own replaces the default one.
+
+### Backfilling existing cases through Flux
+
+Backfill populates the existing job queue; it has no separate run table, durable cursor or run ID.
+Register one `CaseBundleBackfillSource` bean for the definition to backfill. Its
+`caseKeysAfter(after, limit)` returns eligible application case keys in a stable keyset order,
+starting with `after == null` and ending with an empty list. Use the same identifiers as
+`CaseBundleDefinition.select`, not necessarily the CCD case references. Eligibility stays with
+the application: for example, it may exclude draft or deleted cases. Do not filter this query on
+job or bundle state, and do not use offsets.
+
+With managed bundling and the job outbox enabled, set these environment variables in the service's
+Flux release:
+
+```yaml
+CCD_BUNDLING_BACKFILL_ENABLED: "true"
+CCD_BUNDLING_BACKFILL_DEFINITION: "case-bundle"
+```
+
+Backfill is disabled by default. Enabling it without exactly one source for the named managed
+definition fails startup. The scanner queues one page per poll: `ccd.bundling.backfill.batch-size`
+defaults to 25 and `ccd.bundling.backfill.poll-delay` to `10s`. Their environment variable names
+are `CCD_BUNDLING_BACKFILL_BATCHSIZE` and `CCD_BUNDLING_BACKFILL_POLLDELAY`. These settings control
+queue population, not render concurrency, which remains controlled by the existing job worker.
+The scanner can run on API pods even when rendering is restricted to separate worker pods.
+
+Each process scans once. Restarting or deploying scans again from the beginning, skipping cases
+with any existing job or a currently stored publication. Deterministic backfill job IDs and the
+queue's coalescing constraint prevent duplicate backfill submissions across pods, including after
+a job is claimed. A page's inserts commit together; a failure retries the page on the next poll.
+There is no migration to run for each backfill: the library's one-time schema upgrade only adds
+job priority. The source must keep its ordering stable; cases added behind an active scan's
+position need the usual change notifications or a later scan.
+
+Backfill jobs have priority -1; normal submissions have priority 0. Workers claim normal work
+first, then backfill, oldest first within each priority. If a document change joins a waiting
+backfill job, that job is promoted to normal priority in the change's transaction. Work already
+rendering is not interrupted. Sustained normal traffic can delay backfill.
+
+Set `CCD_BUNDLING_BACKFILL_ENABLED` to `"false"` in Flux to stop further queue population after
+rollout. Already queued jobs continue to render. Leaving it enabled is also safe: once a process
+reaches the end, it stops scanning. Backfill does not regenerate published bundles or reset failed
+jobs; failures retain the worker's normal bounded retries and can be retriggered by a subsequent
+document change. An empty scan means population is finished, not that all PDFs have rendered;
+monitor the existing job states for completion.
