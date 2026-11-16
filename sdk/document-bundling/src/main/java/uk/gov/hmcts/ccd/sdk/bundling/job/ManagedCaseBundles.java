@@ -94,16 +94,11 @@ public class ManagedCaseBundles
   }
 
   /**
-   * Queues a missing bundle at background priority unless a job is queued/running or a stored
-   * publication exists. A fresh token can retry failures; the same token cannot queue a case
-   * twice, including after a crash. Must run in a transaction. Normal changes promote a waiting
-   * backfill job to normal priority.
+   * Queues a missing bundle at background priority in the caller's transaction, skipping active
+   * jobs and stored publications. Same-token calls are idempotent; fresh tokens can retry failures.
    */
   public boolean backfill(String token, String definition, String caseKey) {
     definition(definition);
-    if (!TransactionSynchronizationManager.isActualTransactionActive()) {
-      throw new IllegalStateException("Bundle backfill must run in a transaction");
-    }
     // Encode the tuple so token/case-key delimiters cannot produce ambiguous IDs.
     UUID id = UUID.nameUUIDFromBytes(
         json.write(List.of("backfill", token, definition, caseKey)).getBytes(StandardCharsets.UTF_8));

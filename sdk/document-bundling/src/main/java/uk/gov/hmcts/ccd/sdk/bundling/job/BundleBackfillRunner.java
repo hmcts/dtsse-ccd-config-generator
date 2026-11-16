@@ -33,6 +33,9 @@ public class BundleBackfillRunner {
     if (batchSize < 1 || batchSize > 1000) {
       throw new IllegalArgumentException("Backfill batch-size must be between 1 and 1000");
     }
+    if (definitions.isEmpty()) {
+      throw new IllegalArgumentException("Backfill needs at least one CaseBundleDefinition");
+    }
     this.jdbc = jdbc;
     this.bundles = bundles;
     this.definitions = List.copyOf(definitions);

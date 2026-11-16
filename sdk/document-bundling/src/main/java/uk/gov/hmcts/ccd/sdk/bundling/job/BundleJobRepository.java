@@ -85,21 +85,10 @@ public class BundleJobRepository {
    */
   CoalescedInsert insertOrJoin(UUID externalId, String coalesceKey,
       String selectorParametersJson, String executionContextJson) {
-    return insertOrJoin(externalId, coalesceKey, selectorParametersJson, executionContextJson,
-        null);
+    return insertOrJoin(externalId, coalesceKey, selectorParametersJson, executionContextJson, null, 0);
   }
 
-  /**
-   * As {@link #insertOrJoin(UUID, String, String, String)}, but a newly inserted job is not
-   * claimable before notBefore (null for immediately). The job runs as soon as any submission
-   * wants it: joining a delayed job with an immediate submission makes it immediate.
-   */
-  CoalescedInsert insertOrJoin(UUID externalId, String coalesceKey,
-      String selectorParametersJson, String executionContextJson, Instant notBefore) {
-    return insertOrJoin(externalId, coalesceKey, selectorParametersJson, executionContextJson, notBefore, 0);
-  }
-
-  /** Automatic follow-ups retain their priority; live submissions use the normal priority of zero. */
+  /** Delayed follow-ups retain their priority; live changes make them immediate and promote them. */
   CoalescedInsert insertOrJoin(UUID externalId, String coalesceKey,
       String selectorParametersJson, String executionContextJson, Instant notBefore, int priority) {
     return jdbc.queryForObject("""

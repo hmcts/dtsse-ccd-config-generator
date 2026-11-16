@@ -27,9 +27,6 @@ public class BundleBackfillAutoConfiguration {
       NamedParameterJdbcTemplate jdbc, PlatformTransactionManager transactions, ManagedCaseBundles bundles,
       List<CaseBundleDefinition> definitions,
       Environment environment, @Value("${ccd.bundling.backfill.batch-size:25}") int batchSize) {
-    if (definitions.isEmpty()) {
-      throw new IllegalArgumentException("Backfill needs at least one CaseBundleDefinition");
-    }
     return new BundleBackfillRunner(jdbc, transactions, bundles, definitions,
         environment.getProperty("ccd.bundling.backfill").trim(), batchSize);
   }

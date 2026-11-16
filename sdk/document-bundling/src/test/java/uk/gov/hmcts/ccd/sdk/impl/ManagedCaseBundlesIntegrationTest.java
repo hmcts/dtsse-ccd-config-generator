@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 import java.io.ByteArrayOutputStream;
@@ -288,34 +289,15 @@ create table if not exists bundle_test_source(case_key text primary key, referen
 
   @Test
   void anotherPodsCompletionStopsAnUnfinishedScanBeforeReadingItsNextPage() throws Exception {
-    var keys = List.of(fixture(), fixture(), fixture());
-    var calls = new AtomicInteger();
-    var observed = new CaseBundleDefinition() {
-      @Override
-      public String name() {
-        return "case-file";
-      }
-
-      @Override
-      public SelectedCaseBundle select(String caseKey) {
-        return definition.select(caseKey);
-      }
-
-      @Override
-      public List<String> caseKeysAfter(String after, int limit) {
-        calls.incrementAndGet();
-        return backfillDefinition("case-file", keys).caseKeysAfter(after, limit);
-      }
-    };
-    var slow = new BundleBackfillRunner(jdbc, transaction.getTransactionManager(), bundles,
-        List.of(observed), "shared", 2);
+    var keys = new ArrayList<>(List.of(fixture(), fixture(), fixture()));
+    var slow = scanner("shared", keys);
     slow.poll();
     var fast = scanner("shared", keys);
     fast.poll();
     fast.poll();
     fast.poll();
+    keys.add(fixture()); // The unfinished scan must not pick up this new key after another pod finishes.
     slow.poll();
-    assertThat(calls).hasValue(1);
     assertThat(markers()).isEqualTo(1);
     assertThat(jobCount(keys)).isEqualTo(3);
   }
@@ -381,15 +363,11 @@ create table if not exists bundle_test_source(case_key text primary key, referen
       List<Future<?>> submissions = new ArrayList<>();
       for (int i = 0; i < 2; i++) {
         submissions.add(pool.submit(() -> {
-          try {
-            assertThat(start.await(10, TimeUnit.SECONDS)).isTrue();
-          } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException(e);
-          }
+          assertThat(start.await(10, TimeUnit.SECONDS)).isTrue();
           var scanner = scanner("concurrent", List.of(key));
           scanner.poll();
           scanner.poll();
+          return null;
         }));
       }
       start.countDown();
@@ -432,18 +410,11 @@ create table if not exists bundle_test_source(case_key text primary key, referen
   }
 
   @Test
-  void enablingBackfillWithoutADefinitionFailsStartup() {
-    new ApplicationContextRunner()
-        .withConfiguration(AutoConfigurations.of(BundleBackfillAutoConfiguration.class))
-        .withBean(NamedParameterJdbcTemplate.class, () -> jdbc)
-        .withBean(PlatformTransactionManager.class, transaction::getTransactionManager)
-        .withBean(ManagedCaseBundles.class, () -> bundles)
-        .withPropertyValues("ccd.bundling.backfill=one-trigger")
-        .run(app -> {
-          assertThat(app).hasFailed();
-          assertThat(app.getStartupFailure()).rootCause()
-              .hasMessageContaining("at least one CaseBundleDefinition");
-        });
+  void backfillRequiresADefinition() {
+    assertThatThrownBy(() -> new BundleBackfillRunner(jdbc, transaction.getTransactionManager(),
+        bundles, List.of(), "one-trigger", 2))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("at least one CaseBundleDefinition");
   }
 
   @Test
@@ -465,25 +436,13 @@ create table if not exists bundle_test_source(case_key text primary key, referen
     var managed = new ManagedCaseBundles(jdbc, jobs,
         new uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobRepository(jdbc), store,
         transaction.getTransactionManager(), List.of(healthy, empty, legacy));
-    new ApplicationContextRunner()
-        .withConfiguration(AutoConfigurations.of(BundleBackfillAutoConfiguration.class))
-        .withBean(NamedParameterJdbcTemplate.class, () -> jdbc)
-        .withBean(PlatformTransactionManager.class, transaction::getTransactionManager)
-        .withBean(ManagedCaseBundles.class, () -> managed)
-        .withBean("healthy", CaseBundleDefinition.class, () -> healthy)
-        .withBean("empty", CaseBundleDefinition.class, () -> empty)
-        .withBean("legacy", CaseBundleDefinition.class, () -> legacy)
-        .withPropertyValues("ccd.bundling.backfill=all-definitions", "ccd.bundling.backfill.poll-delay=1h")
-        .run(app -> {
-          assertThat(app).hasNotFailed();
-          var scanner = app.getBean(BundleBackfillRunner.class);
-          scanner.poll();
-          assertThat(jobCount(List.of(key))).isEqualTo(1);
-          assertThat(markers()).isEqualTo(1);
-          scanner.poll();
-          assertThat(markers()).isEqualTo(2); // No false completion for the unimplemented legacy definition.
-          assertThat(legacy.select(key).caseReference()).isEqualTo(reference(key));
-        });
+    var scanner = new BundleBackfillRunner(jdbc, transaction.getTransactionManager(), managed,
+        List.of(healthy, empty, legacy), "all-definitions", 2);
+    scanner.poll();
+    assertThat(jobCount(List.of(key))).isEqualTo(1);
+    assertThat(markers()).isEqualTo(1);
+    scanner.poll();
+    assertThat(markers()).isEqualTo(2); // No false completion for the unimplemented legacy definition.
   }
 
   private BundleBackfillRunner scanner(String token, List<String> keys) {

@@ -13,8 +13,7 @@ public interface CaseBundleDefinition {
    * Override to backfill eligible cases, using the same keys as select. Return up to limit keys
    * in a stable keyset order after the previous page's last key (null initially), and an empty
    * list at the end. Do not use offsets or filter on bundle/job state; the library skips handled
-   * cases. Called inside a short database transaction. New cases behind the cursor need normal
-   * change notifications or a fresh trigger. Existing definitions need no change for normal use.
+   * cases. Called inside a short database transaction.
    */
   default List<String> caseKeysAfter(String after, int limit) {
     throw new UnsupportedOperationException("Implement caseKeysAfter to backfill " + name());
