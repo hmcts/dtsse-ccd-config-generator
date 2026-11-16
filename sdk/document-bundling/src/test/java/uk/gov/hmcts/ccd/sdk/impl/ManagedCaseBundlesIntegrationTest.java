@@ -283,7 +283,7 @@ create table if not exists bundle_test_source(case_key text primary key, referen
     scanner.poll();
     assertThat(jobCount(keys)).isEqualTo(4);
     assertThat(markers()).isEqualTo(2);
-    run(keys.getLast());
+    keys.forEach(this::run);
     assertThat(bundles.view("case-file", keys.getLast()).current()).isPresent();
   }
 

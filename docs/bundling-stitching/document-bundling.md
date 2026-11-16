@@ -473,8 +473,9 @@ notifications or a fresh trigger. The source must keep its ordering stable durin
 
 Backfill jobs have priority -1; normal submissions have priority 0. Workers claim normal work
 first, oldest first within each priority. A document change joining a waiting backfill job promotes
-it to normal priority in the change's transaction. Work already rendering is not interrupted;
-sustained normal traffic can delay backfill.
+it to normal priority in the change's transaction. Automatic follow-ups for unavailable documents
+retain their originating priority. Work already rendering is not interrupted; sustained normal
+traffic can delay backfill.
 
 Remove the variable or set it to an empty value in Flux to stop further population after rollout.
 Already queued jobs finish normally. Monitor existing job states for rendering completion. Library

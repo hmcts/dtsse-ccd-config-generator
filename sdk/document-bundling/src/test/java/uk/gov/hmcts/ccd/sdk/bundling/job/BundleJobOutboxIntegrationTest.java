@@ -36,6 +36,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -102,8 +103,8 @@ class BundleJobOutboxIntegrationTest {
     UUID background = UUID.randomUUID();
     UUID promoted = UUID.randomUUID();
     UUID live = UUID.randomUUID();
-    assertThat(repository.insertBackfill(background, "background", "{}")).isTrue();
-    assertThat(repository.insertBackfill(promoted, "hot", "{}")).isTrue();
+    tx.executeWithoutResult(status -> assertThat(repository.insertBackfill(background, "background", "{}")).isTrue());
+    tx.executeWithoutResult(status -> assertThat(repository.insertBackfill(promoted, "hot", "{}")).isTrue());
     repository.insertOrJoin(live, "live", "{}", "{}");
     // Joining a waiting background job promotes it, rather than adding another render.
     assertThat(repository.insertOrJoin(UUID.randomUUID(), "hot", "{}", "{}").externalId())
@@ -115,6 +116,75 @@ class BundleJobOutboxIntegrationTest {
     assertThat(repository.claim(1, "priority-test", Duration.ofMinutes(1), 3))
         .extracting(claim -> claim.job().externalId()).containsExactly(background);
     assertThat(repository.find(promoted).orElseThrow().coalescedSubmissions()).isEqualTo(1);
+  }
+
+  @Test
+  void backfillSeesCompetingSubmissionsClaimedWhileItWaitsForTheKeyLock() throws Exception {
+    for (boolean competingBackfill : List.of(false, true)) {
+      String key = "race-" + competingBackfill;
+      try (var connection = dataSource.getConnection(); var pool = Executors.newSingleThreadExecutor()) {
+        var session = new SingleConnectionDataSource(connection, true);
+        var owningJdbc = new NamedParameterJdbcTemplate(session);
+        var owningRepository = new BundleJobRepository(owningJdbc);
+        owningJdbc.queryForObject(
+            "select pg_advisory_lock(hashtextextended('bundling.job:' || :key, 0))",
+            Map.of("key", key), (rs, n) -> null);
+        try {
+          Future<Boolean> backfill = pool.submit(() -> tx.execute(status ->
+              repository.insertBackfill(UUID.randomUUID(), key, "{}")));
+          awaitSessionBlockedOnLock();
+          assertThat(backfill.isDone()).isFalse();
+          UUID competing = UUID.randomUUID();
+          if (competingBackfill) {
+            new TransactionTemplate(new DataSourceTransactionManager(session)).executeWithoutResult(status ->
+                assertThat(owningRepository.insertBackfill(competing, key, "{}")).isTrue());
+          } else {
+            owningRepository.insertOrJoin(competing, key, "{}", "{}");
+          }
+          // The competing job is committed and leaves the waiting-only unique index before the
+          // backfill proceeds. Its eligibility query must use a snapshot taken after the lock.
+          assertThat(repository.claim(1, "race-test", Duration.ofMinutes(1), 3))
+              .extracting(claim -> claim.job().externalId()).containsExactly(competing);
+          owningJdbc.queryForObject(
+              "select pg_advisory_unlock(hashtextextended('bundling.job:' || :key, 0))",
+              Map.of("key", key), Boolean.class);
+          assertThat(backfill.get(10, TimeUnit.SECONDS)).isFalse();
+          assertThat(jdbc.queryForObject("select count(*) from bundling.bundle_job where coalesce_key = :key",
+              Map.of("key", key), Integer.class)).isEqualTo(1);
+          // A real change after selection must still create a fresh follow-up.
+          assertThat(repository.insertOrJoin(UUID.randomUUID(), key, "{}", "{}").externalId())
+              .isNotEqualTo(competing);
+        } finally {
+          owningJdbc.queryForObject(
+              "select pg_advisory_unlock_all()", Map.of(), (rs, n) -> null);
+        }
+        jdbc.update("delete from bundling.bundle_job where coalesce_key = :key", Map.of("key", key));
+      }
+    }
+  }
+
+  @Test
+  void unavailableBackfillFollowupsStayBehindLiveJobsUntilARealChangePromotesThem() {
+    UUID initial = UUID.randomUUID();
+    tx.executeWithoutResult(status -> repository.insertBackfill(initial, "background", "{}"));
+    var renderer = new FakeRenderer(tempDir).onNextRender(request ->
+        renderer(tempDir).success(request, List.of(), List.of(), List.of("doc-gone")));
+    var worker = new BundleJobWorker(repository, renderer, twoDocumentSelector(), summaryHandler(),
+        new BundleJobRetryPolicy(3, Duration.ofMillis(1), 2.0, Duration.ofMillis(2), Duration.ofMinutes(15), 2),
+        List.of(), Runnable::run, 5, 5, Duration.ofMinutes(5));
+    worker.poll();
+    var followup = queued("background");
+    assertThat(column(followup.externalId(), "priority")).isEqualTo("-1");
+    jdbc.update("update bundling.bundle_job set next_attempt_at = null where external_id = :id",
+        Map.of("id", followup.externalId()));
+    var live = service.submitCoalesced("live", Map.of(), CONTEXT);
+    assertThat(repository.claim(1, "priority-test", Duration.ofMinutes(1), 3))
+        .extracting(claim -> claim.job().externalId()).containsExactly(live.externalId());
+    assertThat(service.submitCoalesced("background", Map.of(), CONTEXT).externalId())
+        .isEqualTo(followup.externalId());
+    assertThat(column(followup.externalId(), "priority")).isEqualTo("0");
+    worker.poll();
+    assertThat(job(followup.externalId()).state()).isEqualTo(BundleJobState.COMPLETED);
   }
 
   @Test

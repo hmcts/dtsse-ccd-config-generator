@@ -11,5 +11,6 @@ record ClaimedBundleJob(
     String selectorParametersJson,
     String executionContextJson,
     String transientHistoryJson,
-    String leaseOwner) {
+    String leaseOwner,
+    int priority) {
 }

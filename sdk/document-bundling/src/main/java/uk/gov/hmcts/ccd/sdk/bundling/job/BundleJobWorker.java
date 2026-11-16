@@ -282,7 +282,7 @@ public class BundleJobWorker implements AutoCloseable {
     try {
       BundleJobRepository.CoalescedInsert landed = repository.insertOrJoin(UUID.randomUUID(),
           coalesceKey.get(), claimed.selectorParametersJson(), json.write(next.build()),
-          runAt.get());
+          runAt.get(), claimed.priority());
       log.info("Bundle job {} has placeholders for temporarily unavailable documents; job {} "
           + "re-runs it from {}", id, landed.externalId(), runAt.get());
     } catch (RuntimeException e) {
