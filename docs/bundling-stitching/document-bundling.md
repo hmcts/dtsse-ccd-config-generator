@@ -480,4 +480,6 @@ traffic can delay backfill.
 Remove the variable or set it to an empty value in Flux to stop further population after rollout.
 Already queued jobs finish normally. Monitor existing job states for rendering completion. Library
 migrations add job priority and the completion-marker table once; subsequent backfills need only a
-fresh Flux token.
+fresh Flux token. Schema changes commit in a short transaction with a five-second lock-wait
+limit; a separate non-transactional migration builds the queue index concurrently, allowing queue
+writes during the build.

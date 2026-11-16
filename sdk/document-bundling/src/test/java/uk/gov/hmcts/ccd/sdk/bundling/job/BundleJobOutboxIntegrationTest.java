@@ -25,6 +25,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import javax.sql.DataSource;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -881,6 +882,52 @@ class BundleJobOutboxIntegrationTest {
     assertThat(events).containsExactly(
         new BundleProgressEvent(id, BundleJobState.IN_PROGRESS, 0, 1),
         new BundleProgressEvent(id, BundleJobState.COMPLETED, 1, 1));
+  }
+
+  @Test
+  void upgradingTheQueueBuildsItsPriorityIndexWithoutBlockingWrites() throws Exception {
+    jdbc.getJdbcTemplate().execute("create database priority_upgrade_db");
+    DataSource upgradeSource = dataSourceFor("priority_upgrade_db");
+    var upgradeJdbc = new NamedParameterJdbcTemplate(upgradeSource);
+    // Start from the previously released bundling schema, with an existing queue row.
+    Flyway.configure().dataSource(upgradeSource).defaultSchema("bundling").schemas("bundling")
+        .locations("classpath:bundling-db/migration").target("0004").load().migrate();
+    String insert = "insert into bundling.bundle_job (external_id, request_version, execution_context) "
+        + "values (:id, 3, '{}'::jsonb)";
+    UUID existing = UUID.randomUUID();
+    upgradeJdbc.update(insert, Map.of("id", existing));
+    Flyway.configure().dataSource(upgradeSource).defaultSchema("bundling").schemas("bundling")
+        .locations("classpath:bundling-db/migration").target("0005").load().migrate();
+    assertThat(upgradeJdbc.queryForObject("select priority from bundling.bundle_job where external_id = :id",
+        Map.of("id", existing), Integer.class)).isZero();
+    try (var writer = upgradeSource.getConnection(); var pool = Executors.newFixedThreadPool(2)) {
+      writer.setAutoCommit(false);
+      var heldJdbc = new NamedParameterJdbcTemplate(new SingleConnectionDataSource(writer, true));
+      heldJdbc.update(insert, Map.of("id", UUID.randomUUID()));
+      try {
+        Future<?> migration = pool.submit(() -> sdkMigrationRunner(upgradeSource)
+            .run(context -> assertThat(context).hasNotFailed()));
+        // A concurrent build waits for this old writer, but must let another queue writer commit.
+        await().atMost(Duration.ofSeconds(20)).until(() -> upgradeJdbc.queryForObject("""
+            select exists (select 1 from pg_stat_activity
+                where datname = 'priority_upgrade_db' and wait_event_type = 'Lock'
+                  and query ilike '%create index concurrently idx_bundle_job_priority%')
+            """, Map.of(), Boolean.class));
+        Future<Integer> anotherWrite = pool.submit(() -> upgradeJdbc.update(insert,
+            Map.of("id", UUID.randomUUID())));
+        assertThat(anotherWrite.get(10, TimeUnit.SECONDS)).isEqualTo(1);
+        writer.commit();
+        migration.get(20, TimeUnit.SECONDS);
+      } finally {
+        writer.rollback();
+      }
+    }
+    assertThat(upgradeJdbc.queryForObject("""
+        select indisvalid from pg_index
+        where indexrelid = 'bundling.idx_bundle_job_priority'::regclass
+        """, Map.of(), Boolean.class)).isTrue();
+    assertThat(upgradeJdbc.queryForObject("select count(*) from bundling.bundle_job", Map.of(), Integer.class))
+        .isEqualTo(3);
   }
 
   @Test
