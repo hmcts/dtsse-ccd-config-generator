@@ -106,10 +106,18 @@ public class BundleJobRepository {
         params("key", key)) == 1;
   }
 
-  /** Queues a background render of the definition's bundle for every case. */
+  /**
+   * Queues a background render of the definition's bundle for every case, and returns how many it
+   * queued. A case with a job already waiting is left to that job. Cases are queued in reference
+   * order so that a refresh and a live change touching several cases cannot deadlock.
+   */
   int refresh(String definition) {
-    return jdbc.queryForObject("select bundling.refresh(:definition)",
-        params("definition", definition), Integer.class);
+    return jdbc.update("""
+        insert into bundling.bundle_job (definition, case_reference, priority)
+        select :definition, reference, -1 from ccd.case_data order by reference
+        on conflict (definition, case_reference) where state = 'QUEUED' and attempts = 0
+        do nothing
+        """, params("definition", definition));
   }
 
   public Optional<BundleJob> find(UUID externalId) {

@@ -263,7 +263,8 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
     Map<String, Object> cases = Map.of("cases", List.of(published, waiting));
     jdbc.update("delete from ccd.case_data where reference not in (:cases)", cases);
 
-    // A pod does this at startup with the configured ccd.bundling.refresh.
+    // The configured ccd.bundling.refresh has run by the time the scheduled check returns.
+    bundles.refreshIfNew();
     assertThat(bundles.refresh("at-startup")).isFalse();
     String key = UUID.randomUUID().toString();
     assertThat(bundles.refresh(key)).isTrue();

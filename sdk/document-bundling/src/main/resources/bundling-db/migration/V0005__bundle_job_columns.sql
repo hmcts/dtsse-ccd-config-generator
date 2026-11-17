@@ -50,24 +50,6 @@ alter table bundling.bundle
 create index idx_bundle_case_selected
     on bundling.bundle (case_reference, definition, selected_at desc);
 
--- Queues a background render of the definition's bundle for every case, or for the given cases,
--- and returns how many it queued. A case with a job already waiting is left to that job. Cases
--- are queued in reference order so that a refresh and a live change touching several cases cannot
--- deadlock. ccd.bundling.refresh calls it; it is also public SQL API for a one-off refresh.
-create function bundling.refresh(p_definition text, p_case_references bigint[] default null)
-returns integer language sql as $$
-  with queued as (
-    insert into bundling.bundle_job (definition, case_reference, priority)
-    select p_definition, reference, -1
-    from ccd.case_data
-    where p_case_references is null or reference = any (p_case_references)
-    order by reference
-    on conflict (definition, case_reference) where state = 'QUEUED' and attempts = 0
-    do nothing
-    returning 1)
-  select count(*)::integer from queued
-$$;
-
 -- The ccd.bundling.refresh values that have already queued a refresh; each runs once.
 create table bundling.refresh_key (
     key text primary key,

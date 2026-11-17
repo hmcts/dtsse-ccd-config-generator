@@ -126,15 +126,6 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
-  void aRefreshOfGivenCasesSkipsTheRestAndReferencesThatAreNotCases() {
-    long wanted = caseRef("wanted");
-    caseRef("unwanted");
-    assertThat(jdbc.queryForObject("select bundling.refresh('test', array[:wanted, 42])",
-        Map.of("wanted", wanted), Integer.class)).isEqualTo(1);
-    assertThat(queued("test", "wanted").caseReference()).isEqualTo(wanted);
-  }
-
-  @Test
   void aRefreshWaitsForAnUncommittedLiveChangeAndLeavesItsJobAlone() throws Exception {
     caseRef("live");
     caseRef("other");
@@ -926,8 +917,7 @@ class BundleJobOutboxIntegrationTest {
   }
 
   private static int refresh(String definition) {
-    return jdbc.queryForObject("select bundling.refresh(:definition)",
-        Map.of("definition", definition), Integer.class);
+    return repository.refresh(definition);
   }
 
   private static BundleDocumentSelector asSubmitted() {

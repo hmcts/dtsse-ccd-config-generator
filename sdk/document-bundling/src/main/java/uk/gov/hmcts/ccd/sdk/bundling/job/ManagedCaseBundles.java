@@ -39,12 +39,16 @@ public class ManagedCaseBundles
   private final Map<String, CaseBundleDefinition> definitions;
   private final TransactionTemplate snapshot;
   private final TransactionTemplate transaction;
+  private final String refreshKey;
+  private volatile boolean refreshChecked;
 
   public ManagedCaseBundles(
       BundleJobRepository repository,
       BundleDocumentStore store,
       PlatformTransactionManager transactions,
-      List<CaseBundleDefinition> definitions) {
+      List<CaseBundleDefinition> definitions,
+      String refreshKey) {
+    this.refreshKey = refreshKey;
     this.repository = repository;
     this.store = store;
     this.definitions =
@@ -68,9 +72,20 @@ public class ManagedCaseBundles
   }
 
   /**
+   * Refreshes for the configured ccd.bundling.refresh, off the startup path. A failure is logged by
+   * the scheduler and tried again a minute later.
+   */
+  @Scheduled(fixedDelay = 60_000)
+  public void refreshIfNew() {
+    if (!refreshChecked) {
+      refresh(refreshKey);
+      refreshChecked = true;
+    }
+  }
+
+  /**
    * Queues a background render of every case's bundles, once for each key, and says whether this
-   * call did. The key commits with the jobs, so other pods and restarts skip it and a failure is
-   * retried.
+   * call did. The key commits with the jobs, so other pods and restarts skip it.
    */
   public boolean refresh(String key) {
     if (key == null || key.isBlank()) {

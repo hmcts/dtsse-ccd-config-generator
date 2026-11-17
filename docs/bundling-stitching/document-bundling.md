@@ -376,22 +376,12 @@ have none, set a new value for `ccd.bundling.refresh` (`CCD_BUNDLING_REFRESH` in
 CCD_BUNDLING_REFRESH: "2026-11-17-new-cover-page"
 ```
 
-At startup, the first pod to see a value it has not seen before queues one background job per
-case for each definition, and records the value in `bundling.refresh_key` in the same transaction.
-Other pods and later restarts skip it; a failure stops the pod starting and is retried on the
-next start. Live changes are claimed first and promote a waiting refresh job; a case with a job
+Shortly after it starts, the first pod to see a value it has not seen before queues one background
+job per case for each definition, and records the value in `bundling.refresh_key` in the same
+transaction. Other pods and later restarts skip it. A failure is logged and retried a minute
+later; it does not stop the pod starting. Live changes are claimed first and promote a waiting refresh job; a case with a job
 already waiting is left to that job. An existing PDF stays current until its replacement
 publishes.
 
 Change the value after the release that changes the rendering has finished rolling out, so that
 every pod renders the new layout.
-
-To refresh some cases only, call the SQL function the trigger uses:
-
-```sql
-select bundling.refresh('case-file', array_agg(case_reference)) from pcs_case where ...;
-```
-
-It queues the given references that are cases, and returns the number queued. The definition must
-match a `CaseBundleDefinition.name()`: the function cannot check it, and a job for an unknown name
-fails when a worker claims it.
