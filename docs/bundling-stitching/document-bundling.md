@@ -133,7 +133,7 @@ the builder) the renderer publishes `ccd.bundling.stage` timers and `ccd.bundlin
 
 Case bundles (below) render outside the request, on a job queue in your service's own
 database, switched on with `ccd.bundling.job.enabled=true`. Each row of `bundling.bundle_job` is
-one render of one case's bundle, identified by its `definition` and `case_key` columns. The row is
+one render of one case's bundle, identified by its `definition` and `case_reference` columns. The row is
 inserted in the caller's transaction, so the job exists exactly when the change that triggered it
 commits. The table is created by the SDK's standard library migration (`SdkFlywayMigration`, run
 by the decentralised runtime's Flyway strategy before the application's own migrations).
@@ -166,8 +166,8 @@ When a job completes, the worker records the bundle it rendered in `bundling.bun
 statement that marks the job completed, so a row exists exactly when its job completed and never
 for a worker that lost its lease. The row holds everything about the bundle except the PDF: the
 request that was rendered, where each document landed, the missing documents and why, the
-warnings, the PDF's file name, media type, size, checksum and page count, the definition, case key
-and case reference, and when its documents were selected. Missing documents carry the selected
+warnings, the PDF's file name, media type, size, checksum and page count, the definition and case
+reference, and when its documents were selected. Missing documents carry the selected
 `title` and `sectionPath` (outermost to innermost, excluding the request root), so they can be
 listed without searching the request. The bundle table has no foreign key to `bundle_job`, so job
 rows can be purged without losing the description of a bundle still in use.
@@ -329,15 +329,17 @@ For a case bundle that follows document changes, switch on the job queue:
 ccd.bundling.job.enabled: true
 ```
 
-Register a `CaseBundleDefinition` bean. Its `name()` identifies the bundle, and `select(caseKey)`
-returns a `SelectedCaseBundle`: the case reference, case type, jurisdiction and an ordered
-`BundleRequest`. The library calls it in a short repeatable-read transaction, so the documents and
+Register a `CaseBundleDefinition` bean. Its `name()` identifies the bundle, and
+`select(caseReference)` returns the case's documents as an ordered `BundleRequest`. A bundle
+belongs to a case in `ccd.case_data`: the library reads the case type and jurisdiction from there,
+and deleting the case deletes its jobs and bundle rows. The library calls `select` in a short repeatable-read transaction, so the documents and
 whatever decides their visibility are read consistently. Selection and visibility rules stay
 application code. An application can register several definitions.
 
-Call `CaseBundles.changed(definition, caseKey)` in the transaction that changes the bundle's
-sources. It queues a job for that definition and case key; repeated calls
-join that job, and a rollback cancels it. The SDK does not detect changes itself:
+Call `CaseBundles.changed(definition, caseReference)` in the transaction that changes the bundle's
+sources. It queues a job for that definition and case; repeated calls
+join that job, and a rollback cancels it. The event that creates a case can call it too: the case
+is checked when the transaction commits. The SDK does not detect changes itself:
 a JPA entity listener on each entity the selection reads is the simplest way to cover every write
 path, including cascades. Native SQL changes must call it explicitly.
 
@@ -350,8 +352,8 @@ after its replacement, so a link a reader already has keeps working, and sets th
 its lease deletes its upload. A PDF uploaded by a worker that dies before recording it stays in
 CDAM, unreadable: CDAM serves a document only to a user who can see it in the case data.
 
-`CaseBundles.view(definition, caseKey)` returns the current bundle's `BundleMetadata`, including
-where its PDF is stored, and a lifecycle worked out from the key's latest job and bundle: `NONE`,
+`CaseBundles.view(definition, caseReference)` returns the current bundle's `BundleMetadata`, including
+where its PDF is stored, and a lifecycle worked out from the case's latest job and bundle: `NONE`,
 `PREPARING` (no bundle yet), `UPDATING`, `UP_TO_DATE` or `FAILED`. **This is sensitive data, and
 these Java methods do not authorise readers.** There is no SDK HTTP endpoint. Expose the reference
 and report only through an authorised application projection with restrictive CCD field
@@ -367,24 +369,29 @@ handler; do not register another. A
 
 ### Refreshing bundles in bulk
 
-To re-render existing bundles, for example after a layout change, or to backfill cases that have
-none, call the SQL function `bundling.refresh(definition, case_keys)` from an application Flyway
-migration. The SDK's migrations always run before the application's, so the function is there.
+To re-render every case's bundles, for example after a layout change, or to backfill cases that
+have none, set a new value for `ccd.bundling.refresh` (`CCD_BUNDLING_REFRESH` in Flux):
 
-```sql
-select bundling.refresh('case-file', array_agg(id::text))
-from pcs_case where case_reference is not null;
+```yaml
+CCD_BUNDLING_REFRESH: "2026-11-17-new-cover-page"
 ```
 
-It queues one background job per case key, using the same keys as `select`, in the migration's
-transaction, and returns the number queued. Live changes are claimed first and promote a waiting
-refresh job; a case with a job already waiting is left to that job. An existing PDF stays current
-until its replacement publishes.
+At startup, the first pod to see a value it has not seen before queues one background job per
+case for each definition, and records the value in `bundling.refresh_key` in the same transaction.
+Other pods and later restarts skip it; a failure stops the pod starting and is retried on the
+next start. Live changes are claimed first and promote a waiting refresh job; a case with a job
+already waiting is left to that job. An existing PDF stays current until its replacement
+publishes.
 
-Put a large refresh in a migration of its own. Until that migration commits, a live change to one
-of its cases waits for it, so keep the transaction short.
+Change the value after the release that changes the rendering has finished rolling out, so that
+every pod renders the new layout.
 
-Ship the migration in the release **after** the rendering change. In the same release, pods still
-running the old code claim refresh jobs during the rollout and render the old layout. The
-definition must match a `CaseBundleDefinition.name()`: the function cannot check it, and a job for
-an unknown name fails when a worker claims it.
+To refresh some cases only, call the SQL function the trigger uses:
+
+```sql
+select bundling.refresh('case-file', array_agg(case_reference)) from pcs_case where ...;
+```
+
+It queues the given references that are cases, and returns the number queued. The definition must
+match a `CaseBundleDefinition.name()`: the function cannot check it, and a job for an unknown name
+fails when a worker claims it.

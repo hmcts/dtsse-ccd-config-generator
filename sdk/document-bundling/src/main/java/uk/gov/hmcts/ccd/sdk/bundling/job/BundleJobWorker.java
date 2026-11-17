@@ -200,7 +200,7 @@ public class BundleJobWorker implements AutoCloseable {
   /** The rendered bundle as recorded in bundling.bundle, with the job's completed state. */
   private BundleJobRepository.BundleRecord bundleRecord(SelectedCaseBundle selected,
       BundleResult result, StoredBundleDocument stored) {
-    return new BundleJobRepository.BundleRecord(selected.caseReference(), result.outcome().name(),
+    return new BundleJobRepository.BundleRecord(result.outcome().name(),
         result.artifact().fileName(), result.artifact().mediaType(), result.artifact().size(),
         result.artifact().sha256(), result.pageCount(), json.write(selected.request()),
         json.write(result.documents()), json.write(result.missingDocuments()),
@@ -252,7 +252,7 @@ public class BundleJobWorker implements AutoCloseable {
       return;
     }
     try {
-      UUID landed = repository.insertOrJoin(UUID.randomUUID(), job.definition(), job.caseKey(),
+      UUID landed = repository.insertOrJoin(UUID.randomUUID(), job.definition(), job.caseReference(),
           runAt.get(), requeues + 1);
       log.info("Bundle job {} has placeholders for temporarily unavailable documents; job {} "
           + "re-runs it from {}", id, landed, runAt.get());

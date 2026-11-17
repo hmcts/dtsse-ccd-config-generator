@@ -6,8 +6,8 @@ public interface CaseBundles {
    * The documents this bundle is built from may have changed, so the bundle is selected and rendered
    * again after commit. Must join the transaction that changed them; rollback cancels it.
    */
-  void changed(String definition, String caseKey);
+  void changed(String definition, long caseReference);
 
   /** A consistent read of the current publication and whether it needs an update. */
-  CaseBundleView view(String definition, String caseKey);
+  CaseBundleView view(String definition, long caseReference);
 }

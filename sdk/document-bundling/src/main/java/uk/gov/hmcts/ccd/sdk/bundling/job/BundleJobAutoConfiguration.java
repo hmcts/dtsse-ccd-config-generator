@@ -2,6 +2,8 @@ package uk.gov.hmcts.ccd.sdk.bundling.job;
 
 import java.util.List;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -64,6 +66,13 @@ public class BundleJobAutoConfiguration {
   ManagedCaseBundles managedCaseBundles(BundleJobRepository repository, BundleDocumentStore store,
       PlatformTransactionManager transactions, List<CaseBundleDefinition> definitions) {
     return new ManagedCaseBundles(repository, store, transactions, definitions);
+  }
+
+  /** Changing ccd.bundling.refresh re-renders every case's bundles, once. */
+  @Bean
+  ApplicationRunner bundleRefresh(ManagedCaseBundles bundles,
+      @Value("${ccd.bundling.refresh:}") String key) {
+    return args -> bundles.refresh(key);
   }
 
   @Bean

@@ -7,7 +7,7 @@ import java.util.UUID;
 
 /**
  * The current state of one durable bundle job, read from its outbox row. The failure is the sanitised failure record.
- * The definition and case key say which bundle it is of, and coalescedSubmissions counts the later
+ * The definition and case reference say which bundle it is of, and coalescedSubmissions counts the later
  * changes it absorbed. claimedAt is when the current (or last) attempt was claimed; the job
  * selects its documents after that, so the completed job with the greatest claimedAt reflects the
  * newest state, whatever order jobs finished in.
@@ -19,7 +19,7 @@ public record BundleJob(
     Instant submittedAt,
     Instant lastUpdatedAt,
     String definition,
-    String caseKey,
+    long caseReference,
     int coalescedSubmissions,
     Optional<Instant> claimedAt,
     Optional<BundleJobFailure> failure) {
@@ -30,7 +30,6 @@ public record BundleJob(
     Objects.requireNonNull(submittedAt, "BundleJob.submittedAt");
     Objects.requireNonNull(lastUpdatedAt, "BundleJob.lastUpdatedAt");
     Objects.requireNonNull(definition, "BundleJob.definition");
-    Objects.requireNonNull(caseKey, "BundleJob.caseKey");
     Objects.requireNonNull(claimedAt, "BundleJob.claimedAt");
     Objects.requireNonNull(failure, "BundleJob.failure");
   }

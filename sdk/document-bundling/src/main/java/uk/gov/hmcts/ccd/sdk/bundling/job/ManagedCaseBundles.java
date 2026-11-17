@@ -13,6 +13,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleResult;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.BundleDocumentStore;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundleDefinition;
@@ -37,6 +38,7 @@ public class ManagedCaseBundles
   private final BundleDocumentStore store;
   private final Map<String, CaseBundleDefinition> definitions;
   private final TransactionTemplate snapshot;
+  private final TransactionTemplate transaction;
 
   public ManagedCaseBundles(
       BundleJobRepository repository,
@@ -48,29 +50,48 @@ public class ManagedCaseBundles
     this.definitions =
         definitions.stream()
             .collect(Collectors.toUnmodifiableMap(CaseBundleDefinition::name, Function.identity()));
+    transaction = new TransactionTemplate(transactions);
     snapshot = new TransactionTemplate(transactions);
     snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
     snapshot.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
   }
 
   @Override
-  public void changed(String definition, String caseKey) {
+  public void changed(String definition, long caseReference) {
     definition(definition);
     if (!TransactionSynchronizationManager.isActualTransactionActive()) {
       throw new IllegalStateException(
           "A bundle change must join the transaction that changed its documents");
     }
     // Calls in one transaction join the job its first call queued.
-    repository.insertOrJoin(UUID.randomUUID(), definition, caseKey, null, 0);
+    repository.insertOrJoin(UUID.randomUUID(), definition, caseReference, null, 0);
+  }
+
+  /**
+   * Queues a background render of every case's bundles, once for each key, and says whether this
+   * call did. The key commits with the jobs, so other pods and restarts skip it and a failure is
+   * retried.
+   */
+  public boolean refresh(String key) {
+    if (key == null || key.isBlank()) {
+      return false;
+    }
+    return transaction.execute(status -> {
+      if (!repository.recordRefresh(key)) {
+        return false;
+      }
+      definitions.keySet().forEach(definition -> log.info("Bundle refresh {} queued {} {} bundles",
+          key, repository.refresh(definition), definition));
+      return true;
+    });
   }
 
   @Override
   public SelectedCaseBundle select(BundleJob job) {
     CaseBundleDefinition definition = definition(job.definition());
     // One snapshot, so the documents and whatever decides their visibility agree.
-    SelectedCaseBundle selected = snapshot.execute(status -> definition.select(job.caseKey()));
-    return new SelectedCaseBundle(selected.caseReference(), selected.caseType(),
-        selected.jurisdiction(), selected.request().withExternalId(job.externalId()));
+    BundleRequest request = snapshot.execute(status -> definition.select(job.caseReference()));
+    return repository.selectedFor(job.caseReference(), request.withExternalId(job.externalId()));
   }
 
   @Override
@@ -96,12 +117,12 @@ public class ManagedCaseBundles
   }
 
   @Override
-  public CaseBundleView view(String definition, String caseKey) {
+  public CaseBundleView view(String definition, long caseReference) {
     definition(definition);
     // The job first: a bundle recorded in between then reads as updating, never as up to date.
-    Optional<BundleJob> job = repository.findLatest(definition, caseKey);
+    Optional<BundleJob> job = repository.findLatest(definition, caseReference);
     Optional<BundleMetadata> current =
-        repository.findLatestBundle(definition, caseKey).filter(bundle -> bundle.stored().isPresent());
+        repository.findLatestBundle(definition, caseReference).filter(bundle -> bundle.stored().isPresent());
     boolean published = current.isPresent();
     Lifecycle lifecycle =
         job.map(

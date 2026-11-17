@@ -18,6 +18,7 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleWarning;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResult;
 import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
+import uk.gov.hmcts.ccd.sdk.bundling.managed.SelectedCaseBundle;
 
 /**
  * JDBC access to the bundling.bundle_job outbox table, and to bundling.bundle, which describes the
@@ -28,7 +29,7 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
  */
 public class BundleJobRepository {
   private static final String JOB_COLUMNS = """
-      select external_id, state, attempts, created_at, updated_at, definition, case_key,
+      select external_id, state, attempts, created_at, updated_at, definition, case_reference,
              coalesced_submissions, claimed_at, failure_code,
              failure_message,
              failure_documents::text as failure_documents
@@ -36,7 +37,7 @@ public class BundleJobRepository {
       """;
 
   private static final String BUNDLE_COLUMNS = """
-      select id, job_id, definition, case_key, case_reference, selected_at, created_at, outcome, file_name,
+      select id, job_id, definition, case_reference, selected_at, created_at, outcome, file_name,
              media_type, size_bytes, sha256, page_count, request::text as request,
              documents::text as documents, missing_documents::text as missing_documents,
              warnings::text as warnings, document_id, document_url, binary_url
@@ -69,13 +70,13 @@ public class BundleJobRepository {
    * the count of re-runs for unavailable documents. Joining a delayed job with an immediate
    * submission makes it immediate, and joining a waiting refresh job promotes it.
    */
-  UUID insertOrJoin(UUID externalId, String definition, String caseKey, Instant notBefore,
+  UUID insertOrJoin(UUID externalId, String definition, long caseReference, Instant notBefore,
       int unavailableRequeues) {
     return jdbc.queryForObject("""
         insert into bundling.bundle_job
-          (external_id, definition, case_key, next_attempt_at, unavailable_requeues)
-        values (:externalId, :definition, :caseKey, :notBefore, :requeues)
-        on conflict (definition, case_key) where state = 'QUEUED' and attempts = 0
+          (external_id, definition, case_reference, next_attempt_at, unavailable_requeues)
+        values (:externalId, :definition, :caseReference, :notBefore, :requeues)
+        on conflict (definition, case_reference) where state = 'QUEUED' and attempts = 0
         do update set coalesced_submissions = bundle_job.coalesced_submissions + 1,
           last_coalesced_at = clock_timestamp(), updated_at = clock_timestamp(),
           priority = 0,
@@ -84,10 +85,31 @@ public class BundleJobRepository {
             else least(bundle_job.next_attempt_at, excluded.next_attempt_at) end
         returning external_id
         """,
-        params("externalId", externalId, "definition", definition, "caseKey", caseKey,
+        params("externalId", externalId, "definition", definition, "caseReference", caseReference,
             "requeues", unavailableRequeues,
             "notBefore", notBefore == null ? null : OffsetDateTime.ofInstant(notBefore, ZoneOffset.UTC)),
         UUID.class);
+  }
+
+  /** The case as CCD holds it: where a bundle of the case is stored. */
+  SelectedCaseBundle selectedFor(long caseReference, BundleRequest request) {
+    return jdbc.queryForObject("""
+        select case_type_id, jurisdiction from ccd.case_data where reference = :caseReference
+        """, params("caseReference", caseReference),
+        (rs, n) -> new SelectedCaseBundle(caseReference, rs.getString("case_type_id"),
+            rs.getString("jurisdiction"), request));
+  }
+
+  /** Records the refresh key, and says whether it was new. A concurrent caller waits its turn. */
+  boolean recordRefresh(String key) {
+    return jdbc.update("insert into bundling.refresh_key (key) values (:key) on conflict do nothing",
+        params("key", key)) == 1;
+  }
+
+  /** Queues a background render of the definition's bundle for every case. */
+  int refresh(String definition) {
+    return jdbc.queryForObject("select bundling.refresh(:definition)",
+        params("definition", definition), Integer.class);
   }
 
   public Optional<BundleJob> find(UUID externalId) {
@@ -102,15 +124,15 @@ public class BundleJobRepository {
    * is the submitting transaction's start time, so it alone cannot order jobs from overlapping
    * transactions.
    */
-  public Optional<BundleJob> findLatest(String definition, String caseKey) {
+  public Optional<BundleJob> findLatest(String definition, long caseReference) {
     return jdbc.query(JOB_COLUMNS + """
-         where definition = :definition and case_key = :caseKey
+         where definition = :definition and case_reference = :caseReference
          order by (state = 'QUEUED' and attempts = 0
                    and (next_attempt_at is null or next_attempt_at <= now())) desc,
                   claimed_at desc nulls last,
                   created_at desc, external_id
          limit 1
-        """, params("definition", definition, "caseKey", caseKey), (rs, n) -> map(rs)).stream()
+        """, params("definition", definition, "caseReference", caseReference), (rs, n) -> map(rs)).stream()
         .findFirst();
   }
 
@@ -132,7 +154,7 @@ public class BundleJobRepository {
             next_attempt_at = null, claimed_at = now(), updated_at = now()
         from claimable where job.external_id = claimable.external_id
         returning job.external_id, job.attempts, job.created_at, job.updated_at,
-            job.definition, job.case_key, job.coalesced_submissions, job.claimed_at,
+            job.definition, job.case_reference, job.coalesced_submissions, job.claimed_at,
             job.unavailable_requeues, job.transient_history::text as transient_history
         """,
         params("limit", limit, "leaseOwner", leaseOwner, "leaseMillis", leaseDuration.toMillis(),
@@ -140,7 +162,7 @@ public class BundleJobRepository {
         (rs, n) -> new ClaimedBundleJob(
             new BundleJob(rs.getObject("external_id", UUID.class), BundleJobState.IN_PROGRESS,
                 rs.getInt("attempts"), instant(rs, "created_at"), instant(rs, "updated_at"),
-                rs.getString("definition"), rs.getString("case_key"),
+                rs.getString("definition"), rs.getLong("case_reference"),
                 rs.getInt("coalesced_submissions"), Optional.of(instant(rs, "claimed_at")),
                 Optional.empty()),
             rs.getInt("unavailable_requeues"), rs.getString("transient_history"), leaseOwner));
@@ -174,18 +196,18 @@ public class BundleJobRepository {
               failure_documents = null, lease_owner = null, lease_expires_at = null,
               next_attempt_at = null, updated_at = now()
           where external_id = :externalId and lease_owner = :leaseOwner and state = 'IN_PROGRESS'
-          returning external_id, definition, case_key, claimed_at, created_at
+          returning external_id, definition, case_reference, claimed_at, created_at
         )
-        insert into bundling.bundle (job_id, definition, case_key, case_reference, selected_at, outcome,
+        insert into bundling.bundle (job_id, definition, case_reference, selected_at, outcome,
           file_name, media_type, size_bytes, sha256, page_count, request, documents,
           missing_documents, warnings, document_id, document_url, binary_url)
-        select external_id, definition, case_key, :caseReference,
+        select external_id, definition, case_reference,
           coalesce(claimed_at, created_at), :outcome, :fileName, :mediaType, :size, :sha256,
           :pageCount, :request::jsonb, :documents::jsonb, :missingDocuments::jsonb,
           :warnings::jsonb, :documentId, :documentUrl, :binaryUrl
         from completed
         """,
-        params("externalId", externalId, "state", state.name(), "caseReference", bundle.caseReference(),
+        params("externalId", externalId, "state", state.name(),
             "leaseOwner", leaseOwner,
             "outcome", bundle.outcome(), "fileName", bundle.fileName(),
             "mediaType", bundle.mediaType(), "size", bundle.size(), "sha256", bundle.sha256(),
@@ -198,7 +220,7 @@ public class BundleJobRepository {
   }
 
   /** A rendered bundle, serialised for bundling.bundle. */
-  record BundleRecord(long caseReference, String outcome, String fileName, String mediaType, long size, String sha256,
+  record BundleRecord(String outcome, String fileName, String mediaType, long size, String sha256,
       int pageCount, String requestJson, String documentsJson, String missingDocumentsJson,
       String warningsJson, StoredBundleDocument stored) {
   }
@@ -209,12 +231,12 @@ public class BundleJobRepository {
   }
 
   /** The case's bundle whose documents were selected last. */
-  public Optional<BundleMetadata> findLatestBundle(String definition, String caseKey) {
+  public Optional<BundleMetadata> findLatestBundle(String definition, long caseReference) {
     return jdbc.query(BUNDLE_COLUMNS + """
-         where definition = :definition and case_key = :caseKey
+         where definition = :definition and case_reference = :caseReference
          order by selected_at desc, created_at desc, id
          limit 1
-        """, params("definition", definition, "caseKey", caseKey), (rs, n) -> mapBundle(rs))
+        """, params("definition", definition, "caseReference", caseReference), (rs, n) -> mapBundle(rs))
         .stream().findFirst();
   }
 
@@ -227,7 +249,7 @@ public class BundleJobRepository {
         select document_id from bundling.bundle old
         where document_id is not null and deleted_at is null
           and exists (select 1 from bundling.bundle newer
-                      where newer.definition = old.definition and newer.case_key = old.case_key
+                      where newer.definition = old.definition and newer.case_reference = old.case_reference
                         and (newer.selected_at, newer.created_at) > (old.selected_at, old.created_at)
                         and newer.created_at <= now() - (:replacedMillis * interval '1 millisecond'))
         order by created_at
@@ -289,8 +311,7 @@ public class BundleJobRepository {
         : Optional.of(new StoredBundleDocument(documentId, rs.getString("document_url"),
             rs.getString("binary_url")));
     return new BundleMetadata(rs.getObject("id", UUID.class), rs.getObject("job_id", UUID.class),
-        rs.getString("definition"), rs.getString("case_key"),
-        rs.getLong("case_reference"), instant(rs, "selected_at"),
+        rs.getString("definition"), rs.getLong("case_reference"), instant(rs, "selected_at"),
         instant(rs, "created_at"),
         json.read(rs.getString("request"), BundleRequest.class, "bundle request"),
         BundleOutcome.valueOf(rs.getString("outcome")), rs.getString("file_name"),
@@ -310,7 +331,7 @@ public class BundleJobRepository {
     return new BundleJob(rs.getObject("external_id", UUID.class),
         BundleJobState.valueOf(rs.getString("state")), rs.getInt("attempts"),
         instant(rs, "created_at"), instant(rs, "updated_at"),
-        rs.getString("definition"), rs.getString("case_key"), rs.getInt("coalesced_submissions"),
+        rs.getString("definition"), rs.getLong("case_reference"), rs.getInt("coalesced_submissions"),
         Optional.ofNullable(rs.getObject("claimed_at", OffsetDateTime.class))
             .map(OffsetDateTime::toInstant), failure);
   }

@@ -70,8 +70,15 @@ class BundleJobOutboxIntegrationTest {
   private static final PostgreSQLContainer<?> POSTGRES =
       new PostgreSQLContainer<>("postgres:16-alpine");
   // What each test case's selection is, for the worker's selector to return.
-  private static final Map<String, BundleRequest> REQUESTS = new ConcurrentHashMap<>();
+  private static final Map<Long, BundleRequest> REQUESTS = new ConcurrentHashMap<>();
+  // The CCD case each test's case name stands for.
+  private static final Map<String, Long> CASES = new ConcurrentHashMap<>();
   private static final StoredBundleDocument STORED = stored();
+  private static final String INSERT_CASE = """
+      insert into ccd.case_data (id, reference, jurisdiction, case_type_id, state, data,
+        security_classification)
+      values (:reference, :reference, 'Jurisdiction', 'CaseType', 'Open', '{}', 'PUBLIC')
+      """;
   // The application's own migrations, which the runtime's strategy runs after the libraries'.
   private static final String CONSUMER_MIGRATIONS =
       "spring.flyway.locations=classpath:consumer-db/migration";
@@ -95,14 +102,16 @@ class BundleJobOutboxIntegrationTest {
 
   @BeforeEach
   void cleanTable() {
-    jdbc.update("delete from bundling.bundle_job", Map.of());
-    jdbc.update("delete from bundling.bundle", Map.of());
+    // Deleting a case deletes its jobs and bundles.
+    jdbc.update("delete from ccd.case_data", Map.of());
+    CASES.clear();
   }
 
   @Test
   void liveJobsAreClaimedBeforeRefreshJobsAndALiveChangePromotesAWaitingRefresh() {
-    assertThat(jdbc.queryForObject("select bundling.refresh('test', array['background', 'hot', 'hot', null])",
-        Map.of(), Integer.class)).isEqualTo(2);
+    caseRef("background");
+    caseRef("hot");
+    assertThat(refresh("test")).isEqualTo(2);
     UUID background = queued("test", "background").externalId();
     UUID hot = queued("test", "hot").externalId();
     UUID live = submit("test", "live").externalId();
@@ -117,13 +126,23 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
+  void aRefreshOfGivenCasesSkipsTheRestAndReferencesThatAreNotCases() {
+    long wanted = caseRef("wanted");
+    caseRef("unwanted");
+    assertThat(jdbc.queryForObject("select bundling.refresh('test', array[:wanted, 42])",
+        Map.of("wanted", wanted), Integer.class)).isEqualTo(1);
+    assertThat(queued("test", "wanted").caseReference()).isEqualTo(wanted);
+  }
+
+  @Test
   void aRefreshWaitsForAnUncommittedLiveChangeAndLeavesItsJobAlone() throws Exception {
+    caseRef("live");
+    caseRef("other");
     ExecutorService pool = Executors.newSingleThreadExecutor();
     try {
       Future<Integer> refresh = tx.execute(status -> {
         submit("test", "live");
-        Future<Integer> running = pool.submit(() -> jdbc.queryForObject(
-            "select bundling.refresh('test', array['live', 'other'])", Map.of(), Integer.class));
+        Future<Integer> running = pool.submit(() -> refresh("test"));
         awaitSessionBlockedOnLock();
         return running;
       });
@@ -133,6 +152,12 @@ class BundleJobOutboxIntegrationTest {
     }
     assertThat(column(queued("test", "live").externalId(), "priority")).isEqualTo("0");
     assertThat(column(queued("test", "other").externalId(), "priority")).isEqualTo("-1");
+  }
+
+  @Test
+  void aJobForAReferenceThatIsNotACaseIsRejected() {
+    assertThatThrownBy(() -> repository.insertOrJoin(UUID.randomUUID(), "test", 42L, null, 0))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
   }
 
   @Test
@@ -433,8 +458,8 @@ class BundleJobOutboxIntegrationTest {
       throw new IllegalArgumentException("Unknown case bundle definition");
     }, summaryHandler(), quickRetries(3), List.of(), Runnable::run, 5, 5, Duration.ofMinutes(5)).poll();
 
-    assertThat(selected).extracting(BundleJob::externalId, BundleJob::definition, BundleJob::caseKey)
-        .containsExactly(tuple(submitted.externalId(), "bundle", "case-1"));
+    assertThat(selected).extracting(BundleJob::externalId, BundleJob::definition, BundleJob::caseReference)
+        .containsExactly(tuple(submitted.externalId(), "bundle", caseRef("case-1")));
     assertThat(job(submitted.externalId()).failure().orElseThrow().code())
         .isEqualTo(BundleErrorCode.JOB_REQUEST_UNREADABLE);
     assertThat(renderer.renders).isEmpty();
@@ -444,7 +469,7 @@ class BundleJobOutboxIntegrationTest {
   void aCompletedJobRecordsTheBundleItRenderedFromTheRequestTheSelectorCompiled() {
     BundleJob submitted = submit("bundle", "case-1");
     assertThat(repository.findBundleForJob(submitted.externalId())).isEmpty();
-    assertThat(repository.findLatestBundle("bundle", "case-1")).isEmpty();
+    assertThat(repository.findLatestBundle("bundle", caseRef("case-1"))).isEmpty();
     FakeRenderer renderer = new FakeRenderer(tempDir).onNextRender(request ->
         renderer(tempDir).success(request, List.of(), List.of("doc-gone")));
     List<BundleResult> handed = new CopyOnWriteArrayList<>();
@@ -466,8 +491,7 @@ class BundleJobOutboxIntegrationTest {
     BundleMetadata bundle = repository.findBundleForJob(submitted.externalId()).orElseThrow();
     assertThat(bundle.jobId()).isEqualTo(submitted.externalId());
     assertThat(bundle.definition()).isEqualTo("bundle");
-    assertThat(bundle.caseKey()).isEqualTo("case-1");
-    assertThat(bundle.caseReference()).isEqualTo(1234567890123456L);
+    assertThat(bundle.caseReference()).isEqualTo(caseRef("case-1"));
     assertThat(bundle.selectedAt()).isEqualTo(job(submitted.externalId()).claimedAt().orElseThrow());
     assertThat(bundle.request().title()).isEqualTo("Selected at execution");
     assertThat(bundle.request().allDocuments()).extracting(BundleDocument::id)
@@ -484,10 +508,10 @@ class BundleJobOutboxIntegrationTest {
       assertThat(missing.startPage()).isEqualTo(2);
     });
     assertThat(bundle.warnings()).isEqualTo(handed.get(0).warnings());
-    assertThat(repository.findLatestBundle("bundle", "case-1").map(BundleMetadata::id))
+    assertThat(repository.findLatestBundle("bundle", caseRef("case-1")).map(BundleMetadata::id))
         .contains(bundle.id());
     // Only an unavailable document is worth re-running for.
-    assertThat(repository.findLatest("bundle", "case-1").orElseThrow().externalId())
+    assertThat(repository.findLatest("bundle", caseRef("case-1")).orElseThrow().externalId())
         .isEqualTo(submitted.externalId());
   }
 
@@ -503,7 +527,7 @@ class BundleJobOutboxIntegrationTest {
 
     assertThat(job(submitted.externalId()).state()).isEqualTo(BundleJobState.FAILED);
     assertThat(repository.findBundleForJob(submitted.externalId())).isEmpty();
-    assertThat(repository.findLatestBundle("bundle", "case-1")).isEmpty();
+    assertThat(repository.findLatestBundle("bundle", caseRef("case-1"))).isEmpty();
   }
 
   @Test
@@ -521,9 +545,9 @@ class BundleJobOutboxIntegrationTest {
     assertThat(repository.markCompleted(older, BundleJobState.COMPLETED, bundleRecord("older"),
         "worker-a")).isTrue();
 
-    assertThat(repository.findLatestBundle("bundle", "case-1").orElseThrow().jobId()).isEqualTo(newer);
+    assertThat(repository.findLatestBundle("bundle", caseRef("case-1")).orElseThrow().jobId()).isEqualTo(newer);
     assertThat(repository.findBundleForJob(older).orElseThrow().sha256()).isEqualTo("sha-older");
-    assertThat(repository.findLatestBundle("bundle", "case-2")).isEmpty();
+    assertThat(repository.findLatestBundle("bundle", caseRef("case-2"))).isEmpty();
   }
 
   @Test
@@ -542,7 +566,7 @@ class BundleJobOutboxIntegrationTest {
 
     BundleJob reRun = queued("bundle", "case-1");
     assertThat(reRun.externalId()).isNotEqualTo(submitted.externalId());
-    assertThat(repository.findLatest("bundle", "case-1").orElseThrow().externalId())
+    assertThat(repository.findLatest("bundle", caseRef("case-1")).orElseThrow().externalId())
         .as("a delayed re-run is not shown as regenerating the bundle").isEqualTo(submitted.externalId());
     assertThat(column(reRun.externalId(), "unavailable_requeues")).isEqualTo("1");
     assertThat(jdbc.queryForObject("select next_attempt_at > now() + interval '14 minutes' "
@@ -555,7 +579,7 @@ class BundleJobOutboxIntegrationTest {
     assertThat(submit("bundle", "case-1").externalId())
         .isEqualTo(reRun.externalId());
     assertThat(column(reRun.externalId(), "next_attempt_at")).isNull();
-    assertThat(repository.findLatest("bundle", "case-1").orElseThrow().externalId()).isEqualTo(reRun.externalId());
+    assertThat(repository.findLatest("bundle", caseRef("case-1")).orElseThrow().externalId()).isEqualTo(reRun.externalId());
     worker.poll();
     assertThat(renderer.renders).hasSize(2);
     BundleJob secondReRun = queued("bundle", "case-1");
@@ -564,7 +588,7 @@ class BundleJobOutboxIntegrationTest {
     jdbc.update("update bundling.bundle_job set next_attempt_at = null", Map.of());
     worker.poll();
     assertThat(renderer.renders).hasSize(3);
-    assertThat(repository.findLatest("bundle", "case-1").orElseThrow().externalId())
+    assertThat(repository.findLatest("bundle", caseRef("case-1")).orElseThrow().externalId())
         .as("the bound of two re-runs is reached").isEqualTo(secondReRun.externalId());
   }
 
@@ -589,8 +613,8 @@ class BundleJobOutboxIntegrationTest {
 
   private BundleJob queued(String definition, String caseKey) {
     UUID id = jdbc.queryForObject("select external_id from bundling.bundle_job where state = 'QUEUED' "
-        + "and definition = :definition and case_key = :caseKey",
-        Map.of("definition", definition, "caseKey", caseKey), UUID.class);
+        + "and definition = :definition and case_reference = :caseReference",
+        Map.of("definition", definition, "caseReference", caseRef(caseKey)), UUID.class);
     return job(id);
   }
 
@@ -611,7 +635,7 @@ class BundleJobOutboxIntegrationTest {
     assertThat(otherCase.externalId()).isNotEqualTo(first.externalId());
     assertThat(submit("other", "case-1").externalId()).isNotEqualTo(first.externalId());
     assertThat(first.definition()).isEqualTo("hearing");
-    assertThat(first.caseKey()).isEqualTo("case-1");
+    assertThat(first.caseReference()).isEqualTo(caseRef("case-1"));
     assertThat(first.claimedAt()).isEmpty();
     assertThat(job(first.externalId()).coalescedSubmissions()).isEqualTo(1);
 
@@ -642,7 +666,7 @@ class BundleJobOutboxIntegrationTest {
       assertThat(followUp.externalId()).isNotEqualTo(first.externalId());
       assertThat(submit("hearing", "case-1").externalId())
           .isEqualTo(followUp.externalId());
-      assertThat(repository.findLatest("hearing", "case-1").orElseThrow().externalId())
+      assertThat(repository.findLatest("hearing", caseRef("case-1")).orElseThrow().externalId())
           .isEqualTo(followUp.externalId());
 
       releaseRender.countDown();
@@ -657,7 +681,8 @@ class BundleJobOutboxIntegrationTest {
     assertThat(handled.claimedAt()).isPresent();
     assertThat(job(first.externalId()).claimedAt()).isEqualTo(handled.claimedAt());
     assertThat(jdbc.queryForObject("select count(*) from bundling.bundle_job "
-        + "where definition = 'hearing' and case_key = 'case-1'", Map.of(), Integer.class)).isEqualTo(2);
+        + "where definition = 'hearing' and case_reference = :reference",
+        Map.of("reference", caseRef("case-1")), Integer.class)).isEqualTo(2);
   }
 
   @Test
@@ -758,7 +783,7 @@ class BundleJobOutboxIntegrationTest {
 
     assertThat(fresh).isNotEqualTo(retrying);
     // The fresh job reflects the newer state, so it is what a status read reports.
-    assertThat(repository.findLatest("hearing", "case-6").orElseThrow().externalId()).isEqualTo(fresh);
+    assertThat(repository.findLatest("hearing", caseRef("case-6")).orElseThrow().externalId()).isEqualTo(fresh);
   }
 
   @Test
@@ -779,38 +804,31 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
-  void upgradingKeepsManagedJobsAndBundlesUnderTheirDefinitionAndCaseKey() {
+  void upgradingClearsJobsAndBundlesThatWereNotKeyedByCase() {
     jdbc.getJdbcTemplate().execute("create database upgrade_db");
     DataSource upgradeSource = dataSourceFor("upgrade_db");
-    // Start from the previously released schema, holding a managed and an unmanaged job.
+    // Start from the previously released schema, holding a job and its bundle.
     Flyway.configure().dataSource(upgradeSource).defaultSchema("bundling").schemas("bundling")
         .locations("classpath:bundling-db/migration").target("0004").load().migrate();
     var upgradeJdbc = new NamedParameterJdbcTemplate(upgradeSource);
-    UUID managed = UUID.randomUUID();
-    for (var job : Map.of(managed, "managed:case-file:a:b", UUID.randomUUID(), "other").entrySet()) {
-      upgradeJdbc.update("""
-          insert into bundling.bundle_job (external_id, request_version, coalesce_key, execution_context)
-          values (:id, 3, :key, '{"bundling.unavailableRequeues": "2"}'::jsonb)
-          """, Map.of("id", job.getKey(), "key", job.getValue()));
-      upgradeJdbc.update("""
-          insert into bundling.bundle (job_id, bundle_key, case_reference, selected_at, outcome,
-            file_name, media_type, size_bytes, sha256, page_count, request, documents,
-            missing_documents, warnings)
-          values (:id, :key, '1234567890123456', now(), 'COMPLETED', 'b.pdf', 'application/pdf', 1, 'sha', 1, '{}', '[]',
-            '[]', '[]')
-          """, Map.of("id", job.getKey(), "key", job.getValue()));
-    }
+    Map<String, Object> row = Map.of("id", UUID.randomUUID(), "key", "managed:case-file:a");
+    upgradeJdbc.update("""
+        insert into bundling.bundle_job (external_id, request_version, coalesce_key, execution_context)
+        values (:id, 3, :key, '{}'::jsonb)
+        """, row);
+    upgradeJdbc.update("""
+        insert into bundling.bundle (job_id, bundle_key, case_reference, selected_at, outcome,
+          file_name, media_type, size_bytes, sha256, page_count, request, documents,
+          missing_documents, warnings)
+        values (:id, :key, '1234567890123456', now(), 'COMPLETED', 'b.pdf', 'application/pdf', 1,
+          'sha', 1, '{}', '[]', '[]', '[]')
+        """, row);
 
     sdkMigrationRunner(upgradeSource).run(context -> assertThat(context).hasNotFailed());
 
-    assertThat(upgradeJdbc.queryForList("""
-        select external_id, definition, case_key, unavailable_requeues from bundling.bundle_job
-        """, Map.of())).containsExactly(Map.of("external_id", managed, "definition", "case-file",
-        "case_key", "a:b", "unavailable_requeues", 2));
-    assertThat(upgradeJdbc.queryForList(
-        "select job_id, definition, case_key, case_reference from bundling.bundle", Map.of()))
-        .containsExactly(Map.of("job_id", managed, "definition", "case-file", "case_key", "a:b",
-            "case_reference", 1234567890123456L));
+    assertThat(upgradeJdbc.queryForObject("""
+        select (select count(*) from bundling.bundle_job) + (select count(*) from bundling.bundle)
+        """, Map.of(), Integer.class)).isZero();
   }
 
   @Test
@@ -832,7 +850,7 @@ class BundleJobOutboxIntegrationTest {
 
     // The outbox lives in its own schema with its own history; the runtime's ccd schema came
     // with it, and the application's history and tables in public are exactly as they were.
-    assertThat(tables(consumer, "bundling")).containsExactly("bundle", "bundle_job", "flyway_schema_history");
+    assertThat(tables(consumer, "bundling")).containsExactly("bundle", "bundle_job", "flyway_schema_history", "refresh_key");
     assertThat(history(consumer, "bundling")).extracting(row -> row.get("version"))
         .contains("0001", "0002");
     assertThat(consumer.queryForList("select schema_name from information_schema.schemata "
@@ -873,30 +891,52 @@ class BundleJobOutboxIntegrationTest {
 
   private static BundleJobRepository.BundleRecord bundleRecord(String name) {
     BundleRequest request = simpleRequest(UUID.randomUUID());
-    return new BundleJobRepository.BundleRecord(1234567890123456L, "COMPLETED", name + ".pdf", "application/pdf", 10,
+    return new BundleJobRepository.BundleRecord("COMPLETED", name + ".pdf", "application/pdf", 10,
         "sha-" + name, 1, new BundleJobJson().write(request), "[]", "[]", "[]", null);
   }
 
   /** Queues a job, under the request's id, for a case whose selection is that request. */
   private static BundleJob submit(BundleRequest request) {
-    String caseKey = request.externalId().toString();
-    REQUESTS.put(caseKey, request);
-    return job(repository.insertOrJoin(request.externalId(), "test", caseKey, null, 0));
+    long caseReference = caseRef(request.externalId().toString());
+    REQUESTS.put(caseReference, request);
+    return job(repository.insertOrJoin(request.externalId(), "test", caseReference, null, 0));
   }
 
   /** Queues a job for the case, as a change to it does. */
   private static BundleJob submit(String definition, String caseKey) {
-    return job(repository.insertOrJoin(UUID.randomUUID(), definition, caseKey, null, 0));
+    return job(repository.insertOrJoin(UUID.randomUUID(), definition, caseRef(caseKey), null, 0));
+  }
+
+  /** The CCD case the name stands for, created on first use. */
+  private static long caseRef(String name) {
+    return CASES.computeIfAbsent(name, unused -> {
+      long reference = 1000000000000000L + CASES.size();
+      insertCase(reference);
+      return reference;
+    });
+  }
+
+  /** Commits the case on a connection of its own, whatever transaction the test is in. */
+  private static void insertCase(long reference) {
+    try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
+      statement.execute(INSERT_CASE.replace(":reference", Long.toString(reference)));
+    } catch (java.sql.SQLException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  private static int refresh(String definition) {
+    return jdbc.queryForObject("select bundling.refresh(:definition)",
+        Map.of("definition", definition), Integer.class);
   }
 
   private static BundleDocumentSelector asSubmitted() {
-    return selecting(job -> REQUESTS.get(job.caseKey()));
+    return selecting(job -> REQUESTS.get(job.caseReference()));
   }
 
   /** Wraps a request selection as the selection of a case. */
   private static BundleDocumentSelector selecting(Function<BundleJob, BundleRequest> request) {
-    return job -> new SelectedCaseBundle(1234567890123456L, "CaseType", "Jurisdiction",
-        request.apply(job));
+    return job -> repository.selectedFor(job.caseReference(), request.apply(job));
   }
 
   private static StoredBundleDocument stored() {

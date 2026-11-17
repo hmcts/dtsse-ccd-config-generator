@@ -1,31 +1,23 @@
--- The queue serves managed case bundles only. A job is identified by its definition and case key
--- in columns, replacing the coalesce key string, the versioned request and the selector parameter
--- and execution context JSON.
+-- A job and a bundle belong to a case in ccd.case_data and are identified by their definition and
+-- case reference in columns, replacing the coalesce key string, the versioned request and the
+-- selector parameter and execution context JSON.
 set local lock_timeout = '5s';
 
--- Anything that was not a managed case bundle has no definition or case key.
-delete from bundling.bundle where bundle_key is null or bundle_key not like 'managed:%:%';
-delete from bundling.bundle_job where coalesce_key is null or coalesce_key not like 'managed:%:%';
+-- Earlier rows were keyed by strings that do not name a case.
+truncate bundling.bundle_job, bundling.bundle;
 
 alter table bundling.bundle_job
-    add column definition text,
-    add column case_key text,
+    alter column external_id set default gen_random_uuid(),
+    add column definition text not null,
+    -- Checked at commit: an event that creates a case runs its handler before the case row is
+    -- written.
+    add column case_reference bigint not null
+        references ccd.case_data (reference) on delete cascade deferrable initially deferred,
     -- How many times this case's bundle has been re-run for temporarily unavailable documents.
     add column unavailable_requeues integer not null default 0,
     -- Live changes are 0; a bulk refresh queues at -1, so live changes are claimed first.
-    add column priority smallint not null default 0;
-
--- Keys were 'managed:<definition>:<case key>'; a definition name never contains a colon.
-update bundling.bundle_job set
-    definition = split_part(coalesce_key, ':', 2),
-    case_key = substr(coalesce_key, length(split_part(coalesce_key, ':', 2)) + 10),
-    unavailable_requeues =
-        coalesce((execution_context ->> 'bundling.unavailableRequeues')::integer, 0);
-
--- Dropping coalesce_key drops its indexes.
-alter table bundling.bundle_job
-    alter column definition set not null,
-    alter column case_key set not null,
+    add column priority smallint not null default 0,
+    -- Dropping coalesce_key drops its indexes.
     drop column coalesce_key,
     drop column request,
     drop column request_version,
@@ -39,38 +31,45 @@ drop index bundling.idx_bundle_job_queued;
 
 -- At most one job per case is waiting for its first claim; a change joins it.
 create unique index uq_bundle_job_waiting
-    on bundling.bundle_job (definition, case_key) where state = 'QUEUED' and attempts = 0;
-create index idx_bundle_job_case on bundling.bundle_job (definition, case_key, created_at desc);
+    on bundling.bundle_job (definition, case_reference) where state = 'QUEUED' and attempts = 0;
+create index idx_bundle_job_case
+    on bundling.bundle_job (case_reference, definition, created_at desc);
 create index idx_bundle_job_priority
     on bundling.bundle_job (priority desc, created_at, external_id)
     where state in ('QUEUED', 'IN_PROGRESS');
 
-alter table bundling.bundle add column definition text, add column case_key text;
-update bundling.bundle set
-    definition = split_part(bundle_key, ':', 2),
-    case_key = substr(bundle_key, length(split_part(bundle_key, ':', 2)) + 10);
+-- Dropping bundle_key drops its index. Deleting a case deletes its bundle rows; its documents,
+-- the bundle PDFs among them, are disposed of with the case.
 alter table bundling.bundle
-    alter column definition set not null,
-    alter column case_key set not null,
+    add column definition text not null,
     alter column case_reference type bigint using case_reference::bigint,
     alter column case_reference set not null,
+    add foreign key (case_reference) references ccd.case_data (reference)
+        on delete cascade deferrable initially deferred,
     drop column bundle_key;
-create index idx_bundle_case_selected on bundling.bundle (definition, case_key, selected_at desc);
+create index idx_bundle_case_selected
+    on bundling.bundle (case_reference, definition, selected_at desc);
 
--- Public SQL API, for an application migration: queues a background re-render of a definition's
--- bundle for each case key, in the caller's transaction, and returns the jobs queued. A case with
--- a job already waiting is left to that job. Keys are inserted in order, so a refresh cannot
--- deadlock with a transaction that changes several cases in the same order.
-create function bundling.refresh(p_definition text, p_case_keys text[]) returns integer
-language sql as $$
+-- Queues a background render of the definition's bundle for every case, or for the given cases,
+-- and returns how many it queued. A case with a job already waiting is left to that job. Cases
+-- are queued in reference order so that a refresh and a live change touching several cases cannot
+-- deadlock. ccd.bundling.refresh calls it; it is also public SQL API for a one-off refresh.
+create function bundling.refresh(p_definition text, p_case_references bigint[] default null)
+returns integer language sql as $$
   with queued as (
-    insert into bundling.bundle_job (external_id, definition, case_key, priority)
-    select gen_random_uuid(), p_definition, case_key, -1
-    from (select distinct unnest(p_case_keys) as case_key) keys
-    where case_key is not null
-    order by case_key
-    on conflict (definition, case_key) where state = 'QUEUED' and attempts = 0
+    insert into bundling.bundle_job (definition, case_reference, priority)
+    select p_definition, reference, -1
+    from ccd.case_data
+    where p_case_references is null or reference = any (p_case_references)
+    order by reference
+    on conflict (definition, case_reference) where state = 'QUEUED' and attempts = 0
     do nothing
     returning 1)
   select count(*)::integer from queued
 $$;
+
+-- The ccd.bundling.refresh values that have already queued a refresh; each runs once.
+create table bundling.refresh_key (
+    key text primary key,
+    created_at timestamptz not null default now()
+);
