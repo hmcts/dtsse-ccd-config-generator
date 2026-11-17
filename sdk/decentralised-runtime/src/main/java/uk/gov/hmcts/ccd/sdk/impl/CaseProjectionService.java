@@ -3,7 +3,6 @@ package uk.gov.hmcts.ccd.sdk.impl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -91,7 +90,7 @@ class CaseProjectionService {
     Object projected = ((CaseView) binding.caseView()).getCase(request, blobCase);
     Map<String, JsonNode> projectedData = mapper.convertValue(projected, JSON_NODE_MAP);
     Map<String, JsonNode> serialised = definitionRegistry.find(caseTypeId)
-        .map(caseTypeDefinition -> stabiliseSearchCriteriaIds(reference,
+        .map(caseTypeDefinition -> stabiliseSearchCriteriaIds(
             globalSearchProcessorService.populateGlobalSearchData(caseTypeDefinition, projectedData)))
         .orElse(projectedData);
 
@@ -102,18 +101,15 @@ class CaseProjectionService {
   /**
    * Data store's processor gives each SearchCriteria item a new random id, and a case is projected afresh on every
    * load. The ids would then differ between an event's start and its submit, which CCD reads as items deleted and
-   * added: refused for anyone without Delete on SearchCriteria, such as a service's system user. Each id is derived
-   * instead from the case, the collection, and the item's position and value, so a case always projects the same ids.
+   * added: refused for anyone without Delete on SearchCriteria, such as a service's system user. CCD only needs ids
+   * unique within a collection, so each is derived from the item's position.
    */
-  static Map<String, JsonNode> stabiliseSearchCriteriaIds(long reference, Map<String, JsonNode> data) {
+  static Map<String, JsonNode> stabiliseSearchCriteriaIds(Map<String, JsonNode> data) {
     if (data.get(SEARCH_CRITERIA) instanceof ObjectNode criteria) {
-      criteria.fields().forEachRemaining(collection -> {
-        if (collection.getValue() instanceof ArrayNode items) {
-          for (int i = 0; i < items.size(); i++) {
-            if (items.get(i) instanceof ObjectNode item && item.has("value")) {
-              String seed = reference + ":" + collection.getKey() + ":" + i + ":" + item.get("value");
-              item.put("id", UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8)).toString());
-            }
+      criteria.forEach(items -> {
+        for (int i = 0; i < items.size(); i++) {
+          if (items.get(i) instanceof ObjectNode item) {
+            item.put("id", UUID.nameUUIDFromBytes(String.valueOf(i).getBytes(StandardCharsets.UTF_8)).toString());
           }
         }
       });

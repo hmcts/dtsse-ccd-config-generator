@@ -16,8 +16,8 @@ class CaseProjectionServiceTest {
   @Test
   void projectsTheSameSearchCriteriaIdsEveryTime() throws Exception {
     // As data store's processor leaves it: a new random id on every item, each time it runs.
-    var first = CaseProjectionService.stabiliseSearchCriteriaIds(1234L, searchCriteria());
-    var second = CaseProjectionService.stabiliseSearchCriteriaIds(1234L, searchCriteria());
+    var first = CaseProjectionService.stabiliseSearchCriteriaIds(searchCriteria());
+    var second = CaseProjectionService.stabiliseSearchCriteriaIds(searchCriteria());
 
     assertThat(first).isEqualTo(second);
     assertThat(ids(first, "SearchParties")).doesNotHaveDuplicates().hasSize(2);
@@ -25,18 +25,10 @@ class CaseProjectionServiceTest {
   }
 
   @Test
-  void givesAnotherCaseOrAnotherItemAnotherId() throws Exception {
-    var one = CaseProjectionService.stabiliseSearchCriteriaIds(1234L, searchCriteria());
-    var other = CaseProjectionService.stabiliseSearchCriteriaIds(5678L, searchCriteria());
-
-    assertThat(ids(one, "SearchParties")).doesNotContainAnyElementsOf(ids(other, "SearchParties"));
-  }
-
-  @Test
   void leavesDataWithoutSearchCriteriaAlone() throws Exception {
     Map<String, JsonNode> data = Map.of("applicant", mapper.readTree("{\"name\": \"Joe\"}"));
 
-    assertThat(CaseProjectionService.stabiliseSearchCriteriaIds(1234L, data)).isEqualTo(data);
+    assertThat(CaseProjectionService.stabiliseSearchCriteriaIds(data)).isEqualTo(data);
   }
 
   private Map<String, JsonNode> searchCriteria() throws Exception {
