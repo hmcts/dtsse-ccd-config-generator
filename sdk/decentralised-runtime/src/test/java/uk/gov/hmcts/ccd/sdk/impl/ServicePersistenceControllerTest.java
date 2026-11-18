@@ -8,8 +8,12 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
 
@@ -61,6 +65,49 @@ public class ServicePersistenceControllerTest {
         .containsExactly("Authorization header is required");
 
     verifyNoInteractions(submissionService);
+  }
+
+  @AfterEach
+  void resetRequestContext() {
+    RequestContextHolder.resetRequestAttributes();
+  }
+
+  @Test
+  void createEventReturnsTheClientContextACallbackReturned() {
+    RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
+    DecentralisedCaseEvent event = mock(DecentralisedCaseEvent.class);
+    UUID idempotencyKey = UUID.randomUUID();
+    when(submissionService.submit(event, "Bearer token", idempotencyKey)).thenAnswer(invocation -> {
+      ClientContextPassthrough.returned("eyJ1c2VyX3Rhc2siOnt9fQ==");
+      return new DecentralisedSubmitEventResponse();
+    });
+
+    ResponseEntity<DecentralisedSubmitEventResponse> response = controller.createEvent(
+        event,
+        "Bearer token",
+        idempotencyKey
+    );
+
+    assertThat(response.getHeaders().getFirst("Client-Context")).isEqualTo("eyJ1c2VyX3Rhc2siOnt9fQ==");
+  }
+
+  @Test
+  void createEventReturnsNoClientContextWhenNoCallbackReturnedOne() {
+    MockHttpServletRequest submission = new MockHttpServletRequest();
+    submission.addHeader("Client-Context", "eyJ1c2VyX3Rhc2siOnt9fQ==");
+    RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(submission));
+    DecentralisedCaseEvent event = mock(DecentralisedCaseEvent.class);
+    UUID idempotencyKey = UUID.randomUUID();
+    when(submissionService.submit(event, "Bearer token", idempotencyKey))
+        .thenReturn(new DecentralisedSubmitEventResponse());
+
+    ResponseEntity<DecentralisedSubmitEventResponse> response = controller.createEvent(
+        event,
+        "Bearer token",
+        idempotencyKey
+    );
+
+    assertThat(response.getHeaders().containsKey("Client-Context")).isFalse();
   }
 
   @Test
