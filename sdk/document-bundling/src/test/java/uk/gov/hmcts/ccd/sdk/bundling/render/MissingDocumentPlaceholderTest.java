@@ -160,6 +160,70 @@ class MissingDocumentPlaceholderTest {
   }
 
   @Test
+  void aSourceWhoseDownloadFailsPartWayFailsARetryableAttempt() {
+    uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocument stalls =
+        new uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocument() {
+          @Override
+          public java.io.InputStream content() {
+            return new java.io.InputStream() {
+              @Override
+              public int read() throws IOException {
+                throw new java.net.SocketTimeoutException("Read timed out");
+              }
+            };
+          }
+
+          @Override
+          public String mediaType() {
+            return "application/pdf";
+          }
+
+          @Override
+          public String fileName() {
+            return "stalls.pdf";
+          }
+
+          @Override
+          public java.util.OptionalLong contentLength() {
+            return java.util.OptionalLong.empty();
+          }
+
+          @Override
+          public java.util.Optional<String> checksum() {
+            return java.util.Optional.empty();
+          }
+
+          @Override
+          public void close() {
+          }
+        };
+    uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResolver stalling =
+        new uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResolver() {
+          @Override
+          public String provider() {
+            return RenderTestSupport.PROVIDER;
+          }
+
+          @Override
+          public uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocuments resolveAll(
+              java.util.List<uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference> references,
+              BundleExecutionContext context) {
+            return new uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocuments(
+                java.util.Map.of(references.get(0), stalls), java.util.Map.of());
+          }
+        };
+    BundleRequest request = placeholderRequest(doc("d1", "Stalls", "stalls"));
+
+    // The source exists: a placeholder for it would be published as an up-to-date bundle.
+    BundleGenerationException failure = catchThrowableOfType(BundleGenerationException.class,
+        () -> BundleRenderer.builder().resolver(stalling).tempDirectory(work).build()
+            .render(request, BundleExecutionContext.empty(), RenderAttempt.RETRYABLE));
+
+    assertThat(failure).isNotNull();
+    assertThat(failure.code()).isEqualTo(BundleErrorCode.DOCUMENT_UNAVAILABLE);
+  }
+
+  @Test
   void aTemporarilyUnavailableDocumentIsReplacedOnTheFinalAttempt() {
     BundleRequest request = placeholderRequest(doc("d1", "Claim form", "good"), doc("d2", "Flaky", "flaky"));
 

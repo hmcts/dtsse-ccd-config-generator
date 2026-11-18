@@ -216,8 +216,9 @@ final class Resolution {
           resolved.checksum()));
       file = null;
     } catch (IOException | RuntimeException e) {
+      // The source exists but its download or the local write failed, so it is not missing.
       failures.put(reference, new Failure(
-          BundleErrorCode.DOCUMENT_RESOLUTION_FAILED,
+          BundleErrorCode.DOCUMENT_UNAVAILABLE,
           "The source content could not be spooled to disk: " + e.getClass().getSimpleName()));
     } finally {
       if (file != null) {
