@@ -14,7 +14,9 @@ public enum BundleErrorCode {
    * {@link #DOCUMENT_NOT_FOUND} only in restricted operational diagnostics.
    */
   DOCUMENT_ACCESS_DENIED,
-  /** A source document could not be resolved for another reason. */
+  /** A source document's store could not serve it for the moment. Worth retrying. */
+  DOCUMENT_UNAVAILABLE,
+  /** A source document could not be resolved for another reason. Not worth retrying. */
   DOCUMENT_RESOLUTION_FAILED,
   /** A document's media type has no registered handler. */
   MEDIA_TYPE_UNSUPPORTED,

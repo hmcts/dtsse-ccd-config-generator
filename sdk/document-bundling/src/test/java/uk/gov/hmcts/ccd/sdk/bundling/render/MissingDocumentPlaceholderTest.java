@@ -144,7 +144,7 @@ class MissingDocumentPlaceholderTest {
     BundleGenerationException failure = catchThrowableOfType(BundleGenerationException.class,
         () -> renderer.render(request, BundleExecutionContext.empty(), RenderAttempt.RETRYABLE));
 
-    assertThat(failure.code()).isEqualTo(BundleErrorCode.DOCUMENT_RESOLUTION_FAILED);
+    assertThat(failure.code()).isEqualTo(BundleErrorCode.DOCUMENT_UNAVAILABLE);
     RenderTestSupport.assertNothingLeftBehind(work);
   }
 

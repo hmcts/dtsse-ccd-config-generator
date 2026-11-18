@@ -239,9 +239,10 @@ final class Resolution {
     }
     Set<BundleErrorCode> codes = new LinkedHashSet<>();
     documentFailures.forEach(failure -> codes.add(failure.code()));
-    BundleErrorCode code = codes.size() == 1
-        ? codes.iterator().next()
-        : BundleErrorCode.DOCUMENT_RESOLUTION_FAILED;
+    // Worth retrying if any document was only unavailable: the rest are reported if they remain.
+    BundleErrorCode code = codes.contains(BundleErrorCode.DOCUMENT_UNAVAILABLE)
+        ? BundleErrorCode.DOCUMENT_UNAVAILABLE
+        : codes.size() == 1 ? codes.iterator().next() : BundleErrorCode.DOCUMENT_RESOLUTION_FAILED;
     return new BundleGenerationException(
         code,
         BundleStage.RESOLVE,
@@ -260,7 +261,7 @@ final class Resolution {
       case UNSUPPORTED_MEDIA_TYPE -> BundleErrorCode.MEDIA_TYPE_UNSUPPORTED;
       case INVALID_CONTENT -> BundleErrorCode.DOCUMENT_CONTENT_INVALID;
       case TOO_LARGE -> BundleErrorCode.LIMIT_EXCEEDED;
-      case TRANSIENT_FAILURE -> BundleErrorCode.DOCUMENT_RESOLUTION_FAILED;
+      case TRANSIENT_FAILURE -> BundleErrorCode.DOCUMENT_UNAVAILABLE;
     };
   }
 

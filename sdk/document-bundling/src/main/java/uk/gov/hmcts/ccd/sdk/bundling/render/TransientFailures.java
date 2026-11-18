@@ -17,7 +17,7 @@ public final class TransientFailures {
   }
 
   public static boolean isTransient(BundleErrorCode code, Throwable cause) {
-    return code == BundleErrorCode.DOCUMENT_RESOLUTION_FAILED
+    return code == BundleErrorCode.DOCUMENT_UNAVAILABLE
         || (code == BundleErrorCode.DOCUMENT_CONVERSION_FAILED
             || code == BundleErrorCode.COVER_PAGE_FAILED) && isDocmosisOutage(cause);
   }

@@ -466,9 +466,9 @@ class BundleJobOutboxIntegrationTest {
     // The case changes while the document store is down, for far longer than a crash is allowed.
     submit(simpleRequest(id));
     BundleGenerationException down = new BundleGenerationException(
-        BundleErrorCode.DOCUMENT_RESOLUTION_FAILED, BundleStage.RESOLVE, "CDAM timed out", "Retry",
+        BundleErrorCode.DOCUMENT_UNAVAILABLE, BundleStage.RESOLVE, "CDAM timed out", "Retry",
         List.of(new DocumentFailure("doc-1", new DocumentReference("case-documents", "d1"),
-            BundleErrorCode.DOCUMENT_RESOLUTION_FAILED, "dm-store 503")));
+            BundleErrorCode.DOCUMENT_UNAVAILABLE, "dm-store 503")));
     FakeRenderer renderer = new FakeRenderer(tempDir);
     for (int i = 0; i < 6; i++) {
       renderer.onNextRender(FakeRenderer.failure(down));
@@ -633,7 +633,7 @@ class BundleJobOutboxIntegrationTest {
   void aChangeWhileABundleAwaitsARetryMakesTheRetryImmediate() {
     Key retrying = submit("hearing", "case-6");
     FakeRenderer renderer = new FakeRenderer(tempDir).onNextRender(FakeRenderer.failure(
-        new BundleGenerationException(BundleErrorCode.DOCUMENT_RESOLUTION_FAILED,
+        new BundleGenerationException(BundleErrorCode.DOCUMENT_UNAVAILABLE,
             BundleStage.RESOLVE, "transient", "retry", List.of())));
     LongFunction<BundleRequest> selector = reference -> BundleRequest.builder()
         .title("Bundle").fileName("bundle.pdf")
@@ -993,7 +993,7 @@ class BundleJobOutboxIntegrationTest {
             boolean temporary = unavailable.contains(document.id());
             missing.add(new MissingDocument(document.id(), document.reference(),
                 temporary ? MissingDocumentReason.UNAVAILABLE : MissingDocumentReason.NOT_FOUND,
-                temporary ? BundleErrorCode.DOCUMENT_RESOLUTION_FAILED : BundleErrorCode.DOCUMENT_NOT_FOUND,
+                temporary ? BundleErrorCode.DOCUMENT_UNAVAILABLE : BundleErrorCode.DOCUMENT_NOT_FOUND,
                 "test", page, document.title(), List.of()));
           } else {
             documents.add(new DocumentResult(document.id(), document.reference(), "application/pdf",
