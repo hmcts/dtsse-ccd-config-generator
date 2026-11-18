@@ -34,7 +34,7 @@ import uk.gov.hmcts.ccd.sdk.bundling.managed.SelectedCaseBundle;
 public class BundleJobRepository {
   // Queues an existing row. Its lease, if a worker is rendering it, is left to that worker.
   private static final String QUEUE_AGAIN = """
-      state = 'QUEUED', attempts = 0, next_attempt_at = null, unavailable_requeues = 0,
+      state = 'QUEUED', attempts = 0, next_attempt_at = null,
       priority = excluded.priority, failure_code = null, failure_message = null,
       failure_documents = null,
       queued_at = case when bundle_job.state = 'QUEUED' then bundle_job.queued_at else now() end
@@ -77,7 +77,7 @@ public class BundleJobRepository {
   /**
    * Queues the bundle for a change to its documents. The caller holds the row until it commits and
    * the claim passes over a held row, so a bundle is never claimed before the change that queued
-   * it is visible. A change makes a waiting retry or re-run immediate and a waiting refresh live.
+   * it is visible. A change makes a waiting retry immediate and a waiting refresh live.
    *
    * <p>It first locks the case as an event does, so a change made outside an event cannot
    * interleave with a refresh or an event on the same case. The event that creates a case has no
@@ -143,10 +143,10 @@ public class BundleJobRepository {
   }
 
   /**
-   * Claims the next bundles: those queued and due, those completed and due a re-run, and those
-   * whose worker's lease expired. A bundle queued again while a worker renders it waits for that
-   * worker's lease. A worker claims, and gives up on, only its own definitions, so a pod on an
-   * older release leaves a definition it does not have to the pods that do.
+   * Claims the next bundles: those queued and due, and those whose worker's lease expired. A
+   * bundle queued again while a worker renders it waits for that worker's lease. A worker claims,
+   * and gives up on, only its own definitions, so a pod on an older release leaves a definition it
+   * does not have to the pods that do.
    */
   List<ClaimedBundleJob> claim(int limit, String leaseOwner, Duration leaseDuration,
       int maxAttempts, Collection<String> definitions) {
@@ -156,12 +156,11 @@ public class BundleJobRepository {
     return jdbc.query("""
         with claimable as (
           select definition, case_reference from bundling.bundle_job
-          where (state in ('QUEUED', 'IN_PROGRESS') or next_attempt_at is not null)
+          where state in ('QUEUED', 'IN_PROGRESS')
             and attempts < :maxAttempts
             and definition in (:definitions)
             and (lease_expires_at is null or lease_expires_at <= now())
-            and (state = 'IN_PROGRESS' or next_attempt_at <= now()
-                 or (state = 'QUEUED' and next_attempt_at is null))
+            and (next_attempt_at is null or next_attempt_at <= now())
           order by priority desc, queued_at
           limit :limit
           for update skip locked
@@ -173,14 +172,14 @@ public class BundleJobRepository {
         from claimable
         where job.definition = claimable.definition
           and job.case_reference = claimable.case_reference
-        returning job.definition, job.case_reference, job.attempts, job.unavailable_requeues
+        returning job.definition, job.case_reference, job.attempts
         """,
         params("limit", limit, "leaseOwner", leaseOwner, "leaseMillis", leaseDuration.toMillis(),
             "maxAttempts", maxAttempts, "definitions", definitions),
         (rs, n) -> new ClaimedBundleJob(
             new BundleJob(rs.getString("definition"), rs.getLong("case_reference"),
                 BundleJobState.IN_PROGRESS, rs.getInt("attempts"), Optional.empty()),
-            rs.getInt("unavailable_requeues"), leaseOwner));
+            leaseOwner));
   }
 
   /** Fails the bundles whose worker's lease expired on their last attempt, and returns them. */
@@ -206,23 +205,14 @@ public class BundleJobRepository {
 
   /**
    * Records the bundle a worker rendered and releases its lease, in one statement. The row is
-   * completed unless a change queued it again meanwhile, in which case it stays queued. A re-run
-   * time makes a completed bundle claimable again then. Nothing is written by a worker that lost
-   * its lease.
+   * completed unless a change queued it again meanwhile, in which case it stays queued. Nothing is
+   * written by a worker that lost its lease.
    */
-  boolean markCompleted(ClaimedBundleJob claimed, BundleRecord bundle, Instant rerunAt) {
+  boolean markCompleted(ClaimedBundleJob claimed, BundleRecord bundle) {
     return jdbc.update("""
         with completed as (
           update bundling.bundle_job
           set state = case when state = 'IN_PROGRESS' then 'COMPLETED' else state end,
-              next_attempt_at = case when state = 'IN_PROGRESS' then :rerunAt::timestamptz end,
-              unavailable_requeues = case
-                when state <> 'IN_PROGRESS' then unavailable_requeues
-                when :rerunAt::timestamptz is null then 0
-                else unavailable_requeues + 1 end,
-              attempts = case
-                when state = 'IN_PROGRESS' and :rerunAt::timestamptz is null then attempts
-                else 0 end,
               lease_owner = null, lease_expires_at = null
         """ + CLAIMED + """
           returning definition, case_reference
@@ -236,8 +226,6 @@ public class BundleJobRepository {
         from completed
         """,
         claimed(claimed)
-            .addValue("rerunAt",
-                rerunAt == null ? null : OffsetDateTime.ofInstant(rerunAt, ZoneOffset.UTC))
             .addValue("outcome", bundle.outcome()).addValue("fileName", bundle.fileName())
             .addValue("mediaType", bundle.mediaType()).addValue("size", bundle.size())
             .addValue("sha256", bundle.sha256()).addValue("pageCount", bundle.pageCount())

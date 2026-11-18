@@ -12,7 +12,6 @@ public class BundleJobProperties {
 
   private Worker worker = new Worker();
   private Retry retry = new Retry();
-  private Requeue requeue = new Requeue();
 
   /** The scheduled worker that claims and renders queue rows. */
   @Data
@@ -30,22 +29,12 @@ public class BundleJobProperties {
   }
 
   /**
-   * Re-running a bundle that has placeholders for documents that were only
-   * temporarily unavailable, so the bundle fills in once they can be fetched.
+   * Bounded backoff for transient resolution and conversion failures. The defaults keep trying for
+   * about 20 minutes, so a bundle waits out a short outage of a dependency.
    */
   @Data
-  public static class Requeue {
-    private boolean enabled = true;
-
-    private Duration delay = Duration.ofMinutes(15);
-
-    private int maxAttempts = 3;
-  }
-
-  /** Bounded backoff for transient resolution and conversion failures. */
-  @Data
   public static class Retry {
-    private int maxAttempts = 3;
+    private int maxAttempts = 10;
 
     private Duration initialDelay = Duration.ofSeconds(5);
 

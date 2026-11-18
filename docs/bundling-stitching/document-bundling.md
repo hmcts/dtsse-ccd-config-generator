@@ -87,8 +87,8 @@ configured) still fail the render.
 
 A source that is only temporarily unavailable (a timeout, a 5xx, a Docmosis outage) should not
 end up as a placeholder if a retry would fetch it. `render(request, context, RenderAttempt.RETRYABLE)`
-fails such a render instead; the durable worker passes `RETRYABLE` while the job has retries left
-and `FINAL` on its last attempt. A plain `render(request, context)` is a final attempt. A
+fails such a render instead; the job worker always passes `RETRYABLE`, so it never publishes a
+bundle while a dependency is down. A plain `render(request, context)` is a final attempt. A
 document still unavailable on the final attempt, including one Docmosis could not convert because
 it was down, gets the `UNAVAILABLE` reason.
 
@@ -162,15 +162,16 @@ and the definition and case reference. Missing documents carry the selected `tit
 `sectionPath` (outermost to innermost, excluding the request root), so they can be listed without
 searching the request. The bundle recorded last is the case's current one.
 
-A bundle completed with placeholders for `UNAVAILABLE` documents is re-run later, so it fills in
-once the source is back: its row becomes claimable again after `requeue.delay`. A change to the
-case in the meantime makes that immediate. A bundle is re-run at most `requeue.max-attempts`
-times in a row for unavailable documents (counted in the row's `unavailable_requeues` column).
+While a dependency is down no bundle is published: a source that CDAM cannot serve for the
+moment, or one Docmosis cannot convert because it is unavailable, fails the attempt, and the
+attempt is retried with backoff. The current bundle stays current and the case shows `UPDATING`.
+The defaults retry for about 20 minutes; after that the bundle is `FAILED` until the case next
+changes or a refresh is run. A document that is missing, forbidden, unreadable or unsupported is
+the document's own problem, and gets a placeholder page straight away.
 
 Properties under `ccd.bundling.job.*`: `enabled` (default `false`), `worker.enabled` (`true`), `worker.poll-delay` (`1s`), `worker.batch-size` (`5`),
-`worker.max-concurrent-renders` (`2`), `worker.lease-duration` (`5m`), `retry.max-attempts` (`3`),
-`retry.initial-delay` (`5s`), `retry.multiplier` (`2.0`), `retry.max-delay` (`5m`),
-`requeue.enabled` (`true`), `requeue.delay` (`15m`), `requeue.max-attempts` (`3`), `cleanup-delay` (`1m`).
+`worker.max-concurrent-renders` (`2`), `worker.lease-duration` (`5m`), `retry.max-attempts` (`10`),
+`retry.initial-delay` (`5s`), `retry.multiplier` (`2.0`), `retry.max-delay` (`5m`), `cleanup-delay` (`1m`).
 
 ## Extending it
 

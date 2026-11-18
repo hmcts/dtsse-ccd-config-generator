@@ -21,10 +21,8 @@ create table bundling.bundle_job (
     -- When the bundle was last queued; the oldest is claimed first.
     queued_at timestamptz not null default now(),
     attempts integer not null default 0,
-    -- When a retry, or a completed bundle's re-run for unavailable documents, becomes claimable.
+    -- When a retry becomes claimable.
     next_attempt_at timestamptz,
-    -- How many times in a row the bundle has been re-run for temporarily unavailable documents.
-    unavailable_requeues integer not null default 0,
     lease_owner varchar(255),
     lease_expires_at timestamptz,
     failure_code varchar(64),
@@ -35,7 +33,7 @@ create table bundling.bundle_job (
 
 create index idx_bundle_job_priority
     on bundling.bundle_job (priority desc, queued_at)
-    where state in ('QUEUED', 'IN_PROGRESS') or next_attempt_at is not null;
+    where state in ('QUEUED', 'IN_PROGRESS');
 
 -- What a render produced: everything about a bundle except its PDF, which is stored as an
 -- ordinary document. The row recorded last for a case is its current bundle; a replaced row is

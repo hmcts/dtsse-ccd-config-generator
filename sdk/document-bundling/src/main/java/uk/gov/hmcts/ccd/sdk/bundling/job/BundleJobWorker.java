@@ -21,7 +21,6 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRenderer;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleResult;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentFailure;
-import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocumentReason;
 import uk.gov.hmcts.ccd.sdk.bundling.api.RenderAttempt;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.SelectedCaseBundle;
 
@@ -32,7 +31,8 @@ import uk.gov.hmcts.ccd.sdk.bundling.managed.SelectedCaseBundle;
  * in bundling.bundle, so the consuming service stores only the PDF and reads everything else about
  * the bundle back through BundleJobRepository. Writes are lease-guarded, so a render that outlives
  * its lease can never overwrite the reclaimer's state. Only transient resolution and conversion
- * failures are retried; untyped exception detail is logged, never persisted. The consuming service
+ * failures are retried, and never rendered around: while a dependency is down no bundle is
+ * published and the current one stays. Untyped exception detail is logged, never persisted. The consuming service
  * enables scheduling for the poll to fire.
  */
 @Slf4j
@@ -152,13 +152,9 @@ public class BundleJobWorker implements AutoCloseable {
     }
 
     BundleRequest request = selected.request();
-    // A source that is only temporarily unavailable fails the render while retries remain, and
-    // becomes a placeholder on the last attempt.
-    RenderAttempt attempt = retryPolicy.nextAttemptAt(job.attempts(), Instant.now()).isPresent()
-        ? RenderAttempt.RETRYABLE : RenderAttempt.FINAL;
     BundleExecutionContext context = BundleExecutionContext.builder()
         .caseReference(String.valueOf(job.caseReference())).build();
-    try (BundleResult result = renderer.render(request, context, attempt)) {
+    try (BundleResult result = renderer.render(request, context, RenderAttempt.RETRYABLE)) {
       StoredBundleDocument stored;
       try {
         stored = bundles.store(selected, result);
@@ -168,10 +164,8 @@ public class BundleJobWorker implements AutoCloseable {
       }
       log.info("Bundle job {} completed as {} after {} attempt(s)", job, result.outcome(),
           job.attempts());
-      Instant rerunAt = rerunAt(claimed, result);
       boolean completed = Boolean.TRUE.equals(repository.holdingCase(job.caseReference(),
-          () -> repository.markCompleted(claimed, bundleRecord(selected, result, stored),
-              rerunAt)));
+          () -> repository.markCompleted(claimed, bundleRecord(selected, result, stored))));
       if (!completed) {
         leaseLost(job, "completion");
         discard(job, stored);
@@ -221,29 +215,6 @@ public class BundleJobWorker implements AutoCloseable {
     } catch (RuntimeException e) {
       log.warn("Bundle job {} could not delete the PDF it stored", job, e);
     }
-  }
-
-  /**
-   * When to re-run a bundle that has placeholders for documents that were only temporarily
-   * unavailable, so it fills in once they can be fetched, or null. A change to the bundle's
-   * documents before then makes the re-run immediate.
-   */
-  private Instant rerunAt(ClaimedBundleJob claimed, BundleResult result) {
-    if (result.missingDocuments().stream()
-        .noneMatch(missing -> missing.reason() == MissingDocumentReason.UNAVAILABLE)) {
-      return null;
-    }
-    BundleJob job = claimed.job();
-    int requeues = claimed.unavailableRequeues();
-    Optional<Instant> runAt = retryPolicy.requeueAt(requeues, Instant.now());
-    if (runAt.isEmpty()) {
-      log.warn("Bundle job {} has placeholders for temporarily unavailable documents and has "
-          + "been re-run {} time(s); not re-running it again", job, requeues);
-      return null;
-    }
-    log.info("Bundle job {} has placeholders for temporarily unavailable documents; it re-runs "
-        + "from {}", job, runAt.get());
-    return runAt.get();
   }
 
   private void handleGenerationFailure(ClaimedBundleJob claimed, BundleGenerationException failure) {

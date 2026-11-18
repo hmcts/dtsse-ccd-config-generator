@@ -270,12 +270,12 @@ class BundleJobOutboxIntegrationTest {
 
     // The stale worker's completion, failure and requeue are all rejected; B's outcome stands.
     ClaimedBundleJob stale = first.get(0);
-    assertThat(repository.markCompleted(stale, bundleRecord("a"), null)).isFalse();
+    assertThat(repository.markCompleted(stale, bundleRecord("a"))).isFalse();
     assertThat(bundle(id)).isEmpty();
     assertThat(repository.markFailed(stale, BundleErrorCode.ASSEMBLY_FAILED, "late", "[]")).isFalse();
     assertThat(repository.requeueForRetry(stale, java.time.Instant.now())).isFalse();
     assertThat(job(id).state()).isEqualTo(BundleJobState.IN_PROGRESS);
-    assertThat(repository.markCompleted(reclaimed.get(0), bundleRecord("b"), null)).isTrue();
+    assertThat(repository.markCompleted(reclaimed.get(0), bundleRecord("b"))).isTrue();
     // Only the lease holder's bundle is recorded.
     assertThat(bundle(id).orElseThrow().sha256()).isEqualTo("sha-b");
     assertThat(jdbc.queryForObject("select count(*) from bundling.bundle", Map.of(), Integer.class))
@@ -475,65 +475,30 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
-  void aBundleMissingTemporarilyUnavailableDocumentsIsReRunLaterUntilTheBound() {
-    Key id = submit("bundle", "case-1");
-    FakeRenderer renderer = new FakeRenderer(tempDir);
-    for (int i = 0; i < 4; i++) {
-      renderer.onNextRender(request -> renderer(tempDir).success(request, List.of(), List.of(),
-          List.of("doc-gone")));
-    }
-    BundleJobWorker worker = worker(renderer, twoDocumentSelector(), storingAnywhere(),
-        new BundleJobRetryPolicy(3, Duration.ofMillis(1), 2.0, Duration.ofMillis(2), Duration.ofMinutes(15), 2),
-        Runnable::run, 5, 5, Duration.ofMinutes(5));
-
-    worker.poll();
-
-    assertThat(job(id).state().terminal()).as("a delayed re-run is not shown as regenerating the bundle")
-        .isTrue();
-    assertThat(column(id, "unavailable_requeues")).isEqualTo("1");
-    assertThat(jdbc.queryForObject("select next_attempt_at > now() + interval '14 minutes' "
-        + "from bundling.bundle_job where case_reference = :reference",
-        Map.of("reference", id.caseReference()), Boolean.class)).isTrue();
-    worker.poll();
-    assertThat(renderer.renders).as("the re-run waits for its delay").hasSize(1);
-
-    // A change to the case wants a bundle now, and starts the count of re-runs again.
-    submit("bundle", "case-1");
-    assertThat(job(id).state()).isEqualTo(BundleJobState.QUEUED);
-    assertThat(column(id, "next_attempt_at")).isNull();
-    worker.poll();
-    assertThat(renderer.renders).hasSize(2);
-    assertThat(column(id, "unavailable_requeues")).isEqualTo("1");
-
-    jdbc.update("update bundling.bundle_job set next_attempt_at = now()", Map.of());
-    worker.poll();
-    assertThat(renderer.renders).hasSize(3);
-    assertThat(column(id, "unavailable_requeues")).isEqualTo("2");
-
-    jdbc.update("update bundling.bundle_job set next_attempt_at = now()", Map.of());
-    worker.poll();
-    assertThat(renderer.renders).hasSize(4);
-    assertThat(column(id, "next_attempt_at")).as("the bound of two re-runs is reached").isNull();
-    assertThat(job(id).state().terminal()).isTrue();
-  }
-
-  @Test
-  void aRenderMayRetryWhileAttemptsRemainAndIsFinalOnTheLastAttempt() {
+  void whileADependencyIsDownNoBundleIsPublishedAndTheCurrentOneStays() {
     UUID id = UUID.randomUUID();
     submit(simpleRequest(id));
-    FakeRenderer renderer = new FakeRenderer(tempDir).onNextRender(FakeRenderer.failure(
-        new BundleGenerationException(BundleErrorCode.DOCUMENT_RESOLUTION_FAILED, BundleStage.RESOLVE,
-            "CDAM timed out", "Retry", List.of())));
-    BundleJobWorker worker = directWorker(renderer, quickRetries(2));
+    directWorker(new FakeRenderer(tempDir)).poll();
+    UUID current = bundle(id).orElseThrow().id();
 
-    worker.poll();
+    // The case changes while the document store is down for longer than the retries last.
+    submit(simpleRequest(id));
+    BundleGenerationException down = new BundleGenerationException(
+        BundleErrorCode.DOCUMENT_RESOLUTION_FAILED, BundleStage.RESOLVE, "CDAM timed out", "Retry",
+        List.of(new DocumentFailure("doc-1", new DocumentReference("case-documents", "d1"),
+            BundleErrorCode.DOCUMENT_RESOLUTION_FAILED, "dm-store 503")));
+    FakeRenderer renderer = new FakeRenderer(tempDir)
+        .onNextRender(FakeRenderer.failure(down)).onNextRender(FakeRenderer.failure(down));
+    BundleJobWorker worker = directWorker(renderer, quickRetries(2));
     await().atMost(Duration.ofSeconds(5)).until(() -> {
       worker.poll();
       return job(id).state().terminal();
     });
 
-    assertThat(renderer.attempts).containsExactly(RenderAttempt.RETRYABLE, RenderAttempt.FINAL);
-    assertThat(job(id).state()).isEqualTo(BundleJobState.COMPLETED);
+    // No attempt may fall back to a placeholder page for a document that is only unavailable.
+    assertThat(renderer.attempts).containsExactly(RenderAttempt.RETRYABLE, RenderAttempt.RETRYABLE);
+    assertThat(job(id).state()).isEqualTo(BundleJobState.FAILED);
+    assertThat(bundle(id).orElseThrow().id()).isEqualTo(current);
   }
 
   private Key queued(String definition, String caseKey) {
