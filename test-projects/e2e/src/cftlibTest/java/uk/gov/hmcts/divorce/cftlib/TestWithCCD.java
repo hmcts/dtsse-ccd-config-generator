@@ -101,8 +101,10 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import uk.gov.hmcts.divorce.bundling.CaseFileBundle;
 import uk.gov.hmcts.divorce.bundling.CaseworkerCreateBundle;
 import uk.gov.hmcts.divorce.bundling.CaseworkerCreateBundleMissingDocument;
+import uk.gov.hmcts.divorce.bundling.CaseworkerUpdateCaseFile;
 import uk.gov.hmcts.divorce.bundling.DocmosisStubController;
 import uk.gov.hmcts.divorce.bundling.FixtureDocumentResolver;
 import uk.gov.hmcts.divorce.bundling.model.CaseBundle;
@@ -125,6 +127,9 @@ import uk.gov.hmcts.divorce.sow014.nfd.ExternalGreetingEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
+import uk.gov.hmcts.ccd.sdk.bundling.job.BundleMetadata;
+import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundleView;
+import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundles;
 import uk.gov.hmcts.ccd.sdk.jackson.UnwrappedPrefixModule;
 import uk.gov.hmcts.divorce.roundtrip.RoundTripFixture;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerRoundTripData;
@@ -225,6 +230,9 @@ public class TestWithCCD extends CftlibTest {
 
     @Autowired
     private DocmosisStubController docmosisStub;
+
+    @Autowired
+    private CaseBundles caseBundles;
 
     private long firstEventId;
     private static final String BASE_URL = "http://localhost:4452";
@@ -722,6 +730,53 @@ public class TestWithCCD extends CftlibTest {
                     && line.contains("\"method\":\"POST\"") && line.contains(documentId)),
                 equalTo(true));
         }
+    }
+
+    @Order(40)
+    @Test
+    public void aChangedCaseFileIsBundledInTheBackgroundAndStoredAgainstTheCase() throws Exception {
+        String user = "TEST_CASE_WORKER_USER@mailinator.com";
+        assertThat(caseBundles.view(CaseFileBundle.NAME, caseRef).lifecycle(),
+            equalTo(CaseBundleView.Lifecycle.NONE));
+
+        BundleMetadata first = updateCaseFileAndAwaitBundle(user, null);
+
+        assertThat(first.caseReference(), equalTo(caseRef));
+        assertThat(first.fileName(), equalTo("case-" + caseRef + "-case-file.pdf"));
+        assertThat(first.missingDocuments(), hasSize(0));
+        // The SDK stored the PDF through the real embedded CDAM and attached it to the case.
+        String documentId = first.stored().orElseThrow().id().toString();
+        assertThat(fetchCdamDocument(documentId).path("metadata").path("case_id").asText(),
+            equalTo(String.valueOf(caseRef)));
+
+        var download = new HttpGet(CDAM_BASE_URL + "/cases/documents/" + documentId + "/binary");
+        download.addHeader("Authorization", getAuthorisation(user));
+        download.addHeader("ServiceAuthorization", cftlib().generateDummyS2SToken("nfdiv_case_api"));
+        try (var downloadResponse = HttpClientBuilder.create().build().execute(download);
+             PDDocument stitched = Loader.loadPDF(EntityUtils.toByteArray(downloadResponse.getEntity()))) {
+            assertThat(stitched.getNumberOfPages(), equalTo(first.pageCount()));
+            String text = new PDFTextStripper().getText(stitched);
+            assertThat(text, containsString(CaseFileBundle.TITLE));
+            assertThat(text, containsString(CaseworkerCreateBundle.POTENTIAL_ENERGY_TITLE));
+            assertThat(text, containsString(CaseworkerCreateBundle.MEDICAL_REPORT_TITLE));
+        }
+
+        // A later change replaces the bundle with a newly stored one.
+        BundleMetadata second = updateCaseFileAndAwaitBundle(user, first.id());
+        assertThat(second.stored().orElseThrow().id(), not(equalTo(first.stored().orElseThrow().id())));
+    }
+
+    private BundleMetadata updateCaseFileAndAwaitBundle(String user, UUID previousBundle) throws Exception {
+        var request = prepareEventRequest(user, CaseworkerUpdateCaseFile.CASEWORKER_UPDATE_CASE_FILE, Map.of());
+        try (var response = HttpClientBuilder.create().build().execute(request)) {
+            assertThat("case file event should succeed: " + EntityUtils.toString(response.getEntity()),
+                response.getStatusLine().getStatusCode(), equalTo(201));
+        }
+        return await().atMost(Duration.ofSeconds(60)).until(
+            () -> caseBundles.view(CaseFileBundle.NAME, caseRef),
+            view -> view.lifecycle() == CaseBundleView.Lifecycle.UP_TO_DATE
+                && !view.current().orElseThrow().id().equals(previousBundle))
+            .current().orElseThrow();
     }
 
     @Order(39)
