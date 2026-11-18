@@ -9,7 +9,11 @@ import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.CaseView;
 import uk.gov.hmcts.ccd.sdk.CaseViewRequest;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
+import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundles;
+import uk.gov.hmcts.ccd.sdk.type.Document;
 import uk.gov.hmcts.divorce.bundling.CaseBundleRepository;
+import uk.gov.hmcts.divorce.bundling.CaseFileBundle;
+import org.springframework.context.annotation.Lazy;
 import uk.gov.hmcts.divorce.caseworker.model.CaseNote;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
@@ -23,10 +27,23 @@ public class NFDCaseView implements CaseView<CaseData, State> {
     @Autowired
     private CaseBundleRepository caseBundleRepository;
 
+    @Autowired
+    @Lazy
+    private CaseBundles caseBundles;
+
     @Override
     public CaseData getCase(CaseViewRequest<State> request, CaseData blobCase) {
         blobCase.setNotes(loadNotes(request.caseRef()));
         blobCase.setCaseBundles(caseBundleRepository.findByCase(request.caseRef()));
+        // CDAM serves a document to a user only when a case field refers to it, so the SDK's
+        // current bundle is put on the case each time it is loaded; nothing is copied.
+        blobCase.setCaseFileBundle(caseBundles.view(CaseFileBundle.NAME, request.caseRef()).current()
+            .flatMap(bundle -> bundle.stored().map(stored -> Document.builder()
+                .url(stored.url())
+                .binaryUrl(stored.binaryUrl())
+                .filename(bundle.fileName())
+                .build()))
+            .orElse(null));
         blobCase.setHyphenatedCaseRef(CaseData.formatCaseRef(request.caseRef()));
         return blobCase;
     }

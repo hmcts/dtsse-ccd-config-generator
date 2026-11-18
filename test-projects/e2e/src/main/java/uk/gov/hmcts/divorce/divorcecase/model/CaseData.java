@@ -167,6 +167,14 @@ public class CaseData {
     @External
     private List<ListValue<CaseBundle>> caseBundles;
 
+    @CCD(
+        label = "Case file bundle",
+        typeOverride = FieldType.Document,
+        access = {CaseworkerAndSuperUserAccess.class}
+    )
+    @External
+    private Document caseFileBundle;
+
     @JsonIgnore
     public static String formatCaseRef(long caseId) {
         String temp = String.format("%016d", caseId);

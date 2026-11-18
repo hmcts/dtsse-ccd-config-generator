@@ -744,19 +744,28 @@ public class TestWithCCD extends CftlibTest {
         assertThat(first.caseReference(), equalTo(caseRef));
         assertThat(first.fileName(), equalTo("case-" + caseRef + "-case-file.pdf"));
         assertThat(first.missingDocuments(), hasSize(0));
-        // The SDK stored the PDF through the real embedded CDAM and attached it to the case. CDAM
-        // only serves a document to a user once a case field refers to it, and this service does
-        // not put the bundle on the case, so the stored document is read from the dm-store stub.
+        // The SDK stored the PDF through the real embedded CDAM and attached it to the case.
         String documentId = first.stored().orElseThrow().id().toString();
-        var stored = stubDocumentStore.find(documentId).orElseThrow(
-            () -> new AssertionError("bundle " + documentId + " missing from dm-store stub"));
-        assertThat(stored.metadata().get("case_id"), equalTo(String.valueOf(caseRef)));
-        try (PDDocument stitched = Loader.loadPDF(stored.content())) {
-            assertThat(stitched.getNumberOfPages(), equalTo(first.pageCount()));
-            String text = new PDFTextStripper().getText(stitched);
-            assertThat(text, containsString(CaseFileBundle.TITLE));
-            assertThat(text, containsString(CaseworkerCreateBundle.POTENTIAL_ENERGY_TITLE));
-            assertThat(text, containsString(CaseworkerCreateBundle.MEDICAL_REPORT_TITLE));
+        assertThat(fetchCdamDocument(documentId).path("metadata").path("case_id").asText(),
+            equalTo(String.valueOf(caseRef)));
+
+        // The service shows the current bundle on the case, which is what lets a user download it.
+        var c = ccdApi.getCase(getAuthorisation(user), getServiceAuth(), String.valueOf(caseRef));
+        var caseData = mapper.readValue(mapper.writeValueAsString(c.getData()), CaseData.class);
+        assertThat(caseData.getCaseFileBundle().getUrl(), endsWith(documentId));
+        var download = new HttpGet(caseData.getCaseFileBundle().getBinaryUrl()
+            .replaceFirst("^.*/documents/", CDAM_BASE_URL + "/cases/documents/"));
+        download.addHeader("Authorization", getAuthorisation(user));
+        download.addHeader("ServiceAuthorization", cftlib().generateDummyS2SToken("nfdiv_case_api"));
+        try (var downloadResponse = HttpClientBuilder.create().build().execute(download)) {
+            assertThat(downloadResponse.getStatusLine().getStatusCode(), equalTo(200));
+            try (PDDocument stitched = Loader.loadPDF(EntityUtils.toByteArray(downloadResponse.getEntity()))) {
+                assertThat(stitched.getNumberOfPages(), equalTo(first.pageCount()));
+                String text = new PDFTextStripper().getText(stitched);
+                assertThat(text, containsString(CaseFileBundle.TITLE));
+                assertThat(text, containsString(CaseworkerCreateBundle.POTENTIAL_ENERGY_TITLE));
+                assertThat(text, containsString(CaseworkerCreateBundle.MEDICAL_REPORT_TITLE));
+            }
         }
 
         // A later change replaces the bundle with a newly stored one.
