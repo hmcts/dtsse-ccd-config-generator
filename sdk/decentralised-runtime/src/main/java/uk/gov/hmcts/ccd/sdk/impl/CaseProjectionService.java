@@ -90,6 +90,7 @@ class CaseProjectionService {
     Object projected = ((CaseView) binding.caseView()).getCase(request, blobCase);
     Map<String, JsonNode> projectedData = mapper.convertValue(projected, JSON_NODE_MAP);
     Map<String, JsonNode> serialised = definitionRegistry.find(caseTypeId)
+        .filter(definition -> definition.getCaseField(SEARCH_CRITERIA).isPresent())
         .map(caseTypeDefinition -> stabiliseSearchCriteriaIds(
             globalSearchProcessorService.populateGlobalSearchData(caseTypeDefinition, projectedData)))
         .orElse(projectedData);
