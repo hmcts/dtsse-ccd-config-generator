@@ -2,59 +2,65 @@
 -- bundle's documents sets its row to QUEUED, even while a worker is rendering it, and a worker
 -- that finishes leaves a row that was queued again to be rendered again. A case therefore has one
 -- render of a bundle at a time, as it has one write to its search index at a time. This replaces
--- a row per submission, the coalesce key string, the versioned request and the selector parameter
--- and execution context JSON.
+-- a row per submission keyed by a string, with its request and context held as JSON.
 set local lock_timeout = '5s';
 
 -- Earlier rows were keyed by strings that do not name a case.
-truncate bundling.bundle_job, bundling.bundle;
+drop table bundling.bundle_job, bundling.bundle;
 
-alter table bundling.bundle_job
-    alter column external_id set default gen_random_uuid(),
-    add column definition text not null,
+create table bundling.bundle_job (
     -- Checked at commit: an event that creates a case runs its handler before the case row is
     -- written.
-    add column case_reference bigint not null
+    case_reference bigint not null
         references ccd.case_data (reference) on delete cascade deferrable initially deferred,
-    -- When the bundle was last queued; the oldest is claimed first.
-    add column queued_at timestamptz not null default now(),
-    -- How many times this bundle has been re-run for temporarily unavailable documents.
-    add column unavailable_requeues integer not null default 0,
+    definition text not null,
+    -- QUEUED, IN_PROGRESS, COMPLETED or FAILED.
+    state varchar(32) not null default 'QUEUED',
     -- Live changes are 0; a bulk refresh queues at -1, so live changes are claimed first.
-    add column priority smallint not null default 0,
-    -- Dropping coalesce_key drops its indexes.
-    drop column coalesce_key,
-    drop column coalesced_submissions,
-    drop column last_coalesced_at,
-    drop column request,
-    drop column request_version,
-    drop column selector_parameters,
-    drop column execution_context,
-    -- The bundle row records where the PDF is stored.
-    drop column result,
-    -- A case's renders run one at a time, so the bundle recorded last is its current one.
-    drop column claimed_at,
-    add unique (case_reference, definition);
+    priority smallint not null default 0,
+    -- When the bundle was last queued; the oldest is claimed first.
+    queued_at timestamptz not null default now(),
+    attempts integer not null default 0,
+    -- When a retry, or a completed bundle's re-run for unavailable documents, becomes claimable.
+    next_attempt_at timestamptz,
+    -- How many times in a row the bundle has been re-run for temporarily unavailable documents.
+    unavailable_requeues integer not null default 0,
+    lease_owner varchar(255),
+    lease_expires_at timestamptz,
+    failure_code varchar(64),
+    failure_message text,
+    failure_documents jsonb,
+    primary key (case_reference, definition)
+);
 
--- The priority index below serves the claim.
-drop index bundling.idx_bundle_job_queued;
-
--- A completed bundle with next_attempt_at set is due a re-run for unavailable documents.
 create index idx_bundle_job_priority
-    on bundling.bundle_job (priority desc, queued_at, external_id)
+    on bundling.bundle_job (priority desc, queued_at)
     where state in ('QUEUED', 'IN_PROGRESS') or next_attempt_at is not null;
 
--- Dropping bundle_key and job_id drops their indexes. Deleting a case deletes its bundle rows; its
--- documents, the bundle PDFs among them, are disposed of with the case.
-alter table bundling.bundle
-    add column definition text not null,
-    alter column case_reference type bigint using case_reference::bigint,
-    alter column case_reference set not null,
-    add foreign key (case_reference) references ccd.case_data (reference)
-        on delete cascade deferrable initially deferred,
-    drop column bundle_key,
-    drop column job_id,
-    drop column selected_at;
+-- What a render produced: everything about a bundle except its PDF, which is stored as an
+-- ordinary document. The row recorded last for a case is its current bundle; a replaced row is
+-- deleted with its PDF. Deleting a case deletes its rows; its documents, the bundle PDFs among
+-- them, are disposed of with the case.
+create table bundling.bundle (
+    id uuid primary key default gen_random_uuid(),
+    case_reference bigint not null references ccd.case_data (reference) on delete cascade,
+    definition text not null,
+    outcome varchar(32) not null,
+    file_name text not null,
+    media_type varchar(255) not null,
+    size_bytes bigint not null,
+    sha256 varchar(64) not null,
+    page_count integer not null,
+    request jsonb not null,
+    documents jsonb not null,
+    missing_documents jsonb not null,
+    warnings jsonb not null,
+    document_id uuid not null,
+    document_url text not null,
+    binary_url text not null,
+    created_at timestamptz not null default now()
+);
+
 create index idx_bundle_case
     on bundling.bundle (case_reference, definition, created_at desc);
 

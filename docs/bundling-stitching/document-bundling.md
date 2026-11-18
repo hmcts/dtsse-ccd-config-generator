@@ -141,8 +141,8 @@ strategy before the application's own migrations).
 
 `BundleJobWorker` polls (your service needs `@EnableScheduling`), claims rows with
 `SELECT ... FOR UPDATE SKIP LOCKED` under a lease, selects the case's documents, renders and
-stores the PDF. Fetch and conversion failures are retried with backoff and the history is kept on
-the row; everything else fails the bundle on the spot. A worker that outlives its lease cannot
+stores the PDF. Fetch and conversion failures are retried with backoff, each one logged;
+everything else fails the bundle on the spot. A worker that outlives its lease cannot
 overwrite the outcome recorded by the worker that took over.
 
 A case has one render of a bundle at a time, as it has one write to its search index at a time.
@@ -341,7 +341,7 @@ Each render selects afresh, renders, uploads the PDF to CDAM and attaches it to 
 worker records the bundle. The case's current bundle is the one recorded last. A worker claims
 only the definitions its release has. `cleanUp` (every
 `ccd.bundling.job.cleanup-delay`, default one minute) deletes a replaced bundle's PDF 12 hours
-after its replacement and sets the row's `deleted_at`. The delay only keeps the file in storage:
+after its replacement, with its row. The delay only keeps the file in storage:
 CDAM stops serving a replaced PDF to users once the case no longer shows it. A failed attachment deletes its upload and retries; a worker that lost
 its lease deletes its upload. A PDF uploaded by a worker that dies before recording it stays in
 CDAM, unreadable: CDAM serves a document only to a user who can see it in the case data.

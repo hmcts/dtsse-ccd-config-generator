@@ -178,18 +178,17 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
     Set<String> before = bundlePdfs();
     store.failOnce.set(true);
     changed(key);
-    UUID id = jobs.find("case-file", key).orElseThrow().externalId();
     worker.poll();
     await()
         .atMost(Duration.ofSeconds(20))
         .until(
             () ->
-                jobs.find(id).orElseThrow().attempts() == 1
-                    && jobs.find(id).orElseThrow().state().name().equals("QUEUED"));
+                jobs.find("case-file", key).orElseThrow().attempts() == 1
+                    && jobs.find("case-file", key).orElseThrow().state().name().equals("QUEUED"));
     assertThat(bundles.view("case-file", key).lifecycle())
         .isEqualTo(CaseBundleView.Lifecycle.PREPARING);
     run(key);
-    String current = bundles.view("case-file", key).current().orElseThrow().stored().orElseThrow().url();
+    String current = bundles.view("case-file", key).current().orElseThrow().stored().url();
     assertThat(newSince(before)).containsExactly(current);
   }
 
@@ -200,18 +199,17 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
     store.storeStarted = new CountDownLatch(1);
     store.releaseStore = new CountDownLatch(1);
     changed(key);
-    UUID id = jobs.find("case-file", key).orElseThrow().externalId();
     worker.poll();
     assertThat(store.storeStarted.await(20, TimeUnit.SECONDS)).isTrue();
     jdbc.update(
         "update bundling.bundle_job set lease_expires_at = clock_timestamp() - interval '1 second' "
-            + "where external_id = :id",
-        Map.of("id", id));
+            + "where case_reference = :key",
+        Map.of("key", key));
     run(key);
-    String current = bundles.view("case-file", key).current().orElseThrow().stored().orElseThrow().url();
+    String current = bundles.view("case-file", key).current().orElseThrow().stored().url();
     store.releaseStore.countDown();
     await().atMost(Duration.ofSeconds(20)).until(() -> store.deleted.get() == 1);
-    assertThat(jobs.find(id).orElseThrow().attempts()).isEqualTo(2);
+    assertThat(jobs.find("case-file", key).orElseThrow().attempts()).isEqualTo(2);
     assertThat(newSince(before)).containsExactly(current);
     store.storeStarted = null;
     store.releaseStore = null;
@@ -338,7 +336,7 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
   }
 
   private static Document document(CaseBundleView view) {
-    var stored = view.current().orElseThrow().stored().orElseThrow();
+    var stored = view.current().orElseThrow().stored();
     return Document.builder().url(stored.url()).binaryUrl(stored.binaryUrl()).build();
   }
 
@@ -377,15 +375,14 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
   }
 
   private void run(long key) {
-    UUID id = jobs.find("case-file", key).orElseThrow().externalId();
     worker.poll();
     await()
         .atMost(Duration.ofSeconds(20))
         .until(() -> {
           worker.poll();
-          return jobs.find(id).orElseThrow().state().terminal();
+          return jobs.find("case-file", key).orElseThrow().state().terminal();
         });
-    assertThat(jobs.find(id).orElseThrow().failure()).isEmpty();
+    assertThat(jobs.find("case-file", key).orElseThrow().failure()).isEmpty();
   }
 
   record CaseData(String value) {}

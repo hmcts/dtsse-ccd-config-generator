@@ -754,7 +754,7 @@ public class TestWithCCD extends CftlibTest {
         assertThat(first.fileName(), equalTo("case-" + caseRef + "-case-file.pdf"));
         assertThat(first.missingDocuments(), hasSize(0));
         // The SDK stored the PDF through the real embedded CDAM and attached it to the case.
-        String documentId = first.stored().orElseThrow().id().toString();
+        String documentId = first.stored().id().toString();
         assertThat(fetchCdamDocument(documentId).path("metadata").path("case_id").asText(),
             equalTo(String.valueOf(caseRef)));
 
@@ -779,7 +779,7 @@ public class TestWithCCD extends CftlibTest {
 
         // A later change replaces the bundle with a newly stored one.
         BundleMetadata second = updateCaseFileAndAwaitBundle(user, first.id());
-        assertThat(second.stored().orElseThrow().id(), not(equalTo(first.stored().orElseThrow().id())));
+        assertThat(second.stored().id(), not(equalTo(first.stored().id())));
     }
 
     @Order(41)

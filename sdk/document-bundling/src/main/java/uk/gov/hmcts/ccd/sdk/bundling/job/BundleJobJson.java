@@ -15,9 +15,6 @@ final class BundleJobJson {
   private static final TypeReference<List<DocumentFailure>> DOCUMENT_FAILURES =
       new TypeReference<>() {
       };
-  private static final TypeReference<List<BundleJobTransientFailure>> HISTORY =
-      new TypeReference<>() {
-      };
 
   /** A persisted payload this worker version cannot read. */
   static final class Unreadable extends RuntimeException {
@@ -60,14 +57,6 @@ final class BundleJobJson {
       return json == null ? List.of() : mapper.readValue(json, DOCUMENT_FAILURES);
     } catch (Exception e) {
       throw new IllegalStateException("Stored document failures could not be read", e);
-    }
-  }
-
-  List<BundleJobTransientFailure> readHistory(String json) {
-    try {
-      return json == null ? List.of() : mapper.readValue(json, HISTORY);
-    } catch (Exception e) {
-      return List.of();
     }
   }
 }

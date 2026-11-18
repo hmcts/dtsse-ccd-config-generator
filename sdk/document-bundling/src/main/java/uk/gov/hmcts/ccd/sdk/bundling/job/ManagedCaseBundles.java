@@ -110,7 +110,7 @@ public class ManagedCaseBundles implements CaseBundles {
     BundleRequest request = snapshot.execute(status ->
         Objects.requireNonNull(definition.select(job.caseReference()),
             () -> definition.name() + " selected no bundle request"));
-    return repository.selectedFor(job.caseReference(), request.withExternalId(job.externalId()));
+    return repository.selectedFor(job.caseReference(), request.withExternalId(UUID.randomUUID()));
   }
 
   /** The definitions this pod can render; bundles of others are left to the pods that can. */
@@ -119,7 +119,8 @@ public class ManagedCaseBundles implements CaseBundles {
   }
 
   StoredBundleDocument store(SelectedCaseBundle selected, BundleResult result) throws Exception {
-    return store.store(selected, result.artifact());
+    return Objects.requireNonNull(store.store(selected, result.artifact()),
+        "The document store returned no location");
   }
 
   /** Whether a failure to store is worth another attempt. */
@@ -133,9 +134,7 @@ public class ManagedCaseBundles implements CaseBundles {
 
   /** Deletes a PDF stored by a worker that then found it no longer held the bundle's lease. */
   void discard(StoredBundleDocument stored) {
-    if (stored != null) {
-      store.delete(stored.id());
-    }
+    store.delete(stored.id());
   }
 
   @Override
@@ -143,8 +142,7 @@ public class ManagedCaseBundles implements CaseBundles {
     definition(definition);
     // The job first: a bundle recorded in between then reads as updating, never as up to date.
     Optional<BundleJob> job = repository.find(definition, caseReference);
-    Optional<BundleMetadata> current =
-        repository.findLatestBundle(definition, caseReference).filter(bundle -> bundle.stored().isPresent());
+    Optional<BundleMetadata> current = repository.findLatestBundle(definition, caseReference);
     boolean published = current.isPresent();
     Lifecycle lifecycle =
         job.map(
@@ -153,20 +151,20 @@ public class ManagedCaseBundles implements CaseBundles {
                       case QUEUED, IN_PROGRESS ->
                           published ? Lifecycle.UPDATING : Lifecycle.PREPARING;
                       case FAILED -> Lifecycle.FAILED;
-                      case COMPLETED, COMPLETED_WITH_WARNINGS ->
+                      case COMPLETED ->
                           published ? Lifecycle.UP_TO_DATE : Lifecycle.NONE;
                     })
             .orElse(published ? Lifecycle.UP_TO_DATE : Lifecycle.NONE);
     return new CaseBundleView(current, lifecycle);
   }
 
-  /** Deletes the PDFs of bundles that a later bundle of the same case replaced 12 hours ago. */
+  /** Deletes the bundles that a later bundle of the same case replaced 12 hours ago. */
   @Scheduled(fixedDelayString = "${ccd.bundling.job.cleanup-delay:60000}")
   public void cleanUp() {
     for (UUID id : repository.findReplacedDocuments(REPLACED_PDF_KEPT_FOR, 20)) {
       try {
         store.delete(id);
-        repository.markDocumentDeleted(id);
+        repository.deleteBundle(id);
       } catch (RuntimeException failure) {
         log.warn("Replaced bundle document {} could not be deleted; it is retried", id, failure);
       }

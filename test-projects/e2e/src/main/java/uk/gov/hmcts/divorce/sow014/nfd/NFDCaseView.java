@@ -36,11 +36,11 @@ public class NFDCaseView implements CaseView<CaseData, State> {
         // CDAM serves a document to a user only when a case field refers to it, so the SDK's
         // current bundle is put on the case each time it is loaded; nothing is copied.
         blobCase.setCaseFileBundle(caseBundles.view(CaseFileBundle.NAME, request.caseRef()).current()
-            .flatMap(bundle -> bundle.stored().map(stored -> Document.builder()
-                .url(stored.url())
-                .binaryUrl(stored.binaryUrl())
+            .map(bundle -> Document.builder()
+                .url(bundle.stored().url())
+                .binaryUrl(bundle.stored().binaryUrl())
                 .filename(bundle.fileName())
-                .build()))
+                .build())
             .orElse(null));
         blobCase.setHyphenatedCaseRef(CaseData.formatCaseRef(request.caseRef()));
         return blobCase;

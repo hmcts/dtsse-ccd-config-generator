@@ -2,7 +2,6 @@ package uk.gov.hmcts.ccd.sdk.bundling.job;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -11,7 +10,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -19,7 +17,6 @@ import org.springframework.transaction.TransactionException;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleErrorCode;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleExecutionContext;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleGenerationException;
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundleOutcome;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRenderer;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleResult;
@@ -98,7 +95,7 @@ public class BundleJobWorker implements AutoCloseable {
     if (toClaim <= 0) {
       return;
     }
-    for (UUID exhausted : repository.failExhaustedStaleJobs(retryPolicy.maxAttempts(),
+    for (String exhausted : repository.failExhaustedStaleJobs(retryPolicy.maxAttempts(),
         bundles.definitions())) {
       log.error("Bundle job {} exhausted its {} attempt(s) without recording a result; FAILED",
           exhausted, retryPolicy.maxAttempts());
@@ -114,7 +111,7 @@ public class BundleJobWorker implements AutoCloseable {
             execute(claimed);
           } catch (RuntimeException e) {
             log.error("Bundle job {} failed unexpectedly outside the render pipeline",
-                claimed.job().externalId(), e);
+                claimed.job(), e);
           } finally {
             inFlight.decrementAndGet();
           }
@@ -122,7 +119,7 @@ public class BundleJobWorker implements AutoCloseable {
       } catch (RejectedExecutionException e) {
         inFlight.decrementAndGet();
         log.warn("Bundle job {} dispatch was rejected; it is reclaimable when its lease expires",
-            claimed.job().externalId(), e);
+            claimed.job(), e);
       }
     }
   }
@@ -136,7 +133,6 @@ public class BundleJobWorker implements AutoCloseable {
 
   private void execute(ClaimedBundleJob claimed) {
     BundleJob job = claimed.job();
-    UUID id = job.externalId();
     SelectedCaseBundle selected;
     try {
       selected = bundles.select(job);
@@ -145,10 +141,10 @@ public class BundleJobWorker implements AutoCloseable {
       return;
     } catch (DataAccessException | TransactionException e) {
       // The database, not the request: the lease expires and the job is reclaimed.
-      log.warn("Bundle job {} could not read its selection", id, e);
+      log.warn("Bundle job {} could not read its selection", job, e);
       return;
     } catch (RuntimeException e) {
-      log.error("Bundle job {} request could not be compiled for execution", id, e);
+      log.error("Bundle job {} request could not be compiled for execution", job, e);
       failTerminally(claimed, BundleErrorCode.JOB_REQUEST_UNREADABLE, "The bundle request could not be "
           + "compiled for execution; the definition threw " + e.getClass().getName() + LOG_ONLY,
           List.of());
@@ -170,24 +166,23 @@ public class BundleJobWorker implements AutoCloseable {
         completionFailed(claimed, e);
         return;
       }
-      BundleJobState terminal = result.outcome() == BundleOutcome.COMPLETED_WITH_WARNINGS
-          ? BundleJobState.COMPLETED_WITH_WARNINGS : BundleJobState.COMPLETED;
-      log.info("Bundle job {} completed as {} after {} attempt(s)", id, terminal, job.attempts());
+      log.info("Bundle job {} completed as {} after {} attempt(s)", job, result.outcome(),
+          job.attempts());
       Instant rerunAt = rerunAt(claimed, result);
       boolean completed = Boolean.TRUE.equals(repository.holdingCase(job.caseReference(),
-          () -> repository.markCompleted(id, terminal, bundleRecord(selected, result, stored),
-              claimed.leaseOwner(), rerunAt)));
+          () -> repository.markCompleted(claimed, bundleRecord(selected, result, stored),
+              rerunAt)));
       if (!completed) {
-        leaseLost(id, "completion");
-        discard(id, stored);
+        leaseLost(job, "completion");
+        discard(job, stored);
       }
     } catch (BundleGenerationException e) {
       handleGenerationFailure(claimed, e);
     } catch (DataAccessException | TransactionException e) {
       // The completion may or may not have committed; the lease expires and the job is reclaimed.
-      log.error("Bundle job {} rendered but its completion could not be recorded", id, e);
+      log.error("Bundle job {} rendered but its completion could not be recorded", job, e);
     } catch (RuntimeException e) {
-      log.error("Bundle job {} failed with an untyped renderer error", id, e);
+      log.error("Bundle job {} failed with an untyped renderer error", job, e);
       failTerminally(claimed, BundleErrorCode.ASSEMBLY_FAILED,
           "Unexpected renderer failure of type " + e.getClass().getName() + LOG_ONLY,
           List.of());
@@ -205,27 +200,26 @@ public class BundleJobWorker implements AutoCloseable {
   }
 
   private void completionFailed(ClaimedBundleJob claimed, Exception failure) {
-    UUID id = claimed.job().externalId();
+    BundleJob job = claimed.job();
     Optional<Instant> next = retryPolicy.nextAttemptAt(claimed.job().attempts(), Instant.now());
     if (bundles.retryable(failure) && next.isPresent()) {
-      log.warn("Bundle job {} rendered but its PDF could not be stored; retrying at {}", id,
+      log.warn("Bundle job {} rendered but its PDF could not be stored; retrying at {}", job,
           next.get(), failure);
-      if (!repository.requeueForRetry(id, next.get(), claimed.transientHistoryJson(),
-          claimed.leaseOwner())) {
-        leaseLost(id, "completion retry");
+      if (!repository.requeueForRetry(claimed, next.get())) {
+        leaseLost(job, "completion retry");
       }
       return;
     }
-    log.error("Bundle job {} rendered but its PDF could not be stored", id, failure);
+    log.error("Bundle job {} rendered but its PDF could not be stored", job, failure);
     failTerminally(claimed, BundleErrorCode.COMPLETION_FAILED, "The bundle rendered but storing it "
         + "threw " + failure.getClass().getName() + LOG_ONLY, List.of());
   }
 
-  private void discard(UUID id, StoredBundleDocument stored) {
+  private void discard(BundleJob job, StoredBundleDocument stored) {
     try {
       bundles.discard(stored);
     } catch (RuntimeException e) {
-      log.warn("Bundle job {} could not delete the PDF it stored", id, e);
+      log.warn("Bundle job {} could not delete the PDF it stored", job, e);
     }
   }
 
@@ -239,65 +233,54 @@ public class BundleJobWorker implements AutoCloseable {
         .noneMatch(missing -> missing.reason() == MissingDocumentReason.UNAVAILABLE)) {
       return null;
     }
-    UUID id = claimed.job().externalId();
+    BundleJob job = claimed.job();
     int requeues = claimed.unavailableRequeues();
     Optional<Instant> runAt = retryPolicy.requeueAt(requeues, Instant.now());
     if (runAt.isEmpty()) {
       log.warn("Bundle job {} has placeholders for temporarily unavailable documents and has "
-          + "been re-run {} time(s); not re-running it again", id, requeues);
+          + "been re-run {} time(s); not re-running it again", job, requeues);
       return null;
     }
     log.info("Bundle job {} has placeholders for temporarily unavailable documents; it re-runs "
-        + "from {}", id, runAt.get());
+        + "from {}", job, runAt.get());
     return runAt.get();
   }
 
   private void handleGenerationFailure(ClaimedBundleJob claimed, BundleGenerationException failure) {
-    UUID id = claimed.job().externalId();
-    int attempts = claimed.job().attempts();
+    BundleJob job = claimed.job();
+    int attempts = job.attempts();
     if (!retryPolicy.isTransient(failure)) {
-      log.error("Bundle job {} failed with non-retryable {}: {}", id, failure.code(),
+      log.error("Bundle job {} failed with non-retryable {}: {}", job, failure.code(),
           failure.getMessage());
       failTerminally(claimed, failure.code(), failure.getMessage(), failure.documentFailures());
       return;
     }
-    List<BundleJobTransientFailure> history =
-        new ArrayList<>(json.readHistory(claimed.transientHistoryJson()));
-    history.add(new BundleJobTransientFailure(attempts, failure.code(), failure.getMessage(),
-        Instant.now()));
     Optional<Instant> nextAttemptAt = retryPolicy.nextAttemptAt(attempts, Instant.now());
     if (nextAttemptAt.isPresent()) {
-      log.warn("Bundle job {} failed transiently with {} on attempt {} of {}; retrying at {}",
-          id, failure.code(), attempts, retryPolicy.maxAttempts(), nextAttemptAt.get());
-      if (!repository.requeueForRetry(id, nextAttemptAt.get(), json.write(history),
-          claimed.leaseOwner())) {
-        leaseLost(id, "transient retry");
+      log.warn("Bundle job {} failed transiently with {} on attempt {} of {}; retrying at {}: {}",
+          job, failure.code(), attempts, retryPolicy.maxAttempts(), nextAttemptAt.get(),
+          failure.getMessage());
+      if (!repository.requeueForRetry(claimed, nextAttemptAt.get())) {
+        leaseLost(job, "transient retry");
       }
       return;
     }
-    String message = failure.getMessage() + " Retries exhausted after " + attempts
-        + " attempt(s). Transient history: "
-        + history.stream().map(BundleJobTransientFailure::describe).collect(Collectors.joining("; "))
-        + ".";
-    log.error("Bundle job {} failed with {} and exhausted its {} attempt(s)", id, failure.code(),
+    log.error("Bundle job {} failed with {} and exhausted its {} attempt(s)", job, failure.code(),
         attempts);
-    if (!repository.markFailed(id, failure.code(), message,
-        json.write(failure.documentFailures()), json.write(history), claimed.leaseOwner())) {
-      leaseLost(id, "exhausted failure");
-    }
+    failTerminally(claimed, failure.code(),
+        failure.getMessage() + " Retries exhausted after " + attempts + " attempt(s).",
+        failure.documentFailures());
   }
 
   private void failTerminally(ClaimedBundleJob claimed, BundleErrorCode code, String message,
       List<DocumentFailure> documentFailures) {
-    UUID id = claimed.job().externalId();
-    if (!repository.markFailed(id, code, message, json.write(documentFailures), null,
-        claimed.leaseOwner())) {
-      leaseLost(id, "failure");
+    if (!repository.markFailed(claimed, code, message, json.write(documentFailures))) {
+      leaseLost(claimed.job(), "failure");
     }
   }
 
-  private void leaseLost(UUID id, String write) {
+  private void leaseLost(BundleJob job, String write) {
     log.warn("Bundle job {} {} was not recorded: this worker ({}) no longer holds the lease; "
-        + "the lease holder's state stands", id, write, workerId);
+        + "the lease holder's state stands", job, write, workerId);
   }
 }

@@ -3,7 +3,6 @@ package uk.gov.hmcts.ccd.sdk.bundling.job;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleOutcome;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
@@ -31,7 +30,7 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
  * @param documents where each included document landed
  * @param missingDocuments the documents replaced by placeholder pages, and why
  * @param warnings non-fatal notes from the render
- * @param stored where the document store stored the PDF, if it said
+ * @param stored where the document store stored the PDF
  */
 public record BundleMetadata(
     UUID id,
@@ -48,7 +47,7 @@ public record BundleMetadata(
     List<DocumentResult> documents,
     List<MissingDocument> missingDocuments,
     List<BundleWarning> warnings,
-    Optional<StoredBundleDocument> stored) {
+    StoredBundleDocument stored) {
 
   public BundleMetadata {
     Objects.requireNonNull(id, "BundleMetadata.id");
