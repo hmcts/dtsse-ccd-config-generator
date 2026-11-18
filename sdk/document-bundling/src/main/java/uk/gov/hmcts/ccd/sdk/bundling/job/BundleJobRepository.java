@@ -74,9 +74,9 @@ public class BundleJobRepository {
   }
 
   /**
-   * Holds the case until the transaction ends, and says whether it exists. Every write here that
-   * adds a row for a case holds it first, as an event does, so the write waits for an event on the
-   * case or for its deletion instead of deadlocking with either.
+   * Holds the case until the transaction ends, and says whether it exists. Every write here takes
+   * its case before its own rows, as an event does, so it waits for an event on the case or for
+   * its deletion instead of deadlocking with either.
    */
   boolean holdCase(long caseReference) {
     return jdbc.query("""
@@ -94,8 +94,14 @@ public class BundleJobRepository {
    * the row until it commits and the claim passes over a held row, so a bundle is never claimed
    * before the change that queued it is visible. A change makes a waiting retry or re-run
    * immediate and a waiting refresh live.
+   *
+   * <p>It first locks the case as an event does, so a change made outside an event cannot
+   * interleave with a refresh or an event on the same case. The event that creates a case has no
+   * case to lock yet.
    */
   UUID changed(String definition, long caseReference) {
+    jdbc.query("select 1 from ccd.case_data where reference = :caseReference for update",
+        params("caseReference", caseReference), ResultSet::next);
     return jdbc.queryForObject("""
         insert into bundling.bundle_job (definition, case_reference)
         values (:definition, :caseReference)

@@ -174,6 +174,26 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
+  void aRefreshAndAChangeToTwoBundlesOfACaseOutsideAnEventDoNotDeadlock() throws Exception {
+    caseRef("live");
+    ExecutorService pool = Executors.newSingleThreadExecutor();
+    try {
+      Future<Integer> refresh = tx.execute(status -> {
+        submit("other", "live");
+        // One refresh transaction queues every definition, as ManagedCaseBundles.refresh does.
+        Future<Integer> running = pool.submit(() -> tx.execute(inRefresh ->
+            refresh("test") + refresh("other")));
+        awaitSessionBlockedOnLock();
+        submit("test", "live");
+        return running;
+      });
+      assertThat(refresh.get(10, TimeUnit.SECONDS)).isZero();
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
   void aBundleFinishingAsItsCaseIsDeletedWaitsForTheDeletionAndDiscardsItsPdf() throws Exception {
     BundleJob job = submit(simpleRequest(UUID.randomUUID()));
     FakeStore handler = storing((selection, artifact) -> STORED);

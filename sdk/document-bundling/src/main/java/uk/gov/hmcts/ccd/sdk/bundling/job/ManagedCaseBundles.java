@@ -68,8 +68,6 @@ public class ManagedCaseBundles implements CaseBundles {
       throw new IllegalStateException(
           "A bundle change must join the transaction that changed its documents");
     }
-    // The event that creates a case has no case to hold yet.
-    repository.holdCase(caseReference);
     repository.changed(definition, caseReference);
   }
 
