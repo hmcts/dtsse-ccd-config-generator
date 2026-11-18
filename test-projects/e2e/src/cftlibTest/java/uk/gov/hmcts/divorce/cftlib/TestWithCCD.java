@@ -526,33 +526,37 @@ public class TestWithCCD extends CftlibTest {
 
     @Order(199)
     @Test
-    public void shouldPopulateSearchCriteriaFromAboutToSubmitCallback() throws Exception {
-        var startEvent = ccdApi.startEvent(
-            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
-            getServiceAuth(),
-            String.valueOf(caseRef),
-            CaseworkerPopulateSearchCriteria.CASEWORKER_POPULATE_SEARCH_CRITERIA
-        ).getToken();
+    public void shouldPopulateAndResubmitSearchCriteriaWithoutDeletePermission() throws Exception {
+        String user = "TEST_CASE_WORKER_USER@mailinator.com";
+        String eventId = CaseworkerPopulateSearchCriteria.CASEWORKER_POPULATE_SEARCH_CRITERIA;
+        String reference = String.valueOf(caseRef);
+        String expectedValue = CaseData.formatCaseRef(caseRef);
+        var start = ccdApi.startEvent(getAuthorisation(user), getServiceAuth(), reference, eventId);
+        var populate = prepareEventRequestWithToken(user, eventId, Map.of(), start.getToken());
 
-        var event = prepareEventRequestWithToken(
-            "TEST_CASE_WORKER_USER@mailinator.com",
-            CaseworkerPopulateSearchCriteria.CASEWORKER_POPULATE_SEARCH_CRITERIA,
-            Map.of(),
-            startEvent);
-        var response = HttpClientBuilder.create().build().execute(event);
-        var responseBody = EntityUtils.toString(response.getEntity());
-        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
-        Map<String, Object> responseMap =
-            mapper.readValue(responseBody, new TypeReference<>() {});
-        Map data = (Map) responseMap.get("data");
-        Map<String, Object> searchCriteria = (Map<String, Object>) data.get("SearchCriteria");
+        try (var client = HttpClientBuilder.create().build()) {
+            try (var response = client.execute(populate)) {
+                String body = EntityUtils.toString(response.getEntity());
+                assertThat(body, response.getStatusLine().getStatusCode(), equalTo(201));
+                var references = mapper.readTree(body).at("/data/SearchCriteria/OtherCaseReferences");
+                assertThat(references.size(), equalTo(1));
+                assertThat(references.at("/0/value").asText(), equalTo(expectedValue));
+            }
 
-        assertThat("SearchCriteria should be populated from global search processor", searchCriteria, is(notNullValue()));
-        List<Map<String, Object>> otherCaseReferences =
-            (List<Map<String, Object>>) searchCriteria.get("OtherCaseReferences");
-        assertThat(otherCaseReferences, is(notNullValue()));
-        assertThat(otherCaseReferences, hasSize(1));
-        assertThat(otherCaseReferences.getFirst().get("value"), equalTo(CaseData.formatCaseRef(caseRef)));
+            // The caseworker can read SearchCriteria but cannot delete collection items.
+            var next = ccdApi.startEvent(getAuthorisation(user), getServiceAuth(), reference, eventId);
+            var criteria = next.getCaseDetails().getData().get("SearchCriteria");
+            JsonNode projected = mapper.valueToTree(criteria);
+            assertThat(projected.at("/OtherCaseReferences/0/value").asText(), equalTo(expectedValue));
+            assertThat(projected.at("/OtherCaseReferences/0/id").asText(""), not(equalTo("")));
+
+            var resubmit = prepareEventRequestWithToken(
+                user, eventId, Map.of("SearchCriteria", criteria), next.getToken());
+            try (var response = client.execute(resubmit)) {
+                String body = EntityUtils.toString(response.getEntity());
+                assertThat(body, response.getStatusLine().getStatusCode(), equalTo(201));
+            }
+        }
     }
 
     @Order(2)
