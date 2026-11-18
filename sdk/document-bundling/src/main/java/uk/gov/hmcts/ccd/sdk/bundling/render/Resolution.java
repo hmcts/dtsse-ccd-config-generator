@@ -142,9 +142,10 @@ final class Resolution {
     } catch (RuntimeException e) {
       log.warn("Resolver for provider '{}' threw {} for its whole batch",
           resolver.provider(), e.getClass().getSimpleName());
+      // It has said nothing about the documents, so they are not treated as missing.
       for (DocumentReference reference : references) {
         failures.put(reference, new Failure(
-            BundleErrorCode.DOCUMENT_RESOLUTION_FAILED,
+            BundleErrorCode.DOCUMENT_UNAVAILABLE,
             "The resolver threw " + e.getClass().getSimpleName() + " for the whole batch"));
       }
       return;

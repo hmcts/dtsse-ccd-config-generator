@@ -500,7 +500,10 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
     @Override
     public StoredBundleDocument store(SelectedCaseBundle selection, BundleArtifact artifact) {
       if (failOnce.getAndSet(false)) {
-        throw new IllegalStateException("Temporary storage failure");
+        throw feign.FeignException.errorStatus("store", feign.Response.builder().status(503)
+            .request(feign.Request.create(feign.Request.HttpMethod.POST, "http://cdam", Map.of(), null,
+                java.nio.charset.StandardCharsets.UTF_8, null))
+            .build());
       }
       CountDownLatch started = storeStarted;
       CountDownLatch release = releaseStore;

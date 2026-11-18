@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.bundling.render;
 
-import java.util.Optional;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleErrorCode;
 import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderException;
 
@@ -24,18 +23,14 @@ public final class TransientFailures {
 
   /** Whether the cause chain says Docmosis failed in a way that is worth retrying. */
   static boolean isDocmosisOutage(Throwable cause) {
-    return docmosisFailure(cause).map(DocmosisRenderException::isTransientFailure).orElse(false);
-  }
-
-  private static Optional<DocmosisRenderException> docmosisFailure(Throwable cause) {
     for (Throwable next = cause; next != null; next = next.getCause()) {
       if (next instanceof DocmosisRenderException docmosis) {
-        return Optional.of(docmosis);
+        return docmosis.isTransientFailure();
       }
       if (next.getCause() == next) {
         break;
       }
     }
-    return Optional.empty();
+    return false;
   }
 }

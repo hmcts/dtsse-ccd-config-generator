@@ -407,7 +407,8 @@ class BundleJobOutboxIntegrationTest {
   void noBundleIsRecordedForABundleWhosePdfCouldNotBeStored() {
     Key submitted = submit("bundle", "case-1");
     FakeStore failing = storing((selection, artifact) -> {
-      throw new IllegalArgumentException("the store rejects the document");
+      // Not a recognised outage, so storing the same PDF again would fail the same way.
+      throw new IllegalStateException("the document is too large for the store");
     });
 
     worker(new FakeRenderer(tempDir), twoDocumentSelector(), failing,

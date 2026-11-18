@@ -123,13 +123,10 @@ public class ManagedCaseBundles implements CaseBundles {
         "The document store returned no location");
   }
 
-  /** Whether a failure to store is worth another attempt. */
+  /** Whether a failure to store is the store being down: anything else would fail again. */
   boolean retryable(Exception failure) {
-    return !(failure instanceof IllegalArgumentException)
-        && (!(failure instanceof feign.FeignException remote)
-            || remote.status() < 0
-            || remote.status() >= 500
-            || remote.status() == 429);
+    return failure instanceof feign.FeignException remote
+        && (remote.status() < 0 || remote.status() >= 500 || remote.status() == 429);
   }
 
   /** Deletes a PDF stored by a worker that then found it no longer held the bundle's lease. */

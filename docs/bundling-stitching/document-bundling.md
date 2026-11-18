@@ -370,6 +370,8 @@ The standard CDAM adapter uses the application's `CaseDocumentClientApi`, `AuthT
 and a `BundleSystemUser` bean supplying its cached system token. The deployed CDAM configuration
 must grant that service CREATE, ATTACH and DELETE for the destination case type. A different store
 can implement `BundleDocumentStore`, whose `store` must leave nothing stored when it fails. A
+failure is retried only if it is a Feign error for a 5xx, a 429 or no response; anything else
+fails the bundle. A
 `CdamBundleDocumentResolver` bean of your own replaces the default one.
 
 ### Refreshing bundles in bulk

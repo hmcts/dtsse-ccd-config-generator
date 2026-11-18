@@ -39,6 +39,8 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.CoverPage;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentFailure;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentHandler;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference;
+import uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocuments;
+import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResolver;
 import uk.gov.hmcts.ccd.sdk.bundling.api.HandledDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.api.WatermarkPreset;
 import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderException;
@@ -140,6 +142,24 @@ class BundleRenderingFailureTest {
         () -> builder().build().render(request(doc("d1", "Missing", "missing"), doc("d2", "Flaky", "flaky")),
             BundleExecutionContext.empty()));
     assertThat(TransientFailures.isTransient(unavailable.code(), unavailable.getCause())).isTrue();
+
+    // A resolver that throws, as when it cannot get a token, has said nothing about its documents.
+    DocumentResolver tokensDown = new DocumentResolver() {
+      @Override
+      public String provider() {
+        return RenderTestSupport.PROVIDER;
+      }
+
+      @Override
+      public ResolvedDocuments resolveAll(java.util.List<DocumentReference> references,
+          BundleExecutionContext context) {
+        throw new IllegalStateException("token service returned 503");
+      }
+    };
+    BundleGenerationException noAnswer = catchThrowableOfType(BundleGenerationException.class,
+        () -> BundleRenderer.builder().resolver(tokensDown).tempDirectory(work).build()
+            .render(request(doc("d1", "Fine", "good")), BundleExecutionContext.empty()));
+    assertThat(TransientFailures.isTransient(noAnswer.code(), noAnswer.getCause())).isTrue();
   }
 
   @Test
