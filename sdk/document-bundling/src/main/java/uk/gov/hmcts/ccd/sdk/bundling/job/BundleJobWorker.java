@@ -205,7 +205,7 @@ public class BundleJobWorker implements AutoCloseable {
       }
     } catch (BundleGenerationException e) {
       handleGenerationFailure(claimed, e, total);
-    } catch (DataAccessException e) {
+    } catch (DataAccessException | TransactionException e) {
       // The completion may or may not have committed; the lease expires and the job is reclaimed.
       log.error("Bundle job {} rendered but its completion could not be recorded", id, e);
     } catch (RuntimeException e) {
