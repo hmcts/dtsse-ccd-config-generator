@@ -3,10 +3,13 @@ package uk.gov.hmcts.ccd.sdk.impl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ResolvableType;
@@ -32,6 +35,7 @@ import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
 class CaseProjectionService {
 
   private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
+  private static final String SEARCH_CRITERIA = "SearchCriteria";
 
   private final CaseDataRepository caseDataRepository;
   private final ObjectMapper mapper;
@@ -86,14 +90,32 @@ class CaseProjectionService {
     Object projected = ((CaseView) binding.caseView()).getCase(request, blobCase);
     Map<String, JsonNode> projectedData = mapper.convertValue(projected, JSON_NODE_MAP);
     Map<String, JsonNode> serialised = definitionRegistry.find(caseTypeId)
-        .map(caseTypeDefinition -> globalSearchProcessorService.populateGlobalSearchData(
-            caseTypeDefinition,
-            projectedData
-        ))
+        .filter(definition -> definition.getCaseField(SEARCH_CRITERIA).isPresent())
+        .map(caseTypeDefinition -> stabiliseSearchCriteriaIds(
+            globalSearchProcessorService.populateGlobalSearchData(caseTypeDefinition, projectedData)))
         .orElse(projectedData);
 
     caseDetails.setData(serialised);
     return raw;
+  }
+
+  /**
+   * Data store's processor gives each SearchCriteria item a new random id, and a case is projected afresh on every
+   * load. The ids would then differ between an event's start and its submit, which CCD reads as items deleted and
+   * added: refused for anyone without Delete on SearchCriteria, such as a service's system user. CCD only needs ids
+   * unique within a collection, so each is derived from the item's position.
+   */
+  static Map<String, JsonNode> stabiliseSearchCriteriaIds(Map<String, JsonNode> data) {
+    if (data.get(SEARCH_CRITERIA) instanceof ObjectNode criteria) {
+      criteria.forEach(items -> {
+        for (int i = 0; i < items.size(); i++) {
+          if (items.get(i) instanceof ObjectNode item) {
+            item.put("id", UUID.nameUUIDFromBytes(String.valueOf(i).getBytes(StandardCharsets.UTF_8)).toString());
+          }
+        }
+      });
+    }
+    return data;
   }
 
   private Map<String, CaseViewBinding> buildBindings(List<CaseView<?, ?>> caseViews,
