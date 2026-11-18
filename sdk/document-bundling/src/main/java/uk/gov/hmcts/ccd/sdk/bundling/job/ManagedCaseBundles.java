@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -52,9 +53,9 @@ public class ManagedCaseBundles implements CaseBundles {
     this.refreshKey = refreshKey;
     this.repository = repository;
     this.store = store;
-    this.definitions =
-        definitions.stream()
-            .collect(Collectors.toUnmodifiableMap(CaseBundleDefinition::name, Function.identity()));
+    // In name order, so every pod refreshes the definitions in the same order.
+    this.definitions = new TreeMap<>(definitions.stream()
+        .collect(Collectors.toMap(CaseBundleDefinition::name, Function.identity())));
     transaction = new TransactionTemplate(transactions);
     snapshot = new TransactionTemplate(transactions);
     snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
