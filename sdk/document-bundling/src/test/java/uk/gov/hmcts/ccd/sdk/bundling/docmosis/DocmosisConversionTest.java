@@ -212,6 +212,9 @@ class DocmosisConversionTest {
     responder.set(exchange -> respond(exchange, 429, secretBody.getBytes(UTF_8)));
     final DocmosisRenderException throttled = catchThrowableOfType(DocmosisRenderException.class,
         () -> service.convertToPdf(source, "letter.docx", DOC));
+    responder.set(exchange -> respond(exchange, 408, secretBody.getBytes(UTF_8)));
+    final DocmosisRenderException timedOut = catchThrowableOfType(DocmosisRenderException.class,
+        () -> service.convertToPdf(source, "letter.docx", DOC));
     responder.set(exchange -> {
       exchange.getResponseHeaders().set("Content-Type", "text/html");
       respond(exchange, 200, ("<html>" + secretBody + "</html>").getBytes(UTF_8));
@@ -223,12 +226,13 @@ class DocmosisConversionTest {
     assertThat(serverError.isTransientFailure()).isTrue();
     assertThat(serverError.getMessage()).contains("500").contains("server error");
     assertThat(throttled.isTransientFailure()).as("throttling passes, so it is worth retrying").isTrue();
+    assertThat(timedOut.isTransientFailure()).as("a request timeout says nothing about the document").isTrue();
     assertThat(notPdf.isTransientFailure()).isFalse();
     assertThat(notPdf.getMessage()).contains("200").contains("not a PDF").contains("text/html");
     for (DocmosisRenderException e : List.of(clientError, serverError, notPdf)) {
       assertThat(e.getMessage()).doesNotContain(secretBody).doesNotContain(ACCESS_KEY);
     }
-    assertThat(requests).as("no retries: one request per call").hasSize(4);
+    assertThat(requests).as("no retries: one request per call").hasSize(5);
     assertThat(outputDir).isEmptyDirectory();
   }
 

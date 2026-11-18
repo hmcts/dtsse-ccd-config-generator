@@ -14,6 +14,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -178,9 +179,10 @@ final class Resolution {
       Map<DocumentReference, Spooled> spooled,
       Map<DocumentReference, Failure> failures) {
     long limit = limits.maxSourceBytesPerDocument();
-    if (resolved.contentLength().isPresent() && resolved.contentLength().getAsLong() > limit) {
+    OptionalLong declared = resolved.contentLength();
+    if (declared.isPresent() && declared.getAsLong() > limit) {
       failures.put(reference, new Failure(BundleErrorCode.LIMIT_EXCEEDED,
-          "The source declares " + resolved.contentLength().getAsLong() + " bytes, which "
+          "The source declares " + declared.getAsLong() + " bytes, which "
               + "exceeds the configured maximum of " + limit + " bytes per document"));
       return;
     }
@@ -199,19 +201,19 @@ final class Resolution {
             failures.put(reference, new Failure(BundleErrorCode.LIMIT_EXCEEDED,
                 "The source exceeded the configured maximum of " + limit + " bytes per "
                     + "document during transfer (it declared "
-                    + (resolved.contentLength().isPresent()
-                        ? resolved.contentLength().getAsLong() + " bytes" : "no length") + ")"));
+                    + (declared.isPresent() ? declared.getAsLong() + " bytes" : "no length")
+                    + ")"));
             return;
           }
           digest.update(buffer, 0, read);
           out.write(buffer, 0, read);
         }
       }
-      if (resolved.contentLength().isPresent() && copied < resolved.contentLength().getAsLong()) {
+      if (declared.isPresent() && copied < declared.getAsLong()) {
         // The download ended early without an error; the document itself may be intact.
         failures.put(reference, new Failure(BundleErrorCode.DOCUMENT_UNAVAILABLE,
-            "The source ended after " + copied + " of its declared "
-                + resolved.contentLength().getAsLong() + " bytes"));
+            "The source ended after " + copied + " of its declared " + declared.getAsLong()
+                + " bytes"));
         return;
       }
       spooled.put(reference, new Spooled(
