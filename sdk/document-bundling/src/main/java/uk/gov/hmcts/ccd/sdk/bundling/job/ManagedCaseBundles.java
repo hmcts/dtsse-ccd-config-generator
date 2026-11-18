@@ -69,6 +69,8 @@ public class ManagedCaseBundles
       throw new IllegalStateException(
           "A bundle change must join the transaction that changed its documents");
     }
+    // The event that creates a case has no case to hold yet.
+    repository.holdCase(caseReference);
     // Calls in one transaction join the job its first call queued.
     repository.insertOrJoin(UUID.randomUUID(), definition, caseReference, null, 0, 0);
   }

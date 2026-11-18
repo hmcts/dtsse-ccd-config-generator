@@ -239,6 +239,31 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
   }
 
   @Test
+  void aChangeOutsideAnEventAndAnEventOnTheSameCaseDoNotDeadlock() throws Exception {
+    long reference = fixture();
+    var pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+    try {
+      var event = transaction.execute(status -> {
+        // A write outside an event queues the bundle; an event then locks the case and queues it too.
+        bundles.changed("case-file", reference);
+        var running = pool.submit(() -> transaction.executeWithoutResult(inEvent -> {
+          jdbc.query("select 1 from ccd.case_data where reference = :reference for update",
+              Map.of("reference", reference), rs -> null);
+          bundles.changed("case-file", reference);
+        }));
+        org.awaitility.Awaitility.await().atMost(java.time.Duration.ofSeconds(10)).until(() ->
+            jdbc.queryForObject("select count(*) from pg_stat_activity where wait_event_type = 'Lock'",
+                Map.of(), Integer.class) > 0);
+        return running;
+      });
+      event.get(10, java.util.concurrent.TimeUnit.SECONDS);
+    } finally {
+      pool.shutdownNow();
+      jdbc.update("delete from ccd.case_data where reference = :reference", Map.of("reference", reference));
+    }
+  }
+
+  @Test
   void aChangeInTheEventThatCreatesACaseIsQueuedAndDeletingTheCaseDeletesItsJobs() {
     // The create handler runs before the runtime writes the case row.
     var creation = events.create("create", State.Open, new CaseData("created"));

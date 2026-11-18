@@ -67,13 +67,19 @@ public class BundleJobRepository {
   }
 
   /**
-   * Runs the writes holding the case, as an event does, so they wait for an event on it or for its
-   * deletion instead of deadlocking with either. Returns null if the case is gone.
+   * Holds the case until the transaction ends, and says whether it exists. Every write here that
+   * adds a row for a case holds it first, as an event does, so the write waits for an event on the
+   * case or for its deletion instead of deadlocking with either.
    */
-  <T> T holdingCase(long caseReference, Supplier<T> writes) {
-    return transaction.execute(status -> jdbc.query("""
+  boolean holdCase(long caseReference) {
+    return jdbc.query("""
         select 1 from ccd.case_data where reference = :caseReference for key share
-        """, params("caseReference", caseReference), ResultSet::next) ? writes.get() : null);
+        """, params("caseReference", caseReference), ResultSet::next);
+  }
+
+  /** Runs the writes in a transaction that holds the case, or returns null if the case is gone. */
+  <T> T holdingCase(long caseReference, Supplier<T> writes) {
+    return transaction.execute(status -> holdCase(caseReference) ? writes.get() : null);
   }
 
   /**

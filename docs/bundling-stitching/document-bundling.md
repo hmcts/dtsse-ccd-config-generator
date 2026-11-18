@@ -384,6 +384,9 @@ have none, set a new value for `ccd.bundling.refresh` (`CCD_BUNDLING_REFRESH` in
 CCD_BUNDLING_REFRESH: "2026-11-17-new-cover-page"
 ```
 
+Set it once the release that changes the bundle is fully rolled out: a pod still on the old
+release renders a refresh job the old way.
+
 Shortly after it starts, the first pod to see a value it has not seen before queues one background
 job for each case of each definition's `caseType()`, and records the value against the definition in
 `bundling.refresh_key` in the same transaction as its jobs. Other pods and later restarts skip it. A failure is logged and retried a minute
