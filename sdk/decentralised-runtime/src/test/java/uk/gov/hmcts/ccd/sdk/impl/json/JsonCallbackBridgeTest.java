@@ -9,16 +9,20 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.InetSocketAddress;
 import java.net.http.HttpTimeoutException;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.support.StaticApplicationContext;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
@@ -113,6 +117,41 @@ class JsonCallbackBridgeTest {
   }
 
   @Test
+  void returnsALocalCallbacksResponseAsTheApplicationWritesItOverHttp() {
+    // The application leaves out empty values, as civil does; this bridge's own mapper keeps them.
+    ObjectMapper applicationMapper = new ObjectMapper().setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
+    JsonCallbackBridge bridge = bridgeWith(
+        new MockEnvironment().withProperty("decentralisation.local-callback-placeholder", "ET_COS_URL"),
+        applicationMapper,
+        new LocalCallbackController()
+    );
+
+    Object response = bridge.invoke("${ET_COS_URL}/callbacks/with-empty-values", Map.of());
+
+    assertThat(response).isEqualTo(Map.of("data", Map.of("kept", "value")));
+  }
+
+  @Test
+  void returnsAResponseEntitysBodyAsTheApplicationWritesItOverHttp() {
+    ObjectMapper applicationMapper = new ObjectMapper().setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
+    JsonCallbackBridge bridge = bridgeWith(
+        new MockEnvironment().withProperty("decentralisation.local-callback-placeholder", "ET_COS_URL"),
+        applicationMapper,
+        new LocalCallbackController()
+    );
+    CaseDetails<Object, Object> caseDetails = CaseDetails.builder()
+        .data(Map.of())
+        .build();
+
+    AboutToStartOrSubmitResponse response = bridge.aboutToSubmit(
+        "${ET_COS_URL}/callbacks/entity-with-empty-values",
+        "local"
+    ).handle(caseDetails, null);
+
+    assertThat(response.getData()).isEqualTo(Map.of("kept", "value"));
+  }
+
+  @Test
   void failsFastWhenCallbackIsNeitherLocalNorAbsoluteExternalUrl() {
     JsonCallbackBridge bridge = bridgeWith(new MockEnvironment());
 
@@ -152,10 +191,22 @@ class JsonCallbackBridgeTest {
   }
 
   private JsonCallbackBridge bridgeWith(MockEnvironment environment, Object... controllers) {
+    return bridgeWith(environment, null, controllers);
+  }
+
+  @SuppressWarnings("removal") // Jackson 2's converter, as spring-boot-jackson2 registers it.
+  private JsonCallbackBridge bridgeWith(MockEnvironment environment,
+                                        ObjectMapper applicationMapper,
+                                        Object... controllers) {
     try {
       StaticApplicationContext applicationContext = new StaticApplicationContext();
       for (int i = 0; i < controllers.length; i++) {
         applicationContext.getBeanFactory().registerSingleton("controller-" + i, controllers[i]);
+      }
+      if (applicationMapper != null) {
+        RequestMappingHandlerAdapter adapter = new RequestMappingHandlerAdapter();
+        adapter.setMessageConverters(List.of(new MappingJackson2HttpMessageConverter(applicationMapper)));
+        applicationContext.getBeanFactory().registerSingleton("requestMappingHandlerAdapter", adapter);
       }
       applicationContext.refresh();
 
@@ -188,6 +239,16 @@ class JsonCallbackBridgeTest {
       return new NocCallbackResponse(new NocCaseData(
           new ChangeOrganisationRequestField(new OrganisationToAdd(null))
       ));
+    }
+
+    @PostMapping("/with-empty-values")
+    Map<String, Object> withEmptyValues(@RequestBody Map<String, Object> request) {
+      return Map.of("data", Map.of("kept", "value", "emptyText", "", "emptyList", List.of()));
+    }
+
+    @PostMapping("/entity-with-empty-values")
+    ResponseEntity<Map<String, Object>> entityWithEmptyValues(@RequestBody Map<String, Object> request) {
+      return ResponseEntity.ok(Map.of("data", Map.of("kept", "value", "emptyText", "", "emptyList", List.of())));
     }
 
     @PostMapping("/significant-item")
