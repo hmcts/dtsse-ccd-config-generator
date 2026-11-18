@@ -13,6 +13,7 @@ import ch.qos.logback.core.read.ListAppender;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,8 +25,12 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleGenerationException;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRenderer;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleResult;
+import uk.gov.hmcts.ccd.sdk.bundling.api.BundleSection;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleStage;
+import uk.gov.hmcts.ccd.sdk.bundling.api.BundleWarning;
+import uk.gov.hmcts.ccd.sdk.bundling.api.EmptySectionPolicy;
 import uk.gov.hmcts.ccd.sdk.bundling.api.ResolutionFailureReason;
+import uk.gov.hmcts.ccd.sdk.bundling.pdf.PdfBundleAssembler;
 
 class BundleRenderingObservabilityTest {
   @TempDir
@@ -84,6 +89,36 @@ class BundleRenderingObservabilityTest {
     assertThat(registry.get("ccd.bundling.pages").counter().count()).isGreaterThan(1.0);
     assertThat(registry.get("ccd.bundling.bytes").counter().count()).isGreaterThan(0.0);
     assertThat(allErrorEvents()).isEmpty();
+  }
+
+  @Test
+  void emptySectionPlaceholdersLogAtInfoWhileInspectionFindingsRemainWarnings() {
+    BundleRenderer renderer = BundleRenderer.builder()
+        .resolver(new RenderTestSupport.InMemoryResolver().source("photo",
+            RenderTestSupport.Source.of(fixture("flying-pig.jpg"), "image/jpeg", "photo.jpg")))
+        .tempDirectory(work)
+        .build();
+    BundleRequest request = BundleRequest.builder()
+        .externalId(UUID.randomUUID()).title("Case bundle").fileName("case-bundle.pdf")
+        .root(BundleSection.builder("Case file")
+            .document(doc("d1", "Photo", "photo"))
+            .section(BundleSection.builder("Correspondence")
+                .emptySectionPolicy(EmptySectionPolicy.INCLUDE_PLACEHOLDER).build())
+            .build())
+        .build();
+
+    try (BundleResult result = renderer.render(request, BundleExecutionContext.empty())) {
+      assertThat(result.warnings()).extracting(BundleWarning::code)
+          .contains(DefaultBundleRenderer.WARNING_NO_EXTRACTABLE_TEXT,
+              PdfBundleAssembler.WARNING_EMPTY_SECTION_PAGE);
+    }
+
+    assertThat(rendererEvents.list)
+        .filteredOn(event -> event.getFormattedMessage().startsWith(PdfBundleAssembler.WARNING_EMPTY_SECTION_PAGE))
+        .singleElement().satisfies(event -> assertThat(event.getLevel()).isEqualTo(Level.INFO));
+    assertThat(rendererEvents.list)
+        .filteredOn(event -> event.getFormattedMessage().startsWith(DefaultBundleRenderer.WARNING_NO_EXTRACTABLE_TEXT))
+        .singleElement().satisfies(event -> assertThat(event.getLevel()).isEqualTo(Level.WARN));
   }
 
   @Test

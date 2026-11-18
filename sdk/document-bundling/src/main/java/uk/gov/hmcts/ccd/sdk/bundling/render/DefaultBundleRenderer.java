@@ -663,7 +663,11 @@ public final class DefaultBundleRenderer implements BundleRenderer {
     private void addWarning(BundleWarning warning) {
       warnings.add(warning);
       metrics.warning(warning.code());
-      log.warn("{}: {}", warning.code(), warning.message());
+      if (PdfBundleAssembler.WARNING_EMPTY_SECTION_PAGE.equals(warning.code())) {
+        log.info("{}: {}", warning.code(), warning.message());
+      } else {
+        log.warn("{}: {}", warning.code(), warning.message());
+      }
     }
 
     private <T> T timedStage(BundleStage stage, Supplier<T> body) {

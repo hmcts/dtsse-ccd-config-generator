@@ -351,6 +351,16 @@ class CcdEventTestSupportIntegrationTest {
   }
 
   @Test
+  void decentralisedEventStartReadsTheClientContext() {
+    long reference = events.seed(TestState.Open, new TestCase("original"));
+
+    assertThat(events.start(reference, "address").withClientContext(new Visit("Sam", "42")).startExpectingSuccess()
+        .rawData().path("value").asText()).isEqualTo("Sam");
+    assertThat(events.start(reference, "address").startExpectingSuccess().rawData().path("value").asText())
+        .isEqualTo("original");
+  }
+
+  @Test
   void externalEventWithoutAStartRefusesAClientContext() {
     long reference = events.seed(TestState.Open, new TestCase("original"));
 
@@ -607,6 +617,10 @@ class CcdEventTestSupportIntegrationTest {
                     : ExternalStartResponse.started(new Greeting("hello " + name));
               });
           builder.externalEvent(WAVE, submit -> ExternalSubmitResponse.accepted("Waved", "Waved")).forAllStates();
+          // A decentralised event's start reads what the frontend said, such as the task it was started from.
+          builder.decentralisedEvent("address", payload -> SubmitResponse.defaultResponse(),
+              payload -> new TestCase(payload.clientContext().as(Addressee.class).map(Addressee::name)
+                  .orElse(payload.caseData().value()))).forAllStates();
           builder.decentralisedEvent("conflict", payload -> {
             throw new IllegalStateException("The case is already being changed");
           }).forAllStates();

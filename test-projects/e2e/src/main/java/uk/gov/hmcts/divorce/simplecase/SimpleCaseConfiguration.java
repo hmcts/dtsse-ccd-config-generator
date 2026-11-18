@@ -16,6 +16,7 @@ import uk.gov.hmcts.divorce.simplecase.model.SimpleCasePriority;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseState;
 
 import java.util.EnumSet;
+import java.util.List;
 
 import static uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy.CONFIRM_DISPOSAL_EVENT_ID;
 import static uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy.DISPOSAL_EVENT_ID;
@@ -52,6 +53,9 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
     public static final String START_CALLBACK_MARKER = "simple-case-start";
     public static final String SUBMIT_CALLBACK_MARKER = "simple-case-creation";
     public static final String FOLLOW_UP_CALLBACK_MARKER = "simple-case-follow-up-callback";
+    public static final String POST_EVENT_HOOK_REJECTED_SUBJECT = "Rejected by the post-event hook";
+    public static final String POST_EVENT_HOOK_REFUSED_SUBJECT = "Refused by the post-event hook";
+    public static final String POST_EVENT_HOOK_REFUSAL = "The post-event hook refuses this subject";
 
     @Override
     public void configure(final ConfigBuilder<SimpleCaseData, SimpleCaseState, UserRole> configBuilder) {
@@ -64,6 +68,7 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
         configBuilder.banner(true, BANNER_DESCRIPTION, BANNER_URL, BANNER_URL_TEXT);
         configBuilder.enableForDeletion();
         configBuilder.printableDocumentsUrl(PRINTABLE_DOCUMENTS_URL);
+        configBuilder.addPostEventHook(this::afterSubmit);
         configBuilder.emitCaseRoleJurisdiction();
         configBuilder.noCaseHistoryTab();
         configBuilder.tab(HISTORY_TAB, "History")
@@ -218,6 +223,34 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
                     .defaultValue(DEFAULT_JUDGE_PERSONAL_CODE)
                 .done()
             .done();
+    }
+
+    public static String postEventHookOutcome(String eventId, SimpleCaseState state) {
+        return eventId + ":" + state.name();
+    }
+
+    private AboutToStartOrSubmitResponse<SimpleCaseData, SimpleCaseState> afterSubmit(
+        String eventId,
+        CaseDetails<SimpleCaseData, SimpleCaseState> details,
+        CaseDetails<SimpleCaseData, SimpleCaseState> before,
+        AboutToStartOrSubmitResponse<SimpleCaseData, SimpleCaseState> response
+    ) {
+        var data = response.getData();
+        // A response without data leaves the case data as it was, so the hook records against that.
+        if (data == null) {
+            data = details.getData();
+            response.setData(data);
+        }
+        if (POST_EVENT_HOOK_REFUSED_SUBJECT.equals(data.getSubject())) {
+            response.setErrors(List.of(POST_EVENT_HOOK_REFUSAL));
+            return response;
+        }
+        if (POST_EVENT_HOOK_REJECTED_SUBJECT.equals(data.getSubject())) {
+            throw new IllegalStateException("The post-event hook rejects the subject " + data.getSubject());
+        }
+        var state = response.getState() != null ? response.getState() : details.getState();
+        data.setPostEventHookOutcome(postEventHookOutcome(eventId, state));
+        return response;
     }
 
     private AboutToStartOrSubmitResponse<SimpleCaseData, SimpleCaseState> startCreation(
