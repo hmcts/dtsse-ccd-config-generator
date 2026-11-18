@@ -7,7 +7,6 @@ import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.SUPER_USER;
 import static uk.gov.hmcts.divorce.divorcecase.model.access.Permissions.CREATE_READ_UPDATE;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
@@ -28,7 +27,6 @@ public class CaseworkerUpdateCaseFile implements CCDConfig<CaseData, State, User
     public static final String CASEWORKER_UPDATE_CASE_FILE = "caseworker-update-case-file";
 
     @Autowired
-    @Lazy
     private CaseBundles caseBundles;
 
     @Override

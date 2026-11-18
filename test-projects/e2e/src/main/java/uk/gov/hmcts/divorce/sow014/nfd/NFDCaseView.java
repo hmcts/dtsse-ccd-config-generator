@@ -13,7 +13,6 @@ import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundles;
 import uk.gov.hmcts.ccd.sdk.type.Document;
 import uk.gov.hmcts.divorce.bundling.CaseBundleRepository;
 import uk.gov.hmcts.divorce.bundling.CaseFileBundle;
-import org.springframework.context.annotation.Lazy;
 import uk.gov.hmcts.divorce.caseworker.model.CaseNote;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
@@ -28,7 +27,6 @@ public class NFDCaseView implements CaseView<CaseData, State> {
     private CaseBundleRepository caseBundleRepository;
 
     @Autowired
-    @Lazy
     private CaseBundles caseBundles;
 
     @Override

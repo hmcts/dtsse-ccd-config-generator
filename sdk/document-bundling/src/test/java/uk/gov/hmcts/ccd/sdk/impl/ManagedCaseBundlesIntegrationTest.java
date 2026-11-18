@@ -25,7 +25,6 @@ import org.springframework.boot.jackson2.autoconfigure.Jackson2AutoConfiguration
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.cloud.openfeign.FeignAutoConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -353,7 +352,7 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
   }
 
   static class Config implements CCDConfig<CaseData, State, Role> {
-    @Autowired @Lazy CaseBundles bundles;
+    @Autowired CaseBundles bundles;
 
     @Override
     public void configureDecentralised(DecentralisedConfigBuilder<CaseData, State, Role> builder) {
