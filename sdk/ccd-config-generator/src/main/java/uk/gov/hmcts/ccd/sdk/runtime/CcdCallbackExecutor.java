@@ -21,6 +21,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
+import uk.gov.hmcts.ccd.sdk.api.AfterCommit;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
@@ -69,18 +70,21 @@ public class CcdCallbackExecutor {
       // An external event's start handler loads what it needs itself, so the case is not read here.
       var domainClass = event.isExternal() ? null
           : mapper.convertValue(data, registry.getRequired(request.getCaseDetails().getCaseTypeId()).getCaseClass());
+      ClientContext context = clientContext(clientContext);
       EventPayload payload = new EventPayload<>(
           request.getCaseDetails().getId(),
           domainClass,
-          new LinkedMultiValueMap<>()
+          new LinkedMultiValueMap<>(),
+          new AfterCommit(),
+          context
       );
 
       if (!event.isExternal()) {
         return AboutToStartOrSubmitResponse.builder()
-            .data(event.start(payload, null, ClientContext.none())).build();
+            .data(event.start(payload, null, context)).build();
       }
-      // Only an external event's start is told who started it and what the frontend said.
-      Object response = event.start(payload, externalUser(authorisation), clientContext(clientContext));
+      // Only an external event's start is told who started it.
+      Object response = event.start(payload, externalUser(authorisation), context);
       return switch ((ExternalStartResponse<?>) response) {
         case ExternalRejection<?> rejected ->
             AboutToStartOrSubmitResponse.builder().errors(rejected.errors()).build();
@@ -151,9 +155,29 @@ public class CcdCallbackExecutor {
   public AboutToStartOrSubmitResponse aboutToSubmit(CallbackRequest request) {
     log.info("About to submit event ID: {}", request.getEventId());
 
-    return findCallback(request, Event::getAboutToSubmitCallback)
-        .handle(convertCaseDetails(request.getCaseDetails()),
-            convertCaseDetails(request.getCaseDetailsBefore(), request.getCaseDetails().getCaseTypeId()));
+    String caseType = request.getCaseDetails().getCaseTypeId();
+    var callback = findCallback(request, Event::getAboutToSubmitCallback);
+    CaseDetails details = convertCaseDetails(request.getCaseDetails());
+    CaseDetails detailsBefore = convertCaseDetails(request.getCaseDetailsBefore(), caseType);
+    AboutToStartOrSubmitResponse response = callback.handle(details, detailsBefore);
+    return registry.applyPostEventHooks(caseType, request.getEventId(), details, detailsBefore, response);
+  }
+
+  /**
+   * Runs the case type's post-event hooks for a submission whose event has no about-to-submit
+   * handler. The hooks start from a response carrying the event's own case data and no state, so
+   * a hook reads the state from the case details. Callers should check
+   * {@link ResolvedConfigRegistry#hasPostEventHooks(String)} first, as this converts the case data.
+   */
+  @SneakyThrows
+  public AboutToStartOrSubmitResponse postEventHooksWithoutHandler(CallbackRequest request) {
+    String caseType = request.getCaseDetails().getCaseTypeId();
+    CaseDetails details = convertCaseDetails(request.getCaseDetails());
+    CaseDetails detailsBefore = convertCaseDetails(request.getCaseDetailsBefore(), caseType);
+    AboutToStartOrSubmitResponse response = AboutToStartOrSubmitResponse.builder()
+        .data(details.getData())
+        .build();
+    return registry.applyPostEventHooks(caseType, request.getEventId(), details, detailsBefore, response);
   }
 
   @SneakyThrows

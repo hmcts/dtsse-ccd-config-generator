@@ -70,6 +70,28 @@ public class E2EConfigGenerationTests {
 
     @SneakyThrows
     @Test
+    public void aTabDoesNotWidenAccessAFieldDeclaresForItself() {
+        Map<String, File> expected =
+            CcdConfigComparator.resourcesDirToMap("DeclaredFieldAccess/AuthorisationCaseField");
+        Map<String, File> actual = CcdConfigComparator.dirToMap(
+            new File(tmp.getRoot(), "DeclaredFieldAccess/AuthorisationCaseField"));
+        CcdConfigComparator.assertEquivalent(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
+    public void aCaseTypeDeclaringItsOwnHistoryViewerTakesNeitherInjectedOne() {
+        CcdConfigComparator.assertEquals(resourceFile("OwnHistoryViewer/CaseField.json"),
+            new File(tmp.getRoot(), "OwnHistoryViewer/CaseField.json"), JSONCompareMode.NON_EXTENSIBLE);
+        Map<String, File> expected =
+            CcdConfigComparator.resourcesDirToMap("OwnHistoryViewer/CaseTypeTab");
+        Map<String, File> actual = CcdConfigComparator.dirToMap(
+            new File(tmp.getRoot(), "OwnHistoryViewer/CaseTypeTab"));
+        CcdConfigComparator.assertEquivalent(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
     public void emitsOnlyExplicitStateGrants() {
         File expected = resourceFile("ExplicitStateGrants/AuthorisationCaseState.json");
         File actual = new File(tmp.getRoot(), "ExplicitStateGrants/AuthorisationCaseState.json");

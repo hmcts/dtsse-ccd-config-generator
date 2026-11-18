@@ -5,9 +5,10 @@ import java.util.Optional;
 import java.util.function.Function;
 
 /**
- * What a frontend tells an external event's start that the case cannot, such as which record the
- * user chose to act on. The frontend sends it as JSON in the Client-Context header, which CCD passes
- * on to the start; the start handler reads it as the type it expects.
+ * What a frontend tells an event's start that the case cannot, such as which record the user chose
+ * to act on, or the Work Allocation task XUI started the event from. The frontend sends it as JSON in
+ * the Client-Context header, which CCD passes on to the start; the start handler reads it as the type
+ * it expects, from the external start request or a decentralised event's payload.
  */
 public final class ClientContext {
 

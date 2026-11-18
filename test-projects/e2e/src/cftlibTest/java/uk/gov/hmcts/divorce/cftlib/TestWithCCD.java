@@ -3539,45 +3539,16 @@ public class TestWithCCD extends CftlibTest {
     @Order(25)
     @Test
     void simpleCaseCreationEventAddsMarkers() {
-        var start = ccdApi.startCase(
-            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
-            getServiceAuth(),
-            SimpleCaseConfiguration.CASE_TYPE,
-            SimpleCaseConfiguration.CREATE_EVENT
-        );
+        var creation = createSimpleCase("TEST_CASE_WORKER_USER@mailinator.com", Map.of(
+            "subject", "Simple case subject",
+            "description", "Initial simple case description"
+        ));
 
-        var startData = mapper.convertValue(start.getCaseDetails().getData(), SimpleCaseData.class);
+        var startData = mapper.convertValue(creation.start().getCaseDetails().getData(), SimpleCaseData.class);
         assertThat(startData.getCreationMarker(), equalTo(SimpleCaseConfiguration.START_CALLBACK_MARKER));
 
-        var token = start.getToken();
-        Map<String, Object> submissionData = new LinkedHashMap<>(
-            mapper.convertValue(start.getCaseDetails().getData(), new TypeReference<Map<String, Object>>() {})
-        );
-        submissionData.put("subject", "Simple case subject");
-        submissionData.put("description", "Initial simple case description");
-
-        var body = Map.of(
-            "data", submissionData,
-            "event", Map.of(
-                "id", SimpleCaseConfiguration.CREATE_EVENT,
-                "summary", "",
-                "description", ""
-            ),
-            "event_token", token,
-            "ignore_warning", false
-        );
-
-        var createCase = buildRequest(
-            "TEST_CASE_WORKER_USER@mailinator.com",
-            BASE_URL + "/data/case-types/" + SimpleCaseConfiguration.CASE_TYPE + "/cases?ignore-warning=false",
-            HttpPost::new
-        );
-        withCcdAccept(createCase, ACCEPT_CREATE_CASE);
-        createCase.setEntity(new StringEntity(mapper.writeValueAsString(body), ContentType.APPLICATION_JSON));
-
-        var response = HttpClientBuilder.create().build().execute(createCase);
-        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
-        Map<String, Object> result = mapper.readValue(EntityUtils.toString(response.getEntity()), new TypeReference<>() {});
+        assertThat(creation.status(), equalTo(201));
+        Map<String, Object> result = mapper.readValue(creation.body(), new TypeReference<>() {});
         simpleCaseRef = Long.parseLong((String) result.get("id"));
         assertThat(result.get("state"), equalTo(SimpleCaseState.CREATED.name()));
 
@@ -3590,6 +3561,102 @@ public class TestWithCCD extends CftlibTest {
         System.out.println("Simple case data after creation: " + storedCase.getData());
         assertThat(storedData.getCreationMarker(), equalTo(SimpleCaseConfiguration.SUBMIT_CALLBACK_MARKER));
         assertThat(storedData.getDescription(), equalTo("Initial simple case description"));
+        // The hook saw the state the handler's response set and its outcome is what CCD stored.
+        assertThat(storedData.getPostEventHookOutcome(), equalTo(SimpleCaseConfiguration.postEventHookOutcome(
+            SimpleCaseConfiguration.CREATE_EVENT, SimpleCaseState.CREATED)));
+    }
+
+    @SneakyThrows
+    @Order(26)
+    @Test
+    void simpleCaseCreationRejectedByThePostEventHookCreatesNoCase() {
+        String countSql = "select count(*) from ccd.case_data where case_type_id = :caseType";
+        Map<String, Object> params = Map.of("caseType", SimpleCaseConfiguration.CASE_TYPE);
+        Integer casesBefore = db.queryForObject(countSql, params, Integer.class);
+
+        var creation = createSimpleCase("TEST_CASE_WORKER_USER@mailinator.com",
+            Map.of("subject", SimpleCaseConfiguration.POST_EVENT_HOOK_REJECTED_SUBJECT));
+
+        // The hook's exception fails the service's submit with a 500, which CCD reports as a 502.
+        assertThat("create returned " + creation.body(), creation.status(), equalTo(502));
+        assertThat(mapper.readTree(creation.body()).path("message").asText(),
+            containsString("[500] during [POST] to [http://localhost:4013/ccd-persistence/cases]"));
+
+        assertThat(db.queryForObject(countSql, params, Integer.class), equalTo(casesBefore));
+        assertThat(db.queryForObject(
+            "select count(*) from ccd.case_data where data ->> 'subject' = :subject",
+            Map.of("subject", SimpleCaseConfiguration.POST_EVENT_HOOK_REJECTED_SUBJECT),
+            Integer.class
+        ), equalTo(0));
+    }
+
+    @SneakyThrows
+    @Order(26)
+    @Test
+    void simpleCaseCreationRefusedByThePostEventHookLeavesNothingBehind() {
+        String countSql = "select count(*) from ccd.case_data where case_type_id = :caseType";
+        Map<String, Object> params = Map.of("caseType", SimpleCaseConfiguration.CASE_TYPE);
+        Integer casesBefore = db.queryForObject(countSql, params, Integer.class);
+        var pointersBefore = dataStoreCasePointers(SimpleCaseConfiguration.CASE_TYPE);
+
+        var creation = createSimpleCase("TEST_CASE_WORKER_USER@mailinator.com",
+            Map.of("subject", SimpleCaseConfiguration.POST_EVENT_HOOK_REFUSED_SUBJECT));
+
+        assertThat("create returned " + creation.body(), creation.status(), equalTo(422));
+        assertThat(creation.body(), containsString(SimpleCaseConfiguration.POST_EVENT_HOOK_REFUSAL));
+
+        // Unlike a hook that throws, one that refuses with errors lets CCD roll back the case pointer.
+        assertThat(dataStoreCasePointers(SimpleCaseConfiguration.CASE_TYPE).keySet(),
+            equalTo(pointersBefore.keySet()));
+        assertThat(db.queryForObject(countSql, params, Integer.class), equalTo(casesBefore));
+    }
+
+    private record SimpleCaseCreation(StartEventResponse start, int status, String body) { }
+
+    /**
+     * Starts the simple case type's creation event as the user and submits the case data CCD started it
+     * with, overlaid with the given fields.
+     */
+    @SneakyThrows
+    private SimpleCaseCreation createSimpleCase(String user, Map<String, Object> fields) {
+        var start = ccdApi.startCase(getAuthorisation(user), getServiceAuth(),
+            SimpleCaseConfiguration.CASE_TYPE, SimpleCaseConfiguration.CREATE_EVENT);
+        Map<String, Object> submissionData = new LinkedHashMap<>(
+            mapper.convertValue(start.getCaseDetails().getData(), new TypeReference<Map<String, Object>>() {})
+        );
+        submissionData.putAll(fields);
+
+        var createCase = buildRequest(user,
+            BASE_URL + "/data/case-types/" + SimpleCaseConfiguration.CASE_TYPE + "/cases?ignore-warning=false",
+            HttpPost::new);
+        withCcdAccept(createCase, ACCEPT_CREATE_CASE);
+        createCase.setEntity(new StringEntity(mapper.writeValueAsString(Map.of(
+            "data", submissionData,
+            "event", Map.of("id", SimpleCaseConfiguration.CREATE_EVENT, "summary", "", "description", ""),
+            "event_token", start.getToken(),
+            "ignore_warning", false
+        )), ContentType.APPLICATION_JSON));
+
+        try (var response = HttpClientBuilder.create().build().execute(createCase)) {
+            return new SimpleCaseCreation(start, response.getStatusLine().getStatusCode(),
+                EntityUtils.toString(response.getEntity()));
+        }
+    }
+
+    @SneakyThrows
+    private Map<Long, String> dataStoreCasePointers(String caseType) {
+        var pointers = new LinkedHashMap<Long, String>();
+        try (Connection dataStoreDb = super.cftlib().getConnection(Database.Datastore);
+             PreparedStatement statement = dataStoreDb.prepareStatement(
+                 "SELECT reference, state FROM case_data WHERE case_type_id = ?")) {
+            statement.setString(1, caseType);
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    pointers.put(rs.getLong(1), rs.getString(2));
+                }
+            }
+        }
+        return pointers;
     }
 
     @SneakyThrows
@@ -3616,6 +3683,8 @@ public class TestWithCCD extends CftlibTest {
         assertThat(dataNode.path("description").asText(), equalTo("Initial simple case description"));
         assertThat(dataNode.path("creationMarker").asText(),
             equalTo(SimpleCaseConfiguration.SUBMIT_CALLBACK_MARKER));
+        assertThat(dataNode.path("postEventHookOutcome").asText(), equalTo(SimpleCaseConfiguration
+            .postEventHookOutcome(SimpleCaseConfiguration.CREATE_EVENT, SimpleCaseState.CREATED)));
         assertThat("Hyphenated reference must be derived at projection time only",
             dataNode.has("hyphenatedCaseRef"), is(false));
     }
@@ -3644,6 +3713,8 @@ public class TestWithCCD extends CftlibTest {
         assertThat(updatedCase.getState(), equalTo(SimpleCaseState.FOLLOW_UP.name()));
         assertThat(updatedData.getFollowUpMarker(), equalTo(SimpleCaseConfiguration.FOLLOW_UP_CALLBACK_MARKER));
         assertThat(updatedData.getFollowUpNote(), containsString("Follow up detail"));
+        assertThat(updatedData.getPostEventHookOutcome(), equalTo(SimpleCaseConfiguration.postEventHookOutcome(
+            SimpleCaseConfiguration.FOLLOW_UP_EVENT, SimpleCaseState.FOLLOW_UP)));
     }
 
     @SneakyThrows
@@ -3665,6 +3736,9 @@ public class TestWithCCD extends CftlibTest {
         assertThat(storedData.path("description").asText(), equalTo("Initial simple case description"));
         assertThat(storedData.path("followUpMarker").asText(),
             equalTo(SimpleCaseConfiguration.FOLLOW_UP_CALLBACK_MARKER));
+        // The handler returned no data, so the hook recorded against the case data CCD sent.
+        assertThat(storedData.path("postEventHookOutcome").asText(), equalTo(SimpleCaseConfiguration
+            .postEventHookOutcome(SimpleCaseConfiguration.STATE_ONLY_EVENT, SimpleCaseState.FOLLOW_UP)));
         assertThat(db.queryForObject(
             "select state from ccd.case_data where reference = :reference",
             Map.of("reference", simpleCaseRef),
@@ -3745,12 +3819,30 @@ public class TestWithCCD extends CftlibTest {
         assertThat(storedData.has("subject"), is(false));
         assertThat(storedData.has("description"), is(false));
         assertThat(storedData.has("followUpMarker"), is(false));
+        // The handler set no state, so the hook took the state from the case details.
+        assertThat(storedData.path("postEventHookOutcome").asText(), equalTo(SimpleCaseConfiguration
+            .postEventHookOutcome(SimpleCaseConfiguration.EMPTY_DATA_EVENT, SimpleCaseState.FOLLOW_UP)));
     }
 
     private JsonNode storedCaseData(long reference) throws IOException {
         return mapper.readTree(db.queryForObject(
             "select data::text from ccd.case_data where reference = :reference",
             Map.of("reference", reference),
+            String.class
+        ));
+    }
+
+    @SneakyThrows
+    private JsonNode simpleCaseEventData(long reference, String eventId) {
+        return mapper.readTree(db.queryForObject(
+            """
+            SELECT ce.data::text
+              FROM ccd.case_event ce
+              JOIN ccd.case_data cd ON cd.id = ce.case_data_id
+             WHERE cd.reference = :reference
+               AND ce.event_id = :eventId
+            """,
+            Map.of("reference", reference, "eventId", eventId),
             String.class
         ));
     }
@@ -3834,6 +3926,7 @@ public class TestWithCCD extends CftlibTest {
         }
     }
 
+    @SneakyThrows
     @Order(34)
     @Test
     void retainAndDisposeTaskOnlyDeletesCasesMissingFromCcd() {
@@ -3926,6 +4019,15 @@ public class TestWithCCD extends CftlibTest {
                 Map.of("reference", simpleCaseRef),
                 String.class
             ), equalTo(SimpleCaseState.PendingDisposal.getId()));
+            // Neither disposal event has an about-to-submit callback, yet the post-event hook runs for
+            // each and sees the state the event ends in rather than the one the case was in.
+            assertThat(initialState, equalTo(SimpleCaseState.FOLLOW_UP.name()));
+            assertThat(simpleCaseEventData(simpleCaseRef, RetainAndDisposePolicy.DISPOSAL_EVENT_ID)
+                .path("postEventHookOutcome").asText(), equalTo(SimpleCaseConfiguration.postEventHookOutcome(
+                    RetainAndDisposePolicy.DISPOSAL_EVENT_ID, SimpleCaseState.PendingDisposal)));
+            assertThat(storedCaseData(simpleCaseRef).path("postEventHookOutcome").asText(),
+                equalTo(SimpleCaseConfiguration.postEventHookOutcome(
+                    RetainAndDisposePolicy.CONFIRM_DISPOSAL_EVENT_ID, SimpleCaseState.PendingDisposal)));
             assertThat(db.queryForObject(
                 "select resolved_ttl = current_date from ccd.case_data where reference = :reference",
                 Map.of("reference", simpleCaseRef),
