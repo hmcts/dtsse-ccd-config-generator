@@ -234,6 +234,15 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
   }
 
   @Test
+  void aSourceThatIsNotAReadablePdfBecomesAMissingPageRatherThanBeingRetriedForEver() {
+    long key = fixture("not a PDF".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+    changed(key);
+    run(key);
+    assertThat(bundles.view("case-file", key).current().orElseThrow().missingDocuments())
+        .hasSize(1);
+  }
+
+  @Test
   void aChangeOutsideAnEventAndAnEventOnTheSameCaseDoNotDeadlock() throws Exception {
     long reference = fixture();
     var pool = java.util.concurrent.Executors.newSingleThreadExecutor();
@@ -357,14 +366,17 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
   }
 
   private long fixture() throws Exception {
-    long reference = events.seed(State.Open, new CaseData("fixture"));
-    byte[] content;
     try (PDDocument pdf = new PDDocument();
         ByteArrayOutputStream output = new ByteArrayOutputStream()) {
       pdf.addPage(new PDPage());
       pdf.save(output);
-      content = output.toByteArray();
+      return fixture(output.toByteArray());
     }
+  }
+
+  /** A case whose one source document has the content. */
+  private long fixture(byte[] content) {
+    long reference = events.seed(State.Open, new CaseData("fixture"));
     Document document = documents.store("source.pdf", "application/pdf", content);
     UUID id = UUID.fromString(document.getUrl().substring(document.getUrl().lastIndexOf('/') + 1));
     jdbc.update(
