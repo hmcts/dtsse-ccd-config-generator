@@ -151,9 +151,7 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
     assertThat(documents.caseReference(first)).hasValue(key);
     assertThat(documents.content(first))
         .startsWith("%PDF".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
-    UUID job = jobs.findLatest("case-file", key).orElseThrow().externalId();
-    assertThat(jobs.findBundleForJob(job).orElseThrow().caseReference())
-        .isEqualTo(key);
+    assertThat(jobs.findLatestBundle("case-file", key).orElseThrow().caseReference()).isEqualTo(key);
     changed(key);
     assertThat(bundles.view("case-file", key).lifecycle())
         .isEqualTo(CaseBundleView.Lifecycle.UPDATING);
@@ -180,7 +178,7 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
     Set<String> before = bundlePdfs();
     store.failOnce.set(true);
     changed(key);
-    UUID id = jobs.findLatest("case-file", key).orElseThrow().externalId();
+    UUID id = jobs.find("case-file", key).orElseThrow().externalId();
     worker.poll();
     await()
         .atMost(Duration.ofSeconds(20))
@@ -202,7 +200,7 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
     store.storeStarted = new CountDownLatch(1);
     store.releaseStore = new CountDownLatch(1);
     changed(key);
-    UUID id = jobs.findLatest("case-file", key).orElseThrow().externalId();
+    UUID id = jobs.find("case-file", key).orElseThrow().externalId();
     worker.poll();
     assertThat(store.storeStarted.await(20, TimeUnit.SECONDS)).isTrue();
     jdbc.update(
@@ -273,7 +271,7 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
         .isEqualTo(CaseBundleView.Lifecycle.PREPARING);
 
     jdbc.update("delete from ccd.case_data where reference = :reference", Map.of("reference", reference));
-    assertThat(jobs.findLatest("case-file", reference)).isEmpty();
+    assertThat(jobs.find("case-file", reference)).isEmpty();
   }
 
   @Test
@@ -379,7 +377,7 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
   }
 
   private void run(long key) {
-    UUID id = jobs.findLatest("case-file", key).orElseThrow().externalId();
+    UUID id = jobs.find("case-file", key).orElseThrow().externalId();
     worker.poll();
     await()
         .atMost(Duration.ofSeconds(20))

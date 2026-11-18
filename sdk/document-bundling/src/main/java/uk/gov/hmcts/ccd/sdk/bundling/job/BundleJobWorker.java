@@ -29,14 +29,14 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.RenderAttempt;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.SelectedCaseBundle;
 
 /**
- * The scheduled worker: each poll fails stale jobs that exhausted their attempts, claims a batch
- * of executable rows under a lease, and for each one runs the document selector, renders, hands
- * the open result to the completion handler and records the terminal state. A completed job's
- * bundle is recorded in bundling.bundle with that state, so the consuming service stores only the
- * PDF and reads everything else about the bundle back through BundleJobRepository. Terminal writes are
- * lease-guarded, so a render that outlives its lease can never overwrite the reclaimer's state.
- * Only transient resolution and conversion failures are retried; untyped exception detail is
- * logged, never persisted. The consuming service enables scheduling for the poll to fire.
+ * The scheduled worker: each poll fails bundles whose renders exhausted their attempts, claims a
+ * batch of queue rows under a lease, and for each one runs the document selector, renders, hands
+ * the open result to the completion handler and records the outcome. A rendered bundle is recorded
+ * in bundling.bundle, so the consuming service stores only the PDF and reads everything else about
+ * the bundle back through BundleJobRepository. Writes are lease-guarded, so a render that outlives
+ * its lease can never overwrite the reclaimer's state. Only transient resolution and conversion
+ * failures are retried; untyped exception detail is logged, never persisted. The consuming service
+ * enables scheduling for the poll to fire.
  */
 @Slf4j
 public class BundleJobWorker implements AutoCloseable {
@@ -164,13 +164,6 @@ public class BundleJobWorker implements AutoCloseable {
       return;
     }
 
-    if (selected == null) {
-      log.info("Bundle job {} leaves its bundle to a job claimed after it", id);
-      record(repository.markSuperseded(id, claimed.leaseOwner()), id, BundleJobState.COMPLETED, 0, 0,
-          "completion");
-      return;
-    }
-
     BundleRequest request = selected.request();
     int total = request.allDocuments().size();
     emit(id, BundleJobState.IN_PROGRESS, 0, total);
@@ -191,14 +184,10 @@ public class BundleJobWorker implements AutoCloseable {
       BundleJobState terminal = result.outcome() == BundleOutcome.COMPLETED_WITH_WARNINGS
           ? BundleJobState.COMPLETED_WITH_WARNINGS : BundleJobState.COMPLETED;
       log.info("Bundle job {} completed as {} after {} attempt(s)", id, terminal, job.attempts());
-      boolean completed = Boolean.TRUE.equals(repository.holdingCase(job.caseReference(), () -> {
-        boolean marked = repository.markCompleted(id, terminal,
-            bundleRecord(selected, result, stored), claimed.leaseOwner());
-        if (marked) {
-          requeueIfUnavailable(claimed, result);
-        }
-        return marked;
-      }));
+      Instant rerunAt = rerunAt(claimed, result);
+      boolean completed = Boolean.TRUE.equals(repository.holdingCase(job.caseReference(),
+          () -> repository.markCompleted(id, terminal, bundleRecord(selected, result, stored),
+              claimed.leaseOwner(), rerunAt)));
       record(completed, id, terminal, total, total, "completion");
       if (!completed) {
         discard(job, stored);
@@ -252,29 +241,26 @@ public class BundleJobWorker implements AutoCloseable {
   }
 
   /**
-   * Queues a delayed re-run of a bundle that has placeholders for documents that were only
-   * temporarily unavailable, so it fills in once they can be fetched. A change to the bundle's
-   * inputs before then joins the re-run and makes it immediate. It commits with the completion.
+   * When to re-run a bundle that has placeholders for documents that were only temporarily
+   * unavailable, so it fills in once they can be fetched, or null. A change to the bundle's
+   * documents before then makes the re-run immediate.
    */
-  private void requeueIfUnavailable(ClaimedBundleJob claimed, BundleResult result) {
+  private Instant rerunAt(ClaimedBundleJob claimed, BundleResult result) {
     if (result.missingDocuments().stream()
         .noneMatch(missing -> missing.reason() == MissingDocumentReason.UNAVAILABLE)) {
-      return;
+      return null;
     }
-    BundleJob job = claimed.job();
-    UUID id = job.externalId();
+    UUID id = claimed.job().externalId();
     int requeues = claimed.unavailableRequeues();
     Optional<Instant> runAt = retryPolicy.requeueAt(requeues, Instant.now());
     if (runAt.isEmpty()) {
       log.warn("Bundle job {} has placeholders for temporarily unavailable documents and has "
           + "been re-run {} time(s); not re-running it again", id, requeues);
-      return;
+      return null;
     }
-    // A re-run of a refresh job stays behind live changes.
-    UUID landed = repository.insertOrJoin(UUID.randomUUID(), job.definition(), job.caseReference(),
-        runAt.get(), requeues + 1, claimed.priority());
-    log.info("Bundle job {} has placeholders for temporarily unavailable documents; job {} "
-        + "re-runs it from {}", id, landed, runAt.get());
+    log.info("Bundle job {} has placeholders for temporarily unavailable documents; it re-runs "
+        + "from {}", id, runAt.get());
+    return runAt.get();
   }
 
   private void handleGenerationFailure(ClaimedBundleJob claimed, BundleGenerationException failure,

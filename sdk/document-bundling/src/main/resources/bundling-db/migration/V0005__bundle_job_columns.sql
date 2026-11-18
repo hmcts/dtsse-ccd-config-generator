@@ -1,6 +1,9 @@
--- A job and a bundle belong to a case in ccd.case_data and are identified by their definition and
--- case reference in columns, replacing the coalesce key string, the versioned request and the
--- selector parameter and execution context JSON.
+-- One queue row per bundle: a definition's bundle of a case in ccd.case_data. A change to the
+-- bundle's documents sets its row to QUEUED, even while a worker is rendering it, and a worker
+-- that finishes leaves a row that was queued again to be rendered again. A case therefore has one
+-- render of a bundle at a time, as it has one write to its search index at a time. This replaces
+-- a row per submission, the coalesce key string, the versioned request and the selector parameter
+-- and execution context JSON.
 set local lock_timeout = '5s';
 
 -- Earlier rows were keyed by strings that do not name a case.
@@ -13,40 +16,42 @@ alter table bundling.bundle_job
     -- written.
     add column case_reference bigint not null
         references ccd.case_data (reference) on delete cascade deferrable initially deferred,
-    -- How many times this case's bundle has been re-run for temporarily unavailable documents.
+    -- When the bundle was last queued; the oldest is claimed first.
+    add column queued_at timestamptz not null default now(),
+    -- How many times this bundle has been re-run for temporarily unavailable documents.
     add column unavailable_requeues integer not null default 0,
     -- Live changes are 0; a bulk refresh queues at -1, so live changes are claimed first.
     add column priority smallint not null default 0,
     -- Dropping coalesce_key drops its indexes.
     drop column coalesce_key,
+    drop column coalesced_submissions,
+    drop column last_coalesced_at,
     drop column request,
     drop column request_version,
     drop column selector_parameters,
     drop column execution_context,
     -- The bundle row records where the PDF is stored.
-    drop column result;
+    drop column result,
+    add unique (case_reference, definition);
 
 -- The priority index below serves the claim.
 drop index bundling.idx_bundle_job_queued;
 
--- At most one job per case is waiting for its first claim; a change joins it.
-create unique index uq_bundle_job_waiting
-    on bundling.bundle_job (definition, case_reference) where state = 'QUEUED' and attempts = 0;
-create index idx_bundle_job_case
-    on bundling.bundle_job (case_reference, definition, created_at desc);
+-- A completed bundle with next_attempt_at set is due a re-run for unavailable documents.
 create index idx_bundle_job_priority
-    on bundling.bundle_job (priority desc, created_at, external_id)
-    where state in ('QUEUED', 'IN_PROGRESS');
+    on bundling.bundle_job (priority desc, queued_at, external_id)
+    where state in ('QUEUED', 'IN_PROGRESS') or next_attempt_at is not null;
 
--- Dropping bundle_key drops its index. Deleting a case deletes its bundle rows; its documents,
--- the bundle PDFs among them, are disposed of with the case.
+-- Dropping bundle_key and job_id drops their indexes. Deleting a case deletes its bundle rows; its
+-- documents, the bundle PDFs among them, are disposed of with the case.
 alter table bundling.bundle
     add column definition text not null,
     alter column case_reference type bigint using case_reference::bigint,
     alter column case_reference set not null,
     add foreign key (case_reference) references ccd.case_data (reference)
         on delete cascade deferrable initially deferred,
-    drop column bundle_key;
+    drop column bundle_key,
+    drop column job_id;
 create index idx_bundle_case_selected
     on bundling.bundle (case_reference, definition, selected_at desc);
 

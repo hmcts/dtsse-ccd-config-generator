@@ -6,11 +6,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * The current state of one durable bundle job, read from its outbox row. The failure is the sanitised failure record.
- * The definition and case reference say which bundle it is of, and coalescedSubmissions counts the later
- * changes it absorbed. claimedAt is when the current (or last) attempt was claimed; the job
- * selects its documents after that, so the completed job with the greatest claimedAt reflects the
- * newest state, whatever order jobs finished in.
+ * The queue row of one bundle: a definition's bundle of a case. The state says whether a render
+ * is wanted, running, done or failed; a change to the bundle's documents queues it again.
+ * submittedAt is when it was last queued, claimedAt when its current (or last) render was claimed,
+ * and the failure is the sanitised failure record.
  */
 public record BundleJob(
     UUID externalId,
@@ -20,7 +19,6 @@ public record BundleJob(
     Instant lastUpdatedAt,
     String definition,
     long caseReference,
-    int coalescedSubmissions,
     Optional<Instant> claimedAt,
     Optional<BundleJobFailure> failure) {
 

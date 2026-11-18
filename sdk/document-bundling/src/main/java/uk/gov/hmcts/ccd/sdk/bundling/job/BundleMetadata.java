@@ -13,15 +13,14 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
 
 /**
  * A bundle the job worker rendered, read from bundling.bundle. The worker records it when the job
- * completes, so the consuming service stores only the PDF (as an ordinary document, linked by the
- * job id) and reads everything else about the bundle from here.
+ * completes, so the consuming service stores only the PDF (as an ordinary document) and reads
+ * everything else about the bundle from here.
  *
  * @param id the bundle's id
- * @param jobId the job that rendered it
  * @param definition the bundle definition's name
  * @param caseReference the case it is a bundle of
- * @param selectedAt when its documents were selected; of two bundles of a case, the one
- *     selected later reflects the newer state
+ * @param selectedAt when the render that selected its documents was claimed; a case's bundles
+ *     are rendered one at a time, so the one selected last is current
  * @param recordedAt when the bundle was recorded
  * @param request the request that was rendered: for a selector-driven job, the one the selector
  *     compiled, so it lists exactly the documents the bundle was built from
@@ -38,7 +37,6 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
  */
 public record BundleMetadata(
     UUID id,
-    UUID jobId,
     String definition,
     long caseReference,
     Instant selectedAt,
@@ -57,7 +55,6 @@ public record BundleMetadata(
 
   public BundleMetadata {
     Objects.requireNonNull(id, "BundleMetadata.id");
-    Objects.requireNonNull(jobId, "BundleMetadata.jobId");
     Objects.requireNonNull(definition, "BundleMetadata.definition");
     Objects.requireNonNull(selectedAt, "BundleMetadata.selectedAt");
     Objects.requireNonNull(recordedAt, "BundleMetadata.recordedAt");

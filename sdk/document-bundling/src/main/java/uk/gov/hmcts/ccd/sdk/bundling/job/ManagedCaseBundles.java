@@ -25,9 +25,9 @@ import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundles;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.SelectedCaseBundle;
 
 /**
- * Keeps each case's bundle current on the job outbox. A change queues a coalesced job; the worker
+ * Keeps each case's bundle current on the job queue. A change queues the bundle; the worker
  * selects the documents afresh, renders, and this class stores the PDF on the case. The worker
- * records it in bundling.bundle, where the bundle selected last is the case's current one, and
+ * records it in bundling.bundle, where the bundle rendered last is the case's current one, and
  * {@link #cleanUp} deletes the PDFs it replaced.
  */
 @Slf4j
@@ -71,8 +71,7 @@ public class ManagedCaseBundles
     }
     // The event that creates a case has no case to hold yet.
     repository.holdCase(caseReference);
-    // Calls in one transaction join the job its first call queued.
-    repository.insertOrJoin(UUID.randomUUID(), definition, caseReference, null, 0, 0);
+    repository.changed(definition, caseReference);
   }
 
   /**
@@ -114,11 +113,9 @@ public class ManagedCaseBundles
     CaseBundleDefinition definition = definition(job.definition());
     // One snapshot, so the documents and whatever decides their visibility agree.
     BundleRequest request = snapshot.execute(status ->
-        repository.superseded(job) ? null
-            : Objects.requireNonNull(definition.select(job.caseReference()),
-                () -> definition.name() + " selected no bundle request"));
-    return request == null ? null
-        : repository.selectedFor(job.caseReference(), request.withExternalId(job.externalId()));
+        Objects.requireNonNull(definition.select(job.caseReference()),
+            () -> definition.name() + " selected no bundle request"));
+    return repository.selectedFor(job.caseReference(), request.withExternalId(job.externalId()));
   }
 
   @Override
@@ -152,7 +149,7 @@ public class ManagedCaseBundles
   public CaseBundleView view(String definition, long caseReference) {
     definition(definition);
     // The job first: a bundle recorded in between then reads as updating, never as up to date.
-    Optional<BundleJob> job = repository.findLatest(definition, caseReference);
+    Optional<BundleJob> job = repository.find(definition, caseReference);
     Optional<BundleMetadata> current =
         repository.findLatestBundle(definition, caseReference).filter(bundle -> bundle.stored().isPresent());
     boolean published = current.isPresent();

@@ -3,10 +3,9 @@ package uk.gov.hmcts.ccd.sdk.bundling.job;
 import java.util.Collection;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.SelectedCaseBundle;
 
-/** Selects a job's case and documents when the worker executes it. */
+/** Selects a bundle's case and documents when the worker renders it. */
 @FunctionalInterface
 interface BundleDocumentSelector {
-  /** The selection, or null if a job of the same bundle has been claimed since this one was. */
   SelectedCaseBundle select(BundleJob job);
 
   /** The definitions this worker can select for, or null for any. Other jobs are left queued. */
