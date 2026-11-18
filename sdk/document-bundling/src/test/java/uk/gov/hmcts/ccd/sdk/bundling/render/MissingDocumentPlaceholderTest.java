@@ -197,27 +197,27 @@ class MissingDocumentPlaceholderTest {
           public void close() {
           }
         };
-    uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResolver stalling =
-        new uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResolver() {
-          @Override
-          public String provider() {
-            return RenderTestSupport.PROVIDER;
-          }
-
-          @Override
-          public uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocuments resolveAll(
-              java.util.List<uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference> references,
-              BundleExecutionContext context) {
-            return new uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocuments(
-                java.util.Map.of(references.get(0), stalls), java.util.Map.of());
-          }
-        };
+    resolver.source("stalls", stalls);
     BundleRequest request = placeholderRequest(doc("d1", "Stalls", "stalls"));
 
     // The source exists: a placeholder for it would be published as an up-to-date bundle.
     BundleGenerationException failure = catchThrowableOfType(BundleGenerationException.class,
-        () -> BundleRenderer.builder().resolver(stalling).tempDirectory(work).build()
-            .render(request, BundleExecutionContext.empty(), RenderAttempt.RETRYABLE));
+        () -> renderer.render(request, BundleExecutionContext.empty(), RenderAttempt.RETRYABLE));
+
+    assertThat(failure).isNotNull();
+    assertThat(failure.code()).isEqualTo(BundleErrorCode.DOCUMENT_UNAVAILABLE);
+  }
+
+  @Test
+  void aSourceThatEndsShortOfItsDeclaredLengthFailsARetryableAttempt() {
+    byte[] header = "%PDF-1.7\n".getBytes(StandardCharsets.US_ASCII);
+    resolver.source("cut-off", RenderTestSupport.Source.declaring(header, "application/pdf", "cut-off.pdf",
+        java.util.OptionalLong.of(1_000_000)));
+    BundleRequest request = placeholderRequest(doc("d1", "Cut off", "cut-off"));
+
+    // The download ended early without an error; the document itself may be intact.
+    BundleGenerationException failure = catchThrowableOfType(BundleGenerationException.class,
+        () -> renderer.render(request, BundleExecutionContext.empty(), RenderAttempt.RETRYABLE));
 
     assertThat(failure).isNotNull();
     assertThat(failure.code()).isEqualTo(BundleErrorCode.DOCUMENT_UNAVAILABLE);

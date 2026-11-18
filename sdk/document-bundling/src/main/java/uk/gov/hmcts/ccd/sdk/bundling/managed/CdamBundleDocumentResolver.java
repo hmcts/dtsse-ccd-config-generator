@@ -1,7 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.bundling.managed;
 
 import feign.FeignException;
-import feign.RetryableException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -67,7 +66,7 @@ public class CdamBundleDocumentResolver implements DocumentResolver {
           failures.put(
               reference,
               new ResolutionFailure(
-                  ResolutionFailureReason.INVALID_CONTENT, "CDAM returned no content"));
+                  ResolutionFailureReason.TRANSIENT_FAILURE, "CDAM returned no content"));
         } else {
           resolved.put(reference, new CdamDocument(reference, response));
         }
@@ -82,21 +81,18 @@ public class CdamBundleDocumentResolver implements DocumentResolver {
     return new ResolvedDocuments(resolved, failures);
   }
 
-  private static ResolutionFailure failure(FeignException e) {
-    if (e instanceof RetryableException
-        || e.status() >= 500
-        || e.status() == 429
-        || e.status() < 0) {
-      return new ResolutionFailure(ResolutionFailureReason.TRANSIENT_FAILURE, "CDAM unavailable");
-    }
+  /**
+   * Only CDAM saying so makes a document missing or forbidden. Anything else says nothing about
+   * the document, so it is unavailable for the moment and worth retrying.
+   */
+  static ResolutionFailure failure(FeignException e) {
     if (e.status() == 404) {
       return new ResolutionFailure(ResolutionFailureReason.NOT_FOUND, "Not found in CDAM");
     }
     if (e.status() == 401 || e.status() == 403) {
       return new ResolutionFailure(ResolutionFailureReason.ACCESS_DENIED, "CDAM refused access");
     }
-    return new ResolutionFailure(
-        ResolutionFailureReason.INVALID_CONTENT, "CDAM rejected the request");
+    return new ResolutionFailure(ResolutionFailureReason.TRANSIENT_FAILURE, "CDAM unavailable");
   }
 
   private static final class CdamDocument implements ResolvedDocument {

@@ -207,6 +207,13 @@ final class Resolution {
           out.write(buffer, 0, read);
         }
       }
+      if (resolved.contentLength().isPresent() && copied < resolved.contentLength().getAsLong()) {
+        // The download ended early without an error; the document itself may be intact.
+        failures.put(reference, new Failure(BundleErrorCode.DOCUMENT_UNAVAILABLE,
+            "The source ended after " + copied + " of its declared "
+                + resolved.contentLength().getAsLong() + " bytes"));
+        return;
+      }
       spooled.put(reference, new Spooled(
           file,
           copied,
