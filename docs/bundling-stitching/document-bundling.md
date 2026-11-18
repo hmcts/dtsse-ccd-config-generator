@@ -144,7 +144,9 @@ decentralised runtime's Flyway strategy before the application's own migrations)
 `SELECT ... FOR UPDATE SKIP LOCKED` under a lease, selects the case's documents, renders and
 stores the PDF. A dependency that is down is retried until it is back, each attempt logged;
 everything else fails the bundle on the spot. A worker that outlives its lease cannot
-overwrite the outcome recorded by the worker that took over.
+overwrite the outcome recorded by the worker that took over, so set `worker.lease-duration`
+longer than your slowest render: a render that outlasts it is taken over, repeated and its PDF
+discarded.
 
 A case has one render of a bundle at a time, as it has one write to its search index at a time.
 Ten documents uploaded in one event, or in ten quick events, give one render. A change never waits

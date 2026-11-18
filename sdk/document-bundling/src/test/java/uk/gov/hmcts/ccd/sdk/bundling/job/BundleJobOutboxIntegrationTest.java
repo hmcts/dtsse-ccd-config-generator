@@ -203,8 +203,8 @@ class BundleJobOutboxIntegrationTest {
       Future<Boolean> completing = tx.execute(status -> {
         // The refresh has raised the revision and not committed when the render finishes.
         refresh("hearing");
-        Future<Boolean> running = pool.submit(() -> repository.holdingCase(id.caseReference(),
-            () -> repository.markCompleted(claimed, bundleRecord("rendered"))));
+        Future<Boolean> running = pool.submit(
+            () -> repository.markCompleted(claimed, bundleRecord("rendered")));
         awaitSessionBlockedOnLock();
         return running;
       });

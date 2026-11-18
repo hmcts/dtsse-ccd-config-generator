@@ -160,9 +160,7 @@ public class BundleJobWorker implements AutoCloseable {
       }
       log.info("Bundle job {} completed as {} after {} attempt(s)", job, result.outcome(),
           job.attempts());
-      boolean completed = Boolean.TRUE.equals(repository.holdingCase(job.caseReference(),
-          () -> repository.markCompleted(claimed, bundleRecord(selected, result, stored))));
-      if (!completed) {
+      if (!repository.markCompleted(claimed, bundleRecord(selected, result, stored))) {
         leaseLost(job, "completion");
         discard(job, stored);
       }

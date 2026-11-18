@@ -10,7 +10,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.Supplier;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -64,14 +63,13 @@ public class BundleJobRepository {
   }
 
   /**
-   * Runs the writes in a transaction that locks the case as an event does, or returns null if the
-   * case is gone. Every write here takes its case before its own rows, so it waits for an event,
-   * a change, a refresh or a deletion of the case instead of crossing it.
+   * Locks the case as an event does, and says whether it exists. Every write here takes its case
+   * before its own rows, so it waits for an event, a change, a refresh or a deletion of the case
+   * instead of crossing it.
    */
-  <T> T holdingCase(long caseReference, Supplier<T> writes) {
-    return transaction.execute(status -> jdbc.query("""
-        select 1 from ccd.case_data where reference = :caseReference for update
-        """, params("caseReference", caseReference), ResultSet::next) ? writes.get() : null);
+  private boolean lockCase(long caseReference) {
+    return jdbc.query("select 1 from ccd.case_data where reference = :caseReference for update",
+        params("caseReference", caseReference), ResultSet::next);
   }
 
   /**
@@ -79,13 +77,10 @@ public class BundleJobRepository {
    * the claim passes over a held row, so a bundle is never claimed before the change that queued
    * it is visible. A change makes a waiting retry immediate and a waiting refresh live.
    *
-   * <p>It first locks the case as an event does, so a change made outside an event cannot
-   * interleave with a refresh or an event on the same case. The event that creates a case has no
-   * case to lock yet.
+   * <p>The event that creates a case has no case to lock yet.
    */
   void changed(String definition, long caseReference) {
-    jdbc.query("select 1 from ccd.case_data where reference = :caseReference for update",
-        params("caseReference", caseReference), ResultSet::next);
+    lockCase(caseReference);
     jdbc.update("""
         insert into bundling.bundle_job (definition, case_reference)
         values (:definition, :caseReference)
@@ -111,9 +106,8 @@ public class BundleJobRepository {
 
   /**
    * Queues a background render of the definition's bundle for every case of the case type, and
-   * returns how many. A bundle already queued keeps its priority. It holds each case before
-   * queuing its bundle, as {@link #holdingCase} does, so events on a case it has reached wait
-   * until it commits.
+   * returns how many. A bundle already queued keeps its priority. It locks each case before
+   * queuing its bundle, so events on a case it has reached wait until it commits.
    */
   int refresh(String definition, String caseType) {
     return jdbc.update("""
@@ -198,9 +192,14 @@ public class BundleJobRepository {
   /**
    * Records the bundle a worker rendered and releases its claim, in one statement. The row is
    * deleted, unless the bundle changed meanwhile: then the row stays, to be rendered again.
-   * Nothing is written by a worker that lost its lease.
+   * Nothing is written by a worker that lost its lease, or for a case that has gone.
    */
   boolean markCompleted(ClaimedBundleJob claimed, BundleRecord bundle) {
+    return transaction.execute(status -> lockCase(claimed.job().caseReference())
+        && recordCompleted(claimed, bundle));
+  }
+
+  private boolean recordCompleted(ClaimedBundleJob claimed, BundleRecord bundle) {
     return jdbc.update("""
         with up_to_date as (
           delete from bundling.bundle_job

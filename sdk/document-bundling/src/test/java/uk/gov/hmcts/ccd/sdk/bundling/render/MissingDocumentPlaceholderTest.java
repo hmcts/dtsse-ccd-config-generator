@@ -149,13 +149,14 @@ class MissingDocumentPlaceholderTest {
   }
 
   @Test
-  void aConversionFailureThatMightBeTransientFailsARetryableAttempt() {
-    BundleRequest request = placeholderRequest(doc("d1", "Broken", "broken"));
+  void aDocumentThatCannotBeConvertedWithNoOutageBehindItIsReplacedEvenWhenTheCallerWillRetry() {
+    BundleRequest request = placeholderRequest(doc("d1", "Claim form", "good"), doc("d2", "Broken", "broken"));
 
-    BundleGenerationException failure = catchThrowableOfType(BundleGenerationException.class,
-        () -> renderer.render(request, BundleExecutionContext.empty(), RenderAttempt.RETRYABLE));
-
-    assertThat(failure.code()).isEqualTo(BundleErrorCode.DOCUMENT_CONVERSION_FAILED);
+    // Retrying would read the same bytes and fail the same way, for ever.
+    try (BundleResult result = renderer.render(request, BundleExecutionContext.empty(), RenderAttempt.RETRYABLE)) {
+      assertThat(result.missingDocuments()).extracting(MissingDocument::documentId, MissingDocument::reason)
+          .containsExactly(org.assertj.core.groups.Tuple.tuple("d2", MissingDocumentReason.CONVERSION_FAILED));
+    }
   }
 
   @Test
