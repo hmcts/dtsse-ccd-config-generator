@@ -341,6 +341,12 @@ path, including cascades. A listener must not load anything during a flush, so i
 reference is on a parent the entity has not loaded, read it with SQL. Native SQL changes must
 call `changed` explicitly.
 
+`changed` locks the case, as a CCD event does before it runs. A transaction outside an event that
+changes a bundle's sources should therefore lock the case first too
+(`select 1 from ccd.case_data where reference = ? for update`), before it writes its own rows.
+Otherwise it holds its row and waits for the case while an event holds the case and waits for
+that row, and the database rolls one of them back.
+
 Each render selects afresh, renders, uploads the PDF to CDAM and attaches it to the case, and the
 worker records the bundle. The case's current bundle is the one recorded last. A worker claims
 only the definitions its release has. `cleanUp` (every
