@@ -744,16 +744,14 @@ public class TestWithCCD extends CftlibTest {
         assertThat(first.caseReference(), equalTo(caseRef));
         assertThat(first.fileName(), equalTo("case-" + caseRef + "-case-file.pdf"));
         assertThat(first.missingDocuments(), hasSize(0));
-        // The SDK stored the PDF through the real embedded CDAM and attached it to the case.
+        // The SDK stored the PDF through the real embedded CDAM and attached it to the case. CDAM
+        // only serves a document to a user once a case field refers to it, and this service does
+        // not put the bundle on the case, so the stored document is read from the dm-store stub.
         String documentId = first.stored().orElseThrow().id().toString();
-        assertThat(fetchCdamDocument(documentId).path("metadata").path("case_id").asText(),
-            equalTo(String.valueOf(caseRef)));
-
-        var download = new HttpGet(CDAM_BASE_URL + "/cases/documents/" + documentId + "/binary");
-        download.addHeader("Authorization", getAuthorisation(user));
-        download.addHeader("ServiceAuthorization", cftlib().generateDummyS2SToken("nfdiv_case_api"));
-        try (var downloadResponse = HttpClientBuilder.create().build().execute(download);
-             PDDocument stitched = Loader.loadPDF(EntityUtils.toByteArray(downloadResponse.getEntity()))) {
+        var stored = stubDocumentStore.find(documentId).orElseThrow(
+            () -> new AssertionError("bundle " + documentId + " missing from dm-store stub"));
+        assertThat(stored.metadata().get("case_id"), equalTo(String.valueOf(caseRef)));
+        try (PDDocument stitched = Loader.loadPDF(stored.content())) {
             assertThat(stitched.getNumberOfPages(), equalTo(first.pageCount()));
             String text = new PDFTextStripper().getText(stitched);
             assertThat(text, containsString(CaseFileBundle.TITLE));
