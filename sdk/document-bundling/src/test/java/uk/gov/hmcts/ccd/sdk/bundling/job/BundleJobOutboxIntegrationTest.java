@@ -194,6 +194,29 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
+  void aRefreshDuringACompletionLeavesTheBundleToBeRenderedAgainAndItsPdfRecorded() throws Exception {
+    Key id = submit("hearing", "case-1");
+    ClaimedBundleJob claimed =
+        repository.claim(1, "worker-a", Duration.ofMinutes(5), 3, DEFINITIONS).get(0);
+    ExecutorService pool = Executors.newSingleThreadExecutor();
+    try {
+      Future<Boolean> completing = tx.execute(status -> {
+        // The refresh has raised the revision and not committed when the render finishes.
+        refresh("hearing");
+        Future<Boolean> running = pool.submit(() -> repository.holdingCase(id.caseReference(),
+            () -> repository.markCompleted(claimed, bundleRecord("rendered"))));
+        awaitSessionBlockedOnLock();
+        return running;
+      });
+      assertThat(completing.get(10, TimeUnit.SECONDS)).isTrue();
+    } finally {
+      pool.shutdownNow();
+    }
+    assertThat(waiting(id)).isTrue();
+    assertThat(bundle(id).orElseThrow().sha256()).isEqualTo("sha-rendered");
+  }
+
+  @Test
   void aBundleFinishingAsItsCaseIsDeletedWaitsForTheDeletionAndDiscardsItsPdf() throws Exception {
     Key job = key(submit(simpleRequest(UUID.randomUUID())));
     FakeStore handler = storing((selection, artifact) -> STORED);
@@ -321,35 +344,6 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
-  void transientFailureRequeuesWithBackoffThenBoundedRetryFails()
-      throws Exception {
-    UUID id = submit(simpleRequest(UUID.randomUUID()));
-    BundleGenerationException transientFailure = new BundleGenerationException(
-        BundleErrorCode.DOCUMENT_RESOLUTION_FAILED, BundleStage.RESOLVE,
-        "The source store returned 503.", "Check dm-store health.",
-        List.of(new DocumentFailure("doc-1", new DocumentReference("case-documents", "d1"),
-            BundleErrorCode.DOCUMENT_RESOLUTION_FAILED, "dm-store 503")));
-    FakeRenderer renderer = new FakeRenderer(tempDir)
-        .onNextRender(FakeRenderer.failure(transientFailure))
-        .onNextRender(FakeRenderer.failure(transientFailure));
-    BundleJobWorker worker = directWorker(renderer, quickRetries(2));
-
-    worker.poll();
-    assertThat(waiting(id)).isTrue();
-    assertThat(job(id).attempts()).isEqualTo(1);
-    assertThat(column(id, "next_attempt_at")).isNotNull();
-
-    Thread.sleep(50);
-    worker.poll();
-    assertThat(job(id).attempts()).isEqualTo(2);
-    assertThat(job(id).failure().orElseThrow()).startsWith("DOCUMENT_RESOLUTION_FAILED: ")
-        .contains("Retries exhausted after 2 attempt(s)");
-    // Exhausted means exhausted: nothing is claimable any more.
-    worker.poll();
-    assertThat(renderer.renders).hasSize(2);
-  }
-
-  @Test
   void nonTransientAndCompletionFailuresAreTerminalOnTheFirstAttempt() throws Exception {
     UUID notFound = submit(simpleRequest(UUID.randomUUID()));
     FakeRenderer renderer = new FakeRenderer(tempDir)
@@ -462,30 +456,40 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
-  void whileADependencyIsDownNoBundleIsPublishedAndTheCurrentOneStays() {
+  void whileADependencyIsDownTheBundleIsRetriedForAsLongAsItTakesAndTheCurrentOneStays()
+      throws Exception {
     UUID id = UUID.randomUUID();
     submit(simpleRequest(id));
     directWorker(new FakeRenderer(tempDir)).poll();
     UUID current = bundle(id).orElseThrow().id();
 
-    // The case changes while the document store is down for longer than the retries last.
+    // The case changes while the document store is down, for far longer than a crash is allowed.
     submit(simpleRequest(id));
     BundleGenerationException down = new BundleGenerationException(
         BundleErrorCode.DOCUMENT_RESOLUTION_FAILED, BundleStage.RESOLVE, "CDAM timed out", "Retry",
         List.of(new DocumentFailure("doc-1", new DocumentReference("case-documents", "d1"),
             BundleErrorCode.DOCUMENT_RESOLUTION_FAILED, "dm-store 503")));
-    FakeRenderer renderer = new FakeRenderer(tempDir)
-        .onNextRender(FakeRenderer.failure(down)).onNextRender(FakeRenderer.failure(down));
+    FakeRenderer renderer = new FakeRenderer(tempDir);
+    for (int i = 0; i < 6; i++) {
+      renderer.onNextRender(FakeRenderer.failure(down));
+    }
     BundleJobWorker worker = directWorker(renderer, quickRetries(2));
+    while (renderer.renders.size() < 6) {
+      worker.poll();
+      Thread.sleep(5);
+      assertThat(failed(id)).isFalse();
+    }
+
+    // No attempt falls back to a placeholder page, and nothing is published.
+    assertThat(renderer.attempts).containsOnly(RenderAttempt.RETRYABLE);
+    assertThat(bundle(id).orElseThrow().id()).isEqualTo(current);
+
+    // The store comes back, and the next retry publishes.
     await().atMost(Duration.ofSeconds(5)).until(() -> {
       worker.poll();
-      return settled(id);
+      return done(id);
     });
-
-    // No attempt may fall back to a placeholder page for a document that is only unavailable.
-    assertThat(renderer.attempts).containsExactly(RenderAttempt.RETRYABLE, RenderAttempt.RETRYABLE);
-    assertThat(failed(id)).isTrue();
-    assertThat(bundle(id).orElseThrow().id()).isEqualTo(current);
+    assertThat(bundle(id).orElseThrow().id()).isNotEqualTo(current);
   }
 
   private Key queued(String definition, String caseKey) {
@@ -635,10 +639,9 @@ class BundleJobOutboxIntegrationTest {
         .title("Bundle").fileName("bundle.pdf")
         .root(BundleSection.builder("Case file").document(document("doc-1")).build()).build();
     BundleJobWorker worker = worker(renderer, selector, storingAnywhere(),
-        new BundleJobRetryPolicy(3, Duration.ofHours(1), 2.0, Duration.ofHours(1)), Runnable::run, 5, 5, Duration.ofMinutes(5));
+        new BundleJobRetryPolicy(3, Duration.ofHours(1)), Runnable::run, 5, 5, Duration.ofMinutes(5));
     worker.poll();
     assertThat(waiting(retrying)).isTrue();
-    assertThat(job(retrying).attempts()).isEqualTo(1);
     worker.poll();
     assertThat(renderer.renders).as("the retry waits for its delay").hasSize(1);
 
@@ -731,7 +734,7 @@ class BundleJobOutboxIntegrationTest {
   }
 
   private static BundleJobRetryPolicy quickRetries(int maxAttempts) {
-    return new BundleJobRetryPolicy(maxAttempts, Duration.ofMillis(1), 2.0, Duration.ofMillis(2));
+    return new BundleJobRetryPolicy(maxAttempts, Duration.ofMillis(1));
   }
 
   private static BundleJobRepository.BundleRecord bundleRecord(String name) {

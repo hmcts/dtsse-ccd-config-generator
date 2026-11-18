@@ -142,7 +142,7 @@ decentralised runtime's Flyway strategy before the application's own migrations)
 
 `BundleJobWorker` polls (your service needs `@EnableScheduling`), claims rows with
 `SELECT ... FOR UPDATE SKIP LOCKED` under a lease, selects the case's documents, renders and
-stores the PDF. Fetch and conversion failures are retried with backoff, each one logged;
+stores the PDF. A dependency that is down is retried until it is back, each attempt logged;
 everything else fails the bundle on the spot. A worker that outlives its lease cannot
 overwrite the outcome recorded by the worker that took over.
 
@@ -167,14 +167,14 @@ searching the request. The bundle recorded last is the case's current one.
 
 While a dependency is down no bundle is published: a source that CDAM cannot serve for the
 moment, or one Docmosis cannot convert because it is unavailable, fails the attempt, and the
-attempt is retried with backoff. The current bundle stays current and the case shows `UPDATING`.
-The defaults retry for about 20 minutes; after that the bundle is `FAILED` until the case next
-changes or a refresh is run. A document that is missing, forbidden, unreadable or unsupported is
+attempt is retried every `retry.delay` for as long as the dependency is down. The current bundle
+stays current and the case shows `UPDATING`. A document that is missing, forbidden, unreadable or unsupported is
 the document's own problem, and gets a placeholder page straight away.
 
 Properties under `ccd.bundling.job.*`: `enabled` (default `false`), `worker.enabled` (`true`), `worker.poll-delay` (`1s`), `worker.batch-size` (`5`),
-`worker.max-concurrent-renders` (`2`), `worker.lease-duration` (`5m`), `retry.max-attempts` (`10`),
-`retry.initial-delay` (`5s`), `retry.multiplier` (`2.0`), `retry.max-delay` (`5m`), `cleanup-delay` (`1m`).
+`worker.max-concurrent-renders` (`2`), `worker.lease-duration` (`5m`), `retry.delay` (`1m`),
+`retry.max-attempts` (`3`, the times a bundle may be claimed without recording a result, as a crash
+leaves it, before it is failed), `cleanup-delay` (`1m`).
 
 ## Extending it
 

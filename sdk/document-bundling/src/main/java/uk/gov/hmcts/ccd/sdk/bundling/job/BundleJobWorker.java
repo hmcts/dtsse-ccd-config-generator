@@ -2,7 +2,6 @@ package uk.gov.hmcts.ccd.sdk.bundling.job;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -29,9 +28,9 @@ import uk.gov.hmcts.ccd.sdk.bundling.managed.SelectedCaseBundle;
  * in bundling.bundle, so the consuming service stores only the PDF and reads everything else about
  * the bundle back through BundleJobRepository. Writes are lease-guarded, so a render that outlives
  * its lease can never overwrite the reclaimer's state. Only transient resolution and conversion
- * failures are retried, and never rendered around: while a dependency is down no bundle is
- * published and the current one stays. Untyped exception detail is logged, never persisted. The consuming service
- * enables scheduling for the poll to fire.
+ * failures are retried, for as long as they last, and never rendered around: while a dependency
+ * is down no bundle is published and the current one stays. Untyped exception detail is logged,
+ * never persisted. The consuming service enables scheduling for the poll to fire.
  */
 @Slf4j
 public class BundleJobWorker implements AutoCloseable {
@@ -191,13 +190,9 @@ public class BundleJobWorker implements AutoCloseable {
 
   private void completionFailed(ClaimedBundleJob claimed, Exception failure) {
     BundleJob job = claimed.job();
-    Optional<Instant> next = retryPolicy.nextAttemptAt(claimed.job().attempts(), Instant.now());
-    if (bundles.retryable(failure) && next.isPresent()) {
-      log.warn("Bundle job {} rendered but its PDF could not be stored; retrying at {}", job,
-          next.get(), failure);
-      if (!repository.requeueForRetry(claimed, next.get())) {
-        leaseLost(job, "completion retry");
-      }
+    if (bundles.retryable(failure)) {
+      log.warn("Bundle job {} rendered but its PDF could not be stored; retrying", job, failure);
+      retry(claimed);
       return;
     }
     log.error("Bundle job {} rendered but its PDF could not be stored", job, failure);
@@ -215,27 +210,22 @@ public class BundleJobWorker implements AutoCloseable {
 
   private void handleGenerationFailure(ClaimedBundleJob claimed, BundleGenerationException failure) {
     BundleJob job = claimed.job();
-    int attempts = job.attempts();
-    if (!retryPolicy.isTransient(failure)) {
-      log.error("Bundle job {} failed with non-retryable {}: {}", job, failure.code(),
+    if (retryPolicy.isTransient(failure)) {
+      log.warn("Bundle job {} failed with {}; retrying: {}", job, failure.code(),
           failure.getMessage());
-      failTerminally(claimed, failure.code(), failure.getMessage());
+      retry(claimed);
       return;
     }
-    Optional<Instant> nextAttemptAt = retryPolicy.nextAttemptAt(attempts, Instant.now());
-    if (nextAttemptAt.isPresent()) {
-      log.warn("Bundle job {} failed transiently with {} on attempt {} of {}; retrying at {}: {}",
-          job, failure.code(), attempts, retryPolicy.maxAttempts(), nextAttemptAt.get(),
-          failure.getMessage());
-      if (!repository.requeueForRetry(claimed, nextAttemptAt.get())) {
-        leaseLost(job, "transient retry");
-      }
-      return;
+    log.error("Bundle job {} failed with non-retryable {}: {}", job, failure.code(),
+        failure.getMessage());
+    failTerminally(claimed, failure.code(), failure.getMessage());
+  }
+
+  /** Tries again after the delay: a dependency that is down is waited out, however long. */
+  private void retry(ClaimedBundleJob claimed) {
+    if (!repository.requeueForRetry(claimed, Instant.now().plus(retryPolicy.delay()))) {
+      leaseLost(claimed.job(), "retry");
     }
-    log.error("Bundle job {} failed with {} and exhausted its {} attempt(s)", job, failure.code(),
-        attempts);
-    failTerminally(claimed, failure.code(),
-        failure.getMessage() + " Retries exhausted after " + attempts + " attempt(s).");
   }
 
   private void failTerminally(ClaimedBundleJob claimed, BundleErrorCode code, String message) {

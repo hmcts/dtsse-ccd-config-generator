@@ -64,13 +64,13 @@ public class BundleJobRepository {
   }
 
   /**
-   * Runs the writes in a transaction that holds the case, or returns null if the case is gone.
-   * Every write here takes its case before its own rows, as an event does, so it waits for an
-   * event on the case or for its deletion instead of deadlocking with either.
+   * Runs the writes in a transaction that locks the case as an event does, or returns null if the
+   * case is gone. Every write here takes its case before its own rows, so it waits for an event,
+   * a change, a refresh or a deletion of the case instead of crossing it.
    */
   <T> T holdingCase(long caseReference, Supplier<T> writes) {
     return transaction.execute(status -> jdbc.query("""
-        select 1 from ccd.case_data where reference = :caseReference for key share
+        select 1 from ccd.case_data where reference = :caseReference for update
         """, params("caseReference", caseReference), ResultSet::next) ? writes.get() : null);
   }
 
@@ -299,12 +299,15 @@ public class BundleJobRepository {
         """ + CLAIMED, claimed(claimed).addValue("message", message)) == 1;
   }
 
-  /** Queues another attempt, at once if the bundle changed meanwhile. */
+  /**
+   * Queues another attempt, at once if the bundle changed meanwhile. A render that reports back is
+   * not one that crashed, so it does not count towards the attempt bound.
+   */
   boolean requeueForRetry(ClaimedBundleJob claimed, Instant nextAttemptAt) {
     return jdbc.update("""
         update bundling.bundle_job
         set next_attempt_at = case when revision = :revision then :nextAttemptAt::timestamptz end,
-            lease_owner = null, lease_expires_at = null
+            attempts = 0, lease_owner = null, lease_expires_at = null
         """ + CLAIMED,
         claimed(claimed).addValue("nextAttemptAt",
             OffsetDateTime.ofInstant(nextAttemptAt, ZoneOffset.UTC))) == 1;

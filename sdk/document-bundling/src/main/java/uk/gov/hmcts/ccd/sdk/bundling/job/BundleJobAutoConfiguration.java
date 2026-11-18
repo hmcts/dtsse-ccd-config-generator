@@ -41,8 +41,7 @@ public class BundleJobAutoConfiguration {
   @ConditionalOnMissingBean
   public BundleJobRetryPolicy bundleJobRetryPolicy(BundleJobProperties properties) {
     BundleJobProperties.Retry retry = properties.getRetry();
-    return new BundleJobRetryPolicy(retry.getMaxAttempts(), retry.getInitialDelay(),
-        retry.getMultiplier(), retry.getMaxDelay());
+    return new BundleJobRetryPolicy(retry.getMaxAttempts(), retry.getDelay());
   }
 
   @Bean

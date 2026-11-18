@@ -74,8 +74,7 @@ import uk.gov.hmcts.reform.ccd.document.am.feign.CaseDocumentClientApi;
       "ccd.bundling.refresh=at-startup",
       "ccd.bundling.job.worker.poll-delay=1h",
       "ccd.bundling.job.worker.max-concurrent-renders=2",
-      "ccd.bundling.job.retry.initial-delay=1ms",
-      "ccd.bundling.job.retry.max-delay=1ms",
+      "ccd.bundling.job.retry.delay=1ms",
       "case_document_am.url=http://cdam.invalid",
       "idam.s2s-auth.url=http://s2s.invalid",
       "ccd.decentralised-runtime.system-user.id=bundle-worker",
@@ -184,7 +183,7 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
         .until(
             () -> jdbc.queryForObject("""
                 select count(*) from bundling.bundle_job
-                where case_reference = :key and attempts = 1 and lease_owner is null
+                where case_reference = :key and next_attempt_at is not null and lease_owner is null
                 """, Map.of("key", key), Integer.class) == 1);
     assertThat(bundles.view("case-file", key).lifecycle())
         .isEqualTo(CaseBundleView.Lifecycle.PREPARING);

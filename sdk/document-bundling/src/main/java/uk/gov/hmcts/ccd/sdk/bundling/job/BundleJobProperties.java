@@ -28,18 +28,13 @@ public class BundleJobProperties {
     private Duration leaseDuration = Duration.ofMinutes(5);
   }
 
-  /**
-   * Bounded backoff for transient resolution and conversion failures. The defaults keep trying for
-   * about 20 minutes, so a bundle waits out a short outage of a dependency.
-   */
+  /** How a render that did not finish is tried again. */
   @Data
   public static class Retry {
-    private int maxAttempts = 10;
+    /** How many times a bundle may be claimed without recording a result, as a crash leaves it. */
+    private int maxAttempts = 3;
 
-    private Duration initialDelay = Duration.ofSeconds(5);
-
-    private double multiplier = 2.0;
-
-    private Duration maxDelay = Duration.ofMinutes(5);
+    /** How long to wait before retrying while a dependency is down; retried until it is back. */
+    private Duration delay = Duration.ofMinutes(1);
   }
 }
