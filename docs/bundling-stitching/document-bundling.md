@@ -336,6 +336,10 @@ and deleting the case deletes its jobs and bundle rows. The library calls `selec
 whatever decides their visibility are read consistently. Selection and visibility rules stay
 application code. An application can register several definitions.
 
+Every case of the definition's `caseType()` gets a bundle, so `select` must return a request for a
+case with no documents too: give a section `EmptySectionPolicy.INCLUDE_PLACEHOLDER`, or the job
+fails and the case shows `FAILED`. There is no way to withdraw a published bundle.
+
 Call `CaseBundles.changed(definition, caseReference)` in the transaction that changes the bundle's
 sources. It queues a job for that definition and case; repeated calls
 join that job, and a rollback cancels it. The event that creates a case can call it too: the case

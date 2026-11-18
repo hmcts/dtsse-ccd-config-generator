@@ -38,7 +38,7 @@ public enum BundleErrorCode {
   ASSEMBLY_FAILED,
   /** A configured maximum (documents, bytes, or pages) was breached. */
   LIMIT_EXCEEDED,
-  /** A durable job's persisted request could not be read by the executing worker. */
+  /** A job's definition could not select the bundle's documents. */
   JOB_REQUEST_UNREADABLE,
   /** The bundle rendered but the consumer's completion handler failed to store it. */
   COMPLETION_FAILED
