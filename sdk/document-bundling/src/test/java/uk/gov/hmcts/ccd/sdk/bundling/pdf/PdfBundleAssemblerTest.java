@@ -401,28 +401,45 @@ class PdfBundleAssemblerTest {
   }
 
   @Test
-  void fullyNonWinAnsiTitleGetsFallbackRowAndWarningAndLongBookmarkTitlesAreTrimmedNotMidSurrogate()
+  void fullyUndrawableTitleGetsFallbackRowAndWarningAndLongBookmarkTitlesAreTrimmedNotMidSurrogate()
       throws IOException {
     Path onePage = textPdf(tmp, "x", 1);
     String astral = "Emoji " + "😀".repeat(300); // 606 code units, 306 code points
     AssemblyResult result = assembler.assemble(request(tocOnly().withDocumentCoverSheets(true),
-        doc("Заявление о приёме", LocalDate.of(2024, 5, 1), onePage), doc("Report ąćę", onePage),
+        doc("申请书", LocalDate.of(2024, 5, 1), onePage), doc("Report 申请", onePage),
         doc("T".repeat(450), onePage), doc(astral, onePage)), workDir);
     Path pdf = result.outputPdf();
 
-    assertThat(Pdfs.pageText(pdf, 1)).contains("Document 1", "1 May 2024", "Report").doesNotContain("Заявление", "ą");
+    assertThat(Pdfs.pageText(pdf, 1)).contains("Document 1", "1 May 2024", "Report").doesNotContain("申");
     assertThat(Pdfs.pageText(pdf, 2)).as("cover sheet carries the fallback title").contains("Document 1");
     assertThat(Pdfs.internalLinkTargets(pdf, 1)).containsExactly(3, 5, 7, 9);
     List<String> outline = Pdfs.outline(pdf);
-    assertThat(outline).contains("  Заявление о приёме -> 2", "  Report ąćę -> 4", "  " + "T".repeat(399) + "... -> 6");
+    assertThat(outline).contains("  申请书 -> 2", "  Report 申请 -> 4", "  " + "T".repeat(399) + "... -> 6");
     String astralBookmark = outline.get(5);
     assertThat(astralBookmark).startsWith("  Emoji 😀").endsWith("... -> 8").hasSizeLessThan(410);
     assertThat(astralBookmark.codePoints().anyMatch(c -> c >= 0xD800 && c <= 0xDFFF))
         .as("no lone surrogate in %s", astralBookmark.substring(astralBookmark.length() - 8)).isFalse();
     assertThat(result.warnings()).singleElement().satisfies(warning -> {
       assertThat(warning.code()).isEqualTo(PdfBundleAssembler.WARNING_TITLE_NOT_RENDERABLE);
-      assertThat(warning.documentId()).contains("Заявление о приёме");
+      assertThat(warning.documentId()).contains("申请书");
     });
+  }
+
+  @Test
+  void welshTitlesRenderInFullOnTheIndexTitlePageAndCoverSheets() throws IOException {
+    String welsh = "Tŷ ŵyl Ŵ datganiad";
+    AssemblyRequest request = new AssemblyRequest("Bwndel Ŷ", "stitched.pdf",
+        Optional.of("Disgrifiad ŵ"), tocOnly().withSectionCoverSheets(true).withDocumentCoverSheets(true),
+        true, Optional.empty(), Optional.empty(),
+        List.of(folder("Adran ŷ", doc(welsh, textPdf(tmp, "x", 1)))));
+    AssemblyResult result = assembler.assemble(request, workDir);
+    Path pdf = result.outputPdf();
+
+    assertThat(Pdfs.pageText(pdf, 1)).as("title page").contains("Bwndel Ŷ", "Disgrifiad ŵ");
+    assertThat(Pdfs.pageText(pdf, 2)).as("contents").contains("Disgrifiad ŵ", "Adran ŷ", welsh);
+    assertThat(Pdfs.pageText(pdf, 3)).as("section cover sheet").contains("Adran ŷ");
+    assertThat(Pdfs.pageText(pdf, 4)).as("document cover sheet").contains(welsh);
+    assertThat(result.warnings()).isEmpty();
   }
 
   private static void assertIndexPages(AssemblyResult result, int indexPages, List<Integer> expected, String label) {

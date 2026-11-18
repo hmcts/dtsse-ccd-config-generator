@@ -24,10 +24,10 @@ final class GeneratedPages {
     PDPage page = new PDPage();
     document.addPage(page);
     PdfUtility.addCenterText(document, page, request.bundleTitle(), 280,
-        fonts.helveticaBold(), 14);
+        fonts.bold(), 14);
     if (request.description().isPresent()) {
       PdfUtility.addCenterText(document, page, request.description().get(), 330,
-          fonts.helvetica(), 12);
+          fonts.regular(), 12);
     }
   }
 
@@ -35,16 +35,16 @@ final class GeneratedPages {
       throws IOException {
     PDPage page = new PDPage();
     document.addPage(page);
-    PdfUtility.addCenterText(document, page, sectionTitle, 300, fonts.helveticaBold(), 14);
+    PdfUtility.addCenterText(document, page, sectionTitle, 300, fonts.bold(), 14);
     PdfUtility.addCenterText(document, page, "There are no documents in this section.", 340,
-        fonts.helvetica(), 12);
+        fonts.regular(), 12);
   }
 
   static void addMediaLinkPage(PDDocument document, String title, Optional<LocalDate> date,
       MediaLinkPage media, PdfFonts fonts) throws IOException {
     PDPage page = new PDPage();
     document.addPage(page);
-    PdfUtility.addCenterText(document, page, title, 150, fonts.helveticaBold(), 14);
+    PdfUtility.addCenterText(document, page, title, 150, fonts.bold(), 14);
 
     float yyOffset = 230;
     if (date.isPresent()) {
@@ -59,15 +59,15 @@ final class GeneratedPages {
     if (media.placeholder().note().isPresent()) {
       String note = media.placeholder().note().get();
       int noteLines =
-          PdfUtility.splitString(note, BODY_WIDTH, fonts.helvetica(), 12).length;
-      PdfUtility.addText(document, page, note, BODY_XX_OFFSET, yyOffset, fonts.helvetica(), 12,
+          PdfUtility.splitString(note, BODY_WIDTH, fonts.regular(), 12).length;
+      PdfUtility.addText(document, page, note, BODY_XX_OFFSET, yyOffset, fonts.regular(), 12,
           BODY_WIDTH);
       yyOffset += noteLines * BODY_LINE_SPACING;
     }
     yyOffset = addBodyLine(document, page, "This recording is not part of the printed bundle."
         + " Use the link below to access it.", yyOffset, fonts);
     PdfUtility.addUriLink(document, page, media.placeholder().accessUrl(),
-        media.placeholder().accessUrl(), BODY_XX_OFFSET, yyOffset, fonts.helvetica(), 12,
+        media.placeholder().accessUrl(), BODY_XX_OFFSET, yyOffset, fonts.regular(), 12,
         BODY_WIDTH);
   }
 
@@ -75,9 +75,9 @@ final class GeneratedPages {
       MissingDocumentPage missing, PdfFonts fonts) throws IOException {
     PDPage page = new PDPage();
     document.addPage(page);
-    PdfUtility.addCenterText(document, page, title, 150, fonts.helveticaBold(), 14);
+    PdfUtility.addCenterText(document, page, title, 150, fonts.bold(), 14);
     PdfUtility.addCenterText(document, page, "This document is missing from the bundle", 190,
-        fonts.helveticaBold(), 12);
+        fonts.bold(), 12);
 
     float yyOffset = 250;
     if (date.isPresent()) {
@@ -85,12 +85,12 @@ final class GeneratedPages {
           yyOffset, fonts);
     }
     PdfUtility.addText(document, page, missing.reason(), BODY_XX_OFFSET, yyOffset,
-        fonts.helvetica(), 12, BODY_WIDTH);
+        fonts.regular(), 12, BODY_WIDTH);
   }
 
   private static float addBodyLine(PDDocument document, PDPage page, String text, float yyOffset,
       PdfFonts fonts) throws IOException {
-    PdfUtility.addText(document, page, text, BODY_XX_OFFSET, yyOffset, fonts.helvetica(), 12,
+    PdfUtility.addText(document, page, text, BODY_XX_OFFSET, yyOffset, fonts.regular(), 12,
         BODY_WIDTH);
     return yyOffset + BODY_LINE_SPACING;
   }

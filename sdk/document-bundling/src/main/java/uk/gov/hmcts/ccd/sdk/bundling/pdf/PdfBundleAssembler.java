@@ -84,7 +84,6 @@ public final class PdfBundleAssembler {
     private final Path workDir;
     private final Path output;
     private final StreamCacheCreateFunction streamCache;
-    private final PdfFonts fonts = new PdfFonts();
     private final PDFMergerUtility merger = new PDFMergerUtility();
     private final List<PDDocument> openSourceDocuments = new ArrayList<>();
     private final List<AssembledItem> assembledItems = new ArrayList<>();
@@ -93,6 +92,7 @@ public final class PdfBundleAssembler {
     private final List<PageRange> confidentialRanges = new ArrayList<>();
     private final List<Path> intermediateFiles = new ArrayList<>();
     private PDDocument document;
+    private PdfFonts fonts;
     private OutlineBuilder outline;
     private TocRenderer toc;
     private int currentPage;
@@ -110,6 +110,7 @@ public final class PdfBundleAssembler {
     private AssemblyResult merge() throws IOException {
       try (PDDocument merged = new PDDocument(streamCache)) {
         this.document = merged;
+        this.fonts = new PdfFonts(merged);
         this.outline = new OutlineBuilder(merged, request.bundleTitle());
 
         if (request.coverPage().isPresent()) {
@@ -174,7 +175,7 @@ public final class PdfBundleAssembler {
 
     private void renderItem(AssemblyItem item, PDOutlineItem parentOutline) throws IOException {
       itemOrdinal++;
-      String drawnTitle = TocRenderer.drawnItemTitle(item.title(), itemOrdinal);
+      String drawnTitle = TocRenderer.drawnItemTitle(item.title(), itemOrdinal, fonts);
       if (!drawnTitle.equals(item.title())) {
         warnings.add(BundleWarning.forDocument(WARNING_TITLE_NOT_RENDERABLE,
             "The title of document " + itemOrdinal + " has no drawable characters; the"
@@ -289,9 +290,9 @@ public final class PdfBundleAssembler {
         // Divergence 10: drawn at the visible top-right and clickable. The service passes
         // swapped x/y arguments here, so its link renders off the page and cannot be clicked.
         PdfUtility.addRightLink(document, page, toc.getPage(), "Back to index", 40f,
-            fonts.helvetica(), 12);
+            fonts.regular(), 12);
       }
-      PdfUtility.addCenterText(document, page, title, 330, fonts.helveticaBold(), 14);
+      PdfUtility.addCenterText(document, page, title, 330, fonts.bold(), 14);
       currentPage++;
       return pageIndex;
     }
@@ -313,7 +314,7 @@ public final class PdfBundleAssembler {
       int totalPages = document.getNumberOfPages();
       for (PageRange range : numberedRanges) {
         for (int i = range.start(); i < range.endExclusive(); i++) {
-          PdfUtility.addPageNumber(document, preset, i, totalPages, fonts.helveticaBold());
+          PdfUtility.addPageNumber(document, preset, i, totalPages, fonts.bold());
         }
       }
     }
@@ -325,7 +326,7 @@ public final class PdfBundleAssembler {
       for (PageRange range : confidentialRanges) {
         for (int i = range.start(); i < range.endExclusive(); i++) {
           PdfUtility.addCenterText(document, document.getPage(i), "CONFIDENTIAL", 25,
-              fonts.helveticaBold(), 14);
+              fonts.bold(), 14);
         }
       }
     }
