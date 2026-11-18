@@ -218,15 +218,18 @@ public class BundleJobRepository {
    * Whether a job of the same bundle has been claimed since this one was. Asked inside the
    * snapshot the job selects from: a later claim the snapshot can see will select newer documents,
    * and one it cannot see selects after this job, so the bundles of the jobs that do select are in
-   * claim order. A job whose own lease was taken over counts too.
+   * claim order. A job whose own lease was taken over counts too. Jobs claimed in one batch share
+   * a claim time, so the job queued later counts as claimed later.
    */
   boolean superseded(BundleJob job) {
     return jdbc.queryForObject("""
         select exists (select 1 from bundling.bundle_job
           where definition = :definition and case_reference = :caseReference
-            and claimed_at > :claimedAt)
+            and (claimed_at, created_at, external_id) > (:claimedAt, :createdAt, :externalId))
         """, params("definition", job.definition(), "caseReference", job.caseReference(),
-            "claimedAt", OffsetDateTime.ofInstant(job.claimedAt().orElseThrow(), ZoneOffset.UTC)),
+            "claimedAt", OffsetDateTime.ofInstant(job.claimedAt().orElseThrow(), ZoneOffset.UTC),
+            "createdAt", OffsetDateTime.ofInstant(job.submittedAt(), ZoneOffset.UTC),
+            "externalId", job.externalId()),
         Boolean.class);
   }
 

@@ -585,6 +585,25 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
+  void ofARetryAndAFreshJobClaimedTogetherOnlyTheFreshJobSelects() {
+    UUID retried = submit("bundle", "case-1").externalId();
+    repository.claim(1, "worker-a", Duration.ofMinutes(5), 3, null);
+    jdbc.update("""
+        update bundling.bundle_job set state = 'QUEUED', lease_owner = null, lease_expires_at = null
+        where external_id = :id
+        """, Map.of("id", retried));
+    UUID fresh = submit("bundle", "case-1").externalId();
+    assertThat(fresh).isNotEqualTo(retried);
+
+    // One batch claims both at the same instant.
+    List<ClaimedBundleJob> batch = repository.claim(2, "worker-b", Duration.ofMinutes(5), 3, null);
+    assertThat(batch).hasSize(2).extracting(claimed -> claimed.job().claimedAt())
+        .containsOnly(batch.get(0).job().claimedAt());
+    assertThat(batch).filteredOn(claimed -> !repository.superseded(claimed.job()))
+        .extracting(claimed -> claimed.job().externalId()).containsExactly(fresh);
+  }
+
+  @Test
   void anAttemptWhoseLeaseWasTakenOverGivesUpBeforeSelecting() throws Exception {
     submit("bundle", "case-1");
     ClaimedBundleJob stale = repository.claim(1, "worker-a", Duration.ofMillis(1), 3, null).get(0);

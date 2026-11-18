@@ -173,7 +173,9 @@ public class BundleJobWorker implements AutoCloseable {
     // becomes a placeholder on the last attempt.
     RenderAttempt attempt = retryPolicy.nextAttemptAt(job.attempts(), Instant.now()).isPresent()
         ? RenderAttempt.RETRYABLE : RenderAttempt.FINAL;
-    try (BundleResult result = renderer.render(request, BundleExecutionContext.empty(), attempt)) {
+    BundleExecutionContext context = BundleExecutionContext.builder()
+        .caseReference(String.valueOf(job.caseReference())).build();
+    try (BundleResult result = renderer.render(request, context, attempt)) {
       StoredBundleDocument stored;
       try {
         stored = completionHandler.onCompleted(job, selected, result);
