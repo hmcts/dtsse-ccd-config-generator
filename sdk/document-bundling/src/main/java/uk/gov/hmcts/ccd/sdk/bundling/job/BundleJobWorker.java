@@ -191,12 +191,16 @@ public class BundleJobWorker implements AutoCloseable {
       BundleJobState terminal = result.outcome() == BundleOutcome.COMPLETED_WITH_WARNINGS
           ? BundleJobState.COMPLETED_WITH_WARNINGS : BundleJobState.COMPLETED;
       log.info("Bundle job {} completed as {} after {} attempt(s)", id, terminal, job.attempts());
-      boolean completed = repository.markCompleted(id, terminal,
-          bundleRecord(selected, result, stored), claimed.leaseOwner());
+      boolean completed = Boolean.TRUE.equals(repository.holdingCase(job.caseReference(), () -> {
+        boolean marked = repository.markCompleted(id, terminal,
+            bundleRecord(selected, result, stored), claimed.leaseOwner());
+        if (marked) {
+          requeueIfUnavailable(claimed, result);
+        }
+        return marked;
+      }));
       record(completed, id, terminal, total, total, "completion");
-      if (completed) {
-        requeueIfUnavailable(claimed, result);
-      } else {
+      if (!completed) {
         discard(job, stored);
       }
     } catch (BundleGenerationException e) {
@@ -250,7 +254,7 @@ public class BundleJobWorker implements AutoCloseable {
   /**
    * Queues a delayed re-run of a bundle that has placeholders for documents that were only
    * temporarily unavailable, so it fills in once they can be fetched. A change to the bundle's
-   * inputs before then joins the re-run and makes it immediate.
+   * inputs before then joins the re-run and makes it immediate. It commits with the completion.
    */
   private void requeueIfUnavailable(ClaimedBundleJob claimed, BundleResult result) {
     if (result.missingDocuments().stream()
@@ -266,16 +270,11 @@ public class BundleJobWorker implements AutoCloseable {
           + "been re-run {} time(s); not re-running it again", id, requeues);
       return;
     }
-    try {
-      // A re-run of a refresh job stays behind live changes.
-      UUID landed = repository.insertOrJoin(UUID.randomUUID(), job.definition(), job.caseReference(),
-          runAt.get(), requeues + 1, claimed.priority());
-      log.info("Bundle job {} has placeholders for temporarily unavailable documents; job {} "
-          + "re-runs it from {}", id, landed, runAt.get());
-    } catch (RuntimeException e) {
-      log.error("Bundle job {} could not queue a re-run for its temporarily unavailable "
-          + "documents; they are included when the bundle is next submitted", id, e);
-    }
+    // A re-run of a refresh job stays behind live changes.
+    UUID landed = repository.insertOrJoin(UUID.randomUUID(), job.definition(), job.caseReference(),
+        runAt.get(), requeues + 1, claimed.priority());
+    log.info("Bundle job {} has placeholders for temporarily unavailable documents; job {} "
+        + "re-runs it from {}", id, landed, runAt.get());
   }
 
   private void handleGenerationFailure(ClaimedBundleJob claimed, BundleGenerationException failure,

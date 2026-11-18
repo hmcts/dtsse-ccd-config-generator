@@ -57,7 +57,6 @@ public class ManagedCaseBundles
         definitions.stream()
             .collect(Collectors.toUnmodifiableMap(CaseBundleDefinition::name, Function.identity()));
     transaction = new TransactionTemplate(transactions);
-    transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     snapshot = new TransactionTemplate(transactions);
     snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
     snapshot.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -94,13 +93,7 @@ public class ManagedCaseBundles
     if (key == null || key.isBlank()) {
       return false;
     }
-    if (TransactionSynchronizationManager.isActualTransactionActive()) {
-      // It locks every case, so it would wait for ever on a case its own caller holds.
-      throw new IllegalStateException("A bundle refresh must not join a transaction");
-    }
     boolean refreshed = false;
-    // One transaction for each definition: holding one definition's waiting jobs while queuing
-    // another's could deadlock with an event that changes both bundles of a case.
     for (CaseBundleDefinition definition : definitions.values()) {
       refreshed |= transaction.execute(status -> {
         if (!repository.recordRefresh(key, definition.name())) {

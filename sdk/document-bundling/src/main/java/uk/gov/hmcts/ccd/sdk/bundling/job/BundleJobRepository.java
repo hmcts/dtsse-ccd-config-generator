@@ -11,8 +11,11 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleErrorCode;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleOutcome;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
@@ -54,10 +57,23 @@ public class BundleJobRepository {
   };
 
   private final NamedParameterJdbcTemplate jdbc;
+  private final TransactionTemplate transaction;
   private final BundleJobJson json = new BundleJobJson();
 
-  public BundleJobRepository(NamedParameterJdbcTemplate jdbc) {
+  public BundleJobRepository(NamedParameterJdbcTemplate jdbc,
+      PlatformTransactionManager transactions) {
     this.jdbc = jdbc;
+    this.transaction = new TransactionTemplate(transactions);
+  }
+
+  /**
+   * Runs the writes holding the case, as an event does, so they wait for an event on it or for its
+   * deletion instead of deadlocking with either. Returns null if the case is gone.
+   */
+  <T> T holdingCase(long caseReference, Supplier<T> writes) {
+    return transaction.execute(status -> jdbc.query("""
+        select 1 from ccd.case_data where reference = :caseReference for key share
+        """, params("caseReference", caseReference), ResultSet::next) ? writes.get() : null);
   }
 
   /**
@@ -114,12 +130,10 @@ public class BundleJobRepository {
   }
 
   /**
-   * Queues a background render of the definition's bundle for every case of the case type, and returns how many it
-   * queued. A case with a job already waiting is left to that job. Each case is locked before
-   * its job is inserted, in reference order, so the refresh waits for an event that holds a case
-   * instead of deadlocking with it when that event changes the case's bundle. Events on a case
-   * the refresh has reached wait until it commits. An event that changes the bundle of a case
-   * other than its own can still deadlock with a refresh.
+   * Queues a background render of the definition's bundle for every case of the case type, and
+   * returns how many it queued. A case with a job already waiting is left to that job. It holds
+   * each case before queuing its job, as {@link #holdingCase} does, so events on a case it has
+   * reached wait until it commits.
    */
   int refresh(String definition, String caseType) {
     return jdbc.update("""

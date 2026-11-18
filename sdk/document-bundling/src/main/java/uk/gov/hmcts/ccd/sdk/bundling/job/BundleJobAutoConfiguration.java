@@ -33,8 +33,9 @@ public class BundleJobAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  public BundleJobRepository bundleJobRepository(NamedParameterJdbcTemplate jdbc) {
-    return new BundleJobRepository(jdbc);
+  public BundleJobRepository bundleJobRepository(NamedParameterJdbcTemplate jdbc,
+      PlatformTransactionManager transactions) {
+    return new BundleJobRepository(jdbc, transactions);
   }
 
   @Bean

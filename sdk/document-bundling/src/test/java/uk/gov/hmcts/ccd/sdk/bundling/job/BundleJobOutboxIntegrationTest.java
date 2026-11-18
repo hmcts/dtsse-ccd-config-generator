@@ -96,8 +96,9 @@ class BundleJobOutboxIntegrationTest {
     dataSource = dataSourceFor(POSTGRES.getDatabaseName());
     sdkMigrationRunner(dataSource).run(context -> assertThat(context).hasNotFailed());
     jdbc = new NamedParameterJdbcTemplate(dataSource);
-    repository = new BundleJobRepository(jdbc);
-    tx = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
+    DataSourceTransactionManager transactions = new DataSourceTransactionManager(dataSource);
+    repository = new BundleJobRepository(jdbc, transactions);
+    tx = new TransactionTemplate(transactions);
   }
 
   @BeforeEach
@@ -181,6 +182,44 @@ class BundleJobOutboxIntegrationTest {
       pool.shutdownNow();
     }
     assertThat(column(queued("test", "live").externalId(), "priority")).isEqualTo("0");
+  }
+
+  @Test
+  void aBundleFinishingAsItsCaseIsDeletedWaitsForTheDeletionAndDiscardsItsPdf() throws Exception {
+    BundleJob job = submit(simpleRequest(UUID.randomUUID()));
+    List<StoredBundleDocument> discarded = new CopyOnWriteArrayList<>();
+    BundleJobCompletionHandler handler = new BundleJobCompletionHandler() {
+      @Override
+      public StoredBundleDocument onCompleted(BundleJob completed, SelectedCaseBundle selection,
+          BundleResult result) {
+        return STORED;
+      }
+
+      @Override
+      public void discarded(BundleJob completed, StoredBundleDocument document) {
+        discarded.add(document);
+      }
+    };
+    BundleJobWorker worker = new BundleJobWorker(repository, new FakeRenderer(tempDir), asSubmitted(),
+        handler, quickRetries(3), List.of(), Runnable::run, 5, 5, Duration.ofMinutes(5));
+    Map<String, Long> reference = Map.of("reference", job.caseReference());
+    ExecutorService pool = Executors.newSingleThreadExecutor();
+    try {
+      Future<?> finishing = tx.execute(status -> {
+        // The deletion holds the case, the bundle reaches its completion, then the case goes.
+        jdbc.query("select 1 from ccd.case_data where reference = :reference for update", reference,
+            rs -> null);
+        Future<?> running = pool.submit(worker::poll);
+        awaitSessionBlockedOnLock();
+        jdbc.update("delete from ccd.case_data where reference = :reference", reference);
+        return running;
+      });
+      finishing.get(10, TimeUnit.SECONDS);
+    } finally {
+      pool.shutdownNow();
+    }
+    assertThat(repository.find(job.externalId())).isEmpty();
+    assertThat(discarded).containsExactly(STORED);
   }
 
   @Test
