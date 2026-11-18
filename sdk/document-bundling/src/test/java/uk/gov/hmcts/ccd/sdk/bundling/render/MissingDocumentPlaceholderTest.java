@@ -144,18 +144,83 @@ class MissingDocumentPlaceholderTest {
     BundleGenerationException failure = catchThrowableOfType(BundleGenerationException.class,
         () -> renderer.render(request, BundleExecutionContext.empty(), RenderAttempt.RETRYABLE));
 
-    assertThat(failure.code()).isEqualTo(BundleErrorCode.DOCUMENT_RESOLUTION_FAILED);
+    assertThat(failure.code()).isEqualTo(BundleErrorCode.DOCUMENT_UNAVAILABLE);
     RenderTestSupport.assertNothingLeftBehind(work);
   }
 
   @Test
-  void aConversionFailureThatMightBeTransientFailsARetryableAttempt() {
-    BundleRequest request = placeholderRequest(doc("d1", "Broken", "broken"));
+  void aDocumentThatCannotBeConvertedWithNoOutageBehindItIsReplacedEvenWhenTheCallerWillRetry() {
+    BundleRequest request = placeholderRequest(doc("d1", "Claim form", "good"), doc("d2", "Broken", "broken"));
 
+    // Retrying would read the same bytes and fail the same way, for ever.
+    try (BundleResult result = renderer.render(request, BundleExecutionContext.empty(), RenderAttempt.RETRYABLE)) {
+      assertThat(result.missingDocuments()).extracting(MissingDocument::documentId, MissingDocument::reason)
+          .containsExactly(org.assertj.core.groups.Tuple.tuple("d2", MissingDocumentReason.CONVERSION_FAILED));
+    }
+  }
+
+  @Test
+  void aSourceWhoseDownloadFailsPartWayFailsARetryableAttempt() {
+    uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocument stalls =
+        new uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocument() {
+          @Override
+          public java.io.InputStream content() {
+            return new java.io.InputStream() {
+              @Override
+              public int read() throws IOException {
+                throw new java.net.SocketTimeoutException("Read timed out");
+              }
+            };
+          }
+
+          @Override
+          public String mediaType() {
+            return "application/pdf";
+          }
+
+          @Override
+          public String fileName() {
+            return "stalls.pdf";
+          }
+
+          @Override
+          public java.util.OptionalLong contentLength() {
+            return java.util.OptionalLong.empty();
+          }
+
+          @Override
+          public java.util.Optional<String> checksum() {
+            return java.util.Optional.empty();
+          }
+
+          @Override
+          public void close() {
+          }
+        };
+    resolver.source("stalls", stalls);
+    BundleRequest request = placeholderRequest(doc("d1", "Stalls", "stalls"));
+
+    // The source exists: a placeholder for it would be published as an up-to-date bundle.
     BundleGenerationException failure = catchThrowableOfType(BundleGenerationException.class,
         () -> renderer.render(request, BundleExecutionContext.empty(), RenderAttempt.RETRYABLE));
 
-    assertThat(failure.code()).isEqualTo(BundleErrorCode.DOCUMENT_CONVERSION_FAILED);
+    assertThat(failure).isNotNull();
+    assertThat(failure.code()).isEqualTo(BundleErrorCode.DOCUMENT_UNAVAILABLE);
+  }
+
+  @Test
+  void aSourceThatEndsShortOfItsDeclaredLengthFailsARetryableAttempt() {
+    byte[] header = "%PDF-1.7\n".getBytes(StandardCharsets.US_ASCII);
+    resolver.source("cut-off", RenderTestSupport.Source.declaring(header, "application/pdf", "cut-off.pdf",
+        java.util.OptionalLong.of(1_000_000)));
+    BundleRequest request = placeholderRequest(doc("d1", "Cut off", "cut-off"));
+
+    // The download ended early without an error; the document itself may be intact.
+    BundleGenerationException failure = catchThrowableOfType(BundleGenerationException.class,
+        () -> renderer.render(request, BundleExecutionContext.empty(), RenderAttempt.RETRYABLE));
+
+    assertThat(failure).isNotNull();
+    assertThat(failure.code()).isEqualTo(BundleErrorCode.DOCUMENT_UNAVAILABLE);
   }
 
   @Test

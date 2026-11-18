@@ -4,7 +4,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Where a completion handler stored a bundle's PDF. A handler that returns one has it recorded
+ * Where a document store stored a bundle's PDF. A store that returns one has it recorded
  * with the bundle in bundling.bundle, so the bundle can be found, served and later deleted.
  *
  * @param id the stored document's id

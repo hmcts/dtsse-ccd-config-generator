@@ -3,7 +3,6 @@ package uk.gov.hmcts.ccd.sdk.bundling.job;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleOutcome;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
@@ -13,16 +12,13 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
 
 /**
  * A bundle the job worker rendered, read from bundling.bundle. The worker records it when the job
- * completes, so the consuming service stores only the PDF (as an ordinary document, linked by the
- * job id) and reads everything else about the bundle from here.
+ * completes, so the consuming service stores only the PDF (as an ordinary document) and reads
+ * everything else about the bundle from here.
  *
  * @param id the bundle's id
- * @param jobId the job that rendered it
- * @param bundleKey the job's coalesce key, if it had one
- * @param caseReference the case reference from the job's execution context, if it had one
- * @param selectedAt when its documents were selected; of two bundles with the same key, the one
- *     selected later reflects the newer state
- * @param recordedAt when the bundle was recorded
+ * @param definition the bundle definition's name
+ * @param caseReference the case it is a bundle of
+ * @param recordedAt when the bundle was recorded; the one recorded last is the current one
  * @param request the request that was rendered: for a selector-driven job, the one the selector
  *     compiled, so it lists exactly the documents the bundle was built from
  * @param outcome whether the render completed cleanly or with warnings
@@ -34,14 +30,12 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
  * @param documents where each included document landed
  * @param missingDocuments the documents replaced by placeholder pages, and why
  * @param warnings non-fatal notes from the render
- * @param stored where the completion handler stored the PDF, if it said
+ * @param stored where the document store stored the PDF
  */
 public record BundleMetadata(
     UUID id,
-    UUID jobId,
-    Optional<String> bundleKey,
-    Optional<String> caseReference,
-    Instant selectedAt,
+    String definition,
+    long caseReference,
     Instant recordedAt,
     BundleRequest request,
     BundleOutcome outcome,
@@ -53,14 +47,11 @@ public record BundleMetadata(
     List<DocumentResult> documents,
     List<MissingDocument> missingDocuments,
     List<BundleWarning> warnings,
-    Optional<StoredBundleDocument> stored) {
+    StoredBundleDocument stored) {
 
   public BundleMetadata {
     Objects.requireNonNull(id, "BundleMetadata.id");
-    Objects.requireNonNull(jobId, "BundleMetadata.jobId");
-    Objects.requireNonNull(bundleKey, "BundleMetadata.bundleKey");
-    Objects.requireNonNull(caseReference, "BundleMetadata.caseReference");
-    Objects.requireNonNull(selectedAt, "BundleMetadata.selectedAt");
+    Objects.requireNonNull(definition, "BundleMetadata.definition");
     Objects.requireNonNull(recordedAt, "BundleMetadata.recordedAt");
     Objects.requireNonNull(request, "BundleMetadata.request");
     Objects.requireNonNull(outcome, "BundleMetadata.outcome");

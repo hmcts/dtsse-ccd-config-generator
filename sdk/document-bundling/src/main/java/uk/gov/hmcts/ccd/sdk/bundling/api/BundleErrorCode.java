@@ -14,7 +14,9 @@ public enum BundleErrorCode {
    * {@link #DOCUMENT_NOT_FOUND} only in restricted operational diagnostics.
    */
   DOCUMENT_ACCESS_DENIED,
-  /** A source document could not be resolved for another reason. */
+  /** A source document's store could not serve it for the moment. Worth retrying. */
+  DOCUMENT_UNAVAILABLE,
+  /** A source document could not be resolved for another reason. Not worth retrying. */
   DOCUMENT_RESOLUTION_FAILED,
   /** A document's media type has no registered handler. */
   MEDIA_TYPE_UNSUPPORTED,
@@ -38,8 +40,8 @@ public enum BundleErrorCode {
   ASSEMBLY_FAILED,
   /** A configured maximum (documents, bytes, or pages) was breached. */
   LIMIT_EXCEEDED,
-  /** A durable job's persisted request could not be read by the executing worker. */
+  /** A job's definition could not select the bundle's documents. */
   JOB_REQUEST_UNREADABLE,
-  /** The bundle rendered but the consumer's completion handler failed to store it. */
+  /** The bundle rendered but its PDF could not be stored. */
   COMPLETION_FAILED
 }

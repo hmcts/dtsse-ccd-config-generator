@@ -2,46 +2,46 @@ package uk.gov.hmcts.ccd.sdk.bundling.job;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundleErrorCode;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleOutcome;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleWarning;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResult;
 import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
+import uk.gov.hmcts.ccd.sdk.bundling.managed.SelectedCaseBundle;
 
 /**
- * JDBC access to the bundling.bundle_job outbox table, and to bundling.bundle, which describes the
- * bundles completed jobs rendered. Every method is a single statement, so the
- * insert joins the caller's transaction while worker writes are statement-atomic. Claiming uses
- * FOR UPDATE SKIP LOCKED plus a lease; every worker-side write is guarded by the lease owner, so a
- * worker that lost its lease gets false back and the lease holder's state stands.
+ * JDBC access to bundling.bundle_job, the queue of bundles to render, and to bundling.bundle, which
+ * describes the bundles rendered from it. The queue works as the search index queue does: a bundle
+ * has a row while a render of it is wanted, a change inserts the row or raises its revision, and a
+ * worker that finishes deletes the row only if the revision is the one it claimed. A change during
+ * a render therefore leaves the row to be rendered again, and a case has one render of a bundle at
+ * a time. Claiming uses FOR UPDATE SKIP LOCKED plus a lease, and every worker-side write is
+ * guarded by the lease owner, so a worker that lost its lease gets false back and the lease
+ * holder's state stands.
  */
 public class BundleJobRepository {
-  private static final String IN_PROGRESS = BundleJobState.IN_PROGRESS.name();
-  private static final String JOB_COLUMNS = """
-      select external_id, state, attempts, created_at, updated_at, coalesce_key,
-             coalesced_submissions, claimed_at, result::text as result, failure_code,
-             failure_message,
-             failure_documents::text as failure_documents
-      from bundling.bundle_job
+  // Asks for another render of a bundle that has a row. Its lease, if a worker is rendering it, is
+  // left to that worker.
+  private static final String RENDER_AGAIN = """
+      revision = bundle_job.revision + 1, attempts = 0, next_attempt_at = null,
+      failure_message = null
       """;
-
-  private static final String BUNDLE_COLUMNS = """
-      select id, job_id, bundle_key, case_reference, selected_at, created_at, outcome, file_name,
-             media_type, size_bytes, sha256, page_count, request::text as request,
-             documents::text as documents, missing_documents::text as missing_documents,
-             warnings::text as warnings, document_id, document_url, binary_url
-      from bundling.bundle
+  // The row a worker's claim holds: none if its lease was taken over.
+  private static final String CLAIMED = """
+      where definition = :definition and case_reference = :caseReference
+        and lease_owner = :leaseOwner
       """;
   private static final TypeReference<List<DocumentResult>> DOCUMENT_RESULTS =
       new TypeReference<>() {
@@ -53,187 +53,183 @@ public class BundleJobRepository {
   };
 
   private final NamedParameterJdbcTemplate jdbc;
+  private final TransactionTemplate transaction;
   private final BundleJobJson json = new BundleJobJson();
 
-  public BundleJobRepository(NamedParameterJdbcTemplate jdbc) {
+  public BundleJobRepository(NamedParameterJdbcTemplate jdbc,
+      PlatformTransactionManager transactions) {
     this.jdbc = jdbc;
-  }
-
-  /** Inserts the job unless its external id exists; a concurrent insert of the id waits. */
-  boolean insertIfAbsent(UUID externalId, String requestJson, String selectorParametersJson,
-      String executionContextJson) {
-    return jdbc.update("""
-        insert into bundling.bundle_job
-          (external_id, state, request_version, request, selector_parameters, execution_context)
-        values (:externalId, 'QUEUED', :requestVersion, :request::jsonb, :parameters::jsonb,
-          :context::jsonb)
-        on conflict (external_id) do nothing
-        """,
-        params("externalId", externalId, "requestVersion", BundleJobJson.REQUEST_VERSION,
-            "request", requestJson, "parameters", selectorParametersJson,
-            "context", executionContextJson)) == 1;
+    this.transaction = new TransactionTemplate(transactions);
   }
 
   /**
-   * Inserts a job under the coalesce key, or joins the key's job that is still waiting for its
-   * first claim. Joining updates that row, so the caller holds its lock until it commits and the
-   * worker's SKIP LOCKED claim passes over it: a joined job is never claimed before the change
-   * that joined it is visible. If the waiting job is being claimed concurrently, Postgres waits
-   * for the claim, finds the row no longer waiting, and inserts a follow-up instead.
+   * Locks the case as an event does, and says whether it exists. Every write here takes its case
+   * before its own rows, so it waits for an event, a change, a refresh or a deletion of the case
+   * instead of crossing it.
    */
-  CoalescedInsert insertOrJoin(UUID externalId, String coalesceKey,
-      String selectorParametersJson, String executionContextJson) {
-    return insertOrJoin(externalId, coalesceKey, selectorParametersJson, executionContextJson,
-        null);
+  private boolean lockCase(long caseReference) {
+    return jdbc.query("select 1 from ccd.case_data where reference = :caseReference for update",
+        params("caseReference", caseReference), ResultSet::next);
   }
 
   /**
-   * As {@link #insertOrJoin(UUID, String, String, String)}, but a newly inserted job is not
-   * claimable before notBefore (null for immediately). The job runs as soon as any submission
-   * wants it: joining a delayed job with an immediate submission makes it immediate.
+   * Queues the bundle for a change to its documents. The caller holds the row until it commits and
+   * the claim passes over a held row, so a bundle is never claimed before the change that queued
+   * it is visible. A change makes a waiting retry immediate and a waiting refresh live.
+   *
+   * <p>The event that creates a case has no case to lock yet.
    */
-  CoalescedInsert insertOrJoin(UUID externalId, String coalesceKey,
-      String selectorParametersJson, String executionContextJson, Instant notBefore) {
+  void changed(String definition, long caseReference) {
+    lockCase(caseReference);
+    jdbc.update("""
+        insert into bundling.bundle_job (definition, case_reference)
+        values (:definition, :caseReference)
+        on conflict (case_reference, definition) do update set priority = 0,
+        """ + RENDER_AGAIN, params("definition", definition, "caseReference", caseReference));
+  }
+
+  /** The case as CCD holds it: where a bundle of the case is stored. */
+  SelectedCaseBundle selectedFor(long caseReference, BundleRequest request) {
     return jdbc.queryForObject("""
-        insert into bundling.bundle_job
-          (external_id, coalesce_key, state, request_version, request, selector_parameters,
-           execution_context, next_attempt_at)
-        values (:externalId, :coalesceKey, 'QUEUED', :requestVersion, null, :parameters::jsonb,
-          :context::jsonb, :notBefore)
-        on conflict (coalesce_key)
-          where coalesce_key is not null and state = 'QUEUED' and attempts = 0
-        do update set coalesced_submissions = bundle_job.coalesced_submissions + 1,
-          last_coalesced_at = clock_timestamp(), updated_at = clock_timestamp(),
-          next_attempt_at = case
-            when bundle_job.next_attempt_at is null or excluded.next_attempt_at is null then null
-            else least(bundle_job.next_attempt_at, excluded.next_attempt_at) end
-        returning external_id, selector_parameters::text as selector_parameters
-        """,
-        params("externalId", externalId, "coalesceKey", coalesceKey,
-            "requestVersion", BundleJobJson.REQUEST_VERSION, "parameters", selectorParametersJson,
-            "context", executionContextJson,
-            "notBefore", notBefore == null ? null : OffsetDateTime.ofInstant(notBefore, ZoneOffset.UTC)),
-        (rs, n) -> new CoalescedInsert(rs.getObject("external_id", UUID.class),
-            rs.getString("selector_parameters")));
+        select case_type_id, jurisdiction from ccd.case_data where reference = :caseReference
+        """, params("caseReference", caseReference),
+        (rs, n) -> new SelectedCaseBundle(caseReference, rs.getString("case_type_id"),
+            rs.getString("jurisdiction"), request));
   }
 
-  /** The job a coalesced submission landed on, and the parameters that job keeps. */
-  record CoalescedInsert(UUID externalId, String storedSelectorParametersJson) {
-  }
-
-  public Optional<BundleJob> find(UUID externalId) {
-    return jdbc.query(JOB_COLUMNS + " where external_id = :externalId",
-        params("externalId", externalId), (rs, n) -> map(rs)).stream().findFirst();
+  /** Records the refresh key, and says whether it was new. A concurrent caller waits its turn. */
+  boolean recordRefresh(String key) {
+    return jdbc.update("""
+        insert into bundling.refresh_key (key) values (:key) on conflict do nothing
+        """, params("key", key)) == 1;
   }
 
   /**
-   * The key's job reflecting the newest state: the one still waiting if there is one, otherwise
-   * the most recently claimed, otherwise the most recently submitted. A delayed re-run is not
-   * waiting until it is due, so the bundle it follows stays the latest until then. created_at
-   * is the submitting transaction's start time, so it alone cannot order jobs from overlapping
-   * transactions.
+   * Queues a background render of the definition's bundle for every case of the case type, and
+   * returns how many. A bundle already queued keeps its priority. It locks each case before
+   * queuing its bundle, so events on a case it has reached wait until it commits.
    */
-  Optional<BundleJob> findLatest(String coalesceKey) {
-    return jdbc.query(JOB_COLUMNS + """
-         where coalesce_key = :coalesceKey
-         order by (state = 'QUEUED' and attempts = 0
-                   and (next_attempt_at is null or next_attempt_at <= now())) desc,
-                  claimed_at desc nulls last,
-                  created_at desc, external_id
-         limit 1
-        """, params("coalesceKey", coalesceKey), (rs, n) -> map(rs)).stream().findFirst();
+  int refresh(String definition, String caseType) {
+    return jdbc.update("""
+        insert into bundling.bundle_job (definition, case_reference, priority)
+        select :definition, reference, -1 from ccd.case_data
+        where case_type_id = :caseType order by reference for key share
+        on conflict (case_reference, definition) do update set
+        """ + RENDER_AGAIN, params("definition", definition, "caseType", caseType));
   }
 
+  /** The bundle's queue row: present while a render of it is wanted, or after one failed. */
+  public Optional<BundleJob> find(String definition, long caseReference) {
+    return jdbc.query("""
+        select definition, case_reference, revision, attempts, failure_message
+        from bundling.bundle_job
+        where definition = :definition and case_reference = :caseReference
+        """, params("definition", definition, "caseReference", caseReference),
+        (rs, n) -> new BundleJob(rs.getString("definition"), rs.getLong("case_reference"),
+            rs.getLong("revision"), rs.getInt("attempts"),
+            Optional.ofNullable(rs.getString("failure_message")))).stream().findFirst();
+  }
+
+  /**
+   * Claims the next bundles: those due, and those whose worker's lease expired. A bundle changed
+   * while a worker renders it waits for that worker's lease. A worker claims, and gives up on,
+   * only its own definitions, so a pod on an older release leaves a definition it does not have to
+   * the pods that do.
+   */
   List<ClaimedBundleJob> claim(int limit, String leaseOwner, Duration leaseDuration,
-      int maxAttempts) {
+      int maxAttempts, Collection<String> definitions) {
+    if (definitions.isEmpty()) {
+      return List.of();
+    }
     return jdbc.query("""
         with claimable as (
-          select external_id from bundling.bundle_job
-          where attempts < :maxAttempts
-            and request_version <= :maxVersion
-            and ((state = 'QUEUED' and (next_attempt_at is null or next_attempt_at <= now()))
-                 or (state = :inProgress and lease_expires_at <= now()))
-          order by created_at, external_id
+          select definition, case_reference from bundling.bundle_job
+          where failure_message is null
+            and attempts < :maxAttempts
+            and definition in (:definitions)
+            and (lease_expires_at is null or lease_expires_at <= now())
+            and (next_attempt_at is null or next_attempt_at <= now())
+          order by priority desc, queued_at
           limit :limit
           for update skip locked
         )
         update bundling.bundle_job job
-        set state = :inProgress, attempts = job.attempts + 1, lease_owner = :leaseOwner,
+        set attempts = job.attempts + 1, lease_owner = :leaseOwner,
             lease_expires_at = now() + (:leaseMillis * interval '1 millisecond'),
-            next_attempt_at = null, claimed_at = now(), updated_at = now()
-        from claimable where job.external_id = claimable.external_id
-        returning job.external_id, job.attempts, job.created_at, job.updated_at,
-            job.coalesce_key, job.coalesced_submissions, job.claimed_at,
-            job.request_version, job.request::text as request,
-            job.selector_parameters::text as selector_parameters,
-            job.execution_context::text as execution_context,
-            job.transient_history::text as transient_history
+            next_attempt_at = null
+        from claimable
+        where job.definition = claimable.definition
+          and job.case_reference = claimable.case_reference
+        returning job.definition, job.case_reference, job.revision, job.attempts
         """,
         params("limit", limit, "leaseOwner", leaseOwner, "leaseMillis", leaseDuration.toMillis(),
-            "maxAttempts", maxAttempts, "inProgress", IN_PROGRESS,
-            "maxVersion", BundleJobJson.REQUEST_VERSION),
+            "maxAttempts", maxAttempts, "definitions", definitions),
         (rs, n) -> new ClaimedBundleJob(
-            new BundleJob(rs.getObject("external_id", UUID.class), BundleJobState.IN_PROGRESS,
-                rs.getInt("attempts"), instant(rs, "created_at"), instant(rs, "updated_at"),
-                Optional.ofNullable(rs.getString("coalesce_key")),
-                rs.getInt("coalesced_submissions"), Optional.of(instant(rs, "claimed_at")),
-                Optional.empty(), Optional.empty()),
-            rs.getInt("request_version"), rs.getString("request"),
-            rs.getString("selector_parameters"), rs.getString("execution_context"),
-            rs.getString("transient_history"), leaseOwner));
+            new BundleJob(rs.getString("definition"), rs.getLong("case_reference"),
+                rs.getLong("revision"), rs.getInt("attempts"), Optional.empty()),
+            leaseOwner));
   }
 
-  List<UUID> failExhaustedStaleJobs(int maxAttempts) {
+  /** Fails the bundles whose worker's lease expired on their last attempt, and returns them. */
+  List<String> failExhaustedStaleJobs(int maxAttempts, Collection<String> definitions) {
+    if (definitions.isEmpty()) {
+      return List.of();
+    }
     return jdbc.query("""
         update bundling.bundle_job
-        set state = 'FAILED', failure_code = :code, failure_documents = '[]'::jsonb, result = null,
-            failure_message = 'The job was claimed ' || attempts || ' time(s) without recording a '
-                || 'result and each lease expired; the attempt bound (' || :maxAttempts || ') is '
+        set failure_message = 'The bundle was claimed ' || attempts || ' time(s) without recording '
+                || 'a result and each lease expired; the attempt bound (' || :maxAttempts || ') is '
                 || 'exhausted. The render most likely crashed; see the service logs.',
-            lease_owner = null, lease_expires_at = null, next_attempt_at = null, updated_at = now()
-        where state = :inProgress and lease_expires_at <= now() and attempts >= :maxAttempts
-        returning external_id
+            lease_owner = null, lease_expires_at = null, next_attempt_at = null
+        where failure_message is null and lease_expires_at <= now() and attempts >= :maxAttempts
+          and definition in (:definitions)
+        returning definition || ' of case ' || case_reference as bundle
         """,
-        params("maxAttempts", maxAttempts, "code", BundleErrorCode.ASSEMBLY_FAILED.name(),
-            "inProgress", IN_PROGRESS),
-        (rs, n) -> rs.getObject("external_id", UUID.class));
+        params("maxAttempts", maxAttempts, "definitions", definitions),
+        (rs, n) -> rs.getString("bundle"));
   }
 
   /**
-   * Marks the job completed and records the bundle it rendered, in one statement: the bundle row
-   * exists exactly when the job completed, and neither is written by a worker that lost its lease.
+   * Records the bundle a worker rendered and releases its claim, in one statement. The row is
+   * deleted, unless the bundle changed meanwhile: then the row stays, to be rendered again.
+   * Nothing is written by a worker that lost its lease, or for a case that has gone.
    */
-  boolean markCompleted(UUID externalId, BundleJobState state, String resultJson,
-      BundleRecord bundle, String leaseOwner) {
+  boolean markCompleted(ClaimedBundleJob claimed, BundleRecord bundle) {
+    return transaction.execute(status -> lockCase(claimed.job().caseReference())
+        && recordCompleted(claimed, bundle));
+  }
+
+  private boolean recordCompleted(ClaimedBundleJob claimed, BundleRecord bundle) {
     return jdbc.update("""
-        with completed as (
-          update bundling.bundle_job
-          set state = :state, result = :result::jsonb,
-              failure_code = null, failure_message = null,
-              failure_documents = null, lease_owner = null, lease_expires_at = null,
-              next_attempt_at = null, updated_at = now()
-          where external_id = :externalId and lease_owner = :leaseOwner and state = :inProgress
-          returning external_id, coalesce_key, claimed_at, created_at, execution_context
+        with up_to_date as (
+          delete from bundling.bundle_job
+        """ + CLAIMED + """
+            and revision = :revision
+          returning definition, case_reference
+        ), changed as (
+          update bundling.bundle_job set lease_owner = null, lease_expires_at = null
+        """ + CLAIMED + """
+            and revision <> :revision
+          returning definition, case_reference
         )
-        insert into bundling.bundle (job_id, bundle_key, case_reference, selected_at, outcome,
+        insert into bundling.bundle (definition, case_reference, outcome,
           file_name, media_type, size_bytes, sha256, page_count, request, documents,
           missing_documents, warnings, document_id, document_url, binary_url)
-        select external_id, coalesce_key, execution_context ->> 'caseReference',
-          coalesce(claimed_at, created_at), :outcome, :fileName, :mediaType, :size, :sha256,
-          :pageCount, :request::jsonb, :documents::jsonb, :missingDocuments::jsonb,
+        select definition, case_reference, :outcome, :fileName, :mediaType, :size,
+          :sha256, :pageCount, :request::jsonb, :documents::jsonb, :missingDocuments::jsonb,
           :warnings::jsonb, :documentId, :documentUrl, :binaryUrl
-        from completed
+        from (select * from up_to_date union all select * from changed) released
         """,
-        params("externalId", externalId, "state", state.name(), "result", resultJson,
-            "leaseOwner", leaseOwner, "inProgress", IN_PROGRESS,
-            "outcome", bundle.outcome(), "fileName", bundle.fileName(),
-            "mediaType", bundle.mediaType(), "size", bundle.size(), "sha256", bundle.sha256(),
-            "pageCount", bundle.pageCount(), "request", bundle.requestJson(),
-            "documents", bundle.documentsJson(), "missingDocuments", bundle.missingDocumentsJson(),
-            "warnings", bundle.warningsJson(),
-            "documentId", bundle.stored() == null ? null : bundle.stored().id(),
-            "documentUrl", bundle.stored() == null ? null : bundle.stored().url(),
-            "binaryUrl", bundle.stored() == null ? null : bundle.stored().binaryUrl())) == 1;
+        claimed(claimed)
+            .addValue("outcome", bundle.outcome()).addValue("fileName", bundle.fileName())
+            .addValue("mediaType", bundle.mediaType()).addValue("size", bundle.size())
+            .addValue("sha256", bundle.sha256()).addValue("pageCount", bundle.pageCount())
+            .addValue("request", bundle.requestJson()).addValue("documents", bundle.documentsJson())
+            .addValue("missingDocuments", bundle.missingDocumentsJson())
+            .addValue("warnings", bundle.warningsJson())
+            .addValue("documentId", bundle.stored().id())
+            .addValue("documentUrl", bundle.stored().url())
+            .addValue("binaryUrl", bundle.stored().binaryUrl())) == 1;
   }
 
   /** A rendered bundle, serialised for bundling.bundle. */
@@ -242,31 +238,44 @@ public class BundleJobRepository {
       String warningsJson, StoredBundleDocument stored) {
   }
 
-  Optional<BundleMetadata> findBundleForJob(UUID jobId) {
-    return jdbc.query(BUNDLE_COLUMNS + " where job_id = :jobId", params("jobId", jobId),
-        (rs, n) -> mapBundle(rs)).stream().findFirst();
-  }
-
-  /** The key's bundle whose documents were selected last. */
-  Optional<BundleMetadata> findLatestBundle(String bundleKey) {
-    return jdbc.query(BUNDLE_COLUMNS + """
-         where bundle_key = :bundleKey
-         order by selected_at desc, created_at desc, id
-         limit 1
-        """, params("bundleKey", bundleKey), (rs, n) -> mapBundle(rs)).stream().findFirst();
+  /** The case's bundle recorded last: its renders run one at a time, so that is the current one. */
+  public Optional<BundleMetadata> findLatestBundle(String definition, long caseReference) {
+    return jdbc.query("""
+        select id, definition, case_reference, created_at, outcome, file_name, media_type,
+               size_bytes, sha256, page_count, request::text as request,
+               documents::text as documents, missing_documents::text as missing_documents,
+               warnings::text as warnings, document_id, document_url, binary_url
+        from bundling.bundle
+        where definition = :definition and case_reference = :caseReference
+        order by created_at desc, id
+        limit 1
+        """, params("definition", definition, "caseReference", caseReference),
+        (rs, n) -> new BundleMetadata(rs.getObject("id", UUID.class), rs.getString("definition"),
+            rs.getLong("case_reference"),
+            rs.getObject("created_at", OffsetDateTime.class).toInstant(),
+            json.read(rs.getString("request"), BundleRequest.class, "bundle request"),
+            BundleOutcome.valueOf(rs.getString("outcome")), rs.getString("file_name"),
+            rs.getString("media_type"), rs.getLong("size_bytes"), rs.getString("sha256"),
+            rs.getInt("page_count"),
+            json.read(rs.getString("documents"), DOCUMENT_RESULTS, "bundle documents"),
+            json.read(rs.getString("missing_documents"), MISSING_DOCUMENTS, "missing documents"),
+            json.read(rs.getString("warnings"), WARNINGS, "bundle warnings"),
+            new StoredBundleDocument(rs.getObject("document_id", UUID.class),
+                rs.getString("document_url"), rs.getString("binary_url"))))
+        .stream().findFirst();
   }
 
   /**
-   * Stored PDFs of bundles that a bundle selected later under the same key replaced at least
+   * Stored PDFs of bundles that a bundle recorded later for the same case replaced at least
    * {@code replacedFor} ago.
    */
   List<UUID> findReplacedDocuments(Duration replacedFor, int limit) {
     return jdbc.query("""
         select document_id from bundling.bundle old
-        where document_id is not null and deleted_at is null
-          and exists (select 1 from bundling.bundle newer
-                      where newer.bundle_key = old.bundle_key
-                        and (newer.selected_at, newer.created_at) > (old.selected_at, old.created_at)
+        where exists (select 1 from bundling.bundle newer
+                      where newer.definition = old.definition
+                        and newer.case_reference = old.case_reference
+                        and newer.created_at > old.created_at
                         and newer.created_at <= now() - (:replacedMillis * interval '1 millisecond'))
         order by created_at
         limit :limit
@@ -274,40 +283,39 @@ public class BundleJobRepository {
         (rs, n) -> rs.getObject("document_id", UUID.class));
   }
 
-  void markDocumentDeleted(UUID documentId) {
-    jdbc.update("update bundling.bundle set deleted_at = now() where document_id = :documentId",
+  /** Deletes the record of a replaced bundle whose PDF has been deleted. */
+  void deleteBundle(UUID documentId) {
+    jdbc.update("delete from bundling.bundle where document_id = :documentId",
         params("documentId", documentId));
   }
 
-  boolean markFailed(UUID externalId, BundleErrorCode code, String message,
-      String documentFailuresJson, String transientHistoryJson, String leaseOwner) {
+  /** Fails the bundle, unless it changed meanwhile: then it is rendered again. */
+  boolean markFailed(ClaimedBundleJob claimed, String message) {
     return jdbc.update("""
         update bundling.bundle_job
-        set state = 'FAILED', failure_code = :code, failure_message = :message,
-            failure_documents = :documentFailures::jsonb,
-            transient_history = coalesce(:transientHistory::jsonb, transient_history),
-            result = null, lease_owner = null, lease_expires_at = null, next_attempt_at = null,
-            updated_at = now()
-        where external_id = :externalId and lease_owner = :leaseOwner and state = :inProgress
-        """,
-        params("externalId", externalId, "code", code.name(), "message", message,
-            "documentFailures", documentFailuresJson, "transientHistory", transientHistoryJson,
-            "leaseOwner", leaseOwner, "inProgress", IN_PROGRESS)) == 1;
+        set failure_message = case when revision = :revision then :message end,
+            lease_owner = null, lease_expires_at = null, next_attempt_at = null
+        """ + CLAIMED, claimed(claimed).addValue("message", message)) == 1;
   }
 
-  boolean requeueForRetry(UUID externalId, Instant nextAttemptAt, String transientHistoryJson,
-      String leaseOwner) {
+  /**
+   * Queues another attempt, at once if the bundle changed meanwhile. A render that reports back is
+   * not one that crashed, so it does not count towards the attempt bound.
+   */
+  boolean requeueForRetry(ClaimedBundleJob claimed, Instant nextAttemptAt) {
     return jdbc.update("""
         update bundling.bundle_job
-        set state = 'QUEUED', next_attempt_at = :nextAttemptAt,
-            transient_history = :transientHistory::jsonb,
-            lease_owner = null, lease_expires_at = null, updated_at = now()
-        where external_id = :externalId and lease_owner = :leaseOwner and state = :inProgress
-        """,
-        params("externalId", externalId,
-            "nextAttemptAt", OffsetDateTime.ofInstant(nextAttemptAt, ZoneOffset.UTC),
-            "transientHistory", transientHistoryJson, "leaseOwner", leaseOwner,
-            "inProgress", IN_PROGRESS)) == 1;
+        set next_attempt_at = case when revision = :revision then :nextAttemptAt::timestamptz end,
+            attempts = 0, lease_owner = null, lease_expires_at = null
+        """ + CLAIMED,
+        claimed(claimed).addValue("nextAttemptAt",
+            OffsetDateTime.ofInstant(nextAttemptAt, ZoneOffset.UTC))) == 1;
+  }
+
+  private static MapSqlParameterSource claimed(ClaimedBundleJob claimed) {
+    return params("definition", claimed.job().definition(),
+        "caseReference", claimed.job().caseReference(), "revision", claimed.job().revision(),
+        "leaseOwner", claimed.leaseOwner());
   }
 
   private static MapSqlParameterSource params(Object... keysAndValues) {
@@ -316,42 +324,5 @@ public class BundleJobRepository {
       params.addValue((String) keysAndValues[i], keysAndValues[i + 1]);
     }
     return params;
-  }
-
-  private static Instant instant(ResultSet rs, String column) throws SQLException {
-    return rs.getObject(column, OffsetDateTime.class).toInstant();
-  }
-
-  private BundleMetadata mapBundle(ResultSet rs) throws SQLException {
-    UUID documentId = rs.getObject("document_id", UUID.class);
-    Optional<StoredBundleDocument> stored = documentId == null ? Optional.empty()
-        : Optional.of(new StoredBundleDocument(documentId, rs.getString("document_url"),
-            rs.getString("binary_url")));
-    return new BundleMetadata(rs.getObject("id", UUID.class), rs.getObject("job_id", UUID.class),
-        Optional.ofNullable(rs.getString("bundle_key")),
-        Optional.ofNullable(rs.getString("case_reference")), instant(rs, "selected_at"),
-        instant(rs, "created_at"),
-        json.read(rs.getString("request"), BundleRequest.class, "bundle request"),
-        BundleOutcome.valueOf(rs.getString("outcome")), rs.getString("file_name"),
-        rs.getString("media_type"), rs.getLong("size_bytes"), rs.getString("sha256"),
-        rs.getInt("page_count"),
-        json.read(rs.getString("documents"), DOCUMENT_RESULTS, "bundle documents"),
-        json.read(rs.getString("missing_documents"), MISSING_DOCUMENTS, "missing documents"),
-        json.read(rs.getString("warnings"), WARNINGS, "bundle warnings"), stored);
-  }
-
-  private BundleJob map(ResultSet rs) throws SQLException {
-    String failureCode = rs.getString("failure_code");
-    Optional<BundleJobFailure> failure = failureCode == null ? Optional.empty()
-        : Optional.of(new BundleJobFailure(BundleErrorCode.valueOf(failureCode),
-            rs.getString("failure_message"),
-            json.readDocumentFailures(rs.getString("failure_documents"))));
-    return new BundleJob(rs.getObject("external_id", UUID.class),
-        BundleJobState.valueOf(rs.getString("state")), rs.getInt("attempts"),
-        instant(rs, "created_at"), instant(rs, "updated_at"),
-        Optional.ofNullable(rs.getString("coalesce_key")), rs.getInt("coalesced_submissions"),
-        Optional.ofNullable(rs.getObject("claimed_at", OffsetDateTime.class))
-            .map(OffsetDateTime::toInstant),
-        Optional.ofNullable(rs.getString("result")), failure);
   }
 }

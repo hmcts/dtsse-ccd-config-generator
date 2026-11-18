@@ -212,10 +212,10 @@ public final class HttpDocmosisRenderService implements DocmosisRenderService {
     int status = response.statusCode();
     if (!isSuccess(status)) {
       deleteQuietly(target);
-      boolean transientFailure = status >= 500;
+      boolean transientFailure = status >= 500 || status == 429 || status == 408;
       throw new DocmosisRenderException(
           "Docmosis " + operation + " of " + subject + " failed with HTTP " + status + " ("
-              + (transientFailure ? "server error" : "client error")
+              + (status >= 500 ? "server error" : "client error")
               + "); response body withheld from logs.",
           transientFailure);
     }

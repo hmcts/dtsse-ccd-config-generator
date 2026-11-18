@@ -6,7 +6,10 @@ import uk.gov.hmcts.ccd.sdk.bundling.job.StoredBundleDocument;
 
 /** External storage adapter; the managed layer owns ordering and cleanup. */
 public interface BundleDocumentStore {
-  /** Stores the PDF and attaches it to the selection's case, leaving nothing stored on failure. */
+  /**
+   * Stores the PDF and attaches it to the selection's case, and says where it is. It leaves nothing
+   * stored on failure.
+   */
   StoredBundleDocument store(SelectedCaseBundle selection, BundleArtifact artifact)
       throws Exception;
 

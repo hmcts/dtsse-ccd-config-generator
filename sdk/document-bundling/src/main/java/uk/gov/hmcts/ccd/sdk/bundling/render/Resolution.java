@@ -14,6 +14,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -142,9 +143,10 @@ final class Resolution {
     } catch (RuntimeException e) {
       log.warn("Resolver for provider '{}' threw {} for its whole batch",
           resolver.provider(), e.getClass().getSimpleName());
+      // It has said nothing about the documents, so they are not treated as missing.
       for (DocumentReference reference : references) {
         failures.put(reference, new Failure(
-            BundleErrorCode.DOCUMENT_RESOLUTION_FAILED,
+            BundleErrorCode.DOCUMENT_UNAVAILABLE,
             "The resolver threw " + e.getClass().getSimpleName() + " for the whole batch"));
       }
       return;
@@ -177,9 +179,10 @@ final class Resolution {
       Map<DocumentReference, Spooled> spooled,
       Map<DocumentReference, Failure> failures) {
     long limit = limits.maxSourceBytesPerDocument();
-    if (resolved.contentLength().isPresent() && resolved.contentLength().getAsLong() > limit) {
+    OptionalLong declared = resolved.contentLength();
+    if (declared.isPresent() && declared.getAsLong() > limit) {
       failures.put(reference, new Failure(BundleErrorCode.LIMIT_EXCEEDED,
-          "The source declares " + resolved.contentLength().getAsLong() + " bytes, which "
+          "The source declares " + declared.getAsLong() + " bytes, which "
               + "exceeds the configured maximum of " + limit + " bytes per document"));
       return;
     }
@@ -198,13 +201,20 @@ final class Resolution {
             failures.put(reference, new Failure(BundleErrorCode.LIMIT_EXCEEDED,
                 "The source exceeded the configured maximum of " + limit + " bytes per "
                     + "document during transfer (it declared "
-                    + (resolved.contentLength().isPresent()
-                        ? resolved.contentLength().getAsLong() + " bytes" : "no length") + ")"));
+                    + (declared.isPresent() ? declared.getAsLong() + " bytes" : "no length")
+                    + ")"));
             return;
           }
           digest.update(buffer, 0, read);
           out.write(buffer, 0, read);
         }
+      }
+      if (declared.isPresent() && copied < declared.getAsLong()) {
+        // The download ended early without an error; the document itself may be intact.
+        failures.put(reference, new Failure(BundleErrorCode.DOCUMENT_UNAVAILABLE,
+            "The source ended after " + copied + " of its declared " + declared.getAsLong()
+                + " bytes"));
+        return;
       }
       spooled.put(reference, new Spooled(
           file,
@@ -215,8 +225,9 @@ final class Resolution {
           resolved.checksum()));
       file = null;
     } catch (IOException | RuntimeException e) {
+      // The source exists but its download or the local write failed, so it is not missing.
       failures.put(reference, new Failure(
-          BundleErrorCode.DOCUMENT_RESOLUTION_FAILED,
+          BundleErrorCode.DOCUMENT_UNAVAILABLE,
           "The source content could not be spooled to disk: " + e.getClass().getSimpleName()));
     } finally {
       if (file != null) {
@@ -239,9 +250,10 @@ final class Resolution {
     }
     Set<BundleErrorCode> codes = new LinkedHashSet<>();
     documentFailures.forEach(failure -> codes.add(failure.code()));
-    BundleErrorCode code = codes.size() == 1
-        ? codes.iterator().next()
-        : BundleErrorCode.DOCUMENT_RESOLUTION_FAILED;
+    // Worth retrying if any document was only unavailable: the rest are reported if they remain.
+    BundleErrorCode code = codes.contains(BundleErrorCode.DOCUMENT_UNAVAILABLE)
+        ? BundleErrorCode.DOCUMENT_UNAVAILABLE
+        : codes.size() == 1 ? codes.iterator().next() : BundleErrorCode.DOCUMENT_RESOLUTION_FAILED;
     return new BundleGenerationException(
         code,
         BundleStage.RESOLVE,
@@ -260,7 +272,7 @@ final class Resolution {
       case UNSUPPORTED_MEDIA_TYPE -> BundleErrorCode.MEDIA_TYPE_UNSUPPORTED;
       case INVALID_CONTENT -> BundleErrorCode.DOCUMENT_CONTENT_INVALID;
       case TOO_LARGE -> BundleErrorCode.LIMIT_EXCEEDED;
-      case TRANSIENT_FAILURE -> BundleErrorCode.DOCUMENT_RESOLUTION_FAILED;
+      case TRANSIENT_FAILURE -> BundleErrorCode.DOCUMENT_UNAVAILABLE;
     };
   }
 

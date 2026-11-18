@@ -39,6 +39,8 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.CoverPage;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentFailure;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentHandler;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference;
+import uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocuments;
+import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResolver;
 import uk.gov.hmcts.ccd.sdk.bundling.api.HandledDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.api.WatermarkPreset;
 import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderException;
@@ -104,19 +106,60 @@ class BundleRenderingFailureTest {
     BundleGenerationException failure = expectFailure(
         request(doc("d1", "Fine", "good"), doc("d2", "Missing", "missing"), doc("d3", "Denied", "denied"),
             doc("d4", "Flaky", "flaky")),
-        BundleErrorCode.DOCUMENT_RESOLUTION_FAILED, BundleStage.RESOLVE);
+        BundleErrorCode.DOCUMENT_UNAVAILABLE, BundleStage.RESOLVE);
 
     assertThat(failure.documentFailures()).extracting(DocumentFailure::documentId).containsExactly("d2", "d3", "d4");
     assertThat(failure.documentFailures()).extracting(DocumentFailure::code)
         .containsExactly(BundleErrorCode.DOCUMENT_NOT_FOUND, BundleErrorCode.DOCUMENT_ACCESS_DENIED,
-            BundleErrorCode.DOCUMENT_RESOLUTION_FAILED);
+            BundleErrorCode.DOCUMENT_UNAVAILABLE);
     // What failed, which documents (with their references), and what to do next, in one message.
     assertThat(failure.getMessage())
         .contains("3 of 4 unique document reference(s) could not be resolved")
         .contains("d2 (case-documents/missing): DOCUMENT_NOT_FOUND - No such document")
         .contains("d3 (case-documents/denied): DOCUMENT_ACCESS_DENIED")
-        .contains("d4 (case-documents/flaky): DOCUMENT_RESOLUTION_FAILED")
+        .contains("d4 (case-documents/flaky): DOCUMENT_UNAVAILABLE")
         .contains("Remediation: Check the failed documents");
+  }
+
+  @Test
+  void onlyASourceThatIsUnavailableForTheMomentIsWorthRetrying() {
+    resolver.failure("missing", NOT_FOUND, "No such document").failure("denied", ACCESS_DENIED, "Not permitted")
+        .failure("flaky", TRANSIENT_FAILURE, "Timed out");
+
+    // Two different permanent reasons would fail the same way again, however often they are retried.
+    BundleGenerationException permanent = catchThrowableOfType(BundleGenerationException.class,
+        () -> builder().build().render(request(doc("d1", "Missing", "missing"), doc("d2", "Denied", "denied")),
+            BundleExecutionContext.empty()));
+    assertThat(TransientFailures.isTransient(permanent.code(), permanent.getCause())).isFalse();
+
+    BundleDocument foreign = BundleDocument.builder().id("d1").title("Order")
+        .reference(new DocumentReference("some-other-provider", "x")).build();
+    BundleGenerationException unknownProvider = catchThrowableOfType(BundleGenerationException.class,
+        () -> builder().build().render(request(foreign), BundleExecutionContext.empty()));
+    assertThat(TransientFailures.isTransient(unknownProvider.code(), unknownProvider.getCause())).isFalse();
+
+    BundleGenerationException unavailable = catchThrowableOfType(BundleGenerationException.class,
+        () -> builder().build().render(request(doc("d1", "Missing", "missing"), doc("d2", "Flaky", "flaky")),
+            BundleExecutionContext.empty()));
+    assertThat(TransientFailures.isTransient(unavailable.code(), unavailable.getCause())).isTrue();
+
+    // A resolver that throws, as when it cannot get a token, has said nothing about its documents.
+    DocumentResolver tokensDown = new DocumentResolver() {
+      @Override
+      public String provider() {
+        return RenderTestSupport.PROVIDER;
+      }
+
+      @Override
+      public ResolvedDocuments resolveAll(java.util.List<DocumentReference> references,
+          BundleExecutionContext context) {
+        throw new IllegalStateException("token service returned 503");
+      }
+    };
+    BundleGenerationException noAnswer = catchThrowableOfType(BundleGenerationException.class,
+        () -> BundleRenderer.builder().resolver(tokensDown).tempDirectory(work).build()
+            .render(request(doc("d1", "Fine", "good")), BundleExecutionContext.empty()));
+    assertThat(TransientFailures.isTransient(noAnswer.code(), noAnswer.getCause())).isTrue();
   }
 
   @Test

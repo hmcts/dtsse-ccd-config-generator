@@ -137,11 +137,11 @@ final class RenderTestSupport {
 
   // The in-memory consumer resolver: records batches, serves sources, maps typed failures.
   static final class InMemoryResolver implements DocumentResolver {
-    private final Map<String, Source> sources = new LinkedHashMap<>();
+    private final Map<String, ResolvedDocument> sources = new LinkedHashMap<>();
     private final Map<String, ResolutionFailure> failures = new LinkedHashMap<>();
     final List<List<DocumentReference>> batches = new ArrayList<>();
 
-    InMemoryResolver source(String referenceId, Source source) {
+    InMemoryResolver source(String referenceId, ResolvedDocument source) {
       sources.put(referenceId, source);
       return this;
     }

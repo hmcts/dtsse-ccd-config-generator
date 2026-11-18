@@ -206,6 +206,8 @@ tasks.withType(CftlibExec).configureEach {
   dependsOn tasks.named('generateJsonLegacyDefinitions')
   authMode = AuthMode.Local
   environment 'POSTGRES_VERSION', '15'
+  // As Flux would set it: the app queues a refresh of every case's bundles once for this value.
+  environment 'CCD_BUNDLING_REFRESH', 'e2e-release-1'
   environment 'ET_COS_URL', etCosUrl
   environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_E2E', 'http://localhost:4013'
   environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_case-type-a', 'http://localhost:4013'

@@ -644,6 +644,9 @@ role-assignment-service:
   maxResults: 20
 ccd:
   bundling:
+    job:
+      # Managed bundles (CaseFileBundle): this app both queues and renders them.
+      enabled: true
     docmosis:
       # The e2e app hosts its own Docmosis stub (DocmosisStubController), preserving the
       # "runs locally without shared services" goal. Office conversion round-trips through it.

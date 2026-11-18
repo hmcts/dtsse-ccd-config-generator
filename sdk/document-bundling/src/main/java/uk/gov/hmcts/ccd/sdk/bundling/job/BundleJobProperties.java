@@ -4,7 +4,7 @@ import java.time.Duration;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/** Configuration for the durable bundle job outbox, bound from ccd.bundling.job. */
+/** Configuration for the bundle job queue, bound from ccd.bundling.job. */
 @Data
 @ConfigurationProperties(prefix = "ccd.bundling.job")
 public class BundleJobProperties {
@@ -12,9 +12,8 @@ public class BundleJobProperties {
 
   private Worker worker = new Worker();
   private Retry retry = new Retry();
-  private Requeue requeue = new Requeue();
 
-  /** The scheduled worker that claims and executes outbox rows. */
+  /** The scheduled worker that claims and renders queue rows. */
   @Data
   public static class Worker {
     // Matches the auto-configuration, which runs the worker unless this is set to false.
@@ -29,28 +28,13 @@ public class BundleJobProperties {
     private Duration leaseDuration = Duration.ofMinutes(5);
   }
 
-  /**
-   * Re-running a coalesced job whose bundle has placeholders for documents that were only
-   * temporarily unavailable, so the bundle fills in once they can be fetched.
-   */
-  @Data
-  public static class Requeue {
-    private boolean enabled = true;
-
-    private Duration delay = Duration.ofMinutes(15);
-
-    private int maxAttempts = 3;
-  }
-
-  /** Bounded backoff for transient resolution and conversion failures. */
+  /** How a render that did not finish is tried again. */
   @Data
   public static class Retry {
+    /** How many times a bundle may be claimed without recording a result, as a crash leaves it. */
     private int maxAttempts = 3;
 
-    private Duration initialDelay = Duration.ofSeconds(5);
-
-    private double multiplier = 2.0;
-
-    private Duration maxDelay = Duration.ofMinutes(5);
+    /** How long to wait before retrying while a dependency is down; retried until it is back. */
+    private Duration delay = Duration.ofMinutes(1);
   }
 }

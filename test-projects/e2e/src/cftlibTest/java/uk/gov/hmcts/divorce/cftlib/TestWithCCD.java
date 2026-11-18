@@ -101,8 +101,10 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import uk.gov.hmcts.divorce.bundling.CaseFileBundle;
 import uk.gov.hmcts.divorce.bundling.CaseworkerCreateBundle;
 import uk.gov.hmcts.divorce.bundling.CaseworkerCreateBundleMissingDocument;
+import uk.gov.hmcts.divorce.bundling.CaseworkerUpdateCaseFile;
 import uk.gov.hmcts.divorce.bundling.DocmosisStubController;
 import uk.gov.hmcts.divorce.bundling.FixtureDocumentResolver;
 import uk.gov.hmcts.divorce.bundling.model.CaseBundle;
@@ -125,6 +127,10 @@ import uk.gov.hmcts.divorce.sow014.nfd.ExternalGreetingEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
+import uk.gov.hmcts.ccd.sdk.bundling.job.BundleMetadata;
+import uk.gov.hmcts.ccd.sdk.bundling.job.ManagedCaseBundles;
+import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundleView;
+import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundles;
 import uk.gov.hmcts.ccd.sdk.jackson.UnwrappedPrefixModule;
 import uk.gov.hmcts.divorce.roundtrip.RoundTripFixture;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerRoundTripData;
@@ -225,6 +231,12 @@ public class TestWithCCD extends CftlibTest {
 
     @Autowired
     private DocmosisStubController docmosisStub;
+
+    @Autowired
+    private CaseBundles caseBundles;
+
+    @Autowired
+    private ManagedCaseBundles managedCaseBundles;
 
     private long firstEventId;
     private static final String BASE_URL = "http://localhost:4452";
@@ -726,6 +738,86 @@ public class TestWithCCD extends CftlibTest {
                     && line.contains("\"method\":\"POST\"") && line.contains(documentId)),
                 equalTo(true));
         }
+    }
+
+    @Order(40)
+    @Test
+    public void aChangedCaseFileIsBundledInTheBackgroundAndStoredAgainstTheCase() throws Exception {
+        String user = "TEST_CASE_WORKER_USER@mailinator.com";
+        assertThat(caseBundles.view(CaseFileBundle.NAME, caseRef).lifecycle(),
+            equalTo(CaseBundleView.Lifecycle.NONE));
+
+        // The app was started with CCD_BUNDLING_REFRESH set (build.gradle), and ran that refresh.
+        await().atMost(Duration.ofSeconds(90)).until(() -> db.queryForObject(
+            "select count(*) from bundling.refresh_key where key = 'e2e-release-1'", Map.of(), Integer.class),
+            equalTo(1));
+
+        BundleMetadata first = updateCaseFileAndAwaitBundle(user, null);
+
+        assertThat(first.caseReference(), equalTo(caseRef));
+        assertThat(first.fileName(), equalTo("case-" + caseRef + "-case-file.pdf"));
+        assertThat(first.missingDocuments(), hasSize(0));
+        // The SDK stored the PDF through the real embedded CDAM and attached it to the case.
+        String documentId = first.stored().id().toString();
+        assertThat(fetchCdamDocument(documentId).path("metadata").path("case_id").asText(),
+            equalTo(String.valueOf(caseRef)));
+
+        // The service shows the current bundle on the case, which is what lets a user download it.
+        var c = ccdApi.getCase(getAuthorisation(user), getServiceAuth(), String.valueOf(caseRef));
+        var caseData = mapper.readValue(mapper.writeValueAsString(c.getData()), CaseData.class);
+        assertThat(caseData.getCaseFileBundle().getUrl(), endsWith(documentId));
+        var download = new HttpGet(caseData.getCaseFileBundle().getBinaryUrl()
+            .replaceFirst("^.*/documents/", CDAM_BASE_URL + "/cases/documents/"));
+        download.addHeader("Authorization", getAuthorisation(user));
+        download.addHeader("ServiceAuthorization", cftlib().generateDummyS2SToken("nfdiv_case_api"));
+        try (var downloadResponse = HttpClientBuilder.create().build().execute(download)) {
+            assertThat(downloadResponse.getStatusLine().getStatusCode(), equalTo(200));
+            try (PDDocument stitched = Loader.loadPDF(EntityUtils.toByteArray(downloadResponse.getEntity()))) {
+                assertThat(stitched.getNumberOfPages(), equalTo(first.pageCount()));
+                String text = new PDFTextStripper().getText(stitched);
+                assertThat(text, containsString(CaseFileBundle.TITLE));
+                assertThat(text, containsString(CaseworkerCreateBundle.POTENTIAL_ENERGY_TITLE));
+                assertThat(text, containsString(CaseworkerCreateBundle.MEDICAL_REPORT_TITLE));
+            }
+        }
+
+        // A later change replaces the bundle with a newly stored one.
+        BundleMetadata second = updateCaseFileAndAwaitBundle(user, first.id());
+        assertThat(second.stored().id(), not(equalTo(first.stored().id())));
+    }
+
+    @Order(41)
+    @Test
+    public void aBundleRefreshRendersTheBundlesOfItsOwnCaseTypeAndLeavesOtherCaseTypesAlone() {
+        UUID before = caseBundles.view(CaseFileBundle.NAME, caseRef).current().orElseThrow().id();
+        assertThat("this database holds cases of another case type", db.queryForObject(
+            "select count(*) from ccd.case_data where case_type_id <> :caseType",
+            Map.of("caseType", NoFaultDivorce.getCaseType()), Integer.class), greaterThan(0));
+
+        // What a release does by changing CCD_BUNDLING_REFRESH, here with cases already present.
+        assertThat(managedCaseBundles.refresh("e2e-release-2"), equalTo(true));
+
+        await().atMost(Duration.ofSeconds(60)).until(
+            () -> caseBundles.view(CaseFileBundle.NAME, caseRef),
+            view -> view.lifecycle() == CaseBundleView.Lifecycle.UP_TO_DATE
+                && !view.current().orElseThrow().id().equals(before));
+        assertThat("a case file bundle is only for cases of its own case type", db.queryForObject(
+            "select count(*) from bundling.bundle_job job join ccd.case_data c on c.reference = job.case_reference"
+                + " where c.case_type_id <> :caseType",
+            Map.of("caseType", NoFaultDivorce.getCaseType()), Integer.class), equalTo(0));
+    }
+
+    private BundleMetadata updateCaseFileAndAwaitBundle(String user, UUID previousBundle) throws Exception {
+        var request = prepareEventRequest(user, CaseworkerUpdateCaseFile.CASEWORKER_UPDATE_CASE_FILE, Map.of());
+        try (var response = HttpClientBuilder.create().build().execute(request)) {
+            assertThat("case file event should succeed: " + EntityUtils.toString(response.getEntity()),
+                response.getStatusLine().getStatusCode(), equalTo(201));
+        }
+        return await().atMost(Duration.ofSeconds(60)).until(
+            () -> caseBundles.view(CaseFileBundle.NAME, caseRef),
+            view -> view.lifecycle() == CaseBundleView.Lifecycle.UP_TO_DATE
+                && !view.current().orElseThrow().id().equals(previousBundle))
+            .current().orElseThrow();
     }
 
     @Order(39)

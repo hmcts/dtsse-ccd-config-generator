@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 
 import java.io.ByteArrayOutputStream;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -30,6 +31,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import uk.gov.hmcts.ccd.sdk.CaseView;
 import uk.gov.hmcts.ccd.sdk.CaseViewRequest;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
+import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleArtifact;
@@ -40,13 +42,13 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference;
 import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocumentPolicy;
 import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobAutoConfiguration;
 import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobFlywayAutoConfiguration;
+import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobRepository;
 import uk.gov.hmcts.ccd.sdk.bundling.job.BundleJobWorker;
-import uk.gov.hmcts.ccd.sdk.bundling.job.ManagedCaseBundleAutoConfiguration;
 import uk.gov.hmcts.ccd.sdk.bundling.job.ManagedCaseBundles;
-import uk.gov.hmcts.ccd.sdk.bundling.job.OutboxBundleJobService;
 import uk.gov.hmcts.ccd.sdk.bundling.job.StoredBundleDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.BundleSystemUser;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundleDefinition;
+import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundles;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundleView;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.CdamBundleDocumentStore;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.SelectedCaseBundle;
@@ -68,12 +70,11 @@ import uk.gov.hmcts.reform.ccd.document.am.feign.CaseDocumentClientApi;
     })
 @TestPropertySource(
     properties = {
-      "ccd.bundling.managed.enabled=true",
       "ccd.bundling.job.enabled=true",
+      "ccd.bundling.refresh=at-startup",
       "ccd.bundling.job.worker.poll-delay=1h",
       "ccd.bundling.job.worker.max-concurrent-renders=2",
-      "ccd.bundling.job.retry.initial-delay=1ms",
-      "ccd.bundling.job.retry.max-delay=1ms",
+      "ccd.bundling.job.retry.delay=1ms",
       "case_document_am.url=http://cdam.invalid",
       "idam.s2s-auth.url=http://s2s.invalid",
       "ccd.decentralised-runtime.system-user.id=bundle-worker",
@@ -82,7 +83,6 @@ import uk.gov.hmcts.reform.ccd.document.am.feign.CaseDocumentClientApi;
       "ccd.decentralised-runtime.system-user.last-name=Worker"
     })
 @ImportAutoConfiguration({
-  ManagedCaseBundleAutoConfiguration.class,
   BundlingAutoConfiguration.class,
   BundleJobAutoConfiguration.class,
   BundleJobFlywayAutoConfiguration.class,
@@ -93,7 +93,7 @@ import uk.gov.hmcts.reform.ccd.document.am.feign.CaseDocumentClientApi;
 class ManagedCaseBundlesIntegrationTest {
   @Autowired ManagedCaseBundles bundles;
   @Autowired BundleJobWorker worker;
-  @Autowired OutboxBundleJobService jobs;
+  @Autowired BundleJobRepository jobs;
   @Autowired NamedParameterJdbcTemplate jdbc;
   @Autowired TransactionTemplate transaction;
   @Autowired CcdEventTestSupport<CaseData, State> events;
@@ -106,8 +106,8 @@ class ManagedCaseBundlesIntegrationTest {
     jdbc.getJdbcTemplate()
         .execute(
             """
-create table if not exists bundle_test_source(case_key text primary key, reference bigint,
-  document_id uuid, title text)
+create table if not exists bundle_test_source(reference bigint primary key, document_id uuid,
+  title text)
 """);
     store.failOnce.set(false);
     store.deleted.set(0);
@@ -116,7 +116,7 @@ create table if not exists bundle_test_source(case_key text primary key, referen
 
   @Test
   void changesCoalesceAndRollbackLeavesNoJob() throws Exception {
-    String key = fixture();
+    long key = fixture();
     assertThat(bundles.view("case-file", key).lifecycle()).isEqualTo(CaseBundleView.Lifecycle.NONE);
     transaction.executeWithoutResult(
         status -> {
@@ -130,8 +130,8 @@ create table if not exists bundle_test_source(case_key text primary key, referen
         });
     assertThat(
             jdbc.queryForObject(
-                "select count(*) from bundling.bundle_job where coalesce_key = :key",
-                Map.of("key", ManagedCaseBundles.key("case-file", key)),
+                "select count(*) from bundling.bundle_job where case_reference = :key",
+                Map.of("key", key),
                 Integer.class))
         .isEqualTo(1);
     assertThat(bundles.view("case-file", key).lifecycle())
@@ -143,17 +143,14 @@ create table if not exists bundle_test_source(case_key text primary key, referen
 
   @Test
   void publishesAnAttachedPdfAndDeletesItHalfADayAfterItIsReplaced() throws Exception {
-    String key = fixture();
+    long key = fixture();
     changed(key);
     run(key);
     var first = document(bundles.view("case-file", key));
-    long reference = reference(key);
-    assertThat(documents.caseReference(first)).hasValue(reference);
+    assertThat(documents.caseReference(first)).hasValue(key);
     assertThat(documents.content(first))
         .startsWith("%PDF".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
-    UUID job = jobs.findLatest(ManagedCaseBundles.key("case-file", key)).orElseThrow().externalId();
-    assertThat(jobs.findBundleForJob(job).orElseThrow().caseReference())
-        .hasValue(String.valueOf(reference));
+    assertThat(jobs.findLatestBundle("case-file", key).orElseThrow().caseReference()).isEqualTo(key);
     changed(key);
     assertThat(bundles.view("case-file", key).lifecycle())
         .isEqualTo(CaseBundleView.Lifecycle.UPDATING);
@@ -165,8 +162,8 @@ create table if not exists bundle_test_source(case_key text primary key, referen
     assertThat(documents.stored()).extracting(Document::getUrl).contains(first.getUrl());
     jdbc.update(
         "update bundling.bundle set created_at = created_at - interval '13 hours' "
-            + "where document_url = :url",
-        Map.of("url", second.getUrl()));
+            + "where case_reference = :key",
+        Map.of("key", key));
     bundles.cleanUp();
     assertThat(documents.stored())
         .extracting(Document::getUrl)
@@ -176,44 +173,42 @@ create table if not exists bundle_test_source(case_key text primary key, referen
 
   @Test
   void aFailedStoreIsRetried() throws Exception {
-    String key = fixture();
+    long key = fixture();
     Set<String> before = bundlePdfs();
     store.failOnce.set(true);
     changed(key);
-    UUID id = jobs.findLatest(ManagedCaseBundles.key("case-file", key)).orElseThrow().externalId();
     worker.poll();
     await()
         .atMost(Duration.ofSeconds(20))
         .until(
-            () ->
-                jobs.find(id).orElseThrow().attempts() == 1
-                    && jobs.find(id).orElseThrow().state().name().equals("QUEUED"));
+            () -> jdbc.queryForObject("""
+                select count(*) from bundling.bundle_job
+                where case_reference = :key and next_attempt_at is not null and lease_owner is null
+                """, Map.of("key", key), Integer.class) == 1);
     assertThat(bundles.view("case-file", key).lifecycle())
         .isEqualTo(CaseBundleView.Lifecycle.PREPARING);
     run(key);
-    String current = bundles.view("case-file", key).current().orElseThrow().stored().orElseThrow().url();
+    String current = bundles.view("case-file", key).current().orElseThrow().stored().url();
     assertThat(newSince(before)).containsExactly(current);
   }
 
   @Test
   void aWorkerThatLostItsLeaseDeletesItsLateUpload() throws Exception {
-    String key = fixture();
+    long key = fixture();
     Set<String> before = bundlePdfs();
     store.storeStarted = new CountDownLatch(1);
     store.releaseStore = new CountDownLatch(1);
     changed(key);
-    UUID id = jobs.findLatest(ManagedCaseBundles.key("case-file", key)).orElseThrow().externalId();
     worker.poll();
     assertThat(store.storeStarted.await(20, TimeUnit.SECONDS)).isTrue();
     jdbc.update(
         "update bundling.bundle_job set lease_expires_at = clock_timestamp() - interval '1 second' "
-            + "where external_id = :id",
-        Map.of("id", id));
+            + "where case_reference = :key",
+        Map.of("key", key));
     run(key);
-    String current = bundles.view("case-file", key).current().orElseThrow().stored().orElseThrow().url();
+    String current = bundles.view("case-file", key).current().orElseThrow().stored().url();
     store.releaseStore.countDown();
     await().atMost(Duration.ofSeconds(20)).until(() -> store.deleted.get() == 1);
-    assertThat(jobs.find(id).orElseThrow().attempts()).isEqualTo(2);
     assertThat(newSince(before)).containsExactly(current);
     store.storeStarted = null;
     store.releaseStore = null;
@@ -221,10 +216,10 @@ create table if not exists bundle_test_source(case_key text primary key, referen
 
   @Test
   void aSourceCdamCannotFindBecomesAMissingPage() throws Exception {
-    String key = fixture();
+    long key = fixture();
     UUID source =
         jdbc.queryForObject(
-            "select document_id from bundle_test_source where case_key = :key",
+            "select document_id from bundle_test_source where reference = :key",
             Map.of("key", key),
             UUID.class);
     documents.delete(
@@ -238,8 +233,118 @@ create table if not exists bundle_test_source(case_key text primary key, referen
         .hasSize(1);
   }
 
+  @Test
+  void aSourceThatIsNotAReadablePdfBecomesAMissingPageRatherThanBeingRetriedForEver() {
+    long key = fixture("not a PDF".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+    changed(key);
+    run(key);
+    assertThat(bundles.view("case-file", key).current().orElseThrow().missingDocuments())
+        .hasSize(1);
+  }
+
+  @Test
+  void aChangeOutsideAnEventAndAnEventOnTheSameCaseDoNotDeadlock() throws Exception {
+    long reference = fixture();
+    var pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+    try {
+      var event = transaction.execute(status -> {
+        // A write outside an event queues the bundle; an event then locks the case and queues it too.
+        bundles.changed("case-file", reference);
+        var running = pool.submit(() -> transaction.executeWithoutResult(inEvent -> {
+          jdbc.query("select 1 from ccd.case_data where reference = :reference for update",
+              Map.of("reference", reference), rs -> null);
+          bundles.changed("case-file", reference);
+        }));
+        org.awaitility.Awaitility.await().atMost(java.time.Duration.ofSeconds(10)).until(() ->
+            jdbc.queryForObject("select count(*) from pg_stat_activity where wait_event_type = 'Lock'",
+                Map.of(), Integer.class) > 0);
+        return running;
+      });
+      event.get(10, java.util.concurrent.TimeUnit.SECONDS);
+    } finally {
+      pool.shutdownNow();
+      jdbc.update("delete from ccd.case_data where reference = :reference", Map.of("reference", reference));
+    }
+  }
+
+  @Test
+  void aChangeInTheEventThatCreatesACaseIsQueuedAndDeletingTheCaseDeletesItsJobs() {
+    // The create handler runs before the runtime writes the case row.
+    var creation = events.create("create", State.Open, new CaseData("created"));
+    creation.submitExpectingSuccess();
+    long reference = creation.reference();
+    assertThat(bundles.view("case-file", reference).lifecycle())
+        .isEqualTo(CaseBundleView.Lifecycle.PREPARING);
+
+    jdbc.update("delete from ccd.case_data where reference = :reference", Map.of("reference", reference));
+    assertThat(jobs.find("case-file", reference)).isEmpty();
+  }
+
+  @Test
+  void aNewRefreshKeyRerendersEveryCaseOnceAndLeavesWaitingJobsAlone() throws Exception {
+    long published = fixture();
+    changed(published);
+    run(published);
+    final String before = document(bundles.view("case-file", published)).getUrl();
+    long waiting = fixture();
+    changed(waiting);
+    Map<String, Object> cases = Map.of("cases", List.of(published, waiting));
+    jdbc.update("delete from ccd.case_data where reference not in (:cases)", cases);
+
+    // The configured ccd.bundling.refresh has run by the time the scheduled check returns.
+    bundles.refreshIfNew();
+    assertThat(bundles.refresh("at-startup")).isFalse();
+    String key = UUID.randomUUID().toString();
+    assertThat(bundles.refresh(key)).isTrue();
+    assertThat(bundles.refresh(key)).isFalse();
+    assertThat(bundles.refresh(" ")).isFalse();
+    assertThat(jdbc.queryForList("""
+        select priority from bundling.bundle_job order by priority
+        """, Map.of(), Integer.class)).containsExactly(-1, 0);
+    // The published PDF stays current until its replacement publishes.
+    assertThat(bundles.view("case-file", published).lifecycle()).isEqualTo(CaseBundleView.Lifecycle.UPDATING);
+    assertThat(document(bundles.view("case-file", published)).getUrl()).isEqualTo(before);
+    run(waiting);
+    run(published);
+    assertThat(document(bundles.view("case-file", published)).getUrl()).isNotEqualTo(before);
+  }
+
+  @Test
+  void theConfiguredRefreshKeyQueuesEveryCaseOnceHoweverManyPodsStartWithIt() throws Exception {
+    long reference = fixture();
+    jdbc.update("delete from ccd.case_data where reference <> :reference", Map.of("reference", reference));
+    String release = UUID.randomUUID().toString();
+
+    // What each pod does shortly after it starts with CCD_BUNDLING_REFRESH set.
+    pod(release).refreshIfNew();
+    assertThat(waitingRefreshes(reference)).isEqualTo(1);
+    run(reference);
+    // A second pod, or a restart, with the same value queues nothing.
+    pod(release).refreshIfNew();
+    assertThat(waitingRefreshes(reference)).isZero();
+    // A pod with no value set queues nothing.
+    pod("").refreshIfNew();
+    assertThat(waitingRefreshes(reference)).isZero();
+    // The next value refreshes again.
+    pod(UUID.randomUUID().toString()).refreshIfNew();
+    assertThat(waitingRefreshes(reference)).isEqualTo(1);
+    run(reference);
+  }
+
+  private ManagedCaseBundles pod(String refreshKey) {
+    return new ManagedCaseBundles(
+        jobs, store, transaction.getTransactionManager(), List.of(definition), refreshKey);
+  }
+
+  private int waitingRefreshes(long reference) {
+    return jdbc.queryForObject("""
+        select count(*) from bundling.bundle_job
+        where case_reference = :reference and priority = -1
+        """, Map.of("reference", reference), Integer.class);
+  }
+
   private static Document document(CaseBundleView view) {
-    var stored = view.current().orElseThrow().stored().orElseThrow();
+    var stored = view.current().orElseThrow().stored();
     return Document.builder().url(stored.url()).binaryUrl(stored.binaryUrl()).build();
   }
 
@@ -256,42 +361,40 @@ create table if not exists bundle_test_source(case_key text primary key, referen
     return added;
   }
 
-  private void changed(String key) {
+  private void changed(long key) {
     transaction.executeWithoutResult(status -> bundles.changed("case-file", key));
   }
 
-  private String fixture() throws Exception {
-    String key = UUID.randomUUID().toString();
-    long reference = events.seed(State.Open, new CaseData("fixture"));
-    byte[] content;
+  private long fixture() throws Exception {
     try (PDDocument pdf = new PDDocument();
         ByteArrayOutputStream output = new ByteArrayOutputStream()) {
       pdf.addPage(new PDPage());
       pdf.save(output);
-      content = output.toByteArray();
+      return fixture(output.toByteArray());
     }
+  }
+
+  /** A case whose one source document has the content. */
+  private long fixture(byte[] content) {
+    long reference = events.seed(State.Open, new CaseData("fixture"));
     Document document = documents.store("source.pdf", "application/pdf", content);
     UUID id = UUID.fromString(document.getUrl().substring(document.getUrl().lastIndexOf('/') + 1));
     jdbc.update(
-        "insert into bundle_test_source values (:key, :reference, :id, 'source.pdf')",
-        Map.of("key", key, "reference", reference, "id", id));
-    return key;
+        "insert into bundle_test_source values (:reference, :id, 'source.pdf')",
+        Map.of("reference", reference, "id", id));
+    return reference;
   }
 
-  private long reference(String key) {
-    return jdbc.queryForObject(
-        "select reference from bundle_test_source where case_key = :key",
-        Map.of("key", key),
-        Long.class);
-  }
-
-  private void run(String key) {
-    UUID id = jobs.findLatest(ManagedCaseBundles.key("case-file", key)).orElseThrow().externalId();
+  private void run(long key) {
     worker.poll();
     await()
         .atMost(Duration.ofSeconds(20))
-        .until(() -> jobs.find(id).orElseThrow().state().terminal());
-    assertThat(jobs.find(id).orElseThrow().failure()).isEmpty();
+        .until(() -> {
+          worker.poll();
+          return jobs.find("case-file", key).map(job -> job.failure().isPresent()).orElse(true);
+        });
+    // A bundle that is up to date has no queue row.
+    assertThat(jobs.find("case-file", key)).isEmpty();
   }
 
   record CaseData(String value) {}
@@ -315,10 +418,16 @@ create table if not exists bundle_test_source(case_key text primary key, referen
   }
 
   static class Config implements CCDConfig<CaseData, State, Role> {
+    @Autowired CaseBundles bundles;
+
     @Override
     public void configureDecentralised(DecentralisedConfigBuilder<CaseData, State, Role> builder) {
       builder.caseType("ManagedTest", "ManagedTest", "ManagedTest");
       builder.jurisdiction("TEST", "Test", "Test");
+      builder.event("create").initialState(State.Open).aboutToSubmitCallback((details, before) -> {
+        bundles.changed("case-file", details.getId());
+        return AboutToStartOrSubmitResponse.<CaseData, State>builder().data(details.getData()).build();
+      });
     }
   }
 
@@ -348,16 +457,17 @@ create table if not exists bundle_test_source(case_key text primary key, referen
     }
 
     @Override
-    public SelectedCaseBundle select(String key) {
+    public String caseType() {
+      return "ManagedTest";
+    }
+
+    @Override
+    public BundleRequest select(long caseReference) {
       calls.incrementAndGet();
       return jdbc.queryForObject(
-          "select * from bundle_test_source where case_key = :key",
-          Map.of("key", key),
+          "select * from bundle_test_source where reference = :reference",
+          Map.of("reference", caseReference),
           (row, n) ->
-              new SelectedCaseBundle(
-                  row.getLong("reference"),
-                  "ManagedTest",
-                  "TEST",
                   BundleRequest.builder()
                       .title("Case bundle")
                       .fileName("bundle.pdf")
@@ -373,7 +483,7 @@ create table if not exists bundle_test_source(case_key text primary key, referen
                                               "cdam", row.getString("document_id")))
                                       .build())
                               .build())
-                      .build()));
+                      .build());
     }
   }
 
@@ -390,7 +500,10 @@ create table if not exists bundle_test_source(case_key text primary key, referen
     @Override
     public StoredBundleDocument store(SelectedCaseBundle selection, BundleArtifact artifact) {
       if (failOnce.getAndSet(false)) {
-        throw new IllegalStateException("Temporary storage failure");
+        throw feign.FeignException.errorStatus("store", feign.Response.builder().status(503)
+            .request(feign.Request.create(feign.Request.HttpMethod.POST, "http://cdam", Map.of(), null,
+                java.nio.charset.StandardCharsets.UTF_8, null))
+            .build());
       }
       CountDownLatch started = storeStarted;
       CountDownLatch release = releaseStore;

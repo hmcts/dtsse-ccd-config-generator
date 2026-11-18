@@ -1,20 +1,21 @@
 package uk.gov.hmcts.ccd.sdk.bundling.job;
 
 import java.time.Duration;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundleExecutionContext;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleResult;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.BundleDocumentStore;
@@ -25,171 +26,140 @@ import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundles;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.SelectedCaseBundle;
 
 /**
- * Keeps each case's bundle current on the job outbox. A change queues a coalesced job; the worker
+ * Keeps each case's bundle current on the job queue. A change queues the bundle; the worker
  * selects the documents afresh, renders, and this class stores the PDF on the case. The worker
- * records it in bundling.bundle, where the bundle selected last is the case's current one, and
+ * records it in bundling.bundle, where the bundle rendered last is the case's current one, and
  * {@link #cleanUp} deletes the PDFs it replaced.
  */
 @Slf4j
-public class ManagedCaseBundles
-    implements CaseBundles, BundleDocumentSelector, BundleJobCompletionHandler {
-  private static final String CASE_TYPE = "bundling.caseType";
-  private static final String JURISDICTION = "bundling.jurisdiction";
+public class ManagedCaseBundles implements CaseBundles {
   // How long a replaced bundle's PDF is kept, so a link a reader already has keeps working.
   static final Duration REPLACED_PDF_KEPT_FOR = Duration.ofHours(12);
 
-  private final NamedParameterJdbcTemplate jdbc;
-  private final OutboxBundleJobService jobs;
   private final BundleJobRepository repository;
   private final BundleDocumentStore store;
   private final Map<String, CaseBundleDefinition> definitions;
   private final TransactionTemplate snapshot;
-  private final BundleJobJson json = new BundleJobJson();
+  private final TransactionTemplate transaction;
+  private final String refreshKey;
+  private volatile boolean refreshChecked;
 
   public ManagedCaseBundles(
-      NamedParameterJdbcTemplate jdbc,
-      OutboxBundleJobService jobs,
       BundleJobRepository repository,
       BundleDocumentStore store,
       PlatformTransactionManager transactions,
-      List<CaseBundleDefinition> definitions) {
-    this.jdbc = jdbc;
-    this.jobs = jobs;
+      List<CaseBundleDefinition> definitions,
+      String refreshKey) {
+    this.refreshKey = refreshKey;
     this.repository = repository;
     this.store = store;
-    this.definitions =
-        definitions.stream()
-            .collect(Collectors.toUnmodifiableMap(CaseBundleDefinition::name, Function.identity()));
-    this.definitions
-        .keySet()
-        .forEach(
-            name -> {
-              if (!name.matches("[a-zA-Z0-9._-]+")) {
-                throw new IllegalArgumentException(
-                    "Bundle definition name must contain only letters, digits, ., _ or -");
-              }
-            });
+    // In name order, so every pod refreshes the definitions in the same order.
+    this.definitions = new TreeMap<>(definitions.stream()
+        .collect(Collectors.toMap(CaseBundleDefinition::name, Function.identity())));
+    transaction = new TransactionTemplate(transactions);
     snapshot = new TransactionTemplate(transactions);
     snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
     snapshot.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
   }
 
-  public static String key(String definition, String caseKey) {
-    return "managed:" + definition + ":" + caseKey;
-  }
-
   @Override
-  public void changed(String definition, String caseKey) {
+  public void changed(String definition, long caseReference) {
     definition(definition);
     if (!TransactionSynchronizationManager.isActualTransactionActive()) {
       throw new IllegalStateException(
           "A bundle change must join the transaction that changed its documents");
     }
-    // Calls in one transaction join the job its first call queued.
-    jobs.submitCoalesced(
-        key(definition, caseKey),
-        Map.of("definition", definition, "caseKey", caseKey),
-        BundleExecutionContext.empty());
+    repository.changed(definition, caseReference);
   }
 
-  @Override
-  public BundleRequest select(BundleJobContext context) {
-    CaseBundleDefinition definition = definition(context.parameters().get("definition"));
-    String caseKey = context.parameters().get("caseKey");
-    // One snapshot, so the documents and whatever decides their visibility agree.
-    SelectedCaseBundle selected = snapshot.execute(status -> definition.select(caseKey));
-    // The job records which case it rendered for: the bundle row's case reference, and where
-    // onCompleted attaches the PDF.
-    jdbc.update(
-        """
-        update bundling.bundle_job set execution_context = execution_context || :caseContext::jsonb
-        where external_id = :jobId
-        """,
-        Map.of(
-            "jobId",
-            context.externalId(),
-            "caseContext",
-            json.write(
-                Map.of(
-                    "caseReference", String.valueOf(selected.caseReference()),
-                    CASE_TYPE, selected.caseType(),
-                    JURISDICTION, selected.jurisdiction()))));
-    return selected.request().withExternalId(context.externalId());
-  }
-
-  @Override
-  public Object onCompleted(
-      BundleJob job, BundleJobContext context, BundleRequest request, BundleResult result)
-      throws Exception {
-    return store.store(target(job.externalId(), request), result.artifact());
-  }
-
-  @Override
-  public boolean retryable(Exception failure) {
-    return !(failure instanceof IllegalArgumentException)
-        && (!(failure instanceof feign.FeignException remote)
-            || remote.status() < 0
-            || remote.status() >= 500
-            || remote.status() == 429);
-  }
-
-  @Override
-  public void discarded(BundleJob job, Object summary) {
-    if (summary instanceof StoredBundleDocument stored) {
-      store.delete(stored.id());
+  /**
+   * Refreshes for the configured ccd.bundling.refresh, off the startup path. A failure is logged by
+   * the scheduler and tried again a minute later.
+   */
+  @Scheduled(fixedDelay = 60_000)
+  public void refreshIfNew() {
+    if (!refreshChecked) {
+      refresh(refreshKey);
+      refreshChecked = true;
     }
   }
 
+  /**
+   * Queues a background render of every case's bundles, once for each key, and says whether this
+   * call did. The key commits with the queued bundles, so other pods and restarts skip it.
+   */
+  public boolean refresh(String key) {
+    if (key == null || key.isBlank()) {
+      return false;
+    }
+    return transaction.execute(status -> {
+      if (!repository.recordRefresh(key)) {
+        return false;
+      }
+      for (CaseBundleDefinition definition : definitions.values()) {
+        log.info("Bundle refresh {} queued {} {} bundles", key,
+            repository.refresh(definition.name(), definition.caseType()), definition.name());
+      }
+      return true;
+    });
+  }
+
+  /** The bundle's case and documents, selected when the worker renders it. */
+  SelectedCaseBundle select(BundleJob job) {
+    CaseBundleDefinition definition = definition(job.definition());
+    // One snapshot, so the documents and whatever decides their visibility agree.
+    BundleRequest request = snapshot.execute(status ->
+        Objects.requireNonNull(definition.select(job.caseReference()),
+            () -> definition.name() + " selected no bundle request"));
+    return repository.selectedFor(job.caseReference(), request.withExternalId(UUID.randomUUID()));
+  }
+
+  /** The definitions this pod can render; bundles of others are left to the pods that can. */
+  Collection<String> definitions() {
+    return definitions.keySet();
+  }
+
+  StoredBundleDocument store(SelectedCaseBundle selected, BundleResult result) throws Exception {
+    return Objects.requireNonNull(store.store(selected, result.artifact()),
+        "The document store returned no location");
+  }
+
+  /** Whether a failure to store is the store being down: anything else would fail again. */
+  boolean retryable(Exception failure) {
+    return failure instanceof feign.FeignException remote
+        && (remote.status() < 0 || remote.status() >= 500 || remote.status() == 429);
+  }
+
+  /** Deletes a PDF stored by a worker that then found it no longer held the bundle's lease. */
+  void discard(StoredBundleDocument stored) {
+    store.delete(stored.id());
+  }
+
   @Override
-  public CaseBundleView view(String definition, String caseKey) {
+  public CaseBundleView view(String definition, long caseReference) {
     definition(definition);
-    String key = key(definition, caseKey);
     // The job first: a bundle recorded in between then reads as updating, never as up to date.
-    Optional<BundleJob> job = jobs.findLatest(key);
-    Optional<BundleMetadata> current =
-        jobs.findLatestBundle(key).filter(bundle -> bundle.stored().isPresent());
+    Optional<BundleJob> job = repository.find(definition, caseReference);
+    Optional<BundleMetadata> current = repository.findLatestBundle(definition, caseReference);
     boolean published = current.isPresent();
-    Lifecycle lifecycle =
-        job.map(
-                latest ->
-                    switch (latest.state()) {
-                      case QUEUED, IN_PROGRESS ->
-                          published ? Lifecycle.UPDATING : Lifecycle.PREPARING;
-                      case FAILED -> Lifecycle.FAILED;
-                      case COMPLETED, COMPLETED_WITH_WARNINGS ->
-                          published ? Lifecycle.UP_TO_DATE : Lifecycle.NONE;
-                    })
-            .orElse(published ? Lifecycle.UP_TO_DATE : Lifecycle.NONE);
+    // A bundle has a queue row while a render of it is wanted, and keeps it if that render failed.
+    Lifecycle lifecycle = job.isEmpty() ? (published ? Lifecycle.UP_TO_DATE : Lifecycle.NONE)
+        : job.get().failure().isPresent() ? Lifecycle.FAILED
+        : published ? Lifecycle.UPDATING : Lifecycle.PREPARING;
     return new CaseBundleView(current, lifecycle);
   }
 
-  /** Deletes the PDFs of bundles that a later bundle of the same case replaced 12 hours ago. */
-  @Scheduled(fixedDelayString = "${ccd.bundling.managed.cleanup-delay:60000}")
+  /** Deletes the bundles that a later bundle of the same case replaced 12 hours ago. */
+  @Scheduled(fixedDelayString = "${ccd.bundling.job.cleanup-delay:60000}")
   public void cleanUp() {
     for (UUID id : repository.findReplacedDocuments(REPLACED_PDF_KEPT_FOR, 20)) {
       try {
         store.delete(id);
-        repository.markDocumentDeleted(id);
+        repository.deleteBundle(id);
       } catch (RuntimeException failure) {
         log.warn("Replaced bundle document {} could not be deleted; it is retried", id, failure);
       }
     }
-  }
-
-  private SelectedCaseBundle target(UUID jobId, BundleRequest request) {
-    BundleExecutionContext context =
-        json.read(
-            jdbc.queryForObject(
-                "select execution_context::text from bundling.bundle_job where external_id = :jobId",
-                Map.of("jobId", jobId),
-                String.class),
-            BundleExecutionContext.class,
-            "execution context");
-    return new SelectedCaseBundle(
-        Long.parseLong(context.caseReference().orElseThrow()),
-        context.attributes().get(CASE_TYPE),
-        context.attributes().get(JURISDICTION),
-        request);
   }
 
   private CaseBundleDefinition definition(String name) {

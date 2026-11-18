@@ -149,8 +149,8 @@ public final class BundleRequest {
     private Builder() {
     }
 
-    /** Sets the consumer-minted UUID that identifies this bundle request. Required to submit or render the
-     * request; managed case bundles set it to the job id. */
+    /** Sets the UUID that identifies this render in logs and metrics. Required to render the
+     * request; managed case bundles set a new one for each render. */
     public Builder externalId(UUID externalId) {
       this.externalId = externalId;
       return this;
