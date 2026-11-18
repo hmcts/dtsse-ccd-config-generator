@@ -182,9 +182,10 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
     await()
         .atMost(Duration.ofSeconds(20))
         .until(
-            () ->
-                jobs.find("case-file", key).orElseThrow().attempts() == 1
-                    && jobs.find("case-file", key).orElseThrow().state().name().equals("QUEUED"));
+            () -> jdbc.queryForObject("""
+                select count(*) from bundling.bundle_job
+                where case_reference = :key and attempts = 1 and lease_owner is null
+                """, Map.of("key", key), Integer.class) == 1);
     assertThat(bundles.view("case-file", key).lifecycle())
         .isEqualTo(CaseBundleView.Lifecycle.PREPARING);
     run(key);
@@ -209,7 +210,6 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
     String current = bundles.view("case-file", key).current().orElseThrow().stored().url();
     store.releaseStore.countDown();
     await().atMost(Duration.ofSeconds(20)).until(() -> store.deleted.get() == 1);
-    assertThat(jobs.find("case-file", key).orElseThrow().attempts()).isEqualTo(2);
     assertThat(newSince(before)).containsExactly(current);
     store.storeStarted = null;
     store.releaseStore = null;
@@ -291,7 +291,7 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
     assertThat(bundles.refresh(key)).isFalse();
     assertThat(bundles.refresh(" ")).isFalse();
     assertThat(jdbc.queryForList("""
-        select priority from bundling.bundle_job where state = 'QUEUED' order by priority
+        select priority from bundling.bundle_job order by priority
         """, Map.of(), Integer.class)).containsExactly(-1, 0);
     // The published PDF stays current until its replacement publishes.
     assertThat(bundles.view("case-file", published).lifecycle()).isEqualTo(CaseBundleView.Lifecycle.UPDATING);
@@ -331,7 +331,7 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
   private int waitingRefreshes(long reference) {
     return jdbc.queryForObject("""
         select count(*) from bundling.bundle_job
-        where case_reference = :reference and state = 'QUEUED' and priority = -1
+        where case_reference = :reference and priority = -1
         """, Map.of("reference", reference), Integer.class);
   }
 
@@ -380,9 +380,10 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
         .atMost(Duration.ofSeconds(20))
         .until(() -> {
           worker.poll();
-          return jobs.find("case-file", key).orElseThrow().state().terminal();
+          return jobs.find("case-file", key).map(job -> job.failure().isPresent()).orElse(true);
         });
-    assertThat(jobs.find("case-file", key).orElseThrow().failure()).isEmpty();
+    // A bundle that is up to date has no queue row.
+    assertThat(jobs.find("case-file", key)).isEmpty();
   }
 
   record CaseData(String value) {}

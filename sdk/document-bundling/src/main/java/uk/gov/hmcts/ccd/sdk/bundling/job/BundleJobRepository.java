@@ -15,7 +15,6 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundleErrorCode;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleOutcome;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleWarning;
@@ -24,20 +23,21 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.SelectedCaseBundle;
 
 /**
- * JDBC access to bundling.bundle_job, the queue with one row per bundle, and to bundling.bundle,
- * which describes the bundles rendered from it. A change queues the bundle's row, even while a
- * worker is rendering it; the worker's completion then leaves the row queued, so the bundle is
- * rendered again and a case has one render of a bundle at a time. Claiming uses FOR UPDATE SKIP
- * LOCKED plus a lease, and every worker-side write is guarded by the lease owner, so a worker that
- * lost its lease gets false back and the lease holder's state stands.
+ * JDBC access to bundling.bundle_job, the queue of bundles to render, and to bundling.bundle, which
+ * describes the bundles rendered from it. The queue works as the search index queue does: a bundle
+ * has a row while a render of it is wanted, a change inserts the row or raises its revision, and a
+ * worker that finishes deletes the row only if the revision is the one it claimed. A change during
+ * a render therefore leaves the row to be rendered again, and a case has one render of a bundle at
+ * a time. Claiming uses FOR UPDATE SKIP LOCKED plus a lease, and every worker-side write is
+ * guarded by the lease owner, so a worker that lost its lease gets false back and the lease
+ * holder's state stands.
  */
 public class BundleJobRepository {
-  // Queues an existing row. Its lease, if a worker is rendering it, is left to that worker.
-  private static final String QUEUE_AGAIN = """
-      state = 'QUEUED', attempts = 0, next_attempt_at = null,
-      priority = excluded.priority, failure_code = null, failure_message = null,
-      failure_documents = null,
-      queued_at = case when bundle_job.state = 'QUEUED' then bundle_job.queued_at else now() end
+  // Asks for another render of a bundle that has a row. Its lease, if a worker is rendering it, is
+  // left to that worker.
+  private static final String RENDER_AGAIN = """
+      revision = bundle_job.revision + 1, attempts = 0, next_attempt_at = null,
+      failure_message = null
       """;
   // The row a worker's claim holds: none if its lease was taken over.
   private static final String CLAIMED = """
@@ -89,8 +89,8 @@ public class BundleJobRepository {
     jdbc.update("""
         insert into bundling.bundle_job (definition, case_reference)
         values (:definition, :caseReference)
-        on conflict (case_reference, definition) do update set
-        """ + QUEUE_AGAIN, params("definition", definition, "caseReference", caseReference));
+        on conflict (case_reference, definition) do update set priority = 0,
+        """ + RENDER_AGAIN, params("definition", definition, "caseReference", caseReference));
   }
 
   /** The case as CCD holds it: where a bundle of the case is stored. */
@@ -111,9 +111,9 @@ public class BundleJobRepository {
 
   /**
    * Queues a background render of the definition's bundle for every case of the case type, and
-   * returns how many it queued. A bundle already queued is left as it is. It holds each case
-   * before queuing its bundle, as {@link #holdingCase} does, so events on a case it has reached
-   * wait until it commits.
+   * returns how many. A bundle already queued keeps its priority. It holds each case before
+   * queuing its bundle, as {@link #holdingCase} does, so events on a case it has reached wait
+   * until it commits.
    */
   int refresh(String definition, String caseType) {
     return jdbc.update("""
@@ -121,32 +121,26 @@ public class BundleJobRepository {
         select :definition, reference, -1 from ccd.case_data
         where case_type_id = :caseType order by reference for key share
         on conflict (case_reference, definition) do update set
-        """ + QUEUE_AGAIN + " where bundle_job.state <> 'QUEUED'",
-        params("definition", definition, "caseType", caseType));
+        """ + RENDER_AGAIN, params("definition", definition, "caseType", caseType));
   }
 
-  /** The bundle's queue row, if the bundle has ever been queued. */
+  /** The bundle's queue row: present while a render of it is wanted, or after one failed. */
   public Optional<BundleJob> find(String definition, long caseReference) {
     return jdbc.query("""
-        select definition, case_reference, state, attempts, failure_code, failure_message,
-               failure_documents::text as failure_documents
+        select definition, case_reference, revision, attempts, failure_message
         from bundling.bundle_job
         where definition = :definition and case_reference = :caseReference
-        """, params("definition", definition, "caseReference", caseReference), (rs, n) -> {
-          String code = rs.getString("failure_code");
-          return new BundleJob(rs.getString("definition"), rs.getLong("case_reference"),
-              BundleJobState.valueOf(rs.getString("state")), rs.getInt("attempts"),
-              code == null ? Optional.empty() : Optional.of(new BundleJobFailure(
-                  BundleErrorCode.valueOf(code), rs.getString("failure_message"),
-                  json.readDocumentFailures(rs.getString("failure_documents")))));
-        }).stream().findFirst();
+        """, params("definition", definition, "caseReference", caseReference),
+        (rs, n) -> new BundleJob(rs.getString("definition"), rs.getLong("case_reference"),
+            rs.getLong("revision"), rs.getInt("attempts"),
+            Optional.ofNullable(rs.getString("failure_message")))).stream().findFirst();
   }
 
   /**
-   * Claims the next bundles: those queued and due, and those whose worker's lease expired. A
-   * bundle queued again while a worker renders it waits for that worker's lease. A worker claims,
-   * and gives up on, only its own definitions, so a pod on an older release leaves a definition it
-   * does not have to the pods that do.
+   * Claims the next bundles: those due, and those whose worker's lease expired. A bundle changed
+   * while a worker renders it waits for that worker's lease. A worker claims, and gives up on,
+   * only its own definitions, so a pod on an older release leaves a definition it does not have to
+   * the pods that do.
    */
   List<ClaimedBundleJob> claim(int limit, String leaseOwner, Duration leaseDuration,
       int maxAttempts, Collection<String> definitions) {
@@ -156,7 +150,7 @@ public class BundleJobRepository {
     return jdbc.query("""
         with claimable as (
           select definition, case_reference from bundling.bundle_job
-          where state in ('QUEUED', 'IN_PROGRESS')
+          where failure_message is null
             and attempts < :maxAttempts
             and definition in (:definitions)
             and (lease_expires_at is null or lease_expires_at <= now())
@@ -166,19 +160,19 @@ public class BundleJobRepository {
           for update skip locked
         )
         update bundling.bundle_job job
-        set state = 'IN_PROGRESS', attempts = job.attempts + 1, lease_owner = :leaseOwner,
+        set attempts = job.attempts + 1, lease_owner = :leaseOwner,
             lease_expires_at = now() + (:leaseMillis * interval '1 millisecond'),
             next_attempt_at = null
         from claimable
         where job.definition = claimable.definition
           and job.case_reference = claimable.case_reference
-        returning job.definition, job.case_reference, job.attempts
+        returning job.definition, job.case_reference, job.revision, job.attempts
         """,
         params("limit", limit, "leaseOwner", leaseOwner, "leaseMillis", leaseDuration.toMillis(),
             "maxAttempts", maxAttempts, "definitions", definitions),
         (rs, n) -> new ClaimedBundleJob(
             new BundleJob(rs.getString("definition"), rs.getLong("case_reference"),
-                BundleJobState.IN_PROGRESS, rs.getInt("attempts"), Optional.empty()),
+                rs.getLong("revision"), rs.getInt("attempts"), Optional.empty()),
             leaseOwner));
   }
 
@@ -189,32 +183,34 @@ public class BundleJobRepository {
     }
     return jdbc.query("""
         update bundling.bundle_job
-        set state = 'FAILED', failure_code = :code, failure_documents = '[]'::jsonb,
-            failure_message = 'The bundle was claimed ' || attempts || ' time(s) without recording '
+        set failure_message = 'The bundle was claimed ' || attempts || ' time(s) without recording '
                 || 'a result and each lease expired; the attempt bound (' || :maxAttempts || ') is '
                 || 'exhausted. The render most likely crashed; see the service logs.',
             lease_owner = null, lease_expires_at = null, next_attempt_at = null
-        where state = 'IN_PROGRESS' and lease_expires_at <= now() and attempts >= :maxAttempts
+        where failure_message is null and lease_expires_at <= now() and attempts >= :maxAttempts
           and definition in (:definitions)
         returning definition || ' of case ' || case_reference as bundle
         """,
-        params("maxAttempts", maxAttempts, "code", BundleErrorCode.ASSEMBLY_FAILED.name(),
-            "definitions", definitions),
+        params("maxAttempts", maxAttempts, "definitions", definitions),
         (rs, n) -> rs.getString("bundle"));
   }
 
   /**
-   * Records the bundle a worker rendered and releases its lease, in one statement. The row is
-   * completed unless a change queued it again meanwhile, in which case it stays queued. Nothing is
-   * written by a worker that lost its lease.
+   * Records the bundle a worker rendered and releases its claim, in one statement. The row is
+   * deleted, unless the bundle changed meanwhile: then the row stays, to be rendered again.
+   * Nothing is written by a worker that lost its lease.
    */
   boolean markCompleted(ClaimedBundleJob claimed, BundleRecord bundle) {
     return jdbc.update("""
-        with completed as (
-          update bundling.bundle_job
-          set state = case when state = 'IN_PROGRESS' then 'COMPLETED' else state end,
-              lease_owner = null, lease_expires_at = null
+        with up_to_date as (
+          delete from bundling.bundle_job
         """ + CLAIMED + """
+            and revision = :revision
+          returning definition, case_reference
+        ), changed as (
+          update bundling.bundle_job set lease_owner = null, lease_expires_at = null
+        """ + CLAIMED + """
+            and revision <> :revision
           returning definition, case_reference
         )
         insert into bundling.bundle (definition, case_reference, outcome,
@@ -223,7 +219,7 @@ public class BundleJobRepository {
         select definition, case_reference, :outcome, :fileName, :mediaType, :size,
           :sha256, :pageCount, :request::jsonb, :documents::jsonb, :missingDocuments::jsonb,
           :warnings::jsonb, :documentId, :documentUrl, :binaryUrl
-        from completed
+        from (select * from up_to_date union all select * from changed) released
         """,
         claimed(claimed)
             .addValue("outcome", bundle.outcome()).addValue("fileName", bundle.fileName())
@@ -294,27 +290,21 @@ public class BundleJobRepository {
         params("documentId", documentId));
   }
 
-  /** Fails the bundle, unless a change queued it again meanwhile: then it is rendered again. */
-  boolean markFailed(ClaimedBundleJob claimed, BundleErrorCode code, String message,
-      String documentFailuresJson) {
+  /** Fails the bundle, unless it changed meanwhile: then it is rendered again. */
+  boolean markFailed(ClaimedBundleJob claimed, String message) {
     return jdbc.update("""
         update bundling.bundle_job
-        set state = case when state = 'IN_PROGRESS' then 'FAILED' else state end,
-            failure_code = case when state = 'IN_PROGRESS' then :code end,
-            failure_message = case when state = 'IN_PROGRESS' then :message end,
-            failure_documents = case when state = 'IN_PROGRESS' then :documentFailures::jsonb end,
+        set failure_message = case when revision = :revision then :message end,
             lease_owner = null, lease_expires_at = null, next_attempt_at = null
-        """ + CLAIMED,
-        claimed(claimed).addValue("code", code.name()).addValue("message", message)
-            .addValue("documentFailures", documentFailuresJson)) == 1;
+        """ + CLAIMED, claimed(claimed).addValue("message", message)) == 1;
   }
 
-  /** Queues another attempt, at once if a change queued the bundle again meanwhile. */
+  /** Queues another attempt, at once if the bundle changed meanwhile. */
   boolean requeueForRetry(ClaimedBundleJob claimed, Instant nextAttemptAt) {
     return jdbc.update("""
         update bundling.bundle_job
-        set next_attempt_at = case when state = 'IN_PROGRESS' then :nextAttemptAt::timestamptz end,
-            state = 'QUEUED', lease_owner = null, lease_expires_at = null
+        set next_attempt_at = case when revision = :revision then :nextAttemptAt::timestamptz end,
+            lease_owner = null, lease_expires_at = null
         """ + CLAIMED,
         claimed(claimed).addValue("nextAttemptAt",
             OffsetDateTime.ofInstant(nextAttemptAt, ZoneOffset.UTC))) == 1;
@@ -322,7 +312,8 @@ public class BundleJobRepository {
 
   private static MapSqlParameterSource claimed(ClaimedBundleJob claimed) {
     return params("definition", claimed.job().definition(),
-        "caseReference", claimed.job().caseReference(), "leaseOwner", claimed.leaseOwner());
+        "caseReference", claimed.job().caseReference(), "revision", claimed.job().revision(),
+        "leaseOwner", claimed.leaseOwner());
   }
 
   private static MapSqlParameterSource params(Object... keysAndValues) {

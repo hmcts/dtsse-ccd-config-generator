@@ -4,17 +4,12 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
-import java.util.List;
-import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentFailure;
 
 /**
  * The queue's JSON format. The mapper is module-owned so the stored shape never varies with a
  * consumer's ObjectMapper customisations.
  */
 final class BundleJobJson {
-  private static final TypeReference<List<DocumentFailure>> DOCUMENT_FAILURES =
-      new TypeReference<>() {
-      };
 
   /** A persisted payload this worker version cannot read. */
   static final class Unreadable extends RuntimeException {
@@ -49,14 +44,6 @@ final class BundleJobJson {
       return mapper.readValue(json, type);
     } catch (Exception e) {
       throw new Unreadable("the stored " + what + " could not be read", e);
-    }
-  }
-
-  List<DocumentFailure> readDocumentFailures(String json) {
-    try {
-      return json == null ? List.of() : mapper.readValue(json, DOCUMENT_FAILURES);
-    } catch (Exception e) {
-      throw new IllegalStateException("Stored document failures could not be read", e);
     }
   }
 }

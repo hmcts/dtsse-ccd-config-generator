@@ -144,17 +144,10 @@ public class ManagedCaseBundles implements CaseBundles {
     Optional<BundleJob> job = repository.find(definition, caseReference);
     Optional<BundleMetadata> current = repository.findLatestBundle(definition, caseReference);
     boolean published = current.isPresent();
-    Lifecycle lifecycle =
-        job.map(
-                latest ->
-                    switch (latest.state()) {
-                      case QUEUED, IN_PROGRESS ->
-                          published ? Lifecycle.UPDATING : Lifecycle.PREPARING;
-                      case FAILED -> Lifecycle.FAILED;
-                      case COMPLETED ->
-                          published ? Lifecycle.UP_TO_DATE : Lifecycle.NONE;
-                    })
-            .orElse(published ? Lifecycle.UP_TO_DATE : Lifecycle.NONE);
+    // A bundle has a queue row while a render of it is wanted, and keeps it if that render failed.
+    Lifecycle lifecycle = job.isEmpty() ? (published ? Lifecycle.UP_TO_DATE : Lifecycle.NONE)
+        : job.get().failure().isPresent() ? Lifecycle.FAILED
+        : published ? Lifecycle.UPDATING : Lifecycle.PREPARING;
     return new CaseBundleView(current, lifecycle);
   }
 

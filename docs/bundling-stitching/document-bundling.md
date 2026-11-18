@@ -132,12 +132,13 @@ the builder) the renderer publishes `ccd.bundling.stage` timers and `ccd.bundlin
 ## Asynchronous bundling (job queue)
 
 Case bundles (below) render outside the request, on a job queue in your service's own
-database, switched on with `ccd.bundling.job.enabled=true`. `bundling.bundle_job` has one row per
-bundle: a definition's bundle of a case, identified by its `definition` and `case_reference`
-columns. A change to the bundle's documents sets the row to `QUEUED` in the caller's transaction,
-so the render is wanted exactly when the change commits. The table is created by the SDK's
-standard library migration (`SdkFlywayMigration`, run by the decentralised runtime's Flyway
-strategy before the application's own migrations).
+database, switched on with `ccd.bundling.job.enabled=true`. `bundling.bundle_job` works as the
+search index queue does. A bundle, which is a definition's bundle of a case, has a row while a
+render of it is wanted, identified by its `definition` and `case_reference` columns. A change to
+the bundle's documents inserts the row or raises its `revision`, in the caller's transaction, so
+the render is wanted exactly when the change commits. A bundle that is up to date has no row.
+The table is created by the SDK's standard library migration (`SdkFlywayMigration`, run by the
+decentralised runtime's Flyway strategy before the application's own migrations).
 
 `BundleJobWorker` polls (your service needs `@EnableScheduling`), claims rows with
 `SELECT ... FOR UPDATE SKIP LOCKED` under a lease, selects the case's documents, renders and
@@ -147,12 +148,14 @@ overwrite the outcome recorded by the worker that took over.
 
 A case has one render of a bundle at a time, as it has one write to its search index at a time.
 Ten documents uploaded in one event, or in ten quick events, give one render. A change never waits
-for a render: it queues the row again and leaves the worker's lease alone, and when that worker
-finishes it publishes its bundle and leaves the row queued, so the bundle is rendered once more
-with the newer documents. The change holds the row until its transaction commits and the claim
-passes over a held row, so a bundle is never claimed before the change that queued it is visible
-to its selection. Because a change takes a row lock, a transaction changing several cases should
-do so in a consistent order, or two such transactions can deadlock.
+for a render: it raises the row's revision and leaves the worker's lease alone. When that worker
+finishes it publishes its bundle, and deletes the row only if the revision is still the one it
+claimed; otherwise the row stays and the bundle is rendered once more with the newer documents.
+The change holds the row until its transaction commits and the claim passes over a held row, so a
+bundle is never claimed before the change that queued it is visible to its selection. Because a
+change takes a row lock, a transaction changing several cases should do so in a consistent order,
+or two such transactions can deadlock. A bundle whose render fails for good keeps its row, with
+the reason in `failure_message`, and is not rendered again until it changes.
 
 A render records its bundle in `bundling.bundle` in the same statement that releases the row, so
 a bundle is never recorded by a worker that lost its lease. The row holds everything about the

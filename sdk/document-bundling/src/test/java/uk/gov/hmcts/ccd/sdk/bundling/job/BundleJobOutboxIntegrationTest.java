@@ -144,7 +144,7 @@ class BundleJobOutboxIntegrationTest {
         awaitSessionBlockedOnLock();
         return running;
       });
-      assertThat(refresh.get(10, TimeUnit.SECONDS)).isEqualTo(1);
+      assertThat(refresh.get(10, TimeUnit.SECONDS)).isEqualTo(2);
     } finally {
       pool.shutdownNow();
     }
@@ -166,7 +166,7 @@ class BundleJobOutboxIntegrationTest {
         submit("test", "live");
         return running;
       });
-      assertThat(refresh.get(10, TimeUnit.SECONDS)).isZero();
+      assertThat(refresh.get(10, TimeUnit.SECONDS)).isEqualTo(1);
     } finally {
       pool.shutdownNow();
     }
@@ -187,7 +187,7 @@ class BundleJobOutboxIntegrationTest {
         submit("test", "live");
         return running;
       });
-      assertThat(refresh.get(10, TimeUnit.SECONDS)).isZero();
+      assertThat(refresh.get(10, TimeUnit.SECONDS)).isEqualTo(2);
     } finally {
       pool.shutdownNow();
     }
@@ -272,9 +272,9 @@ class BundleJobOutboxIntegrationTest {
     ClaimedBundleJob stale = first.get(0);
     assertThat(repository.markCompleted(stale, bundleRecord("a"))).isFalse();
     assertThat(bundle(id)).isEmpty();
-    assertThat(repository.markFailed(stale, BundleErrorCode.ASSEMBLY_FAILED, "late", "[]")).isFalse();
+    assertThat(repository.markFailed(stale, "late")).isFalse();
     assertThat(repository.requeueForRetry(stale, java.time.Instant.now())).isFalse();
-    assertThat(job(id).state()).isEqualTo(BundleJobState.IN_PROGRESS);
+    assertThat(rendering(id)).isTrue();
     assertThat(repository.markCompleted(reclaimed.get(0), bundleRecord("b"))).isTrue();
     // Only the lease holder's bundle is recorded.
     assertThat(bundle(id).orElseThrow().sha256()).isEqualTo("sha-b");
@@ -310,9 +310,9 @@ class BundleJobOutboxIntegrationTest {
       // The earlier attempt finishes first, but the same worker's later claim holds the lease.
       release.get(1).countDown();
       await().atMost(Duration.ofSeconds(10)).until(() -> handler.deleted.size() == 1);
-      assertThat(job(id).state()).isEqualTo(BundleJobState.IN_PROGRESS);
+      assertThat(rendering(id)).isTrue();
       release.get(2).countDown();
-      await().atMost(Duration.ofSeconds(10)).until(() -> job(id).state().terminal());
+      await().atMost(Duration.ofSeconds(10)).until(() -> settled(id));
     } finally {
       pool.shutdownNow();
     }
@@ -335,22 +335,15 @@ class BundleJobOutboxIntegrationTest {
     BundleJobWorker worker = directWorker(renderer, quickRetries(2));
 
     worker.poll();
-    BundleJob requeued = job(id);
-    assertThat(requeued.state()).isEqualTo(BundleJobState.QUEUED);
-    assertThat(requeued.attempts()).isEqualTo(1);
-    assertThat(requeued.failure()).isEmpty();
+    assertThat(waiting(id)).isTrue();
+    assertThat(job(id).attempts()).isEqualTo(1);
     assertThat(column(id, "next_attempt_at")).isNotNull();
 
     Thread.sleep(50);
     worker.poll();
-    BundleJob failed = job(id);
-    assertThat(failed.state()).isEqualTo(BundleJobState.FAILED);
-    assertThat(failed.attempts()).isEqualTo(2);
-    BundleJobFailure failure = failed.failure().orElseThrow();
-    assertThat(failure.code()).isEqualTo(BundleErrorCode.DOCUMENT_RESOLUTION_FAILED);
-    assertThat(failure.message()).contains("Retries exhausted after 2 attempt(s)");
-    assertThat(failure.documentFailures()).extracting(DocumentFailure::documentId)
-        .containsExactly("doc-1");
+    assertThat(job(id).attempts()).isEqualTo(2);
+    assertThat(job(id).failure().orElseThrow()).startsWith("DOCUMENT_RESOLUTION_FAILED: ")
+        .contains("Retries exhausted after 2 attempt(s)");
     // Exhausted means exhausted: nothing is claimable any more.
     worker.poll();
     assertThat(renderer.renders).hasSize(2);
@@ -370,12 +363,8 @@ class BundleJobOutboxIntegrationTest {
     BundleJobWorker worker = directWorker(renderer);
     worker.poll();
 
-    BundleJobFailure failure = job(notFound).failure().orElseThrow();
-    assertThat(job(notFound).state()).isEqualTo(BundleJobState.FAILED);
-    assertThat(failure.code()).isEqualTo(BundleErrorCode.DOCUMENT_NOT_FOUND);
-    assertThat(failure.message()).contains("doc-1").contains("doc-2");
-    assertThat(failure.documentFailures()).extracting(DocumentFailure::documentId)
-        .containsExactly("doc-1", "doc-2");
+    assertThat(job(notFound).failure().orElseThrow()).startsWith("DOCUMENT_NOT_FOUND: ")
+        .contains("doc-1").contains("doc-2");
     assertThat(column(notFound, "next_attempt_at")).isNull();
     worker.poll();
     assertThat(renderer.renders).hasSize(1);
@@ -389,7 +378,7 @@ class BundleJobOutboxIntegrationTest {
             List.of(), new uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderException(
                 "Docmosis returned HTTP 404", false))));
     directWorker(coverFails).poll();
-    assertThat(job(missingTemplate).state()).isEqualTo(BundleJobState.FAILED);
+    assertThat(failed(missingTemplate)).isTrue();
     assertThat(column(missingTemplate, "next_attempt_at")).isNull();
 
     // A store that rejects the PDF fails the rendered job with COMPLETION_FAILED; the raw
@@ -399,9 +388,8 @@ class BundleJobOutboxIntegrationTest {
         storing((selection, artifact) -> {
           throw new IllegalArgumentException("signed-url=https://secret");
         }), quickRetries(3), Runnable::run, 5, 5, Duration.ofMinutes(5)).poll();
-    BundleJobFailure completion = job(unstored).failure().orElseThrow();
-    assertThat(completion.code()).isEqualTo(BundleErrorCode.COMPLETION_FAILED);
-    assertThat(completion.message()).contains("IllegalArgumentException").doesNotContain("secret");
+    assertThat(job(unstored).failure().orElseThrow()).startsWith("COMPLETION_FAILED: ")
+        .contains("IllegalArgumentException").doesNotContain("secret");
     assertThat(Files.list(tempDir)).isEmpty();
   }
 
@@ -417,8 +405,7 @@ class BundleJobOutboxIntegrationTest {
     }, storingAnywhere(), quickRetries(3), Runnable::run, 5, 5, Duration.ofMinutes(5)).poll();
 
     assertThat(selected).containsExactly(caseRef("case-1"));
-    assertThat(job(submitted).failure().orElseThrow().code())
-        .isEqualTo(BundleErrorCode.JOB_REQUEST_UNREADABLE);
+    assertThat(job(submitted).failure().orElseThrow()).startsWith("JOB_REQUEST_UNREADABLE: ");
     assertThat(renderer.renders).isEmpty();
   }
 
@@ -432,7 +419,7 @@ class BundleJobOutboxIntegrationTest {
     worker(new FakeRenderer(tempDir), twoDocumentSelector(), failing,
         quickRetries(3), Runnable::run, 5, 5, Duration.ofMinutes(5)).poll();
 
-    assertThat(job(submitted).state()).isEqualTo(BundleJobState.FAILED);
+    assertThat(failed(submitted)).isTrue();
     assertThat(repository.findLatestBundle("bundle", caseRef("case-1"))).isEmpty();
   }
 
@@ -467,10 +454,10 @@ class BundleJobOutboxIntegrationTest {
 
     worker.poll();
 
-    assertThat(job(id).state()).isNotEqualTo(BundleJobState.FAILED);
+    assertThat(failed(id)).isFalse();
     await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
       worker.poll();
-      assertThat(job(id).state()).isEqualTo(BundleJobState.COMPLETED);
+      assertThat(done(id)).isTrue();
     });
   }
 
@@ -492,18 +479,18 @@ class BundleJobOutboxIntegrationTest {
     BundleJobWorker worker = directWorker(renderer, quickRetries(2));
     await().atMost(Duration.ofSeconds(5)).until(() -> {
       worker.poll();
-      return job(id).state().terminal();
+      return settled(id);
     });
 
     // No attempt may fall back to a placeholder page for a document that is only unavailable.
     assertThat(renderer.attempts).containsExactly(RenderAttempt.RETRYABLE, RenderAttempt.RETRYABLE);
-    assertThat(job(id).state()).isEqualTo(BundleJobState.FAILED);
+    assertThat(failed(id)).isTrue();
     assertThat(bundle(id).orElseThrow().id()).isEqualTo(current);
   }
 
   private Key queued(String definition, String caseKey) {
     Key key = new Key(definition, caseRef(caseKey));
-    assertThat(job(key).state()).isEqualTo(BundleJobState.QUEUED);
+    assertThat(waiting(key)).isTrue();
     return key;
   }
 
@@ -540,20 +527,20 @@ class BundleJobOutboxIntegrationTest {
       worker.poll();
       assertThat(renderStarted.await(10, TimeUnit.SECONDS)).isTrue();
 
-      // A change while it renders queues the bundle again, but not for a second render yet.
+      // A change while it renders raises the revision, but does not start a second render yet.
       submit("hearing", "case-1");
-      assertThat(job(id).state()).isEqualTo(BundleJobState.QUEUED);
+      assertThat(job(id).revision()).isEqualTo(3);
       worker.poll();
       assertThat(renderer.renders).hasSize(1);
 
-      // The render publishes its bundle and leaves the row queued, so it is rendered again.
+      // The render publishes its bundle and leaves the row, so the bundle is rendered again.
       releaseRender.countDown();
       await().atMost(Duration.ofSeconds(10)).until(() -> column(id, "lease_owner") == null);
-      assertThat(job(id).state()).isEqualTo(BundleJobState.QUEUED);
+      assertThat(waiting(id)).isTrue();
       assertThat(repository.findLatestBundle("hearing", caseRef("case-1"))).isPresent();
 
       worker.poll();
-      await().atMost(Duration.ofSeconds(10)).until(() -> job(id).state().terminal());
+      await().atMost(Duration.ofSeconds(10)).until(() -> settled(id));
     } finally {
       pool.shutdownNow();
     }
@@ -568,11 +555,9 @@ class BundleJobOutboxIntegrationTest {
     ClaimedBundleJob claimed = repository.claim(1, "worker-a", Duration.ofMinutes(5), 3, DEFINITIONS).get(0);
     submit("hearing", "case-1");
 
-    assertThat(repository.markFailed(claimed, BundleErrorCode.ASSEMBLY_FAILED, "failed", "[]"))
-        .isTrue();
+    assertThat(repository.markFailed(claimed, "failed")).isTrue();
 
-    assertThat(job(id).state()).isEqualTo(BundleJobState.QUEUED);
-    assertThat(job(id).failure()).isEmpty();
+    assertThat(waiting(id)).isTrue();
     assertThat(repository.claim(1, "worker-b", Duration.ofMinutes(5), 3, DEFINITIONS)).hasSize(1);
   }
 
@@ -629,7 +614,7 @@ class BundleJobOutboxIntegrationTest {
       // Its selector would not see the change yet, so the worker must leave the bundle alone.
       worker.poll();
       assertThat(renderer.renders).isEmpty();
-      assertThat(job(waiting).state()).isEqualTo(BundleJobState.QUEUED);
+      assertThat(waiting(waiting)).isTrue();
 
       commitJoin.countDown();
       assertThat(joining.get(10, TimeUnit.SECONDS)).isEqualTo(waiting);
@@ -637,7 +622,7 @@ class BundleJobOutboxIntegrationTest {
       pool.shutdownNow();
     }
     worker.poll();
-    assertThat(job(waiting).state()).isEqualTo(BundleJobState.COMPLETED);
+    assertThat(done(waiting)).isTrue();
   }
 
   @Test
@@ -652,7 +637,7 @@ class BundleJobOutboxIntegrationTest {
     BundleJobWorker worker = worker(renderer, selector, storingAnywhere(),
         new BundleJobRetryPolicy(3, Duration.ofHours(1), 2.0, Duration.ofHours(1)), Runnable::run, 5, 5, Duration.ofMinutes(5));
     worker.poll();
-    assertThat(job(retrying).state()).isEqualTo(BundleJobState.QUEUED);
+    assertThat(waiting(retrying)).isTrue();
     assertThat(job(retrying).attempts()).isEqualTo(1);
     worker.poll();
     assertThat(renderer.renders).as("the retry waits for its delay").hasSize(1);
@@ -660,7 +645,7 @@ class BundleJobOutboxIntegrationTest {
     submit("hearing", "case-6");
 
     worker.poll();
-    assertThat(job(retrying).state()).isEqualTo(BundleJobState.COMPLETED);
+    assertThat(done(retrying)).isTrue();
   }
 
   @Test
@@ -886,6 +871,50 @@ class BundleJobOutboxIntegrationTest {
 
   private static BundleJob job(UUID id) {
     return job(key(id));
+  }
+
+  /** A render is wanted and no worker has it. */
+  private static boolean waiting(Key key) {
+    return !failed(key) && column(key, "lease_owner") == null;
+  }
+
+  private static boolean waiting(UUID id) {
+    return waiting(key(id));
+  }
+
+  /** A worker holds the bundle's lease. */
+  private static boolean rendering(Key key) {
+    return column(key, "lease_owner") != null;
+  }
+
+  private static boolean rendering(UUID id) {
+    return rendering(key(id));
+  }
+
+  /** The bundle is up to date: it has no queue row. */
+  private static boolean done(Key key) {
+    return repository.find(key.definition(), key.caseReference()).isEmpty();
+  }
+
+  private static boolean done(UUID id) {
+    return done(key(id));
+  }
+
+  private static boolean failed(Key key) {
+    return job(key).failure().isPresent();
+  }
+
+  private static boolean failed(UUID id) {
+    return failed(key(id));
+  }
+
+  /** Nothing more will happen to the bundle until it changes. */
+  private static boolean settled(Key key) {
+    return done(key) || failed(key);
+  }
+
+  private static boolean settled(UUID id) {
+    return settled(key(id));
   }
 
   private static String column(Key key, String column) {

@@ -1,8 +1,9 @@
--- One queue row per bundle: a definition's bundle of a case in ccd.case_data. A change to the
--- bundle's documents sets its row to QUEUED, even while a worker is rendering it, and a worker
--- that finishes leaves a row that was queued again to be rendered again. A case therefore has one
--- render of a bundle at a time, as it has one write to its search index at a time. This replaces
--- a row per submission keyed by a string, with its request and context held as JSON.
+-- The queue of bundles to render, shaped like the search index queue. A bundle, which is a
+-- definition's bundle of a case in ccd.case_data, has a row while a render of it is wanted. A
+-- change to its documents inserts the row or raises its revision, and a worker that finishes
+-- deletes the row only if the revision is the one it claimed, so a change during a render leaves
+-- the row to be rendered again and a case has one render of a bundle at a time. This replaces a
+-- row per submission keyed by a string, with its request and context held as JSON.
 set local lock_timeout = '5s';
 
 -- Earlier rows were keyed by strings that do not name a case.
@@ -14,26 +15,23 @@ create table bundling.bundle_job (
     case_reference bigint not null
         references ccd.case_data (reference) on delete cascade deferrable initially deferred,
     definition text not null,
-    -- QUEUED, IN_PROGRESS, COMPLETED or FAILED.
-    state varchar(32) not null default 'QUEUED',
+    revision bigint not null default 1,
     -- Live changes are 0; a bulk refresh queues at -1, so live changes are claimed first.
     priority smallint not null default 0,
-    -- When the bundle was last queued; the oldest is claimed first.
+    -- The oldest is claimed first.
     queued_at timestamptz not null default now(),
     attempts integer not null default 0,
     -- When a retry becomes claimable.
     next_attempt_at timestamptz,
     lease_owner varchar(255),
     lease_expires_at timestamptz,
-    failure_code varchar(64),
+    -- Why the last render failed for good. The bundle is not rendered again until it changes.
     failure_message text,
-    failure_documents jsonb,
     primary key (case_reference, definition)
 );
 
 create index idx_bundle_job_priority
-    on bundling.bundle_job (priority desc, queued_at)
-    where state in ('QUEUED', 'IN_PROGRESS');
+    on bundling.bundle_job (priority desc, queued_at) where failure_message is null;
 
 -- What a render produced: everything about a bundle except its PDF, which is stored as an
 -- ordinary document. The row recorded last for a case is its current bundle; a replaced row is

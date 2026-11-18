@@ -2,7 +2,6 @@ package uk.gov.hmcts.ccd.sdk.bundling.job;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executor;
@@ -20,7 +19,6 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleGenerationException;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRenderer;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleResult;
-import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentFailure;
 import uk.gov.hmcts.ccd.sdk.bundling.api.RenderAttempt;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.SelectedCaseBundle;
 
@@ -146,8 +144,7 @@ public class BundleJobWorker implements AutoCloseable {
     } catch (RuntimeException e) {
       log.error("Bundle job {} request could not be compiled for execution", job, e);
       failTerminally(claimed, BundleErrorCode.JOB_REQUEST_UNREADABLE, "The bundle request could not be "
-          + "compiled for execution; the definition threw " + e.getClass().getName() + LOG_ONLY,
-          List.of());
+          + "compiled for execution; the definition threw " + e.getClass().getName() + LOG_ONLY);
       return;
     }
 
@@ -178,12 +175,11 @@ public class BundleJobWorker implements AutoCloseable {
     } catch (RuntimeException e) {
       log.error("Bundle job {} failed with an untyped renderer error", job, e);
       failTerminally(claimed, BundleErrorCode.ASSEMBLY_FAILED,
-          "Unexpected renderer failure of type " + e.getClass().getName() + LOG_ONLY,
-          List.of());
+          "Unexpected renderer failure of type " + e.getClass().getName() + LOG_ONLY);
     }
   }
 
-  /** The rendered bundle as recorded in bundling.bundle, with the job's completed state. */
+  /** The rendered bundle as recorded in bundling.bundle. */
   private BundleJobRepository.BundleRecord bundleRecord(SelectedCaseBundle selected,
       BundleResult result, StoredBundleDocument stored) {
     return new BundleJobRepository.BundleRecord(result.outcome().name(),
@@ -206,7 +202,7 @@ public class BundleJobWorker implements AutoCloseable {
     }
     log.error("Bundle job {} rendered but its PDF could not be stored", job, failure);
     failTerminally(claimed, BundleErrorCode.COMPLETION_FAILED, "The bundle rendered but storing it "
-        + "threw " + failure.getClass().getName() + LOG_ONLY, List.of());
+        + "threw " + failure.getClass().getName() + LOG_ONLY);
   }
 
   private void discard(BundleJob job, StoredBundleDocument stored) {
@@ -223,7 +219,7 @@ public class BundleJobWorker implements AutoCloseable {
     if (!retryPolicy.isTransient(failure)) {
       log.error("Bundle job {} failed with non-retryable {}: {}", job, failure.code(),
           failure.getMessage());
-      failTerminally(claimed, failure.code(), failure.getMessage(), failure.documentFailures());
+      failTerminally(claimed, failure.code(), failure.getMessage());
       return;
     }
     Optional<Instant> nextAttemptAt = retryPolicy.nextAttemptAt(attempts, Instant.now());
@@ -239,13 +235,11 @@ public class BundleJobWorker implements AutoCloseable {
     log.error("Bundle job {} failed with {} and exhausted its {} attempt(s)", job, failure.code(),
         attempts);
     failTerminally(claimed, failure.code(),
-        failure.getMessage() + " Retries exhausted after " + attempts + " attempt(s).",
-        failure.documentFailures());
+        failure.getMessage() + " Retries exhausted after " + attempts + " attempt(s).");
   }
 
-  private void failTerminally(ClaimedBundleJob claimed, BundleErrorCode code, String message,
-      List<DocumentFailure> documentFailures) {
-    if (!repository.markFailed(claimed, code, message, json.write(documentFailures))) {
+  private void failTerminally(ClaimedBundleJob claimed, BundleErrorCode code, String message) {
+    if (!repository.markFailed(claimed, code + ": " + message)) {
       leaseLost(claimed.job(), "failure");
     }
   }
