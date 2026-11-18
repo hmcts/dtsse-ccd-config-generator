@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.transaction.TransactionException;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleErrorCode;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleExecutionContext;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleGenerationException;
@@ -150,6 +151,10 @@ public class BundleJobWorker implements AutoCloseable {
       selected = selector.select(job);
     } catch (BundleGenerationException e) {
       handleGenerationFailure(claimed, e, 0);
+      return;
+    } catch (DataAccessException | TransactionException e) {
+      // The database, not the request: the lease expires and the job is reclaimed.
+      log.warn("Bundle job {} could not read its selection", id, e);
       return;
     } catch (RuntimeException e) {
       log.error("Bundle job {} request could not be compiled for execution", id, e);

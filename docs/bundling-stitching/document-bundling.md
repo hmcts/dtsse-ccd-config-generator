@@ -341,7 +341,9 @@ sources. It queues a job for that definition and case; repeated calls
 join that job, and a rollback cancels it. The event that creates a case can call it too: the case
 is checked when the transaction commits. The SDK does not detect changes itself:
 a JPA entity listener on each entity the selection reads is the simplest way to cover every write
-path, including cascades. Native SQL changes must call it explicitly.
+path, including cascades. A listener must not load anything during a flush, so if the case
+reference is on a parent the entity has not loaded, read it with SQL. Native SQL changes must
+call `changed` explicitly.
 
 Each job selects afresh, renders, uploads the PDF to CDAM and attaches it to the case, and the
 worker records it on the bundle row. The case's current bundle is the one whose documents were
@@ -379,7 +381,7 @@ CCD_BUNDLING_REFRESH: "2026-11-17-new-cover-page"
 ```
 
 Shortly after it starts, the first pod to see a value it has not seen before queues one background
-job per case for each definition, and records the value against the definition in
+job for each case of each definition's `caseType()`, and records the value against the definition in
 `bundling.refresh_key` in the same transaction as its jobs. Other pods and later restarts skip it. A failure is logged and retried a minute
 later; it does not stop the pod starting. Live changes are claimed first and promote a waiting refresh job; a case with a job
 already waiting is left to that job. An existing PDF stays current until its replacement

@@ -128,6 +128,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
 import uk.gov.hmcts.ccd.sdk.bundling.job.BundleMetadata;
+import uk.gov.hmcts.ccd.sdk.bundling.job.ManagedCaseBundles;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundleView;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundles;
 import uk.gov.hmcts.ccd.sdk.jackson.UnwrappedPrefixModule;
@@ -233,6 +234,9 @@ public class TestWithCCD extends CftlibTest {
 
     @Autowired
     private CaseBundles caseBundles;
+
+    @Autowired
+    private ManagedCaseBundles managedCaseBundles;
 
     private long firstEventId;
     private static final String BASE_URL = "http://localhost:4452";
@@ -776,6 +780,27 @@ public class TestWithCCD extends CftlibTest {
         // A later change replaces the bundle with a newly stored one.
         BundleMetadata second = updateCaseFileAndAwaitBundle(user, first.id());
         assertThat(second.stored().orElseThrow().id(), not(equalTo(first.stored().orElseThrow().id())));
+    }
+
+    @Order(41)
+    @Test
+    public void aBundleRefreshRendersTheBundlesOfItsOwnCaseTypeAndLeavesOtherCaseTypesAlone() {
+        UUID before = caseBundles.view(CaseFileBundle.NAME, caseRef).current().orElseThrow().id();
+        assertThat("this database holds cases of another case type", db.queryForObject(
+            "select count(*) from ccd.case_data where case_type_id <> :caseType",
+            Map.of("caseType", NoFaultDivorce.getCaseType()), Integer.class), greaterThan(0));
+
+        // What a release does by changing CCD_BUNDLING_REFRESH, here with cases already present.
+        assertThat(managedCaseBundles.refresh("e2e-release-2"), equalTo(true));
+
+        await().atMost(Duration.ofSeconds(60)).until(
+            () -> caseBundles.view(CaseFileBundle.NAME, caseRef),
+            view -> view.lifecycle() == CaseBundleView.Lifecycle.UP_TO_DATE
+                && !view.current().orElseThrow().id().equals(before));
+        assertThat("a case file bundle is only for cases of its own case type", db.queryForObject(
+            "select count(*) from bundling.bundle_job job join ccd.case_data c on c.reference = job.case_reference"
+                + " where c.case_type_id <> :caseType",
+            Map.of("caseType", NoFaultDivorce.getCaseType()), Integer.class), equalTo(0));
     }
 
     private BundleMetadata updateCaseFileAndAwaitBundle(String user, UUID previousBundle) throws Exception {

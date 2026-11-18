@@ -654,6 +654,28 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
+  void aDatabaseErrorWhileSelectingIsTriedAgainRatherThanFailingTheBundle() {
+    UUID id = submit(simpleRequest(UUID.randomUUID())).externalId();
+    java.util.concurrent.atomic.AtomicBoolean lost = new java.util.concurrent.atomic.AtomicBoolean();
+    BundleDocumentSelector selector = job -> {
+      if (lost.compareAndSet(false, true)) {
+        throw new org.springframework.dao.QueryTimeoutException("connection lost");
+      }
+      return asSubmitted().select(job);
+    };
+    BundleJobWorker worker = new BundleJobWorker(repository, new FakeRenderer(tempDir), selector,
+        summaryHandler(), quickRetries(3), List.of(), Runnable::run, 5, 5, Duration.ofMillis(50));
+
+    worker.poll();
+
+    assertThat(job(id).state()).isNotEqualTo(BundleJobState.FAILED);
+    await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+      worker.poll();
+      assertThat(job(id).state()).isEqualTo(BundleJobState.COMPLETED);
+    });
+  }
+
+  @Test
   void aBundleMissingTemporarilyUnavailableDocumentsIsReRunLaterUntilTheBound() {
     BundleJob submitted = submit("bundle", "case-1");
     FakeRenderer renderer = new FakeRenderer(tempDir);
@@ -1029,7 +1051,7 @@ class BundleJobOutboxIntegrationTest {
   }
 
   private static int refresh(String definition) {
-    return repository.refresh(definition);
+    return repository.refresh(definition, "CaseType");
   }
 
   private static BundleDocumentSelector asSubmitted() {

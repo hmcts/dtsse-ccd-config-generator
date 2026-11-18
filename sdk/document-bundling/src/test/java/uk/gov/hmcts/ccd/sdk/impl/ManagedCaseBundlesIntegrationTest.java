@@ -425,6 +425,11 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
     }
 
     @Override
+    public String caseType() {
+      return "ManagedTest";
+    }
+
+    @Override
     public BundleRequest select(long caseReference) {
       calls.incrementAndGet();
       return jdbc.queryForObject(

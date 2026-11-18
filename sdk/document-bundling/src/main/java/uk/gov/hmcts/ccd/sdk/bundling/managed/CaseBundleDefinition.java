@@ -6,6 +6,9 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
 public interface CaseBundleDefinition {
   String name();
 
+  /** The CCD case type whose cases have this bundle. */
+  String caseType();
+
   /** The documents of the case, in order. */
   BundleRequest select(long caseReference);
 }

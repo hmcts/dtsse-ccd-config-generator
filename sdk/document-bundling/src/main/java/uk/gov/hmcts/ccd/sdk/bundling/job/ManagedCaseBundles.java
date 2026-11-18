@@ -101,13 +101,13 @@ public class ManagedCaseBundles
     boolean refreshed = false;
     // One transaction for each definition: holding one definition's waiting jobs while queuing
     // another's could deadlock with an event that changes both bundles of a case.
-    for (String definition : definitions.keySet()) {
+    for (CaseBundleDefinition definition : definitions.values()) {
       refreshed |= transaction.execute(status -> {
-        if (!repository.recordRefresh(key, definition)) {
+        if (!repository.recordRefresh(key, definition.name())) {
           return false;
         }
-        log.info("Bundle refresh {} queued {} {} bundles", key, repository.refresh(definition),
-            definition);
+        log.info("Bundle refresh {} queued {} {} bundles", key,
+            repository.refresh(definition.name(), definition.caseType()), definition.name());
         return true;
       });
     }

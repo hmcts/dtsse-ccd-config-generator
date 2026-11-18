@@ -9,6 +9,7 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleSection;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.BundleSystemUser;
 import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundleDefinition;
+import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
 import uk.gov.hmcts.divorce.idam.IdamService;
 
 /**
@@ -25,6 +26,11 @@ public class CaseFileBundle implements CaseBundleDefinition {
     @Override
     public String name() {
         return NAME;
+    }
+
+    @Override
+    public String caseType() {
+        return NoFaultDivorce.getCaseType();
     }
 
     @Override
