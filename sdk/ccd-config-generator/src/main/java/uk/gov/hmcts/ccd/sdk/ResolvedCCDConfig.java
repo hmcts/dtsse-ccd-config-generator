@@ -31,6 +31,7 @@ import uk.gov.hmcts.ccd.sdk.api.SearchCases;
 import uk.gov.hmcts.ccd.sdk.api.SearchCriteria;
 import uk.gov.hmcts.ccd.sdk.api.SearchParty;
 import uk.gov.hmcts.ccd.sdk.api.Tab;
+import uk.gov.hmcts.ccd.sdk.api.callback.PostEventHook;
 
 @RequiredArgsConstructor
 @Getter
@@ -56,6 +57,8 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   boolean shutterService = false;
   boolean explicitStateGrants = false;
   boolean emitCaseRoleJurisdiction = false;
+  boolean tabsRespectDeclaredFieldAccess = false;
+
   boolean noCaseHistoryTab = false;
   boolean jurisdictionShuttered = false;
   boolean enableForDeletion = false;
@@ -67,6 +70,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   // Events by id
   ImmutableMap<String, Event<T, R, S>> events;
   List<Function<Map<String, Object>, Map<String, Object>>> preEventHooks = new ArrayList<>();
+  List<PostEventHook<T, S>> postEventHooks = new ArrayList<>();
   List<Tab<T, R>> tabs;
   List<Search<T, R>> workBasketResultFields;
   List<Search<T, R>> workBasketInputFields;

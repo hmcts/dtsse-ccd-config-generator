@@ -121,9 +121,13 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     EventMetadata eventMetadata = null;
     SignificantItem significantItem = null;
 
-    if (eventConfig.getAboutToSubmitCallback() != null) {
+    boolean hasCallback = eventConfig.getAboutToSubmitCallback() != null;
+    if (hasCallback || registry.hasPostEventHooks(caseType)) {
       CallbackRequest request = buildCallbackRequest(event);
-      AboutToStartOrSubmitResponse callbackResponse = executor.aboutToSubmit(request);
+      // Without a callback, CCD's case details already carry the event's end state for the hooks to read.
+      AboutToStartOrSubmitResponse callbackResponse = hasCallback
+          ? executor.aboutToSubmit(request)
+          : executor.postEventHooksWithoutHandler(request);
       eventMetadata = callbackResponse.getEventMetadata();
       significantItem = callbackResponse.getSignificantItem();
 

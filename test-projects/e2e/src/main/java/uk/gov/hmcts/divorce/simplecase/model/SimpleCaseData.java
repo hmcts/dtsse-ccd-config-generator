@@ -39,6 +39,9 @@ public class SimpleCaseData {
     @CCD(label = "Follow up callback marker", access = {CaseworkerAccess.class})
     private String followUpMarker;
 
+    @CCD(label = "Post-event hook outcome", access = {CaseworkerAccess.class})
+    private String postEventHookOutcome;
+
     @CCD(label = "Priority", access = {CaseworkerAccess.class})
     private SimpleCasePriority priority;
 
