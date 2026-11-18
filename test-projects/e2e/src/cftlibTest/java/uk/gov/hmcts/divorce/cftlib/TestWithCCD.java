@@ -739,6 +739,11 @@ public class TestWithCCD extends CftlibTest {
         assertThat(caseBundles.view(CaseFileBundle.NAME, caseRef).lifecycle(),
             equalTo(CaseBundleView.Lifecycle.NONE));
 
+        // The app was started with CCD_BUNDLING_REFRESH set (build.gradle), and ran that refresh.
+        await().atMost(Duration.ofSeconds(90)).until(() -> db.queryForObject(
+            "select count(*) from bundling.refresh_key where key = 'e2e-release-1'", Map.of(), Integer.class),
+            equalTo(1));
+
         BundleMetadata first = updateCaseFileAndAwaitBundle(user, null);
 
         assertThat(first.caseReference(), equalTo(caseRef));

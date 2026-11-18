@@ -126,6 +126,23 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
+  void aRerunOfARefreshJobStaysBehindLiveChangesAndDoesNotDemoteAWaitingLiveJob() {
+    // A refresh job that rendered with unavailable documents queues its re-run at its own priority.
+    UUID rerun = repository.insertOrJoin(UUID.randomUUID(), "test", caseRef("refreshed"), null, 1, -1);
+    UUID live = submit("test", "live").externalId();
+    assertThat(repository.insertOrJoin(UUID.randomUUID(), "test", caseRef("live"), null, 1, -1))
+        .isEqualTo(live);
+    List<UUID> claimed = new ArrayList<>();
+    for (int i = 0; i < 2; i++) {
+      repository.claim(1, "priority-test", Duration.ofMinutes(1), 3).forEach(claim -> {
+        claimed.add(claim.job().externalId());
+        assertThat(claim.priority()).isEqualTo(claim.job().externalId().equals(live) ? 0 : -1);
+      });
+    }
+    assertThat(claimed).containsExactly(live, rerun);
+  }
+
+  @Test
   void aRefreshWaitsForAnUncommittedLiveChangeAndLeavesItsJobAlone() throws Exception {
     caseRef("live");
     caseRef("other");
@@ -147,7 +164,7 @@ class BundleJobOutboxIntegrationTest {
 
   @Test
   void aJobForAReferenceThatIsNotACaseIsRejected() {
-    assertThatThrownBy(() -> repository.insertOrJoin(UUID.randomUUID(), "test", 42L, null, 0))
+    assertThatThrownBy(() -> repository.insertOrJoin(UUID.randomUUID(), "test", 42L, null, 0, 0))
         .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
   }
 
@@ -890,12 +907,12 @@ class BundleJobOutboxIntegrationTest {
   private static BundleJob submit(BundleRequest request) {
     long caseReference = caseRef(request.externalId().toString());
     REQUESTS.put(caseReference, request);
-    return job(repository.insertOrJoin(request.externalId(), "test", caseReference, null, 0));
+    return job(repository.insertOrJoin(request.externalId(), "test", caseReference, null, 0, 0));
   }
 
   /** Queues a job for the case, as a change to it does. */
   private static BundleJob submit(String definition, String caseKey) {
-    return job(repository.insertOrJoin(UUID.randomUUID(), definition, caseRef(caseKey), null, 0));
+    return job(repository.insertOrJoin(UUID.randomUUID(), definition, caseRef(caseKey), null, 0, 0));
   }
 
   /** The CCD case the name stands for, created on first use. */

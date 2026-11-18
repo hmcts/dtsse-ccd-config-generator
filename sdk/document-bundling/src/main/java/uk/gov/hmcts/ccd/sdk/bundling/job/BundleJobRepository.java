@@ -68,25 +68,26 @@ public class BundleJobRepository {
    *
    * <p>A newly inserted job is not claimable before notBefore (null for immediately) and carries
    * the count of re-runs for unavailable documents. Joining a delayed job with an immediate
-   * submission makes it immediate, and joining a waiting refresh job promotes it.
+   * submission makes it immediate, and the joined job keeps the higher of the two priorities, so
+   * a live change promotes a waiting refresh job.
    */
   UUID insertOrJoin(UUID externalId, String definition, long caseReference, Instant notBefore,
-      int unavailableRequeues) {
+      int unavailableRequeues, int priority) {
     return jdbc.queryForObject("""
         insert into bundling.bundle_job
-          (external_id, definition, case_reference, next_attempt_at, unavailable_requeues)
-        values (:externalId, :definition, :caseReference, :notBefore, :requeues)
+          (external_id, definition, case_reference, next_attempt_at, unavailable_requeues, priority)
+        values (:externalId, :definition, :caseReference, :notBefore, :requeues, :priority)
         on conflict (definition, case_reference) where state = 'QUEUED' and attempts = 0
         do update set coalesced_submissions = bundle_job.coalesced_submissions + 1,
           last_coalesced_at = clock_timestamp(), updated_at = clock_timestamp(),
-          priority = 0,
+          priority = greatest(bundle_job.priority, excluded.priority),
           next_attempt_at = case
             when bundle_job.next_attempt_at is null or excluded.next_attempt_at is null then null
             else least(bundle_job.next_attempt_at, excluded.next_attempt_at) end
         returning external_id
         """,
         params("externalId", externalId, "definition", definition, "caseReference", caseReference,
-            "requeues", unavailableRequeues,
+            "requeues", unavailableRequeues, "priority", priority,
             "notBefore", notBefore == null ? null : OffsetDateTime.ofInstant(notBefore, ZoneOffset.UTC)),
         UUID.class);
   }
@@ -100,10 +101,15 @@ public class BundleJobRepository {
             rs.getString("jurisdiction"), request));
   }
 
-  /** Records the refresh key, and says whether it was new. A concurrent caller waits its turn. */
-  boolean recordRefresh(String key) {
-    return jdbc.update("insert into bundling.refresh_key (key) values (:key) on conflict do nothing",
-        params("key", key)) == 1;
+  /**
+   * Records that the key has refreshed the definition, and says whether that was new. A concurrent
+   * caller waits its turn.
+   */
+  boolean recordRefresh(String key, String definition) {
+    return jdbc.update("""
+        insert into bundling.refresh_key (key, definition) values (:key, :definition)
+        on conflict do nothing
+        """, params("key", key, "definition", definition)) == 1;
   }
 
   /**
@@ -163,7 +169,7 @@ public class BundleJobRepository {
         from claimable where job.external_id = claimable.external_id
         returning job.external_id, job.attempts, job.created_at, job.updated_at,
             job.definition, job.case_reference, job.coalesced_submissions, job.claimed_at,
-            job.unavailable_requeues, job.transient_history::text as transient_history
+            job.unavailable_requeues, job.priority, job.transient_history::text as transient_history
         """,
         params("limit", limit, "leaseOwner", leaseOwner, "leaseMillis", leaseDuration.toMillis(),
             "maxAttempts", maxAttempts),
@@ -173,7 +179,8 @@ public class BundleJobRepository {
                 rs.getString("definition"), rs.getLong("case_reference"),
                 rs.getInt("coalesced_submissions"), Optional.of(instant(rs, "claimed_at")),
                 Optional.empty()),
-            rs.getInt("unavailable_requeues"), rs.getString("transient_history"), leaseOwner));
+            rs.getInt("unavailable_requeues"), rs.getInt("priority"),
+            rs.getString("transient_history"), leaseOwner));
   }
 
   List<UUID> failExhaustedStaleJobs(int maxAttempts) {

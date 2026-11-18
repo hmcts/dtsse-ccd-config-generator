@@ -7,6 +7,7 @@ package uk.gov.hmcts.ccd.sdk.bundling.job;
 record ClaimedBundleJob(
     BundleJob job,
     int unavailableRequeues,
+    int priority,
     String transientHistoryJson,
     String leaseOwner) {
 }

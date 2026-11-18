@@ -50,8 +50,10 @@ alter table bundling.bundle
 create index idx_bundle_case_selected
     on bundling.bundle (case_reference, definition, selected_at desc);
 
--- The ccd.bundling.refresh values that have already queued a refresh; each runs once.
+-- The ccd.bundling.refresh values that have already queued a refresh of a definition; each runs once.
 create table bundling.refresh_key (
-    key text primary key,
-    created_at timestamptz not null default now()
+    key text not null,
+    definition text not null,
+    created_at timestamptz not null default now(),
+    primary key (key, definition)
 );

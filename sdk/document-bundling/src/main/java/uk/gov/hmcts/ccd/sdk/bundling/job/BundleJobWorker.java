@@ -252,8 +252,9 @@ public class BundleJobWorker implements AutoCloseable {
       return;
     }
     try {
+      // A re-run of a refresh job stays behind live changes.
       UUID landed = repository.insertOrJoin(UUID.randomUUID(), job.definition(), job.caseReference(),
-          runAt.get(), requeues + 1);
+          runAt.get(), requeues + 1, claimed.priority());
       log.info("Bundle job {} has placeholders for temporarily unavailable documents; job {} "
           + "re-runs it from {}", id, landed, runAt.get());
     } catch (RuntimeException e) {

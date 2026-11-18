@@ -68,7 +68,7 @@ public class ManagedCaseBundles
           "A bundle change must join the transaction that changed its documents");
     }
     // Calls in one transaction join the job its first call queued.
-    repository.insertOrJoin(UUID.randomUUID(), definition, caseReference, null, 0);
+    repository.insertOrJoin(UUID.randomUUID(), definition, caseReference, null, 0, 0);
   }
 
   /**
@@ -85,20 +85,26 @@ public class ManagedCaseBundles
 
   /**
    * Queues a background render of every case's bundles, once for each key, and says whether this
-   * call did. The key commits with the jobs, so other pods and restarts skip it.
+   * call did. The key commits with each definition's jobs, so other pods and restarts skip it.
    */
   public boolean refresh(String key) {
     if (key == null || key.isBlank()) {
       return false;
     }
-    return transaction.execute(status -> {
-      if (!repository.recordRefresh(key)) {
-        return false;
-      }
-      definitions.keySet().forEach(definition -> log.info("Bundle refresh {} queued {} {} bundles",
-          key, repository.refresh(definition), definition));
-      return true;
-    });
+    boolean refreshed = false;
+    // One transaction for each definition: holding one definition's waiting jobs while queuing
+    // another's could deadlock with an event that changes both bundles of a case.
+    for (String definition : definitions.keySet()) {
+      refreshed |= transaction.execute(status -> {
+        if (!repository.recordRefresh(key, definition)) {
+          return false;
+        }
+        log.info("Bundle refresh {} queued {} {} bundles", key, repository.refresh(definition),
+            definition);
+        return true;
+      });
+    }
+    return refreshed;
   }
 
   @Override

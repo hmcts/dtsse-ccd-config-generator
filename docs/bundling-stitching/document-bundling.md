@@ -347,8 +347,8 @@ Each job selects afresh, renders, uploads the PDF to CDAM and attaches it to the
 worker records it on the bundle row. The case's current bundle is the one whose documents were
 selected last, so a slower, older render never replaces a newer one. `cleanUp` (every
 `ccd.bundling.job.cleanup-delay`, default one minute) deletes a replaced bundle's PDF 12 hours
-after its replacement, so a link a reader already has keeps working, and sets the row's
-`deleted_at`. A failed attachment deletes its upload and retries; a worker that lost
+after its replacement and sets the row's `deleted_at`. The delay only keeps the file in storage:
+CDAM stops serving a replaced PDF to users once the case no longer shows it. A failed attachment deletes its upload and retries; a worker that lost
 its lease deletes its upload. A PDF uploaded by a worker that dies before recording it stays in
 CDAM, unreadable: CDAM serves a document only to a user who can see it in the case data.
 
@@ -377,8 +377,8 @@ CCD_BUNDLING_REFRESH: "2026-11-17-new-cover-page"
 ```
 
 Shortly after it starts, the first pod to see a value it has not seen before queues one background
-job per case for each definition, and records the value in `bundling.refresh_key` in the same
-transaction. Other pods and later restarts skip it. A failure is logged and retried a minute
+job per case for each definition, and records the value against the definition in
+`bundling.refresh_key` in the same transaction as its jobs. Other pods and later restarts skip it. A failure is logged and retried a minute
 later; it does not stop the pod starting. Live changes are claimed first and promote a waiting refresh job; a case with a job
 already waiting is left to that job. An existing PDF stays current until its replacement
 publishes.

@@ -10,7 +10,7 @@ import uk.gov.hmcts.ccd.sdk.bundling.managed.SelectedCaseBundle;
  * {@link #retryable} says so.
  */
 @FunctionalInterface
-public interface BundleJobCompletionHandler {
+interface BundleJobCompletionHandler {
 
   StoredBundleDocument onCompleted(BundleJob job, SelectedCaseBundle selected, BundleResult result)
       throws Exception;

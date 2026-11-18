@@ -280,6 +280,40 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
     assertThat(document(bundles.view("case-file", published)).getUrl()).isNotEqualTo(before);
   }
 
+  @Test
+  void theConfiguredRefreshKeyQueuesEveryCaseOnceHoweverManyPodsStartWithIt() throws Exception {
+    long reference = fixture();
+    jdbc.update("delete from ccd.case_data where reference <> :reference", Map.of("reference", reference));
+    String release = UUID.randomUUID().toString();
+
+    // What each pod does shortly after it starts with CCD_BUNDLING_REFRESH set.
+    pod(release).refreshIfNew();
+    assertThat(waitingRefreshes(reference)).isEqualTo(1);
+    run(reference);
+    // A second pod, or a restart, with the same value queues nothing.
+    pod(release).refreshIfNew();
+    assertThat(waitingRefreshes(reference)).isZero();
+    // A pod with no value set queues nothing.
+    pod("").refreshIfNew();
+    assertThat(waitingRefreshes(reference)).isZero();
+    // The next value refreshes again.
+    pod(UUID.randomUUID().toString()).refreshIfNew();
+    assertThat(waitingRefreshes(reference)).isEqualTo(1);
+    run(reference);
+  }
+
+  private ManagedCaseBundles pod(String refreshKey) {
+    return new ManagedCaseBundles(
+        jobs, store, transaction.getTransactionManager(), List.of(definition), refreshKey);
+  }
+
+  private int waitingRefreshes(long reference) {
+    return jdbc.queryForObject("""
+        select count(*) from bundling.bundle_job
+        where case_reference = :reference and state = 'QUEUED' and priority = -1
+        """, Map.of("reference", reference), Integer.class);
+  }
+
   private static Document document(CaseBundleView view) {
     var stored = view.current().orElseThrow().stored().orElseThrow();
     return Document.builder().url(stored.url()).binaryUrl(stored.binaryUrl()).build();
