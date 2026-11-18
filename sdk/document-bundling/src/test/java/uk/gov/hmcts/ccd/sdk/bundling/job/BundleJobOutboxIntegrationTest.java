@@ -163,6 +163,27 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
+  void aRefreshWaitsForAnEventThatHoldsTheCaseInsteadOfDeadlockingWithIt() throws Exception {
+    long reference = caseRef("live");
+    ExecutorService pool = Executors.newSingleThreadExecutor();
+    try {
+      Future<Integer> refresh = tx.execute(status -> {
+        // An event locks its case, the refresh reaches the case, then the event's handler queues.
+        jdbc.query("select 1 from ccd.case_data where reference = :reference for update",
+            Map.of("reference", reference), rs -> null);
+        Future<Integer> running = pool.submit(() -> refresh("test"));
+        awaitSessionBlockedOnLock();
+        submit("test", "live");
+        return running;
+      });
+      assertThat(refresh.get(10, TimeUnit.SECONDS)).isZero();
+    } finally {
+      pool.shutdownNow();
+    }
+    assertThat(column(queued("test", "live").externalId(), "priority")).isEqualTo("0");
+  }
+
+  @Test
   void aJobForAReferenceThatIsNotACaseIsRejected() {
     assertThatThrownBy(() -> repository.insertOrJoin(UUID.randomUUID(), "test", 42L, null, 0, 0))
         .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);

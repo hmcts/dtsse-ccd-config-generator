@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
@@ -93,6 +94,10 @@ public class ManagedCaseBundles
     if (key == null || key.isBlank()) {
       return false;
     }
+    if (TransactionSynchronizationManager.isActualTransactionActive()) {
+      // It locks every case, so it would wait for ever on a case its own caller holds.
+      throw new IllegalStateException("A bundle refresh must not join a transaction");
+    }
     boolean refreshed = false;
     // One transaction for each definition: holding one definition's waiting jobs while queuing
     // another's could deadlock with an event that changes both bundles of a case.
@@ -114,7 +119,9 @@ public class ManagedCaseBundles
     CaseBundleDefinition definition = definition(job.definition());
     // One snapshot, so the documents and whatever decides their visibility agree.
     BundleRequest request = snapshot.execute(status ->
-        repository.superseded(job) ? null : definition.select(job.caseReference()));
+        repository.superseded(job) ? null
+            : Objects.requireNonNull(definition.select(job.caseReference()),
+                () -> definition.name() + " selected no bundle request"));
     return request == null ? null
         : repository.selectedFor(job.caseReference(), request.withExternalId(job.externalId()));
   }

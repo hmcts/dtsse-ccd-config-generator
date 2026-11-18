@@ -115,13 +115,16 @@ public class BundleJobRepository {
 
   /**
    * Queues a background render of the definition's bundle for every case, and returns how many it
-   * queued. A case with a job already waiting is left to that job. Cases are queued in reference
-   * order so that a refresh and a live change touching several cases cannot deadlock.
+   * queued. A case with a job already waiting is left to that job. Each case is locked before
+   * its job is inserted, in reference order, so the refresh waits for an event that holds a case
+   * instead of deadlocking with it when that event changes the case's bundle. Events on a case
+   * the refresh has reached wait until it commits. An event that changes the bundle of a case
+   * other than its own can still deadlock with a refresh.
    */
   int refresh(String definition) {
     return jdbc.update("""
         insert into bundling.bundle_job (definition, case_reference, priority)
-        select :definition, reference, -1 from ccd.case_data order by reference
+        select :definition, reference, -1 from ccd.case_data order by reference for key share
         on conflict (definition, case_reference) where state = 'QUEUED' and attempts = 0
         do nothing
         """, params("definition", definition));
