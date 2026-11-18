@@ -112,13 +112,11 @@ public class ManagedCaseBundles
   @Override
   public SelectedCaseBundle select(BundleJob job) {
     CaseBundleDefinition definition = definition(job.definition());
-    return transaction.execute(turn -> {
-      // Selections of one bundle take turns, so the bundle selected last is the newest.
-      repository.startSelection(job);
-      // One snapshot, so the documents and whatever decides their visibility agree.
-      BundleRequest request = snapshot.execute(status -> definition.select(job.caseReference()));
-      return repository.selectedFor(job.caseReference(), request.withExternalId(job.externalId()));
-    });
+    // One snapshot, so the documents and whatever decides their visibility agree.
+    BundleRequest request = snapshot.execute(status ->
+        repository.superseded(job) ? null : definition.select(job.caseReference()));
+    return request == null ? null
+        : repository.selectedFor(job.caseReference(), request.withExternalId(job.externalId()));
   }
 
   @Override

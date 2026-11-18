@@ -17,8 +17,6 @@ alter table bundling.bundle_job
     add column unavailable_requeues integer not null default 0,
     -- Live changes are 0; a bulk refresh queues at -1, so live changes are claimed first.
     add column priority smallint not null default 0,
-    -- When the current attempt took its turn to select the bundle's documents.
-    add column selected_at timestamptz,
     -- Dropping coalesce_key drops its indexes.
     drop column coalesce_key,
     drop column request,

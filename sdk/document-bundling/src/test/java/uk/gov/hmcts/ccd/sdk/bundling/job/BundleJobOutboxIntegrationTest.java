@@ -559,35 +559,58 @@ class BundleJobOutboxIntegrationTest {
   }
 
   @Test
-  void theLatestBundleIsTheOneSelectedLastEvenWhenItsJobWasClaimedFirst() {
+  void aJobLeavesItsBundleToAJobClaimedAfterItSoBundlesAreSelectedInClaimOrder() {
     final UUID first = submit("bundle", "case-1").externalId();
     final ClaimedBundleJob firstClaim =
         repository.claim(1, "worker-a", Duration.ofMinutes(5), 3, null).get(0);
+    assertThat(repository.superseded(firstClaim.job())).isFalse();
     final UUID second = submit("bundle", "case-1").externalId();
     final ClaimedBundleJob secondClaim =
         repository.claim(1, "worker-b", Duration.ofMinutes(5), 3, null).get(0);
+    assertThat(repository.superseded(secondClaim.job())).isFalse();
+    assertThat(repository.superseded(firstClaim.job())).isTrue();
 
-    // The job claimed second selects and publishes while the first is still waiting to select.
-    tx.executeWithoutResult(status -> repository.startSelection(secondClaim.job()));
+    // The first job reaches selection late: it publishes nothing, and the second job's bundle stands.
+    BundleDocumentSelector selector =
+        job -> repository.superseded(job) ? null : twoDocumentSelector().select(job);
     assertThat(repository.markCompleted(second, BundleJobState.COMPLETED, bundleRecord("second"),
         "worker-b")).isTrue();
-    tx.executeWithoutResult(status -> repository.startSelection(firstClaim.job()));
-    assertThat(repository.markCompleted(first, BundleJobState.COMPLETED, bundleRecord("first"),
-        "worker-a")).isTrue();
+    assertThat(selector.select(firstClaim.job())).isNull();
+    assertThat(repository.markSuperseded(first, "worker-a")).isTrue();
 
+    assertThat(job(first).state()).isEqualTo(BundleJobState.COMPLETED);
+    assertThat(repository.findBundleForJob(first)).isEmpty();
     assertThat(repository.findLatestBundle("bundle", caseRef("case-1")).orElseThrow().jobId())
-        .isEqualTo(first);
+        .isEqualTo(second);
   }
 
   @Test
-  void aWorkerLeavesJobsForDefinitionsItDoesNotHaveToAWorkerThatDoes() {
+  void anAttemptWhoseLeaseWasTakenOverGivesUpBeforeSelecting() throws Exception {
+    submit("bundle", "case-1");
+    ClaimedBundleJob stale = repository.claim(1, "worker-a", Duration.ofMillis(1), 3, null).get(0);
+    Thread.sleep(20);
+    ClaimedBundleJob current = repository.claim(1, "worker-b", Duration.ofMinutes(5), 3, null).get(0);
+    assertThat(current.job().externalId()).isEqualTo(stale.job().externalId());
+
+    assertThat(repository.superseded(stale.job())).isTrue();
+    assertThat(repository.superseded(current.job())).isFalse();
+    assertThat(repository.markSuperseded(stale.job().externalId(), stale.leaseOwner())).isFalse();
+  }
+
+  @Test
+  void aWorkerLeavesJobsForDefinitionsItDoesNotHaveToAWorkerThatDoes() throws Exception {
     UUID added = submit("added-in-the-next-release", "case-1").externalId();
 
     assertThat(repository.claim(5, "old-pod", Duration.ofMinutes(5), 3, List.of("bundle"))).isEmpty();
     assertThat(repository.claim(5, "old-pod", Duration.ofMinutes(5), 3, List.of())).isEmpty();
-    assertThat(repository.claim(5, "new-pod", Duration.ofMinutes(5), 3,
+    // Nor does it give up on one whose lease expired, which the pods that have it can still retry.
+    assertThat(repository.claim(5, "new-pod", Duration.ofMillis(1), 1,
         List.of("bundle", "added-in-the-next-release")))
         .extracting(claimed -> claimed.job().externalId()).containsExactly(added);
+    Thread.sleep(20);
+    assertThat(repository.failExhaustedStaleJobs(1, List.of("bundle"))).isEmpty();
+    assertThat(repository.failExhaustedStaleJobs(1, List.of("bundle", "added-in-the-next-release")))
+        .containsExactly(added);
   }
 
   @Test

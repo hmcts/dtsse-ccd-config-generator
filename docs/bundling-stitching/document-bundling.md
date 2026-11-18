@@ -345,7 +345,9 @@ path, including cascades. Native SQL changes must call it explicitly.
 
 Each job selects afresh, renders, uploads the PDF to CDAM and attaches it to the case, and the
 worker records it on the bundle row. The case's current bundle is the one whose documents were
-selected last, so a slower, older render never replaces a newer one. `cleanUp` (every
+selected last, so a slower, older render never replaces a newer one: a job that reaches selection
+after a later job of the same bundle has been claimed publishes nothing and leaves the bundle to
+that job. A worker claims only the definitions its release has. `cleanUp` (every
 `ccd.bundling.job.cleanup-delay`, default one minute) deletes a replaced bundle's PDF 12 hours
 after its replacement and sets the row's `deleted_at`. The delay only keeps the file in storage:
 CDAM stops serving a replaced PDF to users once the case no longer shows it. A failed attachment deletes its upload and retries; a worker that lost

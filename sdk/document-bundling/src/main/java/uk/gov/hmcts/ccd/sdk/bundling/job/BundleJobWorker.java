@@ -105,7 +105,8 @@ public class BundleJobWorker implements AutoCloseable {
     if (toClaim <= 0) {
       return;
     }
-    for (UUID exhausted : repository.failExhaustedStaleJobs(retryPolicy.maxAttempts())) {
+    for (UUID exhausted : repository.failExhaustedStaleJobs(retryPolicy.maxAttempts(),
+        selector.definitions())) {
       log.error("Bundle job {} exhausted its {} attempt(s) without recording a result; FAILED",
           exhausted, retryPolicy.maxAttempts());
       emit(exhausted, BundleJobState.FAILED, 0, 0);
@@ -155,6 +156,13 @@ public class BundleJobWorker implements AutoCloseable {
       failTerminally(claimed, BundleErrorCode.JOB_REQUEST_UNREADABLE, "The bundle request could not be "
           + "compiled for execution; the selector threw " + e.getClass().getName() + LOG_ONLY,
           List.of(), 0);
+      return;
+    }
+
+    if (selected == null) {
+      log.info("Bundle job {} leaves its bundle to a job claimed after it", id);
+      record(repository.markSuperseded(id, claimed.leaseOwner()), id, BundleJobState.COMPLETED, 0, 0,
+          "completion");
       return;
     }
 

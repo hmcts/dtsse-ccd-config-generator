@@ -152,8 +152,8 @@ public class BundleJobRepository {
   }
 
   /**
-   * Claims the next jobs. A worker given definitions claims only those, so a pod on an older
-   * release leaves a definition it does not have to the pods that do.
+   * Claims the next jobs. A worker given definitions claims, and gives up on, only those, so a pod
+   * on an older release leaves a definition it does not have to the pods that do.
    */
   List<ClaimedBundleJob> claim(int limit, String leaseOwner, Duration leaseDuration,
       int maxAttempts, Collection<String> definitions) {
@@ -193,7 +193,10 @@ public class BundleJobRepository {
             rs.getString("transient_history"), leaseOwner));
   }
 
-  List<UUID> failExhaustedStaleJobs(int maxAttempts) {
+  List<UUID> failExhaustedStaleJobs(int maxAttempts, Collection<String> definitions) {
+    if (definitions != null && definitions.isEmpty()) {
+      return List.of();
+    }
     return jdbc.query("""
         update bundling.bundle_job
         set state = 'FAILED', failure_code = :code, failure_documents = '[]'::jsonb,
@@ -202,24 +205,38 @@ public class BundleJobRepository {
                 || 'exhausted. The render most likely crashed; see the service logs.',
             lease_owner = null, lease_expires_at = null, next_attempt_at = null, updated_at = now()
         where state = 'IN_PROGRESS' and lease_expires_at <= now() and attempts >= :maxAttempts
+          and (:anyDefinition or definition in (:definitions))
         returning external_id
         """,
-        params("maxAttempts", maxAttempts, "code", BundleErrorCode.ASSEMBLY_FAILED.name()),
+        params("maxAttempts", maxAttempts, "code", BundleErrorCode.ASSEMBLY_FAILED.name(),
+            "anyDefinition", definitions == null,
+            "definitions", definitions == null ? List.of("") : definitions),
         (rs, n) -> rs.getObject("external_id", UUID.class));
   }
 
   /**
-   * Takes the job's turn to select its bundle's documents and records when. The turn lasts until
-   * the caller's transaction ends, so of two selections the one recorded later saw the later
-   * documents, whichever job was claimed first.
+   * Whether a job of the same bundle has been claimed since this one was. Asked inside the
+   * snapshot the job selects from: a later claim the snapshot can see will select newer documents,
+   * and one it cannot see selects after this job, so the bundles of the jobs that do select are in
+   * claim order. A job whose own lease was taken over counts too.
    */
-  void startSelection(BundleJob job) {
-    jdbc.query("""
-        select pg_advisory_xact_lock(hashtextextended(:definition || ':' || :caseReference::text, 0))
-        """, params("definition", job.definition(), "caseReference", job.caseReference()), rs -> null);
-    jdbc.update("""
-        update bundling.bundle_job set selected_at = clock_timestamp() where external_id = :externalId
-        """, params("externalId", job.externalId()));
+  boolean superseded(BundleJob job) {
+    return jdbc.queryForObject("""
+        select exists (select 1 from bundling.bundle_job
+          where definition = :definition and case_reference = :caseReference
+            and claimed_at > :claimedAt)
+        """, params("definition", job.definition(), "caseReference", job.caseReference(),
+            "claimedAt", OffsetDateTime.ofInstant(job.claimedAt().orElseThrow(), ZoneOffset.UTC)),
+        Boolean.class);
+  }
+
+  /** Completes a superseded job without a bundle; the job claimed after it publishes one. */
+  boolean markSuperseded(UUID externalId, String leaseOwner) {
+    return jdbc.update("""
+        update bundling.bundle_job
+        set state = 'COMPLETED', lease_owner = null, lease_expires_at = null, updated_at = now()
+        where external_id = :externalId and lease_owner = :leaseOwner and state = 'IN_PROGRESS'
+        """, params("externalId", externalId, "leaseOwner", leaseOwner)) == 1;
   }
 
   /**
@@ -235,13 +252,13 @@ public class BundleJobRepository {
               failure_documents = null, lease_owner = null, lease_expires_at = null,
               next_attempt_at = null, updated_at = now()
           where external_id = :externalId and lease_owner = :leaseOwner and state = 'IN_PROGRESS'
-          returning external_id, definition, case_reference, selected_at, claimed_at, created_at
+          returning external_id, definition, case_reference, claimed_at, created_at
         )
         insert into bundling.bundle (job_id, definition, case_reference, selected_at, outcome,
           file_name, media_type, size_bytes, sha256, page_count, request, documents,
           missing_documents, warnings, document_id, document_url, binary_url)
         select external_id, definition, case_reference,
-          coalesce(selected_at, claimed_at, created_at), :outcome, :fileName, :mediaType, :size, :sha256,
+          coalesce(claimed_at, created_at), :outcome, :fileName, :mediaType, :size, :sha256,
           :pageCount, :request::jsonb, :documents::jsonb, :missingDocuments::jsonb,
           :warnings::jsonb, :documentId, :documentUrl, :binaryUrl
         from completed
