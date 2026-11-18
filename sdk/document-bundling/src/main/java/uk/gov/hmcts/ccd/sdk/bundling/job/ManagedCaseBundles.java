@@ -31,8 +31,7 @@ import uk.gov.hmcts.ccd.sdk.bundling.managed.SelectedCaseBundle;
  * {@link #cleanUp} deletes the PDFs it replaced.
  */
 @Slf4j
-public class ManagedCaseBundles
-    implements CaseBundles, BundleDocumentSelector, BundleJobCompletionHandler {
+public class ManagedCaseBundles implements CaseBundles {
   // How long a replaced bundle's PDF is kept, so a link a reader already has keeps working.
   static final Duration REPLACED_PDF_KEPT_FOR = Duration.ofHours(12);
 
@@ -88,28 +87,26 @@ public class ManagedCaseBundles
 
   /**
    * Queues a background render of every case's bundles, once for each key, and says whether this
-   * call did. The key commits with each definition's jobs, so other pods and restarts skip it.
+   * call did. The key commits with the queued bundles, so other pods and restarts skip it.
    */
   public boolean refresh(String key) {
     if (key == null || key.isBlank()) {
       return false;
     }
-    boolean refreshed = false;
-    for (CaseBundleDefinition definition : definitions.values()) {
-      refreshed |= transaction.execute(status -> {
-        if (!repository.recordRefresh(key, definition.name())) {
-          return false;
-        }
+    return transaction.execute(status -> {
+      if (!repository.recordRefresh(key)) {
+        return false;
+      }
+      for (CaseBundleDefinition definition : definitions.values()) {
         log.info("Bundle refresh {} queued {} {} bundles", key,
             repository.refresh(definition.name(), definition.caseType()), definition.name());
-        return true;
-      });
-    }
-    return refreshed;
+      }
+      return true;
+    });
   }
 
-  @Override
-  public SelectedCaseBundle select(BundleJob job) {
+  /** The bundle's case and documents, selected when the worker renders it. */
+  SelectedCaseBundle select(BundleJob job) {
     CaseBundleDefinition definition = definition(job.definition());
     // One snapshot, so the documents and whatever decides their visibility agree.
     BundleRequest request = snapshot.execute(status ->
@@ -118,19 +115,17 @@ public class ManagedCaseBundles
     return repository.selectedFor(job.caseReference(), request.withExternalId(job.externalId()));
   }
 
-  @Override
-  public Collection<String> definitions() {
+  /** The definitions this pod can render; bundles of others are left to the pods that can. */
+  Collection<String> definitions() {
     return definitions.keySet();
   }
 
-  @Override
-  public StoredBundleDocument onCompleted(BundleJob job, SelectedCaseBundle selected,
-      BundleResult result) throws Exception {
+  StoredBundleDocument store(SelectedCaseBundle selected, BundleResult result) throws Exception {
     return store.store(selected, result.artifact());
   }
 
-  @Override
-  public boolean retryable(Exception failure) {
+  /** Whether a failure to store is worth another attempt. */
+  boolean retryable(Exception failure) {
     return !(failure instanceof IllegalArgumentException)
         && (!(failure instanceof feign.FeignException remote)
             || remote.status() < 0
@@ -138,8 +133,8 @@ public class ManagedCaseBundles
             || remote.status() == 429);
   }
 
-  @Override
-  public void discarded(BundleJob job, StoredBundleDocument stored) {
+  /** Deletes a PDF stored by a worker that then found it no longer held the bundle's lease. */
+  void discard(StoredBundleDocument stored) {
     if (stored != null) {
       store.delete(stored.id());
     }

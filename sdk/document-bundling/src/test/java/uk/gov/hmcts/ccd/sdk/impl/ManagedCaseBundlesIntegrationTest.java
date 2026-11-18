@@ -163,8 +163,8 @@ create table if not exists bundle_test_source(reference bigint primary key, docu
     assertThat(documents.stored()).extracting(Document::getUrl).contains(first.getUrl());
     jdbc.update(
         "update bundling.bundle set created_at = created_at - interval '13 hours' "
-            + "where document_url = :url",
-        Map.of("url", second.getUrl()));
+            + "where case_reference = :key",
+        Map.of("key", key));
     bundles.cleanUp();
     assertThat(documents.stored())
         .extracting(Document::getUrl)

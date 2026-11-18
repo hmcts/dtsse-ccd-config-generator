@@ -35,13 +35,13 @@ import uk.gov.hmcts.ccd.sdk.bundling.managed.SelectedCaseBundle;
 public class BundleJobRepository {
   private static final String JOB_COLUMNS = """
       select external_id, state, attempts, queued_at, updated_at, definition, case_reference,
-             claimed_at, failure_code, failure_message,
+             failure_code, failure_message,
              failure_documents::text as failure_documents
       from bundling.bundle_job
       """;
 
   private static final String BUNDLE_COLUMNS = """
-      select id, definition, case_reference, selected_at, created_at, outcome, file_name,
+      select id, definition, case_reference, created_at, outcome, file_name,
              media_type, size_bytes, sha256, page_count, request::text as request,
              documents::text as documents, missing_documents::text as missing_documents,
              warnings::text as warnings, document_id, document_url, binary_url
@@ -113,15 +113,11 @@ public class BundleJobRepository {
             rs.getString("jurisdiction"), request));
   }
 
-  /**
-   * Records that the key has refreshed the definition, and says whether that was new. A concurrent
-   * caller waits its turn.
-   */
-  boolean recordRefresh(String key, String definition) {
+  /** Records the refresh key, and says whether it was new. A concurrent caller waits its turn. */
+  boolean recordRefresh(String key) {
     return jdbc.update("""
-        insert into bundling.refresh_key (key, definition) values (:key, :definition)
-        on conflict do nothing
-        """, params("key", key, "definition", definition)) == 1;
+        insert into bundling.refresh_key (key) values (:key) on conflict do nothing
+        """, params("key", key)) == 1;
   }
 
   /**
@@ -156,12 +152,12 @@ public class BundleJobRepository {
   /**
    * Claims the next bundles: those queued and due, those completed and due a re-run, and those
    * whose worker's lease expired. A bundle queued again while a worker renders it waits for that
-   * worker's lease. A worker given definitions claims, and gives up on, only those, so a pod on an
+   * worker's lease. A worker claims, and gives up on, only its own definitions, so a pod on an
    * older release leaves a definition it does not have to the pods that do.
    */
   List<ClaimedBundleJob> claim(int limit, String leaseOwner, Duration leaseDuration,
       int maxAttempts, Collection<String> definitions) {
-    if (definitions != null && definitions.isEmpty()) {
+    if (definitions.isEmpty()) {
       return List.of();
     }
     return jdbc.query("""
@@ -169,7 +165,7 @@ public class BundleJobRepository {
           select external_id from bundling.bundle_job
           where (state in ('QUEUED', 'IN_PROGRESS') or next_attempt_at is not null)
             and attempts < :maxAttempts
-            and (:anyDefinition or definition in (:definitions))
+            and definition in (:definitions)
             and (lease_expires_at is null or lease_expires_at <= now())
             and (state = 'IN_PROGRESS' or next_attempt_at <= now()
                  or (state = 'QUEUED' and next_attempt_at is null))
@@ -180,26 +176,24 @@ public class BundleJobRepository {
         update bundling.bundle_job job
         set state = 'IN_PROGRESS', attempts = job.attempts + 1, lease_owner = :leaseOwner,
             lease_expires_at = now() + (:leaseMillis * interval '1 millisecond'),
-            next_attempt_at = null, claimed_at = now(), updated_at = now()
+            next_attempt_at = null, updated_at = now()
         from claimable where job.external_id = claimable.external_id
         returning job.external_id, job.attempts, job.queued_at, job.updated_at,
-            job.definition, job.case_reference, job.claimed_at,
+            job.definition, job.case_reference,
             job.unavailable_requeues, job.transient_history::text as transient_history
         """,
         params("limit", limit, "leaseOwner", leaseOwner, "leaseMillis", leaseDuration.toMillis(),
-            "maxAttempts", maxAttempts, "anyDefinition", definitions == null,
-            "definitions", definitions == null ? List.of("") : definitions),
+            "maxAttempts", maxAttempts, "definitions", definitions),
         (rs, n) -> new ClaimedBundleJob(
             new BundleJob(rs.getObject("external_id", UUID.class), BundleJobState.IN_PROGRESS,
                 rs.getInt("attempts"), instant(rs, "queued_at"), instant(rs, "updated_at"),
-                rs.getString("definition"), rs.getLong("case_reference"),
-                Optional.of(instant(rs, "claimed_at")), Optional.empty()),
+                rs.getString("definition"), rs.getLong("case_reference"), Optional.empty()),
             rs.getInt("unavailable_requeues"), rs.getString("transient_history"), leaseOwner));
   }
 
   /** Fails the bundles whose worker's lease expired on their last attempt. */
   List<UUID> failExhaustedStaleJobs(int maxAttempts, Collection<String> definitions) {
-    if (definitions != null && definitions.isEmpty()) {
+    if (definitions.isEmpty()) {
       return List.of();
     }
     return jdbc.query("""
@@ -210,12 +204,11 @@ public class BundleJobRepository {
                 || 'exhausted. The render most likely crashed; see the service logs.',
             lease_owner = null, lease_expires_at = null, next_attempt_at = null, updated_at = now()
         where state = 'IN_PROGRESS' and lease_expires_at <= now() and attempts >= :maxAttempts
-          and (:anyDefinition or definition in (:definitions))
+          and definition in (:definitions)
         returning external_id
         """,
         params("maxAttempts", maxAttempts, "code", BundleErrorCode.ASSEMBLY_FAILED.name(),
-            "anyDefinition", definitions == null,
-            "definitions", definitions == null ? List.of("") : definitions),
+            "definitions", definitions),
         (rs, n) -> rs.getObject("external_id", UUID.class));
   }
 
@@ -241,12 +234,12 @@ public class BundleJobRepository {
                 else 0 end,
               lease_owner = null, lease_expires_at = null, updated_at = now()
           where external_id = :externalId and lease_owner = :leaseOwner
-          returning definition, case_reference, claimed_at
+          returning definition, case_reference
         )
-        insert into bundling.bundle (definition, case_reference, selected_at, outcome,
+        insert into bundling.bundle (definition, case_reference, outcome,
           file_name, media_type, size_bytes, sha256, page_count, request, documents,
           missing_documents, warnings, document_id, document_url, binary_url)
-        select definition, case_reference, claimed_at, :outcome, :fileName, :mediaType, :size,
+        select definition, case_reference, :outcome, :fileName, :mediaType, :size,
           :sha256, :pageCount, :request::jsonb, :documents::jsonb, :missingDocuments::jsonb,
           :warnings::jsonb, :documentId, :documentUrl, :binaryUrl
         from completed
@@ -269,18 +262,18 @@ public class BundleJobRepository {
       String warningsJson, StoredBundleDocument stored) {
   }
 
-  /** The case's bundle whose documents were selected last. */
+  /** The case's bundle recorded last: its renders run one at a time, so that is the current one. */
   public Optional<BundleMetadata> findLatestBundle(String definition, long caseReference) {
     return jdbc.query(BUNDLE_COLUMNS + """
          where definition = :definition and case_reference = :caseReference
-         order by selected_at desc, created_at desc, id
+         order by created_at desc, id
          limit 1
         """, params("definition", definition, "caseReference", caseReference), (rs, n) -> mapBundle(rs))
         .stream().findFirst();
   }
 
   /**
-   * Stored PDFs of bundles that a bundle selected later for the same case replaced at least
+   * Stored PDFs of bundles that a bundle recorded later for the same case replaced at least
    * {@code replacedFor} ago.
    */
   List<UUID> findReplacedDocuments(Duration replacedFor, int limit) {
@@ -289,7 +282,7 @@ public class BundleJobRepository {
         where document_id is not null and deleted_at is null
           and exists (select 1 from bundling.bundle newer
                       where newer.definition = old.definition and newer.case_reference = old.case_reference
-                        and (newer.selected_at, newer.created_at) > (old.selected_at, old.created_at)
+                        and newer.created_at > old.created_at
                         and newer.created_at <= now() - (:replacedMillis * interval '1 millisecond'))
         order by created_at
         limit :limit
@@ -356,7 +349,7 @@ public class BundleJobRepository {
         : Optional.of(new StoredBundleDocument(documentId, rs.getString("document_url"),
             rs.getString("binary_url")));
     return new BundleMetadata(rs.getObject("id", UUID.class), rs.getString("definition"),
-        rs.getLong("case_reference"), instant(rs, "selected_at"), instant(rs, "created_at"),
+        rs.getLong("case_reference"), instant(rs, "created_at"),
         json.read(rs.getString("request"), BundleRequest.class, "bundle request"),
         BundleOutcome.valueOf(rs.getString("outcome")), rs.getString("file_name"),
         rs.getString("media_type"), rs.getLong("size_bytes"), rs.getString("sha256"),
@@ -375,8 +368,6 @@ public class BundleJobRepository {
     return new BundleJob(rs.getObject("external_id", UUID.class),
         BundleJobState.valueOf(rs.getString("state")), rs.getInt("attempts"),
         instant(rs, "queued_at"), instant(rs, "updated_at"),
-        rs.getString("definition"), rs.getLong("case_reference"),
-        Optional.ofNullable(rs.getObject("claimed_at", OffsetDateTime.class))
-            .map(OffsetDateTime::toInstant), failure);
+        rs.getString("definition"), rs.getLong("case_reference"), failure);
   }
 }

@@ -4,7 +4,7 @@ import java.time.Duration;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/** Configuration for the durable bundle job outbox, bound from ccd.bundling.job. */
+/** Configuration for the bundle job queue, bound from ccd.bundling.job. */
 @Data
 @ConfigurationProperties(prefix = "ccd.bundling.job")
 public class BundleJobProperties {
@@ -14,7 +14,7 @@ public class BundleJobProperties {
   private Retry retry = new Retry();
   private Requeue requeue = new Requeue();
 
-  /** The scheduled worker that claims and executes outbox rows. */
+  /** The scheduled worker that claims and renders queue rows. */
   @Data
   public static class Worker {
     // Matches the auto-configuration, which runs the worker unless this is set to false.
@@ -30,7 +30,7 @@ public class BundleJobProperties {
   }
 
   /**
-   * Re-running a coalesced job whose bundle has placeholders for documents that were only
+   * Re-running a bundle that has placeholders for documents that were only
    * temporarily unavailable, so the bundle fills in once they can be fetched.
    */
   @Data

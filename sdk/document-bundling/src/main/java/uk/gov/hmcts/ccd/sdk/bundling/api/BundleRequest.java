@@ -150,7 +150,7 @@ public final class BundleRequest {
     }
 
     /** Sets the consumer-minted UUID that identifies this bundle request. Required to submit or render the
-     * request; managed case bundles set it to the job id. */
+     * request; managed case bundles set it to their queue row's id. */
     public Builder externalId(UUID externalId) {
       this.externalId = externalId;
       return this;

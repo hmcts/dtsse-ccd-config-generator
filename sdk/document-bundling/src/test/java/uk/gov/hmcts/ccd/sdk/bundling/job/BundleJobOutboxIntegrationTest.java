@@ -1,8 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.bundling.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 
 import java.io.ByteArrayInputStream;
@@ -18,6 +16,10 @@ import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
+import uk.gov.hmcts.ccd.sdk.bundling.managed.CaseBundleDefinition;
+import uk.gov.hmcts.ccd.sdk.bundling.managed.BundleDocumentStore;
+import java.util.function.LongFunction;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -40,7 +42,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -75,6 +76,9 @@ class BundleJobOutboxIntegrationTest {
   // The CCD case each test's case name stands for.
   private static final Map<String, Long> CASES = new ConcurrentHashMap<>();
   private static final StoredBundleDocument STORED = stored();
+  // The definitions every test worker has.
+  private static final List<String> DEFINITIONS =
+      List.of("test", "bundle", "hearing", "other", "added-in-the-next-release");
   private static final String INSERT_CASE = """
       insert into ccd.case_data (id, reference, jurisdiction, case_type_id, state, data,
         security_classification)
@@ -87,6 +91,7 @@ class BundleJobOutboxIntegrationTest {
   private static DataSource dataSource;
   private static NamedParameterJdbcTemplate jdbc;
   private static BundleJobRepository repository;
+  private static DataSourceTransactionManager transactions;
   private static TransactionTemplate tx;
 
   @TempDir
@@ -97,7 +102,7 @@ class BundleJobOutboxIntegrationTest {
     dataSource = dataSourceFor(POSTGRES.getDatabaseName());
     sdkMigrationRunner(dataSource).run(context -> assertThat(context).hasNotFailed());
     jdbc = new NamedParameterJdbcTemplate(dataSource);
-    DataSourceTransactionManager transactions = new DataSourceTransactionManager(dataSource);
+    transactions = new DataSourceTransactionManager(dataSource);
     repository = new BundleJobRepository(jdbc, transactions);
     tx = new TransactionTemplate(transactions);
   }
@@ -121,7 +126,7 @@ class BundleJobOutboxIntegrationTest {
     assertThat(submit("test", "hot").externalId()).isEqualTo(hot);
     List<UUID> claimed = new ArrayList<>();
     for (int i = 0; i < 3; i++) {
-      repository.claim(1, "priority-test", Duration.ofMinutes(1), 3, null)
+      repository.claim(1, "priority-test", Duration.ofMinutes(1), 3, DEFINITIONS)
           .forEach(claim -> claimed.add(claim.job().externalId()));
     }
     assertThat(claimed).containsExactly(hot, live, background);
@@ -171,21 +176,9 @@ class BundleJobOutboxIntegrationTest {
   @Test
   void aBundleFinishingAsItsCaseIsDeletedWaitsForTheDeletionAndDiscardsItsPdf() throws Exception {
     BundleJob job = submit(simpleRequest(UUID.randomUUID()));
-    List<StoredBundleDocument> discarded = new CopyOnWriteArrayList<>();
-    BundleJobCompletionHandler handler = new BundleJobCompletionHandler() {
-      @Override
-      public StoredBundleDocument onCompleted(BundleJob completed, SelectedCaseBundle selection,
-          BundleResult result) {
-        return STORED;
-      }
-
-      @Override
-      public void discarded(BundleJob completed, StoredBundleDocument document) {
-        discarded.add(document);
-      }
-    };
-    BundleJobWorker worker = new BundleJobWorker(repository, new FakeRenderer(tempDir), asSubmitted(),
-        handler, quickRetries(3), List.of(), Runnable::run, 5, 5, Duration.ofMinutes(5));
+    FakeStore handler = storing((selection, artifact) -> STORED);
+    BundleJobWorker worker = worker(new FakeRenderer(tempDir), asSubmitted(),
+        handler, quickRetries(3), Runnable::run, 5, 5, Duration.ofMinutes(5));
     Map<String, Long> reference = Map.of("reference", job.caseReference());
     ExecutorService pool = Executors.newSingleThreadExecutor();
     try {
@@ -203,97 +196,7 @@ class BundleJobOutboxIntegrationTest {
       pool.shutdownNow();
     }
     assertThat(repository.find(job.externalId())).isEmpty();
-    assertThat(discarded).containsExactly(STORED);
-  }
-
-  @Test
-  void aJobForAReferenceThatIsNotACaseIsRejected() {
-    assertThatThrownBy(() -> repository.changed("test", 42L))
-        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
-  }
-
-  @Test
-  void submitThenPollRunsThroughInProgressToCompletedRecordingWhereThePdfWasStored()
-      throws Exception {
-    UUID id = UUID.randomUUID();
-    BundleJob submitted = submit(fullRequest(id));
-    assertThat(submitted.state()).isEqualTo(BundleJobState.QUEUED);
-    assertThat(submitted.attempts()).isZero();
-
-    CountDownLatch renderStarted = new CountDownLatch(1);
-    CountDownLatch releaseRender = new CountDownLatch(1);
-    FakeRenderer renderer = new FakeRenderer(tempDir).onNextRender(request -> {
-      renderStarted.countDown();
-      awaitQuietly(releaseRender);
-      return renderer(tempDir).success(request, List.of());
-    });
-    List<BundleRequest> handled = new CopyOnWriteArrayList<>();
-    BundleJobCompletionHandler handler = (job, selection, result) -> {
-      handled.add(selection.request());
-      assertThat(job.state()).isEqualTo(BundleJobState.IN_PROGRESS);
-      try (InputStream pdf = result.artifact().open()) {
-        assertThat(pdf.readAllBytes()).isNotEmpty();
-      }
-      return STORED;
-    };
-    ExecutorService pool = Executors.newSingleThreadExecutor();
-    try {
-      BundleJobWorker worker = new BundleJobWorker(repository, renderer,
-          asSubmitted(), handler, quickRetries(3), List.of(), pool, 5, 5,
-          Duration.ofMinutes(5));
-      worker.poll();
-      assertThat(renderStarted.await(10, TimeUnit.SECONDS)).isTrue();
-      assertThat(job(id).state()).isEqualTo(BundleJobState.IN_PROGRESS);
-      assertThat(column(id, "lease_owner")).startsWith("bundle-job-worker-");
-      releaseRender.countDown();
-      await().atMost(Duration.ofSeconds(10)).until(() -> job(id).state().terminal());
-    } finally {
-      pool.shutdownNow();
-    }
-
-    BundleJob completed = job(id);
-    assertThat(completed.state()).isEqualTo(BundleJobState.COMPLETED);
-    assertThat(completed.attempts()).isEqualTo(1);
-    assertThat(completed.failure()).isEmpty();
-    assertThat(bundle(id).orElseThrow().stored()).contains(STORED);
-    assertThat(column(id, "lease_owner")).isNull();
-    // The request round-tripped through JSON unchanged: the handler saw the whole tree.
-    assertThat(handled).hasSize(1);
-    BundleRequest seen = handled.get(0);
-    assertThat(seen.title()).isEqualTo("Final hearing bundle");
-    assertThat(seen.presentation().documentCoverSheets()).isTrue();
-    assertThat(seen.presentation().watermark()).contains(
-        uk.gov.hmcts.ccd.sdk.bundling.api.WatermarkPreset.allPages("hmcts-logo"));
-    assertThat(seen.coverPage()).contains(new uk.gov.hmcts.ccd.sdk.bundling.api.CoverPage(
-        "FL-FRM-GOR-ENG-12345.docx", java.util.Map.of("caseReference", "1234")));
-    assertThat(seen.allDocuments()).extracting(BundleDocument::id)
-        .containsExactly("doc-1", "doc-2", "doc-3");
-    assertThat(seen.allDocuments().get(2).media().orElseThrow().duration())
-        .contains(Duration.ofMinutes(42));
-    assertThat(seen.coverPage().orElseThrow().templateName()).isEqualTo("FL-FRM-GOR-ENG-12345.docx");
-    assertThat(seen.presentation().watermark()).isPresent();
-    // The worker closed the result: the renderer's job directory is gone.
-    assertThat(Files.list(tempDir)).isEmpty();
-
-    // A warning-carrying render lands in COMPLETED_WITH_WARNINGS.
-    UUID warned = UUID.randomUUID();
-    submit(simpleRequest(warned));
-    directWorker(new FakeRenderer(tempDir).onNextRender(request -> renderer(tempDir)
-        .success(request, List.of(BundleWarning.of("EMPTY_SECTION_PAGE_INCLUDED", "empty")))))
-        .poll();
-    assertThat(job(warned).state()).isEqualTo(BundleJobState.COMPLETED_WITH_WARNINGS);
-  }
-
-  @Test
-  void submitJoinsTheCallersTransaction() {
-    UUID rolledBack = UUID.randomUUID();
-    tx.execute(status -> {
-      submit(simpleRequest(rolledBack));
-      assertThat(repository.find(rolledBack)).isPresent();
-      status.setRollbackOnly();
-      return null;
-    });
-    assertThat(repository.find(rolledBack)).isEmpty();
+    assertThat(handler.deleted).containsExactly(STORED.id());
   }
 
   @Test
@@ -308,14 +211,14 @@ class BundleJobOutboxIntegrationTest {
     try {
       // Worker A claims three rows and holds its transaction (and so its row locks) open.
       Future<List<ClaimedBundleJob>> first = pool.submit(() -> tx.execute(status -> {
-        List<ClaimedBundleJob> claimed = repository.claim(3, "worker-a", Duration.ofMinutes(5), 3, null);
+        List<ClaimedBundleJob> claimed = repository.claim(3, "worker-a", Duration.ofMinutes(5), 3, DEFINITIONS);
         firstClaimHeld.countDown();
         awaitQuietly(release);
         return claimed;
       }));
       assertThat(firstClaimHeld.await(10, TimeUnit.SECONDS)).isTrue();
       // B returning at all proves SKIP LOCKED did not block; A releases only after B is done.
-      List<ClaimedBundleJob> second = repository.claim(6, "worker-b", Duration.ofMinutes(5), 3, null);
+      List<ClaimedBundleJob> second = repository.claim(6, "worker-b", Duration.ofMinutes(5), 3, DEFINITIONS);
       release.countDown();
       List<ClaimedBundleJob> firstClaimed = first.get(10, TimeUnit.SECONDS);
 
@@ -333,13 +236,13 @@ class BundleJobOutboxIntegrationTest {
   @Test
   void expiredLeaseIsReclaimedAndTheStaleWorkersLateWriteIsIgnored() throws Exception {
     submit(simpleRequest(UUID.randomUUID()));
-    List<ClaimedBundleJob> first = repository.claim(1, "worker-a", Duration.ofMillis(100), 3, null);
+    List<ClaimedBundleJob> first = repository.claim(1, "worker-a", Duration.ofMillis(100), 3, DEFINITIONS);
     assertThat(first).hasSize(1);
     assertThat(first.get(0).job().attempts()).isEqualTo(1);
-    assertThat(repository.claim(1, "worker-b", Duration.ofMinutes(5), 3, null)).isEmpty();
+    assertThat(repository.claim(1, "worker-b", Duration.ofMinutes(5), 3, DEFINITIONS)).isEmpty();
 
     Thread.sleep(250);
-    List<ClaimedBundleJob> reclaimed = repository.claim(1, "worker-b", Duration.ofMinutes(5), 3, null);
+    List<ClaimedBundleJob> reclaimed = repository.claim(1, "worker-b", Duration.ofMinutes(5), 3, DEFINITIONS);
     assertThat(reclaimed).hasSize(1);
     assertThat(reclaimed.get(0).job().attempts()).isEqualTo(2);
     UUID id = reclaimed.get(0).job().externalId();
@@ -368,25 +271,17 @@ class BundleJobOutboxIntegrationTest {
     Map<Integer, CountDownLatch> started = Map.of(1, new CountDownLatch(1), 2, new CountDownLatch(1));
     Map<Integer, CountDownLatch> release = Map.of(1, new CountDownLatch(1), 2, new CountDownLatch(1));
     Map<Integer, StoredBundleDocument> stored = Map.of(1, stored(), 2, stored());
-    List<StoredBundleDocument> discarded = new CopyOnWriteArrayList<>();
-    BundleJobCompletionHandler handler = new BundleJobCompletionHandler() {
-      @Override
-      public StoredBundleDocument onCompleted(BundleJob job, SelectedCaseBundle selection,
-          BundleResult result) {
-        started.get(job.attempts()).countDown();
-        awaitQuietly(release.get(job.attempts()));
-        return stored.get(job.attempts());
-      }
-
-      @Override
-      public void discarded(BundleJob job, StoredBundleDocument document) {
-        discarded.add(document);
-      }
-    };
+    java.util.concurrent.atomic.AtomicInteger attempts = new java.util.concurrent.atomic.AtomicInteger();
+    FakeStore handler = storing((selection, artifact) -> {
+      int attempt = attempts.incrementAndGet();
+      started.get(attempt).countDown();
+      awaitQuietly(release.get(attempt));
+      return stored.get(attempt);
+    });
     ExecutorService pool = Executors.newFixedThreadPool(2);
     try {
-      BundleJobWorker worker = new BundleJobWorker(repository, new FakeRenderer(tempDir),
-          asSubmitted(), handler, quickRetries(3), List.of(), pool, 5, 2,
+      BundleJobWorker worker = worker(new FakeRenderer(tempDir),
+          asSubmitted(), handler, quickRetries(3), pool, 5, 2,
           Duration.ofMinutes(5));
       worker.poll();
       assertThat(started.get(1).await(10, TimeUnit.SECONDS)).isTrue();
@@ -396,14 +291,14 @@ class BundleJobOutboxIntegrationTest {
       assertThat(started.get(2).await(10, TimeUnit.SECONDS)).isTrue();
       // The earlier attempt finishes first, but the same worker's later claim holds the lease.
       release.get(1).countDown();
-      await().atMost(Duration.ofSeconds(10)).until(() -> discarded.size() == 1);
+      await().atMost(Duration.ofSeconds(10)).until(() -> handler.deleted.size() == 1);
       assertThat(job(id).state()).isEqualTo(BundleJobState.IN_PROGRESS);
       release.get(2).countDown();
       await().atMost(Duration.ofSeconds(10)).until(() -> job(id).state().terminal());
     } finally {
       pool.shutdownNow();
     }
-    assertThat(discarded).containsExactly(stored.get(1));
+    assertThat(handler.deleted).containsExactly(stored.get(1).id());
     assertThat(bundle(id).orElseThrow().stored()).contains(stored.get(2));
   }
 
@@ -419,8 +314,7 @@ class BundleJobOutboxIntegrationTest {
     FakeRenderer renderer = new FakeRenderer(tempDir)
         .onNextRender(FakeRenderer.failure(transientFailure))
         .onNextRender(FakeRenderer.failure(transientFailure));
-    List<BundleProgressEvent> events = new CopyOnWriteArrayList<>();
-    BundleJobWorker worker = directWorker(renderer, quickRetries(2), List.of(events::add));
+    BundleJobWorker worker = directWorker(renderer, quickRetries(2));
 
     worker.poll();
     BundleJob requeued = job(id);
@@ -441,10 +335,6 @@ class BundleJobOutboxIntegrationTest {
         .contains("attempt 1 at").contains("attempt 2 at");
     assertThat(failure.documentFailures()).extracting(DocumentFailure::documentId)
         .containsExactly("doc-1");
-    assertThat(events).extracting(BundleProgressEvent::state).containsExactly(
-        BundleJobState.IN_PROGRESS, BundleJobState.QUEUED,
-        BundleJobState.IN_PROGRESS, BundleJobState.FAILED);
-
     // Exhausted means exhausted: nothing is claimable any more.
     worker.poll();
     assertThat(renderer.renders).hasSize(2);
@@ -486,16 +376,16 @@ class BundleJobOutboxIntegrationTest {
     assertThat(job(missingTemplate).state()).isEqualTo(BundleJobState.FAILED);
     assertThat(column(missingTemplate, "next_attempt_at")).isNull();
 
-    // A throwing completion handler fails the rendered job with COMPLETION_FAILED; the raw
+    // A store that rejects the PDF fails the rendered job with COMPLETION_FAILED; the raw
     // exception message stays out of the row, and the result is still closed.
     UUID unstored = submit(simpleRequest(UUID.randomUUID())).externalId();
-    new BundleJobWorker(repository, new FakeRenderer(tempDir), asSubmitted(),
-        (job, selection, result) -> {
-          throw new IllegalStateException("signed-url=https://secret");
-        }, quickRetries(3), List.of(), Runnable::run, 5, 5, Duration.ofMinutes(5)).poll();
+    worker(new FakeRenderer(tempDir), asSubmitted(),
+        storing((selection, artifact) -> {
+          throw new IllegalArgumentException("signed-url=https://secret");
+        }), quickRetries(3), Runnable::run, 5, 5, Duration.ofMinutes(5)).poll();
     BundleJobFailure completion = job(unstored).failure().orElseThrow();
     assertThat(completion.code()).isEqualTo(BundleErrorCode.COMPLETION_FAILED);
-    assertThat(completion.message()).contains("IllegalStateException").doesNotContain("secret");
+    assertThat(completion.message()).contains("IllegalArgumentException").doesNotContain("secret");
     assertThat(Files.list(tempDir)).isEmpty();
   }
 
@@ -503,76 +393,28 @@ class BundleJobOutboxIntegrationTest {
   void aSelectorThatThrowsFailsTheJobWithoutReachingTheRenderer() {
     BundleJob submitted = submit("bundle", "case-1");
     FakeRenderer renderer = new FakeRenderer(tempDir);
-    List<BundleJob> selected = new CopyOnWriteArrayList<>();
+    List<Long> selected = new CopyOnWriteArrayList<>();
 
-    new BundleJobWorker(repository, renderer, job -> {
-      selected.add(job);
-      throw new IllegalArgumentException("Unknown case bundle definition");
-    }, summaryHandler(), quickRetries(3), List.of(), Runnable::run, 5, 5, Duration.ofMinutes(5)).poll();
+    worker(renderer, reference -> {
+      selected.add(reference);
+      throw new IllegalArgumentException("No such case");
+    }, storingNothing(), quickRetries(3), Runnable::run, 5, 5, Duration.ofMinutes(5)).poll();
 
-    assertThat(selected).extracting(BundleJob::externalId, BundleJob::definition, BundleJob::caseReference)
-        .containsExactly(tuple(submitted.externalId(), "bundle", caseRef("case-1")));
+    assertThat(selected).containsExactly(caseRef("case-1"));
     assertThat(job(submitted.externalId()).failure().orElseThrow().code())
         .isEqualTo(BundleErrorCode.JOB_REQUEST_UNREADABLE);
     assertThat(renderer.renders).isEmpty();
   }
 
   @Test
-  void aCompletedJobRecordsTheBundleItRenderedFromTheRequestTheSelectorCompiled() {
+  void noBundleIsRecordedForABundleWhosePdfCouldNotBeStored() {
     BundleJob submitted = submit("bundle", "case-1");
-    assertThat(repository.findLatestBundle("bundle", caseRef("case-1"))).isEmpty();
-    FakeRenderer renderer = new FakeRenderer(tempDir).onNextRender(request ->
-        renderer(tempDir).success(request, List.of(), List.of("doc-gone")));
-    List<BundleResult> handed = new CopyOnWriteArrayList<>();
-    BundleJobCompletionHandler handler = (job, selection, result) -> {
-      // The consumer still receives the full result, to store the PDF where it keeps documents.
-      handed.add(result);
-      assertThat(repository.findLatestBundle("bundle", job.caseReference())).isEmpty();
-      return null;
-    };
-
-    new BundleJobWorker(repository, renderer, twoDocumentSelector(), handler, quickRetries(3),
-        List.of(), Runnable::run, 5, 5, Duration.ofMinutes(5)).poll();
-
-    assertThat(handed).singleElement().satisfies(result -> {
-      assertThat(result.pageCount()).isEqualTo(1);
-      assertThat(result.missingDocuments()).extracting(MissingDocument::documentId)
-          .containsExactly("doc-gone");
+    FakeStore failing = storing((selection, artifact) -> {
+      throw new IllegalArgumentException("the store rejects the document");
     });
-    BundleMetadata bundle = repository.findLatestBundle("bundle", caseRef("case-1")).orElseThrow();
-    assertThat(bundle.definition()).isEqualTo("bundle");
-    assertThat(bundle.caseReference()).isEqualTo(caseRef("case-1"));
-    assertThat(bundle.selectedAt()).isEqualTo(job(submitted.externalId()).claimedAt().orElseThrow());
-    assertThat(bundle.request().title()).isEqualTo("Selected at execution");
-    assertThat(bundle.request().allDocuments()).extracting(BundleDocument::id)
-        .containsExactly("doc-kept", "doc-gone");
-    assertThat(bundle.outcome()).isEqualTo(uk.gov.hmcts.ccd.sdk.bundling.api.BundleOutcome.COMPLETED_WITH_WARNINGS);
-    assertThat(bundle.fileName()).isEqualTo("selected.pdf");
-    assertThat(bundle.mediaType()).isEqualTo("application/pdf");
-    assertThat(bundle.sha256()).isEqualTo("sha-bundle");
-    assertThat(bundle.pageCount()).isEqualTo(1);
-    assertThat(bundle.documents()).extracting(DocumentResult::documentId).containsExactly("doc-kept");
-    assertThat(bundle.missingDocuments()).singleElement().satisfies(missing -> {
-      assertThat(missing.documentId()).isEqualTo("doc-gone");
-      assertThat(missing.reason()).isEqualTo(MissingDocumentReason.NOT_FOUND);
-      assertThat(missing.startPage()).isEqualTo(2);
-    });
-    assertThat(bundle.warnings()).isEqualTo(handed.get(0).warnings());
-    assertThat(repository.findLatestBundle("bundle", caseRef("case-1")).map(BundleMetadata::id))
-        .contains(bundle.id());
-    // Only an unavailable document is worth re-running for.
-    assertThat(column(submitted.externalId(), "next_attempt_at")).isNull();
-  }
 
-  @Test
-  void noBundleIsRecordedForAJobWhoseCompletionHandlerFailed() {
-    BundleJob submitted = submit("bundle", "case-1");
-    BundleJobCompletionHandler failing = (job, selection, result) -> {
-      throw new IllegalStateException("document store down");
-    };
-
-    new BundleJobWorker(repository, new FakeRenderer(tempDir), twoDocumentSelector(), failing,
-        quickRetries(3), List.of(), Runnable::run, 5, 5, Duration.ofMinutes(5)).poll();
+    worker(new FakeRenderer(tempDir), twoDocumentSelector(), failing,
+        quickRetries(3), Runnable::run, 5, 5, Duration.ofMinutes(5)).poll();
 
     assertThat(job(submitted.externalId()).state()).isEqualTo(BundleJobState.FAILED);
     assertThat(repository.findLatestBundle("bundle", caseRef("case-1"))).isEmpty();
@@ -598,14 +440,14 @@ class BundleJobOutboxIntegrationTest {
   void aDatabaseErrorWhileSelectingIsTriedAgainRatherThanFailingTheBundle() {
     UUID id = submit(simpleRequest(UUID.randomUUID())).externalId();
     java.util.concurrent.atomic.AtomicBoolean lost = new java.util.concurrent.atomic.AtomicBoolean();
-    BundleDocumentSelector selector = job -> {
+    LongFunction<BundleRequest> selector = reference -> {
       if (lost.compareAndSet(false, true)) {
         throw new org.springframework.dao.QueryTimeoutException("connection lost");
       }
-      return asSubmitted().select(job);
+      return REQUESTS.get(reference);
     };
-    BundleJobWorker worker = new BundleJobWorker(repository, new FakeRenderer(tempDir), selector,
-        summaryHandler(), quickRetries(3), List.of(), Runnable::run, 5, 5, Duration.ofMillis(50));
+    BundleJobWorker worker = worker(new FakeRenderer(tempDir), selector,
+        storingNothing(), quickRetries(3), Runnable::run, 5, 5, Duration.ofMillis(50));
 
     worker.poll();
 
@@ -624,9 +466,9 @@ class BundleJobOutboxIntegrationTest {
       renderer.onNextRender(request -> renderer(tempDir).success(request, List.of(), List.of(),
           List.of("doc-gone")));
     }
-    BundleJobWorker worker = new BundleJobWorker(repository, renderer, twoDocumentSelector(), summaryHandler(),
+    BundleJobWorker worker = worker(renderer, twoDocumentSelector(), storingNothing(),
         new BundleJobRetryPolicy(3, Duration.ofMillis(1), 2.0, Duration.ofMillis(2), Duration.ofMinutes(15), 2),
-        List.of(), Runnable::run, 5, 5, Duration.ofMinutes(5));
+        Runnable::run, 5, 5, Duration.ofMinutes(5));
 
     worker.poll();
 
@@ -665,7 +507,7 @@ class BundleJobOutboxIntegrationTest {
     FakeRenderer renderer = new FakeRenderer(tempDir).onNextRender(FakeRenderer.failure(
         new BundleGenerationException(BundleErrorCode.DOCUMENT_RESOLUTION_FAILED, BundleStage.RESOLVE,
             "CDAM timed out", "Retry", List.of())));
-    BundleJobWorker worker = directWorker(renderer, quickRetries(2), List.of());
+    BundleJobWorker worker = directWorker(renderer, quickRetries(2));
 
     worker.poll();
     await().atMost(Duration.ofSeconds(5)).until(() -> {
@@ -684,12 +526,12 @@ class BundleJobOutboxIntegrationTest {
     return job(id);
   }
 
-  private static BundleDocumentSelector twoDocumentSelector() {
-    return selecting(context -> BundleRequest.builder().externalId(context.externalId())
+  private static LongFunction<BundleRequest> twoDocumentSelector() {
+    return reference -> BundleRequest.builder()
         .title("Selected at execution").fileName("selected.pdf")
         .root(BundleSection.builder("Case file").document(document("doc-kept"))
             .document(document("doc-gone")).build())
-        .build());
+        .build();
   }
 
   @Test
@@ -697,7 +539,6 @@ class BundleJobOutboxIntegrationTest {
     UUID id = submit("hearing", "case-1").externalId();
     // Changes to a bundle share its one row.
     assertThat(submit("hearing", "case-1").externalId()).isEqualTo(id);
-    assertThat(job(id).claimedAt()).isEmpty();
 
     CountDownLatch renderStarted = new CountDownLatch(1);
     CountDownLatch releaseRender = new CountDownLatch(1);
@@ -706,13 +547,13 @@ class BundleJobOutboxIntegrationTest {
       awaitQuietly(releaseRender);
       return renderer(tempDir).success(request, List.of());
     });
-    BundleDocumentSelector selector = selecting(context -> BundleRequest.builder()
-        .externalId(context.externalId()).title("Bundle").fileName("bundle.pdf")
-        .root(BundleSection.builder("Case file").document(document("doc-1")).build()).build());
+    LongFunction<BundleRequest> selector = reference -> BundleRequest.builder()
+        .title("Bundle").fileName("bundle.pdf")
+        .root(BundleSection.builder("Case file").document(document("doc-1")).build()).build();
     ExecutorService pool = Executors.newSingleThreadExecutor();
     try {
-      BundleJobWorker worker = new BundleJobWorker(repository, renderer, selector, summaryHandler(),
-          quickRetries(3), List.of(), pool, 5, 5, Duration.ofMinutes(5));
+      BundleJobWorker worker = worker(renderer, selector, storingNothing(),
+          quickRetries(3), pool, 5, 5, Duration.ofMinutes(5));
       worker.poll();
       assertThat(renderStarted.await(10, TimeUnit.SECONDS)).isTrue();
 
@@ -741,7 +582,7 @@ class BundleJobOutboxIntegrationTest {
   @Test
   void aBundleThatFailsWhileAChangeArrivesIsRenderedAgainRatherThanLeftFailed() {
     UUID id = submit("hearing", "case-1").externalId();
-    ClaimedBundleJob claimed = repository.claim(1, "worker-a", Duration.ofMinutes(5), 3, null).get(0);
+    ClaimedBundleJob claimed = repository.claim(1, "worker-a", Duration.ofMinutes(5), 3, DEFINITIONS).get(0);
     submit("hearing", "case-1");
 
     assertThat(repository.markFailed(id, BundleErrorCode.ASSEMBLY_FAILED, "failed", "[]", null,
@@ -749,7 +590,7 @@ class BundleJobOutboxIntegrationTest {
 
     assertThat(job(id).state()).isEqualTo(BundleJobState.QUEUED);
     assertThat(job(id).failure()).isEmpty();
-    assertThat(repository.claim(1, "worker-b", Duration.ofMinutes(5), 3, null)).hasSize(1);
+    assertThat(repository.claim(1, "worker-b", Duration.ofMinutes(5), 3, DEFINITIONS)).hasSize(1);
   }
 
   @Test
@@ -786,11 +627,11 @@ class BundleJobOutboxIntegrationTest {
     CountDownLatch joined = new CountDownLatch(1);
     CountDownLatch commitJoin = new CountDownLatch(1);
     FakeRenderer renderer = new FakeRenderer(tempDir);
-    BundleDocumentSelector selector = selecting(context -> BundleRequest.builder()
-        .externalId(context.externalId()).title("Bundle").fileName("bundle.pdf")
-        .root(BundleSection.builder("Case file").document(document("doc-1")).build()).build());
-    BundleJobWorker worker = new BundleJobWorker(repository, renderer, selector, summaryHandler(),
-        quickRetries(3), List.of(), Runnable::run, 5, 5, Duration.ofMinutes(5));
+    LongFunction<BundleRequest> selector = reference -> BundleRequest.builder()
+        .title("Bundle").fileName("bundle.pdf")
+        .root(BundleSection.builder("Case file").document(document("doc-1")).build()).build();
+    BundleJobWorker worker = worker(renderer, selector, storingNothing(),
+        quickRetries(3), Runnable::run, 5, 5, Duration.ofMinutes(5));
     ExecutorService pool = Executors.newSingleThreadExecutor();
     try {
       // A change to the waiting bundle has not committed yet.
@@ -822,12 +663,11 @@ class BundleJobOutboxIntegrationTest {
     FakeRenderer renderer = new FakeRenderer(tempDir).onNextRender(FakeRenderer.failure(
         new BundleGenerationException(BundleErrorCode.DOCUMENT_RESOLUTION_FAILED,
             BundleStage.RESOLVE, "transient", "retry", List.of())));
-    BundleDocumentSelector selector = selecting(context -> BundleRequest.builder()
-        .externalId(context.externalId()).title("Bundle").fileName("bundle.pdf")
-        .root(BundleSection.builder("Case file").document(document("doc-1")).build()).build());
-    BundleJobWorker worker = new BundleJobWorker(repository, renderer, selector, summaryHandler(),
-        new BundleJobRetryPolicy(3, Duration.ofHours(1), 2.0, Duration.ofHours(1)), List.of(),
-        Runnable::run, 5, 5, Duration.ofMinutes(5));
+    LongFunction<BundleRequest> selector = reference -> BundleRequest.builder()
+        .title("Bundle").fileName("bundle.pdf")
+        .root(BundleSection.builder("Case file").document(document("doc-1")).build()).build();
+    BundleJobWorker worker = worker(renderer, selector, storingNothing(),
+        new BundleJobRetryPolicy(3, Duration.ofHours(1), 2.0, Duration.ofHours(1)), Runnable::run, 5, 5, Duration.ofMinutes(5));
     worker.poll();
     assertThat(job(retrying).state()).isEqualTo(BundleJobState.QUEUED);
     assertThat(job(retrying).attempts()).isEqualTo(1);
@@ -838,23 +678,6 @@ class BundleJobOutboxIntegrationTest {
 
     worker.poll();
     assertThat(job(retrying).state()).isEqualTo(BundleJobState.COMPLETED);
-  }
-
-  @Test
-  void progressEventsArriveInOrderAndAThrowingListenerNeverBreaksTheJob() {
-    UUID id = submit(simpleRequest(UUID.randomUUID())).externalId();
-    List<BundleProgressEvent> events = new CopyOnWriteArrayList<>();
-    BundleProgressListener throwing = event -> {
-      throw new IllegalStateException("listener bug");
-    };
-
-    directWorker(new FakeRenderer(tempDir), quickRetries(3), List.of(throwing, events::add))
-        .poll();
-
-    assertThat(job(id).state()).isEqualTo(BundleJobState.COMPLETED);
-    assertThat(events).containsExactly(
-        new BundleProgressEvent(id, BundleJobState.IN_PROGRESS, 0, 1),
-        new BundleProgressEvent(id, BundleJobState.COMPLETED, 1, 1));
   }
 
   @Test
@@ -991,13 +814,8 @@ class BundleJobOutboxIntegrationTest {
     return repository.refresh(definition, "CaseType");
   }
 
-  private static BundleDocumentSelector asSubmitted() {
-    return selecting(job -> REQUESTS.get(job.caseReference()));
-  }
-
-  /** Wraps a request selection as the selection of a case. */
-  private static BundleDocumentSelector selecting(Function<BundleJob, BundleRequest> request) {
-    return job -> repository.selectedFor(job.caseReference(), request.apply(job));
+  private static LongFunction<BundleRequest> asSubmitted() {
+    return REQUESTS::get;
   }
 
   private static StoredBundleDocument stored() {
@@ -1005,25 +823,47 @@ class BundleJobOutboxIntegrationTest {
     return new StoredBundleDocument(id, "http://dm/" + id, "http://dm/" + id + "/binary");
   }
 
-  private static BundleJobCompletionHandler summaryHandler() {
-    return (job, selection, result) -> null;
+  private static FakeStore storing(Storing storing) {
+    return new FakeStore(storing);
   }
 
-  private static BundleJobWorker directWorker(FakeRenderer renderer, BundleJobRetryPolicy policy,
-      List<BundleProgressListener> listeners) {
-    return new BundleJobWorker(repository, renderer, asSubmitted(),
-        summaryHandler(), policy, listeners, Runnable::run, 5, 5, Duration.ofMinutes(5));
+  private static FakeStore storingNothing() {
+    return storing((selection, artifact) -> null);
+  }
+
+  /** A worker whose every definition selects with the function and stores in the store. */
+  private static BundleJobWorker worker(BundleRenderer renderer, LongFunction<BundleRequest> selecting,
+      BundleDocumentStore store, BundleJobRetryPolicy policy, Executor executor, int batchSize,
+      int maxConcurrentRenders, Duration leaseDuration) {
+    List<CaseBundleDefinition> definitions = DEFINITIONS.stream()
+        .<CaseBundleDefinition>map(name -> new CaseBundleDefinition() {
+          @Override
+          public String name() {
+            return name;
+          }
+
+          @Override
+          public String caseType() {
+            return "CaseType";
+          }
+
+          @Override
+          public BundleRequest select(long caseReference) {
+            return selecting.apply(caseReference);
+          }
+        }).toList();
+    return new BundleJobWorker(repository, renderer,
+        new ManagedCaseBundles(repository, store, transactions, definitions, null), policy, executor,
+        batchSize, maxConcurrentRenders, leaseDuration);
+  }
+
+  private static BundleJobWorker directWorker(FakeRenderer renderer, BundleJobRetryPolicy policy) {
+    return worker(renderer, asSubmitted(), storingNothing(), policy, Runnable::run, 5, 5,
+        Duration.ofMinutes(5));
   }
 
   private static BundleJobWorker directWorker(FakeRenderer renderer) {
-    return directWorker(renderer, quickRetries(3), List.of());
-  }
-
-  // A separate transaction that commits independently of any outer one.
-  private static TransactionTemplate tx2() {
-    TransactionTemplate template = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
-    template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-    return template;
+    return directWorker(renderer, quickRetries(3));
   }
 
   // Waits until some other session is blocked waiting for a row or index lock.
@@ -1062,33 +902,6 @@ class BundleJobOutboxIntegrationTest {
   }
 
   // Nested sections, a date and confidentiality: the whole persisted shape.
-  private static BundleRequest fullRequest(UUID id) {
-    return BundleRequest.builder().externalId(id).title("Final hearing bundle")
-        .fileName("final-hearing-bundle.pdf")
-        .presentation(uk.gov.hmcts.ccd.sdk.bundling.api.BundlePresentation.courtDefault()
-            .withDocumentCoverSheets(true)
-            .withWatermark(uk.gov.hmcts.ccd.sdk.bundling.api.WatermarkPreset.allPages("hmcts-logo")))
-        .coverPage(new uk.gov.hmcts.ccd.sdk.bundling.api.CoverPage(
-            "FL-FRM-GOR-ENG-12345.docx", java.util.Map.of("caseReference", "1234")))
-        .root(BundleSection.builder("Case file")
-            .document(BundleDocument.builder().id("doc-1").title("Application form")
-                .date(java.time.LocalDate.of(2026, 3, 14))
-                .reference(new DocumentReference("case-documents", "d1")).build())
-            .section(BundleSection.builder("Evidence")
-                .document(BundleDocument.builder().id("doc-2").title("Medical report")
-                    .confidential(true).reference(new DocumentReference("case-documents", "d2"))
-                    .build())
-                .document(BundleDocument.builder().id("doc-3").title("Hearing recording")
-                    .reference(new DocumentReference("media-store", "m1"))
-                    .media(uk.gov.hmcts.ccd.sdk.bundling.api.MediaPlaceholder.builder()
-                        .mediaType("audio/mpeg").accessUrl("https://media.example/m1")
-                        .duration(Duration.ofMinutes(42)).build())
-                    .build())
-                .build())
-            .build())
-        .build();
-  }
-
   private static FakeRenderer renderer(Path base) {
     return new FakeRenderer(base);
   }
@@ -1178,6 +991,30 @@ class BundleJobOutboxIntegrationTest {
     @Override
     public Set<String> handledMediaTypes() {
       return Set.of("application/pdf");
+    }
+  }
+
+  private interface Storing {
+    StoredBundleDocument store(SelectedCaseBundle selection, BundleArtifact artifact) throws Exception;
+  }
+
+  private static final class FakeStore implements BundleDocumentStore {
+    final List<UUID> deleted = new CopyOnWriteArrayList<>();
+    private final Storing storing;
+
+    FakeStore(Storing storing) {
+      this.storing = storing;
+    }
+
+    @Override
+    public StoredBundleDocument store(SelectedCaseBundle selection, BundleArtifact artifact)
+        throws Exception {
+      return storing.store(selection, artifact);
+    }
+
+    @Override
+    public void delete(UUID documentId) {
+      deleted.add(documentId);
     }
   }
 

@@ -132,51 +132,40 @@ the builder) the renderer publishes `ccd.bundling.stage` timers and `ccd.bundlin
 ## Asynchronous bundling (job queue)
 
 Case bundles (below) render outside the request, on a job queue in your service's own
-database, switched on with `ccd.bundling.job.enabled=true`. Each row of `bundling.bundle_job` is
-one render of one case's bundle, identified by its `definition` and `case_reference` columns. The row is
-inserted in the caller's transaction, so the job exists exactly when the change that triggered it
-commits. The table is created by the SDK's standard library migration (`SdkFlywayMigration`, run
-by the decentralised runtime's Flyway strategy before the application's own migrations).
+database, switched on with `ccd.bundling.job.enabled=true`. `bundling.bundle_job` has one row per
+bundle: a definition's bundle of a case, identified by its `definition` and `case_reference`
+columns. A change to the bundle's documents sets the row to `QUEUED` in the caller's transaction,
+so the render is wanted exactly when the change commits. The table is created by the SDK's
+standard library migration (`SdkFlywayMigration`, run by the decentralised runtime's Flyway
+strategy before the application's own migrations).
 
 `BundleJobWorker` polls (your service needs `@EnableScheduling`), claims rows with
 `SELECT ... FOR UPDATE SKIP LOCKED` under a lease, selects the case's documents, renders and
 stores the PDF. Fetch and conversion failures are retried with backoff and the history is kept on
-the job; everything else fails the job on the spot. A worker that outlives its lease cannot
-overwrite the outcome recorded by the worker that took over. `BundleProgressListener` beans
-receive state changes.
+the row; everything else fails the bundle on the spot. A worker that outlives its lease cannot
+overwrite the outcome recorded by the worker that took over.
 
-Changes to a case collapse onto the job that is still waiting for its first claim. Ten documents
-uploaded in one event, or in ten quick events, give one render, and the job's
-`coalescedSubmissions` counts what it absorbed. Joining a waiting job is an upsert that locks its
-row until the submitting transaction commits, and the worker's `SKIP LOCKED` claim passes over a
-locked row, so a joined job is never claimed before the change that joined it is visible to its
-selection. Once a job is claimed it stops absorbing changes: a change made mid-render queues one
-follow-up. Because joining takes a row lock, a transaction changing several cases should do so in
-a consistent order, or two such transactions can deadlock. Submit under READ COMMITTED: under
-REPEATABLE READ or SERIALIZABLE a racing submission can fail with a serialization error
-(SQLSTATE 40001) that the caller must retry.
+A case has one render of a bundle at a time, as it has one write to its search index at a time.
+Ten documents uploaded in one event, or in ten quick events, give one render. A change never waits
+for a render: it queues the row again and leaves the worker's lease alone, and when that worker
+finishes it publishes its bundle and leaves the row queued, so the bundle is rendered once more
+with the newer documents. The change holds the row until its transaction commits and the claim
+passes over a held row, so a bundle is never claimed before the change that queued it is visible
+to its selection. Because a change takes a row lock, a transaction changing several cases should
+do so in a consistent order, or two such transactions can deadlock.
 
-Renders for one case can still overlap (an in-flight job and its follow-up on different pods), and
-a retried job can finish after a newer one. Among completed jobs, the one with the greatest
-`BundleJob.claimedAt()` reflects the newest state: it selected its documents after that claim, so
-it saw every change submitted before it. Rows are never deleted by the module; each burst of
-changes adds one, so purge old terminal rows on your own schedule if the table grows.
-
-When a job completes, the worker records the bundle it rendered in `bundling.bundle`, in the same
-statement that marks the job completed, so a row exists exactly when its job completed and never
-for a worker that lost its lease. The row holds everything about the bundle except the PDF: the
-request that was rendered, where each document landed, the missing documents and why, the
-warnings, the PDF's file name, media type, size, checksum and page count, the definition and case
-reference, and when its documents were selected. Missing documents carry the selected
-`title` and `sectionPath` (outermost to innermost, excluding the request root), so they can be
-listed without searching the request. The bundle table has no foreign key to `bundle_job`, so job
-rows can be purged without losing the description of a bundle still in use.
+A render records its bundle in `bundling.bundle` in the same statement that releases the row, so
+a bundle is never recorded by a worker that lost its lease. The row holds everything about the
+bundle except the PDF: the request that was rendered, where each document landed, the missing
+documents and why, the warnings, the PDF's file name, media type, size, checksum and page count,
+and the definition and case reference. Missing documents carry the selected `title` and
+`sectionPath` (outermost to innermost, excluding the request root), so they can be listed without
+searching the request. The bundle recorded last is the case's current one.
 
 A bundle completed with placeholders for `UNAVAILABLE` documents is re-run later, so it fills in
-once the source is back: the worker queues a job for the same case that is not claimable for
-`requeue.delay`. A change to the case in the meantime joins it and makes it immediate. A bundle is
-re-run at most `requeue.max-attempts` times in a row for unavailable documents (counted in the
-job's `unavailable_requeues` column).
+once the source is back: its row becomes claimable again after `requeue.delay`. A change to the
+case in the meantime makes that immediate. A bundle is re-run at most `requeue.max-attempts`
+times in a row for unavailable documents (counted in the row's `unavailable_requeues` column).
 
 Properties under `ccd.bundling.job.*`: `enabled` (default `false`), `worker.enabled` (`true`), `worker.poll-delay` (`1s`), `worker.batch-size` (`5`),
 `worker.max-concurrent-renders` (`2`), `worker.lease-duration` (`5m`), `retry.max-attempts` (`3`),
@@ -341,19 +330,16 @@ case with no documents too: give a section `EmptySectionPolicy.INCLUDE_PLACEHOLD
 fails and the case shows `FAILED`. There is no way to withdraw a published bundle.
 
 Call `CaseBundles.changed(definition, caseReference)` in the transaction that changes the bundle's
-sources. It queues a job for that definition and case; repeated calls
-join that job, and a rollback cancels it. The event that creates a case can call it too: the case
-is checked when the transaction commits. The SDK does not detect changes itself:
+sources. It queues that case's bundle, and a rollback undoes it. The event that creates a case can
+call it too: the case is checked when the transaction commits. The SDK does not detect changes itself:
 a JPA entity listener on each entity the selection reads is the simplest way to cover every write
 path, including cascades. A listener must not load anything during a flush, so if the case
 reference is on a parent the entity has not loaded, read it with SQL. Native SQL changes must
 call `changed` explicitly.
 
-Each job selects afresh, renders, uploads the PDF to CDAM and attaches it to the case, and the
-worker records it on the bundle row. The case's current bundle is the one whose documents were
-selected last, so a slower, older render never replaces a newer one: a job that reaches selection
-after a later job of the same bundle has been claimed publishes nothing and leaves the bundle to
-that job. A worker claims only the definitions its release has. `cleanUp` (every
+Each render selects afresh, renders, uploads the PDF to CDAM and attaches it to the case, and the
+worker records the bundle. The case's current bundle is the one recorded last. A worker claims
+only the definitions its release has. `cleanUp` (every
 `ccd.bundling.job.cleanup-delay`, default one minute) deletes a replaced bundle's PDF 12 hours
 after its replacement and sets the row's `deleted_at`. The delay only keeps the file in storage:
 CDAM stops serving a replaced PDF to users once the case no longer shows it. A failed attachment deletes its upload and retries; a worker that lost
@@ -361,7 +347,7 @@ its lease deletes its upload. A PDF uploaded by a worker that dies before record
 CDAM, unreadable: CDAM serves a document only to a user who can see it in the case data.
 
 `CaseBundles.view(definition, caseReference)` returns the current bundle's `BundleMetadata`, including
-where its PDF is stored, and a lifecycle worked out from the case's latest job and bundle: `NONE`,
+where its PDF is stored, and a lifecycle worked out from the bundle's queue row and its latest bundle: `NONE`,
 `PREPARING` (no bundle yet), `UPDATING`, `UP_TO_DATE` or `FAILED`. **This is sensitive data, and
 these Java methods do not authorise readers.** There is no SDK HTTP endpoint. Expose the reference
 and report only through an authorised application projection with restrictive CCD field
@@ -371,8 +357,7 @@ anywhere in a caller's permission-filtered case data when authorising a download
 The standard CDAM adapter uses the application's `CaseDocumentClientApi`, `AuthTokenGenerator`
 and a `BundleSystemUser` bean supplying its cached system token. The deployed CDAM configuration
 must grant that service CREATE, ATTACH and DELETE for the destination case type. A different store
-can implement `BundleDocumentStore`, whose `store` must leave nothing stored when it fails. The SDK owns the worker's selector and completion
-handler; do not register another. A
+can implement `BundleDocumentStore`, whose `store` must leave nothing stored when it fails. A
 `CdamBundleDocumentResolver` bean of your own replaces the default one.
 
 ### Refreshing bundles in bulk
@@ -384,15 +369,12 @@ have none, set a new value for `ccd.bundling.refresh` (`CCD_BUNDLING_REFRESH` in
 CCD_BUNDLING_REFRESH: "2026-11-17-new-cover-page"
 ```
 
-Set it once the release that changes the bundle is fully rolled out: a pod still on the old
-release renders a refresh job the old way.
-
-Shortly after it starts, the first pod to see a value it has not seen before queues one background
-job for each case of each definition's `caseType()`, and records the value against the definition in
-`bundling.refresh_key` in the same transaction as its jobs. Other pods and later restarts skip it. A failure is logged and retried a minute
-later; it does not stop the pod starting. Live changes are claimed first and promote a waiting refresh job; a case with a job
-already waiting is left to that job. An existing PDF stays current until its replacement
-publishes.
+Shortly after it starts, the first pod to see a value it has not seen before queues a background
+render of each definition's bundle for every case of its `caseType()`, and records the value in
+`bundling.refresh_key` in the same transaction. Other pods and later restarts skip it. A failure
+is logged and retried a minute later; it does not stop the pod starting. Live changes are claimed
+first and make a waiting refresh live; a bundle already queued is left as it is. An existing PDF
+stays current until its replacement publishes.
 
 Change the value after the release that changes the rendering has finished rolling out, so that
 every pod renders the new layout.

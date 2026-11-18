@@ -8,7 +8,7 @@ import java.util.List;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentFailure;
 
 /**
- * The outbox wire format. The mapper is module-owned so the stored shape never varies with a
+ * The queue's JSON format. The mapper is module-owned so the stored shape never varies with a
  * consumer's ObjectMapper customisations.
  */
 final class BundleJobJson {
@@ -35,7 +35,7 @@ final class BundleJobJson {
     try {
       return mapper.writeValueAsString(value);
     } catch (Exception e) {
-      throw new IllegalStateException("Failed to serialise a value for the bundle job outbox", e);
+      throw new IllegalStateException("Failed to serialise a value for the bundle job queue", e);
     }
   }
 

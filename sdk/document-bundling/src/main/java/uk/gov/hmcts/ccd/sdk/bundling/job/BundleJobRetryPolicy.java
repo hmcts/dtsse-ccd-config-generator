@@ -27,8 +27,8 @@ public class BundleJobRetryPolicy {
   }
 
   /**
-   * A policy that also re-runs a coalesced job up to maxRequeues times, requeueDelay apart, while
-   * its bundle has placeholders for documents that were only temporarily unavailable.
+   * A policy that also re-runs a bundle up to maxRequeues times, requeueDelay apart, while it has
+   * placeholders for documents that were only temporarily unavailable.
    */
   public BundleJobRetryPolicy(int maxAttempts, Duration initialDelay, double multiplier,
       Duration maxDelay, Duration requeueDelay, int maxRequeues) {

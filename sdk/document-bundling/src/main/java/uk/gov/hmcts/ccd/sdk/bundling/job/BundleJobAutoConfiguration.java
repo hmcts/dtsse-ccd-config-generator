@@ -1,7 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.bundling.job;
 
 import java.util.List;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -74,11 +73,9 @@ public class BundleJobAutoConfiguration {
   @ConditionalOnProperty(prefix = "ccd.bundling.job.worker", name = "enabled",
       matchIfMissing = true)
   public BundleJobWorker bundleJobWorker(BundleJobRepository repository, BundleRenderer renderer,
-      ManagedCaseBundles bundles, BundleJobRetryPolicy retryPolicy,
-      ObjectProvider<BundleProgressListener> listeners, BundleJobProperties properties) {
+      ManagedCaseBundles bundles, BundleJobRetryPolicy retryPolicy, BundleJobProperties properties) {
     BundleJobProperties.Worker worker = properties.getWorker();
-    return new BundleJobWorker(repository, renderer, bundles, bundles, retryPolicy,
-        listeners.orderedStream().toList(), worker.getBatchSize(),
+    return new BundleJobWorker(repository, renderer, bundles, retryPolicy, worker.getBatchSize(),
         worker.getMaxConcurrentRenders(), worker.getLeaseDuration());
   }
 }

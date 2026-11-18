@@ -40,6 +40,6 @@ public enum BundleErrorCode {
   LIMIT_EXCEEDED,
   /** A job's definition could not select the bundle's documents. */
   JOB_REQUEST_UNREADABLE,
-  /** The bundle rendered but the consumer's completion handler failed to store it. */
+  /** The bundle rendered but its PDF could not be stored. */
   COMPLETION_FAILED
 }

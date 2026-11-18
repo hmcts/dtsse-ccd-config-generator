@@ -32,6 +32,8 @@ alter table bundling.bundle_job
     drop column execution_context,
     -- The bundle row records where the PDF is stored.
     drop column result,
+    -- A case's renders run one at a time, so the bundle recorded last is its current one.
+    drop column claimed_at,
     add unique (case_reference, definition);
 
 -- The priority index below serves the claim.
@@ -51,14 +53,13 @@ alter table bundling.bundle
     add foreign key (case_reference) references ccd.case_data (reference)
         on delete cascade deferrable initially deferred,
     drop column bundle_key,
-    drop column job_id;
-create index idx_bundle_case_selected
-    on bundling.bundle (case_reference, definition, selected_at desc);
+    drop column job_id,
+    drop column selected_at;
+create index idx_bundle_case
+    on bundling.bundle (case_reference, definition, created_at desc);
 
--- The ccd.bundling.refresh values that have already queued a refresh of a definition; each runs once.
+-- The ccd.bundling.refresh values that have already queued a refresh; each runs once.
 create table bundling.refresh_key (
-    key text not null,
-    definition text not null,
-    created_at timestamptz not null default now(),
-    primary key (key, definition)
+    key text primary key,
+    created_at timestamptz not null default now()
 );

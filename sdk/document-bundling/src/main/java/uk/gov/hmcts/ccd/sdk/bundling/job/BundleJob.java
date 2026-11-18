@@ -8,8 +8,7 @@ import java.util.UUID;
 /**
  * The queue row of one bundle: a definition's bundle of a case. The state says whether a render
  * is wanted, running, done or failed; a change to the bundle's documents queues it again.
- * submittedAt is when it was last queued, claimedAt when its current (or last) render was claimed,
- * and the failure is the sanitised failure record.
+ * submittedAt is when it was last queued, and the failure is the sanitised failure record.
  */
 public record BundleJob(
     UUID externalId,
@@ -19,7 +18,6 @@ public record BundleJob(
     Instant lastUpdatedAt,
     String definition,
     long caseReference,
-    Optional<Instant> claimedAt,
     Optional<BundleJobFailure> failure) {
 
   public BundleJob {
@@ -28,7 +26,6 @@ public record BundleJob(
     Objects.requireNonNull(submittedAt, "BundleJob.submittedAt");
     Objects.requireNonNull(lastUpdatedAt, "BundleJob.lastUpdatedAt");
     Objects.requireNonNull(definition, "BundleJob.definition");
-    Objects.requireNonNull(claimedAt, "BundleJob.claimedAt");
     Objects.requireNonNull(failure, "BundleJob.failure");
   }
 }
