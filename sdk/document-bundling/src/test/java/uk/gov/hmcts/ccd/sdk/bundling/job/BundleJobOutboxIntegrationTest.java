@@ -119,7 +119,7 @@ class BundleJobOutboxIntegrationTest {
     assertThat(submit("test", "hot").externalId()).isEqualTo(hot);
     List<UUID> claimed = new ArrayList<>();
     for (int i = 0; i < 3; i++) {
-      repository.claim(1, "priority-test", Duration.ofMinutes(1), 3)
+      repository.claim(1, "priority-test", Duration.ofMinutes(1), 3, null)
           .forEach(claim -> claimed.add(claim.job().externalId()));
     }
     assertThat(claimed).containsExactly(hot, live, background);
@@ -134,7 +134,7 @@ class BundleJobOutboxIntegrationTest {
         .isEqualTo(live);
     List<UUID> claimed = new ArrayList<>();
     for (int i = 0; i < 2; i++) {
-      repository.claim(1, "priority-test", Duration.ofMinutes(1), 3).forEach(claim -> {
+      repository.claim(1, "priority-test", Duration.ofMinutes(1), 3, null).forEach(claim -> {
         claimed.add(claim.job().externalId());
         assertThat(claim.priority()).isEqualTo(claim.job().externalId().equals(live) ? 0 : -1);
       });
@@ -264,14 +264,14 @@ class BundleJobOutboxIntegrationTest {
     try {
       // Worker A claims three rows and holds its transaction (and so its row locks) open.
       Future<List<ClaimedBundleJob>> first = pool.submit(() -> tx.execute(status -> {
-        List<ClaimedBundleJob> claimed = repository.claim(3, "worker-a", Duration.ofMinutes(5), 3);
+        List<ClaimedBundleJob> claimed = repository.claim(3, "worker-a", Duration.ofMinutes(5), 3, null);
         firstClaimHeld.countDown();
         awaitQuietly(release);
         return claimed;
       }));
       assertThat(firstClaimHeld.await(10, TimeUnit.SECONDS)).isTrue();
       // B returning at all proves SKIP LOCKED did not block; A releases only after B is done.
-      List<ClaimedBundleJob> second = repository.claim(6, "worker-b", Duration.ofMinutes(5), 3);
+      List<ClaimedBundleJob> second = repository.claim(6, "worker-b", Duration.ofMinutes(5), 3, null);
       release.countDown();
       List<ClaimedBundleJob> firstClaimed = first.get(10, TimeUnit.SECONDS);
 
@@ -289,13 +289,13 @@ class BundleJobOutboxIntegrationTest {
   @Test
   void expiredLeaseIsReclaimedAndTheStaleWorkersLateWriteIsIgnored() throws Exception {
     submit(simpleRequest(UUID.randomUUID()));
-    List<ClaimedBundleJob> first = repository.claim(1, "worker-a", Duration.ofMillis(100), 3);
+    List<ClaimedBundleJob> first = repository.claim(1, "worker-a", Duration.ofMillis(100), 3, null);
     assertThat(first).hasSize(1);
     assertThat(first.get(0).job().attempts()).isEqualTo(1);
-    assertThat(repository.claim(1, "worker-b", Duration.ofMinutes(5), 3)).isEmpty();
+    assertThat(repository.claim(1, "worker-b", Duration.ofMinutes(5), 3, null)).isEmpty();
 
     Thread.sleep(250);
-    List<ClaimedBundleJob> reclaimed = repository.claim(1, "worker-b", Duration.ofMinutes(5), 3);
+    List<ClaimedBundleJob> reclaimed = repository.claim(1, "worker-b", Duration.ofMinutes(5), 3, null);
     assertThat(reclaimed).hasSize(1);
     assertThat(reclaimed.get(0).job().attempts()).isEqualTo(2);
     UUID id = reclaimed.get(0).job().externalId();
@@ -541,9 +541,9 @@ class BundleJobOutboxIntegrationTest {
   @Test
   void theLatestBundleForAKeyIsTheOneWhoseDocumentsWereSelectedLastWhateverOrderTheyFinished() {
     UUID older = submit("bundle", "case-1").externalId();
-    List<ClaimedBundleJob> olderClaim = repository.claim(1, "worker-a", Duration.ofMinutes(5), 3);
+    List<ClaimedBundleJob> olderClaim = repository.claim(1, "worker-a", Duration.ofMinutes(5), 3, null);
     UUID newer = submit("bundle", "case-1").externalId();
-    List<ClaimedBundleJob> newerClaim = repository.claim(1, "worker-b", Duration.ofMinutes(5), 3);
+    List<ClaimedBundleJob> newerClaim = repository.claim(1, "worker-b", Duration.ofMinutes(5), 3, null);
     assertThat(olderClaim).extracting(claimed -> claimed.job().externalId()).containsExactly(older);
     assertThat(newerClaim).extracting(claimed -> claimed.job().externalId()).containsExactly(newer);
 
@@ -556,6 +556,38 @@ class BundleJobOutboxIntegrationTest {
     assertThat(repository.findLatestBundle("bundle", caseRef("case-1")).orElseThrow().jobId()).isEqualTo(newer);
     assertThat(repository.findBundleForJob(older).orElseThrow().sha256()).isEqualTo("sha-older");
     assertThat(repository.findLatestBundle("bundle", caseRef("case-2"))).isEmpty();
+  }
+
+  @Test
+  void theLatestBundleIsTheOneSelectedLastEvenWhenItsJobWasClaimedFirst() {
+    final UUID first = submit("bundle", "case-1").externalId();
+    final ClaimedBundleJob firstClaim =
+        repository.claim(1, "worker-a", Duration.ofMinutes(5), 3, null).get(0);
+    final UUID second = submit("bundle", "case-1").externalId();
+    final ClaimedBundleJob secondClaim =
+        repository.claim(1, "worker-b", Duration.ofMinutes(5), 3, null).get(0);
+
+    // The job claimed second selects and publishes while the first is still waiting to select.
+    tx.executeWithoutResult(status -> repository.startSelection(secondClaim.job()));
+    assertThat(repository.markCompleted(second, BundleJobState.COMPLETED, bundleRecord("second"),
+        "worker-b")).isTrue();
+    tx.executeWithoutResult(status -> repository.startSelection(firstClaim.job()));
+    assertThat(repository.markCompleted(first, BundleJobState.COMPLETED, bundleRecord("first"),
+        "worker-a")).isTrue();
+
+    assertThat(repository.findLatestBundle("bundle", caseRef("case-1")).orElseThrow().jobId())
+        .isEqualTo(first);
+  }
+
+  @Test
+  void aWorkerLeavesJobsForDefinitionsItDoesNotHaveToAWorkerThatDoes() {
+    UUID added = submit("added-in-the-next-release", "case-1").externalId();
+
+    assertThat(repository.claim(5, "old-pod", Duration.ofMinutes(5), 3, List.of("bundle"))).isEmpty();
+    assertThat(repository.claim(5, "old-pod", Duration.ofMinutes(5), 3, List.of())).isEmpty();
+    assertThat(repository.claim(5, "new-pod", Duration.ofMinutes(5), 3,
+        List.of("bundle", "added-in-the-next-release")))
+        .extracting(claimed -> claimed.job().externalId()).containsExactly(added);
   }
 
   @Test

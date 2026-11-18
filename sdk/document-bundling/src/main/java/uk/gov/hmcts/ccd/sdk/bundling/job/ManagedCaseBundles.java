@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.bundling.job;
 
 import java.time.Duration;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -55,6 +56,7 @@ public class ManagedCaseBundles
         definitions.stream()
             .collect(Collectors.toUnmodifiableMap(CaseBundleDefinition::name, Function.identity()));
     transaction = new TransactionTemplate(transactions);
+    transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     snapshot = new TransactionTemplate(transactions);
     snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
     snapshot.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -110,9 +112,18 @@ public class ManagedCaseBundles
   @Override
   public SelectedCaseBundle select(BundleJob job) {
     CaseBundleDefinition definition = definition(job.definition());
-    // One snapshot, so the documents and whatever decides their visibility agree.
-    BundleRequest request = snapshot.execute(status -> definition.select(job.caseReference()));
-    return repository.selectedFor(job.caseReference(), request.withExternalId(job.externalId()));
+    return transaction.execute(turn -> {
+      // Selections of one bundle take turns, so the bundle selected last is the newest.
+      repository.startSelection(job);
+      // One snapshot, so the documents and whatever decides their visibility agree.
+      BundleRequest request = snapshot.execute(status -> definition.select(job.caseReference()));
+      return repository.selectedFor(job.caseReference(), request.withExternalId(job.externalId()));
+    });
+  }
+
+  @Override
+  public Collection<String> definitions() {
+    return definitions.keySet();
   }
 
   @Override

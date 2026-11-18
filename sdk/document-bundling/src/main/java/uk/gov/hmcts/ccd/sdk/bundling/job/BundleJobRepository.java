@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -150,12 +151,20 @@ public class BundleJobRepository {
         .findFirst();
   }
 
+  /**
+   * Claims the next jobs. A worker given definitions claims only those, so a pod on an older
+   * release leaves a definition it does not have to the pods that do.
+   */
   List<ClaimedBundleJob> claim(int limit, String leaseOwner, Duration leaseDuration,
-      int maxAttempts) {
+      int maxAttempts, Collection<String> definitions) {
+    if (definitions != null && definitions.isEmpty()) {
+      return List.of();
+    }
     return jdbc.query("""
         with claimable as (
           select external_id from bundling.bundle_job
           where attempts < :maxAttempts
+            and (:anyDefinition or definition in (:definitions))
             and ((state = 'QUEUED' and (next_attempt_at is null or next_attempt_at <= now()))
                  or (state = 'IN_PROGRESS' and lease_expires_at <= now()))
           order by priority desc, created_at, external_id
@@ -172,7 +181,8 @@ public class BundleJobRepository {
             job.unavailable_requeues, job.priority, job.transient_history::text as transient_history
         """,
         params("limit", limit, "leaseOwner", leaseOwner, "leaseMillis", leaseDuration.toMillis(),
-            "maxAttempts", maxAttempts),
+            "maxAttempts", maxAttempts, "anyDefinition", definitions == null,
+            "definitions", definitions == null ? List.of("") : definitions),
         (rs, n) -> new ClaimedBundleJob(
             new BundleJob(rs.getObject("external_id", UUID.class), BundleJobState.IN_PROGRESS,
                 rs.getInt("attempts"), instant(rs, "created_at"), instant(rs, "updated_at"),
@@ -199,6 +209,20 @@ public class BundleJobRepository {
   }
 
   /**
+   * Takes the job's turn to select its bundle's documents and records when. The turn lasts until
+   * the caller's transaction ends, so of two selections the one recorded later saw the later
+   * documents, whichever job was claimed first.
+   */
+  void startSelection(BundleJob job) {
+    jdbc.query("""
+        select pg_advisory_xact_lock(hashtextextended(:definition || ':' || :caseReference::text, 0))
+        """, params("definition", job.definition(), "caseReference", job.caseReference()), rs -> null);
+    jdbc.update("""
+        update bundling.bundle_job set selected_at = clock_timestamp() where external_id = :externalId
+        """, params("externalId", job.externalId()));
+  }
+
+  /**
    * Marks the job completed and records the bundle it rendered, in one statement: the bundle row
    * exists exactly when the job completed, and neither is written by a worker that lost its lease.
    */
@@ -211,13 +235,13 @@ public class BundleJobRepository {
               failure_documents = null, lease_owner = null, lease_expires_at = null,
               next_attempt_at = null, updated_at = now()
           where external_id = :externalId and lease_owner = :leaseOwner and state = 'IN_PROGRESS'
-          returning external_id, definition, case_reference, claimed_at, created_at
+          returning external_id, definition, case_reference, selected_at, claimed_at, created_at
         )
         insert into bundling.bundle (job_id, definition, case_reference, selected_at, outcome,
           file_name, media_type, size_bytes, sha256, page_count, request, documents,
           missing_documents, warnings, document_id, document_url, binary_url)
         select external_id, definition, case_reference,
-          coalesce(claimed_at, created_at), :outcome, :fileName, :mediaType, :size, :sha256,
+          coalesce(selected_at, claimed_at, created_at), :outcome, :fileName, :mediaType, :size, :sha256,
           :pageCount, :request::jsonb, :documents::jsonb, :missingDocuments::jsonb,
           :warnings::jsonb, :documentId, :documentUrl, :binaryUrl
         from completed

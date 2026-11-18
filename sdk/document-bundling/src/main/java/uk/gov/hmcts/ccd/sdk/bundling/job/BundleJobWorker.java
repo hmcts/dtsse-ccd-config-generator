@@ -113,7 +113,7 @@ public class BundleJobWorker implements AutoCloseable {
     // A lease owner per poll: a job this worker reclaims after its lease expired gets a new one.
     String leaseOwner = workerId + "/" + UUID.randomUUID();
     for (ClaimedBundleJob claimed : repository.claim(toClaim, leaseOwner, leaseDuration,
-        retryPolicy.maxAttempts())) {
+        retryPolicy.maxAttempts(), selector.definitions())) {
       inFlight.incrementAndGet();
       try {
         executor.execute(() -> {
