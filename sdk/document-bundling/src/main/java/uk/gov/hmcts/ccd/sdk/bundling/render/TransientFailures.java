@@ -16,7 +16,7 @@ public final class TransientFailures {
 
   private static final Set<BundleErrorCode> TRANSIENT_CODES = EnumSet.of(
       BundleErrorCode.DOCUMENT_RESOLUTION_FAILED, BundleErrorCode.DOCUMENT_CONVERSION_FAILED,
-      BundleErrorCode.COVER_PAGE_FAILED);
+      BundleErrorCode.COVER_PAGE_FAILED, BundleErrorCode.CREDENTIALS_REJECTED);
 
   private TransientFailures() {
   }

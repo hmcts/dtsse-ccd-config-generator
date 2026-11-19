@@ -14,6 +14,12 @@ public enum BundleErrorCode {
    * {@link #DOCUMENT_NOT_FOUND} only in restricted operational diagnostics.
    */
   DOCUMENT_ACCESS_DENIED,
+  /**
+   * A document provider rejected the service's own credentials (for example an expired system
+   * user or service token), so no document could be read. Retried, never replaced by a
+   * placeholder.
+   */
+  CREDENTIALS_REJECTED,
   /** A source document could not be resolved for another reason. */
   DOCUMENT_RESOLUTION_FAILED,
   /** A document's media type has no registered handler. */
