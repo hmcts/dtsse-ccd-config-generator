@@ -177,6 +177,32 @@ class ConversionAutoConfigurationTest {
         });
   }
 
+  /**
+   * Bundling converts through this converter, so a service that pointed bundling at a larger
+   * volume keeps converting there without setting the conversion property too.
+   */
+  @Test
+  void conversionsWorkUnderTheBundlingTempDirectoryUnlessTheirOwnIsSet() throws Exception {
+    Path bundling = Files.createDirectory(dir.resolve("bundling"));
+    Path conversion = Files.createDirectory(dir.resolve("conversion"));
+    Path photo = Fixtures.bmp(Files.createDirectory(dir.resolve("inputs")));
+    ConversionSource source = ConversionSource.of(photo, "photo.bmp", "image/bmp");
+
+    runner.withPropertyValues("ccd.bundling.temp-directory=" + bundling)
+        .run(context -> {
+          try (ConvertedPdf pdf = context.getBean(DocumentConverter.class).toPdf(source)) {
+            assertThat(pdf.file()).startsWith(bundling);
+          }
+        });
+    runner.withPropertyValues("ccd.bundling.temp-directory=" + bundling,
+            "ccd.conversion.temp-directory=" + conversion)
+        .run(context -> {
+          try (ConvertedPdf pdf = context.getBean(DocumentConverter.class).toPdf(source)) {
+            assertThat(pdf.file()).startsWith(conversion);
+          }
+        });
+  }
+
   @Test
   void canBeSwitchedOff() {
     runner.withPropertyValues("ccd.conversion.enabled=false")

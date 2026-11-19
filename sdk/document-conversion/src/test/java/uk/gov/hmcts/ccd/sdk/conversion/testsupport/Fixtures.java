@@ -240,6 +240,21 @@ public final class Fixtures {
   }
 
   /**
+   * A one-image TIFF whose only image is flagged reduced-resolution (NewSubfileType 1), as some
+   * tools write a page they downsampled. There is no other image to treat as the page.
+   */
+  public static Path tiffFlaggedReducedOnly(Path dir) throws IOException {
+    BufferedImage page = uprightQuadrantImage();
+    byte[] pixels = greyPixels(page);
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    out.write(new byte[] {'I', 'I', 42, 0});
+    out.write(le32(8 + pixels.length));
+    out.write(pixels);
+    out.write(tiffIfd(page.getWidth(), page.getHeight(), 1, 1, 1, 8, pixels.length, 0));
+    return Files.write(dir.resolve("scan-reduced-only.tif"), out.toByteArray());
+  }
+
+  /**
    * A two-page TIFF whose first page is fine and whose second claims a compression no decoder
    * supports, as a damaged or exotic scan can.
    */

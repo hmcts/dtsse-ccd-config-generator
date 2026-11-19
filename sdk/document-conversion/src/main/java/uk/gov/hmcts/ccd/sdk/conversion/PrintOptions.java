@@ -22,8 +22,9 @@ import java.util.Objects;
  *     counter-clockwise onto the portrait output page, so it prints larger; its top lands on the
  *     left edge, as a printer driver turns landscape
  * @param padToEvenPages whether a blank page is added to an odd page count, so the output is
- *     ready for duplex printing; send-letter re-saves any odd-page document, which would undo
- *     PDF/X-1a, so bulk print needs this on
+ *     ready for duplex printing; in a letter each part is padded, as send-letter pads each
+ *     document, so no part starts on the back of another. Send-letter re-saves any odd-page
+ *     document, which would undo PDF/X-1a, so bulk print needs this on
  * @param maxOutputBytes the largest output accepted, or 0 for no limit; above it conversion
  *     fails with {@code OUTPUT_TOO_LARGE}
  * @param greyscaleAboveFraction when CMYK output exceeds this fraction of {@code maxOutputBytes},

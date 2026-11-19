@@ -78,6 +78,11 @@ try (ConvertedPdf letter = converter.toPrintReadyLetter("Claim pack", List.of(
 }
 ```
 
+With `padToEvenPages`, each part is padded to an even page count, as send-letter pads each
+document it merges. Every part starts on a new sheet, so the statement above does not print on
+the back of the coversheet. The example is 2 coversheet pages, 2 photo pages, and the statement's
+pages rounded up to even.
+
 `asIs` parts keep their pages exactly as they are. Only a missing TrimBox is added. Their content
 is not re-rendered, so a coversheet's address stays where the envelope window expects it. Those
 pages keep their own colour and fonts, so they are the only pages that can fall outside
@@ -166,8 +171,9 @@ conversion could succeed later, so it is worth retrying. It is true when:
 
 Everything else is a problem with the document itself, and retrying it will fail the same way.
 
-The result is written to a private directory under `ccd.conversion.temp-directory` (default
-`java.io.tmpdir`). Closing the `ConvertedPdf` deletes it. A failed conversion leaves nothing
+The result is written to a private directory under `ccd.conversion.temp-directory`. When that
+is unset, the auto-configured converter uses `ccd.bundling.temp-directory`, and then
+`java.io.tmpdir`. Closing the `ConvertedPdf` deletes it. A failed conversion leaves nothing
 behind, even when it fails with an `Error` such as running out of memory.
 
 Images ImageIO cannot read, such as CMYK JPEGs, are decoded at full size by PDFBox instead. Above

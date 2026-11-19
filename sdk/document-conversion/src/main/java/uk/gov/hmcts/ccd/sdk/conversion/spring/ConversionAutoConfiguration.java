@@ -22,6 +22,10 @@ import uk.gov.hmcts.ccd.sdk.conversion.docmosis.HttpDocmosisRenderService;
  * endpoint and access key are set. A bundling client set up only to render cover pages is not
  * used for conversion. Every {@link PdfConverter} bean is registered on the converter, in
  * {@code @Order} order. Every bean is {@code @ConditionalOnMissingBean}.
+ *
+ * <p>Conversions work under {@code ccd.conversion.temp-directory}. Unset, it falls back to
+ * {@code ccd.bundling.temp-directory}, since bundling converts through this converter and a
+ * service may have pointed bundling at a larger volume, and then to {@code java.io.tmpdir}.
  */
 @AutoConfiguration(
     afterName = "uk.gov.hmcts.ccd.sdk.bundling.spring.BundlingAutoConfiguration")
@@ -32,8 +36,9 @@ public class ConversionAutoConfiguration {
   @Bean
   @ConditionalOnMissingBean
   @Conditional(ConversionDocmosisConfigured.class)
-  public DocmosisRenderService conversionDocmosisRenderService(ConversionProperties properties) {
-    return conversionDocmosis(properties);
+  public DocmosisRenderService conversionDocmosisRenderService(ConversionProperties properties,
+      Environment environment) {
+    return conversionDocmosis(properties, environment);
   }
 
   @Bean
@@ -42,7 +47,7 @@ public class ConversionAutoConfiguration {
       ObjectProvider<DocmosisRenderService> docmosis, ObjectProvider<PdfConverter> converters,
       Environment environment) {
     DocumentConverter.Builder builder = DocumentConverter.builder()
-        .tempDirectory(tempDirectory(properties));
+        .tempDirectory(tempDirectory(properties, environment));
     converters.orderedStream().forEach(builder::converter);
     Optional<DocmosisRenderService> converting =
         docmosis.orderedStream().filter(DocmosisRenderService::convertsFiles).findFirst();
@@ -50,18 +55,23 @@ public class ConversionAutoConfiguration {
       builder.docmosis(converting.get());
     } else if (ConversionDocmosisConfigured.isConfigured(environment)) {
       // The application's client only renders templates; conversion needs its own.
-      builder.docmosis(conversionDocmosis(properties));
+      builder.docmosis(conversionDocmosis(properties, environment));
     }
     return builder.build();
   }
 
-  private static DocmosisRenderService conversionDocmosis(ConversionProperties properties) {
+  private static DocmosisRenderService conversionDocmosis(ConversionProperties properties,
+      Environment environment) {
     return new HttpDocmosisRenderService(properties.getDocmosis().toConnection(),
-        tempDirectory(properties).resolve("ccd-conversion-docmosis"));
+        tempDirectory(properties, environment).resolve("ccd-conversion-docmosis"));
   }
 
-  private static Path tempDirectory(ConversionProperties properties) {
-    return properties.getTempDirectory() != null
-        ? properties.getTempDirectory() : Path.of(System.getProperty("java.io.tmpdir"));
+  private static Path tempDirectory(ConversionProperties properties, Environment environment) {
+    if (properties.getTempDirectory() != null) {
+      return properties.getTempDirectory();
+    }
+    String bundling = environment.getProperty("ccd.bundling.temp-directory");
+    return Path.of(bundling != null && !bundling.isBlank()
+        ? bundling : System.getProperty("java.io.tmpdir"));
   }
 }

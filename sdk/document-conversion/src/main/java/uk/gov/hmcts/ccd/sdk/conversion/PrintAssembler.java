@@ -12,10 +12,12 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 
 /**
- * Joins print-ready parts into one letter and pads it to an even page count, keeping the
- * PDF/X-1a file structure: send-letter passes a single even-page document to the printer
- * byte for byte, but re-saves anything else as PDF 1.6. The letter is identified as PDF/X-1a
- * only when every part is print-ready; pages added as they are could break it.
+ * Joins print-ready parts into one letter, keeping the PDF/X-1a file structure: send-letter
+ * passes a single even-page document to the printer byte for byte, but re-saves anything else
+ * as PDF 1.6. When padding, each part is padded to an even page count as send-letter pads each
+ * document it merges, so every part starts on a new sheet rather than on the back of the one
+ * before. The letter is identified as PDF/X-1a only when every part is print-ready; pages added
+ * as they are could break it.
  */
 final class PrintAssembler {
 
@@ -40,18 +42,18 @@ final class PrintAssembler {
         PDDocument source = PdfChecks.load(part, scratchDirectory);
         sources.add(source);
         merger.appendDocument(letter, source);
+        if (options.padToEvenPages() && letter.getNumberOfPages() % 2 == 1) {
+          PDRectangle last = letter.getPage(letter.getNumberOfPages() - 1).getMediaBox();
+          PDPage blank = new PDPage(copy(last));
+          blank.setTrimBox(copy(last));
+          letter.addPage(blank);
+        }
       }
       for (PDPage page : letter.getPages()) {
         if (page.getCOSObject().getDictionaryObject(COSName.TRIM_BOX) == null
             && page.getCOSObject().getDictionaryObject(COSName.ART_BOX) == null) {
           page.setTrimBox(copy(page.getMediaBox()));
         }
-      }
-      if (options.padToEvenPages() && letter.getNumberOfPages() % 2 == 1) {
-        PDRectangle last = letter.getPage(letter.getNumberOfPages() - 1).getMediaBox();
-        PDPage blank = new PDPage(copy(last));
-        blank.setTrimBox(copy(last));
-        letter.addPage(blank);
       }
       if (options.standard() == PdfStandard.PDF_X_1A_2001 && allPrintReady) {
         PdfX1a.identify(letter, title, options.outputCondition());

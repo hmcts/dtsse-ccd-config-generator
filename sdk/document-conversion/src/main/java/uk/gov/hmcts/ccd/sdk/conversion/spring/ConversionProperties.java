@@ -17,7 +17,8 @@ public class ConversionProperties {
 
   // Master switch: false registers nothing.
   private boolean enabled = true;
-  // Base directory for per-conversion working directories; defaults to java.io.tmpdir.
+  // Base directory for per-conversion working directories; defaults to
+  // ccd.bundling.temp-directory, then java.io.tmpdir.
   private Path tempDirectory;
   private Docmosis docmosis = new Docmosis();
 
