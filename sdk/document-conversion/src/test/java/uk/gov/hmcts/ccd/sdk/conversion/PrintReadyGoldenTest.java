@@ -134,8 +134,8 @@ class PrintReadyGoldenTest {
             "flying-pig.jpg", "image/jpeg")),
         PrintPart.convert(ConversionSource.of(Fixtures.mixedLayoutPdf(dir), "mixed-layout.pdf",
             "application/pdf"))), PrintOptions.bulkPrint())) {
-      // 1 coversheet + 1 photo + 3 document pages, padded to 6.
-      assertThat(letter.pageCount()).isEqualTo(6);
+      // Each part padded to even: coversheet 1 + 1, photo 1 + 1, document 3 + 1.
+      assertThat(letter.pageCount()).isEqualTo(8);
       assertThat(letter.warnings()).singleElement().satisfies(warning -> {
         assertThat(warning.code()).isEqualTo(ConversionWarning.Code.STANDARD_NOT_CLAIMED);
         assertThat(warning.message()).contains("Claim pack", "PDF/X-1a:2001");

@@ -61,13 +61,7 @@ final class ImageFrames {
         if (!isTiff(reader)) {
           return 0;
         }
-        List<Integer> pages = new ArrayList<>();
-        int count = reader.getNumImages(true);
-        for (int i = 0; i < count; i++) {
-          if (!TiffTags.of(reader, i).isReducedOrMask()) {
-            pages.add(i);
-          }
-        }
+        List<Integer> pages = tiffPageIndexes(reader);
         if (pages.size() > 1) {
           // A page that cannot be decoded fails the conversion: falling back to the single-image
           // path would print the first page and silently drop the rest.
@@ -91,7 +85,7 @@ final class ImageFrames {
   /**
    * Decodes each page upright, applying a JPEG's EXIF orientation or a TIFF page's orientation
    * tag, and subsampling by the factor {@code subsampling} returns for the page's full, upright
-   * width and height. A TIFF's thumbnails and masks are skipped.
+   * width and height. A TIFF's thumbnails and masks are skipped, unless every image is one.
    */
   static void read(Path image, IntBinaryOperator subsampling, FrameConsumer consumer)
       throws IOException {
@@ -105,19 +99,11 @@ final class ImageFrames {
         try {
           reader.setInput(in, false, false);
           boolean tiff = isTiff(reader);
-          int count = tiff ? reader.getNumImages(true) : 1;
-          for (int i = 0; i < count; i++) {
+          for (int i : tiff ? tiffPageIndexes(reader) : List.of(0)) {
             int width = reader.getWidth(i);
             int height = reader.getHeight(i);
             fallbackPixels = (long) width * height;
-            int orientation = jpegOrientation;
-            if (tiff) {
-              TiffTags tags = TiffTags.of(reader, i);
-              if (tags.isReducedOrMask()) {
-                continue;
-              }
-              orientation = tags.orientation();
-            }
+            int orientation = tiff ? TiffTags.of(reader, i).orientation() : jpegOrientation;
             boolean swap = ExifOrientation.swapsAxes(orientation);
             int uprightWidth = swap ? height : width;
             int uprightHeight = swap ? width : height;
@@ -150,6 +136,22 @@ final class ImageFrames {
           jpegOrientation);
       consumer.accept(frame, frame.getWidth(), frame.getHeight());
     }
+  }
+
+  /**
+   * The images of a TIFF that are pages, skipping thumbnails and masks. If every image is flagged
+   * as one, the first is the page, as {@link ImageToPdf} draws it: a file that prints nothing
+   * would pass as an even, zero-page part of a letter.
+   */
+  private static List<Integer> tiffPageIndexes(ImageReader reader) throws IOException {
+    List<Integer> pages = new ArrayList<>();
+    int count = reader.getNumImages(true);
+    for (int i = 0; i < count; i++) {
+      if (!TiffTags.of(reader, i).isReducedOrMask()) {
+        pages.add(i);
+      }
+    }
+    return pages.isEmpty() ? List.of(0) : pages;
   }
 
   /** Whether the reader's input is a TIFF with more than one image; false if that is unreadable. */

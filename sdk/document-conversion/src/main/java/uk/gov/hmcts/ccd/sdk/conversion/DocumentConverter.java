@@ -97,10 +97,10 @@ public final class DocumentConverter {
   /**
    * Builds one print-ready PDF from several parts, in order: {@link PrintPart#convert} parts
    * are converted as {@link #toPrintReadyPdf} does, {@link PrintPart#asIs} parts (a coversheet)
-   * keep their pages unchanged. The letter is padded to an even page count when
-   * {@link PrintOptions#padToEvenPages()} is set, and the size limit applies to the whole
-   * letter: if CMYK output passes {@link PrintOptions#greyscaleAboveFraction()} of it, every
-   * converted part is redone in greyscale.
+   * keep their pages unchanged. When {@link PrintOptions#padToEvenPages()} is set, each part is
+   * padded to an even page count, so each starts on a new sheet. The size limit applies to the
+   * whole letter: if CMYK output passes {@link PrintOptions#greyscaleAboveFraction()} of it,
+   * every converted part is redone in greyscale.
    *
    * @param title the document title written to the PDF
    */
@@ -268,7 +268,13 @@ public final class DocumentConverter {
     }
     PrintRenderer renderer = new PrintRenderer(print, work);
     if (converter instanceof BuiltInConverters.PrintsDirectly direct) {
-      return new Converted(direct.renderForPrint(routed, renderer, title, work, output), type);
+      int pages = direct.renderForPrint(routed, renderer, title, work, output);
+      if (pages == 0) {
+        // Zero is even, so nothing later would notice a letter part that prints nothing.
+        throw new ConversionException(Reason.INVALID_CONTENT,
+            source.fileName() + " produced no pages to print");
+      }
+      return new Converted(pages, type);
     }
     Path pdf = intermediates == null ? null : intermediates.byPart().get(part);
     boolean keep = intermediates != null;

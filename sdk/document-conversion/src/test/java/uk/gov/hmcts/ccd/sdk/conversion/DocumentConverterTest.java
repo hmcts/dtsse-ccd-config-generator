@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 import org.apache.pdfbox.Loader;
@@ -304,6 +305,43 @@ class DocumentConverterTest {
     assertThat(other).isNotEqualTo(first);
   }
 
+  /**
+   * Printed duplex, a part that followed an odd-page part back to back would start on the back
+   * of its last sheet: a statement printed behind the coversheet. Send-letter pads each document
+   * it merges, so each part of a letter is padded the same way.
+   */
+  @Test
+  void eachPartOfALetterStartsOnANewSheet() throws Exception {
+    Path coversheet = Files.write(inputs.resolve("coversheet.pdf"),
+        Fixtures.pdfSaying("Coversheet"));
+    try (ConvertedPdf letter = converter.toPrintReadyLetter("Claim pack", List.of(
+            PrintPart.asIs(coversheet, "coversheet"),
+            PrintPart.convert(ConversionSource.of(Fixtures.mixedLayoutPdf(inputs),
+                "statement.pdf", "application/pdf")),
+            PrintPart.convert(ConversionSource.of(Fixtures.bmp(inputs), "photo.bmp",
+                "image/bmp"))),
+        PrintOptions.bulkPrint());
+        PDDocument document = Loader.loadPDF(letter.file().toFile())) {
+      // Coversheet 1 + blank, statement 3 + blank, photo 1 + blank.
+      assertThat(letter.pageCount()).isEqualTo(8);
+      List<Boolean> printed = new ArrayList<>();
+      for (int i = 0; i < document.getNumberOfPages(); i++) {
+        printed.add(document.getPage(i).hasContents());
+      }
+      assertThat(printed).containsExactly(true, false, true, true, true, false, true, false);
+      assertThat(PrintFacts.pages(document).get(0).hasText()).as("the coversheet").isTrue();
+      PrintRequirements.assertPrintReady(letter.file(), PrintOptions.bulkPrint(), 2);
+    }
+
+    PrintOptions unpadded = PrintOptions.bulkPrint().toBuilder().padToEvenPages(false).build();
+    try (ConvertedPdf letter = converter.toPrintReadyLetter("Claim pack", List.of(
+        PrintPart.asIs(coversheet, "coversheet"),
+        PrintPart.convert(ConversionSource.of(Fixtures.bmp(inputs), "photo.bmp", "image/bmp"))),
+        unpadded)) {
+      assertThat(letter.pageCount()).as("unpadded parts run back to back").isEqualTo(2);
+    }
+  }
+
   private String checksumOfLetter(Path coversheet, Path evidence, String name, String type)
       throws Exception {
     try (ConvertedPdf letter = converter.toPrintReadyLetter("Claim pack", List.of(
@@ -393,6 +431,27 @@ class DocumentConverterTest {
     assertPrintsUpright(scan, "scan.tif", "image/tiff");
     try (ConvertedPdf pdf = converter.toPdf(ConversionSource.of(scan, "scan.tif", "image/tiff"))) {
       assertThat(pdf.pageCount()).as("plain conversion pages").isEqualTo(1);
+    }
+  }
+
+  /**
+   * A TIFF whose only image is flagged reduced-resolution has no other page, so that image is
+   * the page, in print as in plain conversion. Skipping it printed nothing, and a zero-page part
+   * passed as even.
+   */
+  @Test
+  void aTiffWhoseEveryImageIsFlaggedPrintsItsFirstImage() throws Exception {
+    Path scan = Fixtures.tiffFlaggedReducedOnly(inputs);
+    ConversionSource source = ConversionSource.of(scan, "scan.tif", "image/tiff");
+    PrintOptions unpadded = PrintOptions.bulkPrint().toBuilder().padToEvenPages(false).build();
+    try (ConvertedPdf print = converter.toPrintReadyPdf(source, unpadded);
+        ConvertedPdf plain = converter.toPdf(source)) {
+      assertThat(print.pageCount()).isEqualTo(1);
+      assertThat(plain.pageCount()).isEqualTo(1);
+      PrintRequirements.assertPrintReady(print.file(), unpadded);
+    }
+    try (ConvertedPdf padded = converter.toPrintReadyPdf(source, PrintOptions.bulkPrint())) {
+      assertThat(padded.pageCount()).isEqualTo(2);
     }
   }
 

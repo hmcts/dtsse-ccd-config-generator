@@ -93,10 +93,11 @@ public final class PrintRequirements {
             .isCloseTo(options.pageSize().heightMillimetres(), org.assertj.core.data.Offset
                 .offset(0.1));
         assertThat(page.hasText()).as(where + " has no live text to reflow").isFalse();
-        // Every converted page is exactly one image. Only a trailing page added to make the
-        // count even may be blank, so output with nothing drawn cannot pass.
-        boolean trailingPadding = i == pages.size() - 1 && options.padToEvenPages();
-        if (!trailingPadding || !page.images().isEmpty()) {
+        // Every converted page is exactly one image. Only a page added to make a part's count
+        // even may be blank, and it has no content stream at all, so a rendered page with
+        // nothing drawn cannot pass.
+        boolean padding = options.padToEvenPages() && !document.getPage(i).hasContents();
+        if (!padding) {
           assertThat(page.images()).as(where + " images").hasSize(1);
         }
         for (PrintFacts.PlacedImage image : page.images()) {
