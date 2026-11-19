@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.Set;
 import java.util.OptionalLong;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -33,16 +34,17 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRendererBuilder;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleSection;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleStage;
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundlingExtension;
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundlingExtensionContext;
 import uk.gov.hmcts.ccd.sdk.bundling.api.CoverPage;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentFailure;
-import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentHandler;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference;
-import uk.gov.hmcts.ccd.sdk.bundling.api.HandledDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.api.WatermarkPreset;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderException;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderService;
+import uk.gov.hmcts.ccd.sdk.conversion.ConversionContext;
+import uk.gov.hmcts.ccd.sdk.conversion.ConversionException;
+import uk.gov.hmcts.ccd.sdk.conversion.ConversionSource;
+import uk.gov.hmcts.ccd.sdk.conversion.DocumentConverter;
+import uk.gov.hmcts.ccd.sdk.conversion.PdfConverter;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderException;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderService;
 
 class BundleRenderingFailureTest {
   private static final long MB = 1024L * 1024L;
@@ -223,19 +225,12 @@ class BundleRenderingFailureTest {
   }
 
   @Test
-  void handlerProducingAnEncryptedPdfFailsInspectionNamingTheDocument() {
-    BundleRenderer renderer = builder().extension(textHandler("encrypting", (source, ctx) -> {
-      try {
-        Path out = ctx.createTempFile(".pdf");
-        Files.write(out, encryptedPdf());
-        return HandledDocument.of(out);
-      } catch (IOException e) {
-        throw new java.io.UncheckedIOException(e);
-      }
-    })).build();
+  void converterProducingAnEncryptedPdfFailsConversionNamingTheDocument() {
+    BundleRenderer renderer = builder().converter(textConverter(
+        (source, output, ctx) -> Files.write(output, encryptedPdf()))).build();
 
     BundleGenerationException failure = expectFailure(renderer, request(doc("d1", "Note", "note")),
-        BundleErrorCode.DOCUMENT_INSPECTION_FAILED, BundleStage.INSPECT);
+        BundleErrorCode.DOCUMENT_CONVERSION_FAILED, BundleStage.CONVERT);
 
     assertThat(failure.getMessage()).contains("'d1'").containsIgnoringCase("encrypted");
     assertThat(detailOf(failure, "d1")).containsIgnoringCase("encrypted");
@@ -333,33 +328,18 @@ class BundleRenderingFailureTest {
   }
 
   @Test
-  void handlerReturningAPdfOutsideTheJobDirectoryIsRejectedTyped(@TempDir Path outside) throws Exception {
-    Path foreign = outside.resolve("foreign.pdf");
-    try (PDDocument document = new PDDocument()) {
-      document.addPage(new PDPage());
-      document.save(foreign.toFile());
-    }
-
-    BundleGenerationException failure = expectFailure(
-        builder().extension(textHandler("outside-jobdir", (source, ctx) -> HandledDocument.of(foreign))).build(),
-        request(doc("d1", "Note", "note")), BundleErrorCode.DOCUMENT_CONVERSION_FAILED, BundleStage.CONVERT);
-
-    assertThat(detailOf(failure, "d1")).contains("outside the job");
-    assertThat(foreign).as("the foreign file is never touched").exists();
-  }
-
-  @Test
-  void handlerThrowingANakedRuntimeExceptionIsWrappedWithoutLeakingItsMessage() {
-    DocumentHandler throwing = (source, ctx) -> {
+  void converterThrowingANakedRuntimeExceptionIsWrappedWithoutLeakingItsMessage() {
+    BundleRenderer renderer = builder().converter(textConverter((source, output, ctx) -> {
       throw new IllegalStateException("secret internal detail with a token: abc123");
-    };
+    })).build();
 
-    BundleGenerationException failure = expectFailure(builder().extension(textHandler("throwing", throwing)).build(),
+    BundleGenerationException failure = expectFailure(renderer,
         request(doc("d1", "Note", "note")), BundleErrorCode.DOCUMENT_CONVERSION_FAILED, BundleStage.CONVERT);
 
     assertThat(failure.getMessage()).doesNotContain("abc123");
     assertThat(detailOf(failure, "d1")).contains("IllegalStateException").doesNotContain("abc123");
-    assertThat(failure.getCause()).isInstanceOf(IllegalStateException.class);
+    assertThat(failure.getCause()).isInstanceOf(ConversionException.class)
+        .hasCauseInstanceOf(IllegalStateException.class);
   }
 
   @Test
@@ -414,18 +394,25 @@ class BundleRenderingFailureTest {
     assertThat(pages.documentFailures()).isEmpty();
   }
 
-  private static BundlingExtension textHandler(String name, DocumentHandler handler) {
-    return new BundlingExtension() {
+  private interface ConvertBody {
+    void convert(ConversionSource source, Path output, ConversionContext context)
+        throws ConversionException, IOException;
+  }
+
+  /** A converter with an extra {@code text/plain} converter registered. */
+  private static DocumentConverter textConverter(ConvertBody body) {
+    return DocumentConverter.builder().converter(new PdfConverter() {
       @Override
-      public String name() {
-        return name;
+      public Set<String> mediaTypes() {
+        return Set.of("text/plain");
       }
 
       @Override
-      public void configure(BundlingExtensionContext registry) {
-        registry.addHandler("text/plain", handler);
+      public void convert(ConversionSource source, Path output, ConversionContext context)
+          throws ConversionException, IOException {
+        body.convert(source, output, context);
       }
-    };
+    }).build();
   }
 
   private static byte[] encryptedPdf() throws IOException {

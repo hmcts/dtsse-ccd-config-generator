@@ -39,7 +39,7 @@ final class RenderMetrics {
 
   void warning(String code) {
     if (registry != null) {
-      String tag = BUILT_IN_WARNING_CODES.contains(code) ? code : "extension";
+      String tag = BUILT_IN_WARNING_CODES.contains(code) ? code : "other";
       registry.counter("ccd.bundling.warnings", "code", tag).increment();
     }
   }
