@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.AnnotationIntrospector;
 import com.fasterxml.jackson.databind.BeanDescription;
 import com.fasterxml.jackson.databind.DeserializationConfig;
 import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyName;
 import com.fasterxml.jackson.databind.deser.BeanDeserializerBuilder;
 import com.fasterxml.jackson.databind.deser.BeanDeserializerModifier;
@@ -15,6 +16,7 @@ import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.util.NameTransformer;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Keeps a {@code @JsonUnwrapped(prefix = ...)} prefix on the unwrapped object's own properties.
@@ -37,6 +39,7 @@ import java.util.List;
  * #3178</a>. It is fixed in Jackson 3.2.0 but not in Jackson 2. Remove this module once the SDK
  * runs on a Jackson 2 release that includes the fix, or on Jackson 3.2+.
  */
+@Slf4j
 public class UnwrappedPrefixModule extends SimpleModule {
 
   private static final long serialVersionUID = 1L;
@@ -44,6 +47,21 @@ public class UnwrappedPrefixModule extends SimpleModule {
   public UnwrappedPrefixModule() {
     super(UnwrappedPrefixModule.class.getName());
     setDeserializerModifier(new PrefixScopeModifier());
+  }
+
+  /**
+   * Returns {@code mapper} if this module is registered on it, otherwise a copy with it
+   * registered. Registering the module on a mapper that has already read a type does not reach
+   * that type's cached deserializer, so the copy, which starts with an empty cache, is used
+   * instead and the mapper itself is left as it is.
+   */
+  public static ObjectMapper ensureRegistered(ObjectMapper mapper) {
+    if (mapper.getRegisteredModuleIds().contains(UnwrappedPrefixModule.class.getName())) {
+      return mapper;
+    }
+    log.warn("An ObjectMapper without {} was created before the SDK could configure it; case data is read with"
+        + " a copy that has it", UnwrappedPrefixModule.class.getSimpleName());
+    return mapper.copy().registerModule(new UnwrappedPrefixModule());
   }
 
   static class PrefixScopeModifier extends BeanDeserializerModifier {
