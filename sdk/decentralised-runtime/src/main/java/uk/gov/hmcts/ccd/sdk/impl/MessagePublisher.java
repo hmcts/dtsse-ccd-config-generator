@@ -6,7 +6,7 @@ import java.util.Optional;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -22,7 +22,7 @@ import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 
 @Slf4j
 @Service
-@ConditionalOnBean(MessagingProperties.class)
+@ConditionalOnProperty(prefix = "ccd.messaging", name = "enabled", havingValue = "true")
 class MessagePublisher {
 
   private final DefinitionBlockGenerator definitionBlockGenerator;
@@ -56,8 +56,9 @@ class MessagePublisher {
   ) {
     CaseTypeDefinition caseType = definitionRegistry.find(caseDetails.getCaseTypeId()).orElse(null);
     if (caseType == null) {
-      log.error("Case type {} is not known", caseDetails.getCaseTypeId());
-      return;
+      // Failing the event rolls it back, rather than committing it without the message it should publish.
+      throw new IllegalStateException(
+          "CCD messaging is enabled but there is no definition snapshot for case type " + caseDetails.getCaseTypeId());
     }
 
     Optional<CaseEventDefinition> opt = caseType.findCaseEvent(eventId);
