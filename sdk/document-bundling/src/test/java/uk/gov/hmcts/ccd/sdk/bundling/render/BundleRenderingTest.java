@@ -7,11 +7,14 @@ import static uk.gov.hmcts.ccd.sdk.bundling.render.RenderTestSupport.request;
 import static uk.gov.hmcts.ccd.sdk.bundling.render.RenderTestSupport.sha256;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -37,17 +40,17 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleResult;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleSection;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleStage;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleWarning;
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundlingExtension;
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundlingExtensionContext;
 import uk.gov.hmcts.ccd.sdk.bundling.api.ConfidentialMarking;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResult;
 import uk.gov.hmcts.ccd.sdk.bundling.api.EmptySectionPolicy;
-import uk.gov.hmcts.ccd.sdk.bundling.api.HandledDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.api.PageNumbers;
 import uk.gov.hmcts.ccd.sdk.bundling.api.WatermarkPreset;
-import uk.gov.hmcts.ccd.sdk.bundling.convert.FileBackedSource;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.PdfBundleAssembler;
+import uk.gov.hmcts.ccd.sdk.conversion.ConversionContext;
+import uk.gov.hmcts.ccd.sdk.conversion.ConversionSource;
+import uk.gov.hmcts.ccd.sdk.conversion.DocumentConverter;
+import uk.gov.hmcts.ccd.sdk.conversion.PdfConverter;
 
 class BundleRenderingTest {
   @TempDir
@@ -352,31 +355,32 @@ class BundleRenderingTest {
     AtomicInteger entered = new AtomicInteger();
     AtomicInteger active = new AtomicInteger();
     AtomicInteger maxActive = new AtomicInteger();
-    BundlingExtension gatedPdfHandler = new BundlingExtension() {
+    PdfConverter gatedPdf = new PdfConverter() {
       @Override
-      public String name() {
-        return "gated-pdf";
+      public Set<String> mediaTypes() {
+        return Set.of("application/pdf");
       }
 
       @Override
-      public void configure(BundlingExtensionContext registry) {
-        registry.replaceHandler("application/pdf", (source, ctx) -> {
-          entered.incrementAndGet();
-          maxActive.accumulateAndGet(active.incrementAndGet(), Math::max);
-          twoEntered.countDown();
-          try {
-            release.await(20, TimeUnit.SECONDS);
-          } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-          } finally {
-            active.decrementAndGet();
-          }
-          return HandledDocument.of(((FileBackedSource) source).file());
-        });
+      public void convert(ConversionSource source, Path output, ConversionContext ctx)
+          throws IOException {
+        entered.incrementAndGet();
+        maxActive.accumulateAndGet(active.incrementAndGet(), Math::max);
+        twoEntered.countDown();
+        try {
+          release.await(20, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        } finally {
+          active.decrementAndGet();
+        }
+        Files.copy(source.file(), output, StandardCopyOption.REPLACE_EXISTING);
       }
     };
     BundleRenderer gated = BundleRenderer.builder().resolver(resolver).tempDirectory(work)
-        .maxConcurrentRenders(2).extension(gatedPdfHandler).build();
+        .maxConcurrentRenders(2)
+        .converter(DocumentConverter.builder().tempDirectory(work).converter(gatedPdf).build())
+        .build();
     ExecutorService executor = Executors.newFixedThreadPool(3);
     try {
       final List<Future<BundleResult>> futures = Stream.of("one", "two", "three")

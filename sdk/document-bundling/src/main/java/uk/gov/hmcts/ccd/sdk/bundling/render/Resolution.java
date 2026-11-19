@@ -210,7 +210,7 @@ final class Resolution {
           file,
           copied,
           HexFormat.of().formatHex(digest.digest()),
-          MediaTypes.normalise(resolved.mediaType()),
+          resolved.mediaType(),
           resolved.fileName(),
           resolved.checksum()));
       file = null;

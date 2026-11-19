@@ -12,13 +12,16 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.Semaphore;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
@@ -37,26 +40,26 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleStage;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleWarning;
 import uk.gov.hmcts.ccd.sdk.bundling.api.CoverPage;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentFailure;
-import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentHandler;
-import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentHandlingException;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResolver;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResult;
-import uk.gov.hmcts.ccd.sdk.bundling.api.HandledDocument;
-import uk.gov.hmcts.ccd.sdk.bundling.api.HandlerRegistry;
 import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocumentPolicy;
 import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocumentReason;
 import uk.gov.hmcts.ccd.sdk.bundling.api.RenderAttempt;
-import uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocument;
 import uk.gov.hmcts.ccd.sdk.bundling.api.WatermarkPreset;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderException;
-import uk.gov.hmcts.ccd.sdk.bundling.docmosis.DocmosisRenderService;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.AssemblyContent;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.AssemblyResult;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.MissingDocumentPage;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.PdfBundleAssembler;
 import uk.gov.hmcts.ccd.sdk.bundling.pdf.PdfSource;
+import uk.gov.hmcts.ccd.sdk.conversion.ConversionException;
+import uk.gov.hmcts.ccd.sdk.conversion.ConversionSource;
+import uk.gov.hmcts.ccd.sdk.conversion.ConversionWarning;
+import uk.gov.hmcts.ccd.sdk.conversion.ConvertedPdf;
+import uk.gov.hmcts.ccd.sdk.conversion.DocumentConverter;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderException;
+import uk.gov.hmcts.ccd.sdk.conversion.docmosis.DocmosisRenderService;
 
 public final class DefaultBundleRenderer implements BundleRenderer {
   public static final String WARNING_MEDIA_TYPE_MISMATCH = "MEDIA_TYPE_MISMATCH";
@@ -74,7 +77,8 @@ public final class DefaultBundleRenderer implements BundleRenderer {
 
   private final Map<String, DocumentResolver> resolvers;
   private final DocmosisRenderService docmosis;
-  private final HandlerRegistry registry;
+  private final DocumentConverter converter;
+  private final MediaLinkPages mediaLinkPages = new MediaLinkPages();
   private final BundleLimits limits;
   private final Semaphore permits;
   private final RenderMetrics metrics;
@@ -85,7 +89,7 @@ public final class DefaultBundleRenderer implements BundleRenderer {
   public DefaultBundleRenderer(
       Map<String, DocumentResolver> resolvers,
       DocmosisRenderService docmosis,
-      HandlerRegistry registry,
+      DocumentConverter converter,
       BundleLimits limits,
       int maxConcurrentRenders,
       MeterRegistry meterRegistry,
@@ -94,7 +98,7 @@ public final class DefaultBundleRenderer implements BundleRenderer {
     this.resolvers = Map.copyOf(resolvers);
     this.watermarkImages = Map.copyOf(watermarkImages);
     this.docmosis = docmosis;
-    this.registry = registry;
+    this.converter = converter;
     this.limits = limits;
     this.permits = new Semaphore(maxConcurrentRenders, true);
     this.metrics = new RenderMetrics(meterRegistry);
@@ -103,7 +107,9 @@ public final class DefaultBundleRenderer implements BundleRenderer {
 
   @Override
   public Set<String> handledMediaTypes() {
-    return registry.handledMediaTypes();
+    Set<String> types = new TreeSet<>(converter.supportedMediaTypes());
+    types.addAll(BuiltInMediaTypes.MEDIA);
+    return Collections.unmodifiableSet(types);
   }
 
   @Override
@@ -250,9 +256,9 @@ public final class DefaultBundleRenderer implements BundleRenderer {
 
     private void markMissing(
         BundleDocument document, BundleErrorCode code, String detail, Throwable cause) {
-      // A conversion that failed because Docmosis is down is a temporary problem, not a
-      // problem with the document, so it is re-run like an unavailable source.
-      MissingDocumentReason reason = TransientFailures.isDocmosisOutage(cause)
+      // A conversion that failed for a temporary reason (Docmosis down, local disk trouble) is
+      // not a problem with the document, so it is re-run like an unavailable source.
+      MissingDocumentReason reason = TransientFailures.isOutage(cause)
           ? MissingDocumentReason.UNAVAILABLE : MissingDocumentReason.of(code);
       missing.put(document.id(), new Missing(document, reason, code, detail));
       // The detail stays in the logs and on the MissingDocument; the warning has the
@@ -286,9 +292,11 @@ public final class DefaultBundleRenderer implements BundleRenderer {
       request.coverPage().ifPresent(this::validateCoverPage);
       for (BundleDocument document : request.allDocuments()) {
         document.media().ifPresent(media -> {
-          String type = MediaTypes.normalise(media.mediaType().orElse(""));
-          if (BuiltInMediaTypes.PDF.equals(type) || BuiltInMediaTypes.IMAGES.contains(type)
-              || BuiltInMediaTypes.OFFICE.contains(type)) {
+          String type = mediaTypeOf(media.mediaType().orElse(""));
+          if (BuiltInMediaTypes.MEDIA.contains(type)) {
+            return;
+          }
+          if (converter.supportedMediaTypes().contains(type)) {
             throw new BundleGenerationException(
                 BundleErrorCode.REQUEST_INVALID, BundleStage.VALIDATE,
                 "Document '" + document.id() + "' carries a media placeholder declaring '" + type
@@ -299,17 +307,15 @@ public final class DefaultBundleRenderer implements BundleRenderer {
                     BundleErrorCode.REQUEST_INVALID, "Media placeholder declares content type '"
                         + type + "'")));
           }
-          if (type.isBlank() || registry.handlerFor(type).isEmpty()) {
-            throw new BundleGenerationException(
-                BundleErrorCode.REQUEST_INVALID, BundleStage.VALIDATE,
-                "Document '" + document.id() + "' carries a media placeholder whose media type '"
-                    + type + "' is not a registered media type.",
-                "Use a registered audio/video media type, or register a handler for it through "
-                    + "a BundlingExtension.",
-                List.of(new DocumentFailure(document.id(), document.reference(),
-                    BundleErrorCode.REQUEST_INVALID, "Unregistered media placeholder type '"
-                        + type + "'")));
-          }
+          throw new BundleGenerationException(
+              BundleErrorCode.REQUEST_INVALID, BundleStage.VALIDATE,
+              "Document '" + document.id() + "' carries a media placeholder whose media type '"
+                  + type + "' is not an audio/video type bundling supports: "
+                  + BuiltInMediaTypes.MEDIA + ".",
+              "Use one of " + BuiltInMediaTypes.MEDIA + ".",
+              List.of(new DocumentFailure(document.id(), document.reference(),
+                  BundleErrorCode.REQUEST_INVALID, "Unsupported media placeholder type '"
+                      + type + "'")));
         });
       }
     }
@@ -436,139 +442,107 @@ public final class DefaultBundleRenderer implements BundleRenderer {
 
     private Converted convertOne(
         BundleDocument document, Map<DocumentReference, Resolution.Spooled> spooled) {
-      ResolvedDocument source;
-      String effectiveType;
-      String sourceSha = null;
       if (document.media().isPresent()) {
-        effectiveType = MediaTypes.normalise(document.media().get().mediaType().orElse(""));
-        source = new SyntheticMediaSource(effectiveType, document.id());
-      } else {
-        Resolution.Spooled spool = spooled.get(document.reference());
-        effectiveType = routeMediaType(document, spool);
-        source = new SpooledSource(spool.file(), effectiveType, spool.fileName(), spool.size(),
-            spool.sha256(), spool.providerChecksum());
-        sourceSha = spool.sha256();
+        String type = mediaTypeOf(document.media().get().mediaType().orElse(""));
+        try {
+          Path page = mediaLinkPages.render(document, type, jobDirectory);
+          return new Converted(document, page, type, sha256Of(page), true);
+        } catch (IOException | RuntimeException e) {
+          throw new BundleGenerationException(
+              BundleErrorCode.DOCUMENT_CONVERSION_FAILED, BundleStage.CONVERT,
+              "The media link page for document '" + document.id() + "' could not be generated.",
+              "Resubmit the bundle; if it fails again, report it.",
+              List.of(new DocumentFailure(document.id(), document.reference(),
+                  BundleErrorCode.DOCUMENT_CONVERSION_FAILED,
+                  "The media link page could not be generated: " + e.getClass().getSimpleName())),
+              e);
+        }
       }
-      if (effectiveType.isBlank()) {
+      Resolution.Spooled spool = spooled.get(document.reference());
+      String fileName = spool.fileName() == null || spool.fileName().isBlank()
+          ? document.id() : spool.fileName();
+      ConversionSource source =
+          new ConversionSource(spool.file(), fileName, spool.declaredMediaType());
+      try (ConvertedPdf pdf = converter.toPdf(source)) {
+        for (ConversionWarning warning : pdf.warnings()) {
+          addWarning(BundleWarning.forDocument(WARNING_MEDIA_TYPE_MISMATCH,
+              "Document '" + document.id() + "': " + warning.message() + " The detected type "
+                  + "was used for conversion.",
+              document.id()));
+        }
+        // The converter's result lives in its own directory; the job must own what it bundles.
+        Path owned = JobDirectory.createFile(jobDirectory, ".pdf");
+        Files.move(pdf.file(), owned, StandardCopyOption.REPLACE_EXISTING);
+        return new Converted(document, owned, pdf.mediaType(), spool.sha256(), false);
+      } catch (ConversionException e) {
+        throw conversionFailure(document, e);
+      } catch (IOException e) {
         throw new BundleGenerationException(
+            BundleErrorCode.DOCUMENT_CONVERSION_FAILED, BundleStage.CONVERT,
+            "Document '" + document.id() + "' could not be converted to PDF.",
+            "Resubmit the bundle; local disk trouble is usually temporary.",
+            List.of(new DocumentFailure(document.id(), document.reference(),
+                BundleErrorCode.DOCUMENT_CONVERSION_FAILED,
+                "The converted PDF could not be moved into the job's temporary directory")),
+            e);
+      }
+    }
+
+    private BundleGenerationException conversionFailure(
+        BundleDocument document, ConversionException e) {
+      String type = e.mediaType().orElse("");
+      return switch (e.reason()) {
+        case UNSUPPORTED_MEDIA_TYPE -> BuiltInMediaTypes.MEDIA.contains(type)
+            ? contentInvalid(document, "resolved to recorded media content ('" + type
+                + "'); audio and video documents are metadata-only and must carry a "
+                + "MediaPlaceholder instead of content")
+            : unsupportedMediaType(document, type);
+        case MEDIA_TYPE_CONFLICT -> contentInvalid(document,
+            "could not be converted: " + e.getMessage());
+        case CONVERTER_NOT_CONFIGURED -> new BundleGenerationException(
+            BundleErrorCode.DOCMOSIS_NOT_CONFIGURED, BundleStage.CONVERT,
+            "Document '" + document.id() + "' is an office-format source ('" + type
+                + "') but no Docmosis render service is configured for conversion.",
+            "Configure Docmosis (ccd.bundling.docmosis.convert-endpoint and "
+                + "ccd.bundling.docmosis.access-key, or ccd.conversion.docmosis.*), or give the "
+                + "renderer a DocumentConverter with a PdfConverter for the media type.",
+            List.of(new DocumentFailure(document.id(), document.reference(),
+                BundleErrorCode.DOCMOSIS_NOT_CONFIGURED,
+                "No Docmosis render service is configured for office conversion of '"
+                    + type + "'")),
+            e);
+        default -> new BundleGenerationException(
+            BundleErrorCode.DOCUMENT_CONVERSION_FAILED, BundleStage.CONVERT,
+            "Document '" + document.id() + "' could not be converted to PDF.",
+            "Check the source document is valid, then resubmit the bundle.",
+            List.of(new DocumentFailure(document.id(), document.reference(),
+                BundleErrorCode.DOCUMENT_CONVERSION_FAILED, e.getMessage())),
+            e);
+      };
+    }
+
+    private BundleGenerationException unsupportedMediaType(
+        BundleDocument document, String effectiveType) {
+      if (effectiveType.isBlank()) {
+        return new BundleGenerationException(
             BundleErrorCode.MEDIA_TYPE_UNSUPPORTED, BundleStage.CONVERT,
             "Document '" + document.id() + "' has no usable media type: the resolver declared "
-                + "none and its content matched no known signature. Registered types: "
-                + registry.handledMediaTypes() + ".",
+                + "none and neither its content nor its file name identified one. Supported "
+                + "types: " + handledMediaTypes() + ".",
             "Have the resolver declare the source's media type, or correct the source content.",
             List.of(new DocumentFailure(document.id(), document.reference(),
                 BundleErrorCode.MEDIA_TYPE_UNSUPPORTED,
                 "The declared media type is missing and content detection found no signature")));
       }
-      DocumentHandler handler = registry.handlerFor(effectiveType)
-          .orElseThrow(() -> unsupportedMediaType(document, effectiveType));
-      HandledDocument handled;
-      try {
-        handled = handler.handle(source,
-            new DefaultHandlerContext(jobDirectory, document, Optional.ofNullable(docmosis)));
-      } catch (DocumentHandlingException | RuntimeException e) {
-        throw new BundleGenerationException(
-            BundleErrorCode.DOCUMENT_CONVERSION_FAILED, BundleStage.CONVERT,
-            "Document '" + document.id() + "' could not be converted to PDF.",
-            "Check the source document is valid, then resubmit the bundle.",
-            List.of(new DocumentFailure(document.id(), document.reference(),
-                BundleErrorCode.DOCUMENT_CONVERSION_FAILED,
-                e instanceof DocumentHandlingException
-                    ? e.getMessage()
-                    : "The handler threw " + e.getClass().getSimpleName())),
-            e);
-      }
-      Path producedPdf = requireInsideJobDirectory(document, handler, handled.pdfFile());
-      handled.warnings().forEach(this::addWarning);
-      String sha = sourceSha != null ? sourceSha : sha256Of(producedPdf);
-      return new Converted(document, producedPdf, effectiveType, sha, handled.generated());
-    }
-
-    private Path requireInsideJobDirectory(
-        BundleDocument document, DocumentHandler handler, Path pdfFile) {
-      String handlerName = handler.getClass().getName();
-      try {
-        Path real = pdfFile.toRealPath();
-        if (real.startsWith(jobDirectory.toRealPath())) {
-          return real;
-        }
-      } catch (IOException e) {
-        throw conversionFailed(document, "handler " + handlerName
-            + " returned a PDF path that does not resolve to a readable file", e);
-      }
-      throw conversionFailed(document, "handler " + handlerName
-          + " returned a PDF outside the job's temporary directory", null);
-    }
-
-    private BundleGenerationException conversionFailed(
-        BundleDocument document, String detail, Throwable cause) {
-      return new BundleGenerationException(
-          BundleErrorCode.DOCUMENT_CONVERSION_FAILED, BundleStage.CONVERT,
-          "Document '" + document.id() + "' could not be converted: " + detail + ".",
-          "Handlers must allocate their output through HandlerContext.createTempFile so the "
-              + "job owns and cleans it.",
-          List.of(new DocumentFailure(document.id(), document.reference(),
-              BundleErrorCode.DOCUMENT_CONVERSION_FAILED, detail)), cause);
-    }
-
-    private String routeMediaType(BundleDocument document, Resolution.Spooled spool) {
-      byte[] head = new byte[MediaTypes.DETECTION_PREFIX_BYTES];
-      int length;
-      try (InputStream in = Files.newInputStream(spool.file())) {
-        length = in.readNBytes(head, 0, head.length);
-      } catch (IOException e) {
-        throw new UncheckedIOException("Could not re-read a spooled source file", e);
-      }
-      MediaTypes.Routing routing = MediaTypes.route(spool.declaredMediaType(), head, length);
-      String effectiveType = switch (routing) {
-        case MediaTypes.Routing.Route route -> route.mediaType();
-        case MediaTypes.Routing.RouteWithMismatch mismatch -> {
-          addWarning(BundleWarning.forDocument(WARNING_MEDIA_TYPE_MISMATCH,
-              "Document '" + document.id() + "' declares media type '" + mismatch.declared()
-                  + "' but its content was detected as '" + mismatch.detected() + "'; the "
-                  + "detected type was used for conversion.",
-              document.id()));
-          yield mismatch.mediaType();
-        }
-        case MediaTypes.Routing.Irreconcilable mismatch ->
-            throw contentInvalid(document, "declares media type '" + mismatch.declared()
-                + "' but its content was detected as " + mismatch.detectedDescription());
-      };
-      if (BuiltInMediaTypes.MEDIA.contains(effectiveType)) {
-        throw contentInvalid(document, "resolved to recorded media content ('" + effectiveType
-            + "'); audio and video documents are metadata-only and must carry a "
-            + "MediaPlaceholder instead of content");
-      }
-      return effectiveType;
-    }
-
-    private BundleGenerationException unsupportedMediaType(
-        BundleDocument document, String effectiveType) {
-      if ((docmosis == null || !docmosis.convertsFiles())
-          && BuiltInMediaTypes.OFFICE.contains(effectiveType)) {
-        return new BundleGenerationException(
-            BundleErrorCode.DOCMOSIS_NOT_CONFIGURED, BundleStage.CONVERT,
-            "Document '" + document.id() + "' is an office-format source ('" + effectiveType
-                + "') but the Docmosis render service is not configured for conversion, so there is "
-                + "no office conversion handler.",
-            "Configure Docmosis (ccd.bundling.docmosis.convert-endpoint and "
-                + "ccd.bundling.docmosis.access-key — or call docmosis(...) on the renderer "
-                + "builder), or register a replacement handler for the media type through a "
-                + "BundlingExtension.",
-            List.of(new DocumentFailure(document.id(), document.reference(),
-                BundleErrorCode.DOCMOSIS_NOT_CONFIGURED,
-                "No Docmosis render service is configured for office conversion of '"
-                    + effectiveType + "'")));
-      }
       return new BundleGenerationException(
           BundleErrorCode.MEDIA_TYPE_UNSUPPORTED, BundleStage.CONVERT,
           "The media type '" + effectiveType + "' of document '" + document.id() + "' has "
-              + "no registered handler. Registered types: " + registry.handledMediaTypes() + ".",
-          "Register a handler for the media type through a BundlingExtension, or correct "
-              + "the source.",
+              + "no converter. Supported types: " + handledMediaTypes() + ".",
+          "Register a PdfConverter for the media type on the renderer's DocumentConverter, or "
+              + "correct the source.",
           List.of(new DocumentFailure(document.id(), document.reference(),
               BundleErrorCode.MEDIA_TYPE_UNSUPPORTED,
-              "No handler is registered for '" + effectiveType + "'")));
+              "No converter is registered for '" + effectiveType + "'")));
     }
 
     private BundleGenerationException contentInvalid(BundleDocument document, String detail) {
@@ -702,5 +676,12 @@ public final class DefaultBundleRenderer implements BundleRenderer {
     } catch (IOException e) {
       throw new UncheckedIOException("Could not checksum " + file.getFileName(), e);
     }
+  }
+
+  /** Lower case without parameters, as placeholder media types are compared. */
+  private static String mediaTypeOf(String declared) {
+    int parameters = declared.indexOf(';');
+    String type = parameters >= 0 ? declared.substring(0, parameters) : declared;
+    return type.trim().toLowerCase(Locale.ROOT);
   }
 }
