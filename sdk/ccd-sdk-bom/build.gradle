@@ -13,6 +13,7 @@ dependencies {
         api project(':task-management')
         api project(':document-bundling')
         api project(':docweave')
+        api project(':bank-holidays')
     }
 }
 

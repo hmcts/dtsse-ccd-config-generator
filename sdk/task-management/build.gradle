@@ -10,9 +10,9 @@ dependencyManagement {
 }
 
 dependencies {
+    api project(':bank-holidays')
     api 'org.springframework:spring-context'
     api 'org.springframework:spring-jdbc'
-    implementation 'org.springframework:spring-context-support'
     api 'org.springframework:spring-web'
     api 'org.springframework.cloud:spring-cloud-starter-openfeign'
     api 'com.github.hmcts:service-auth-provider-java-client:6.1.2'
@@ -21,7 +21,6 @@ dependencies {
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
     implementation 'org.springframework.boot:spring-boot-http-converter'
 
-    implementation 'com.github.ben-manes.caffeine:caffeine'
     implementation 'com.fasterxml.jackson.core:jackson-databind'
     implementation 'org.springframework.boot:spring-boot-jackson2'
 

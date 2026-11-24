@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.delay.DelayUntilRequest;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.delay.internal.calendar.WorkingDayIndicator;
 
 @RequiredArgsConstructor
 class DelayUntilIntervalCalculator implements DelayUntilCalculator {
