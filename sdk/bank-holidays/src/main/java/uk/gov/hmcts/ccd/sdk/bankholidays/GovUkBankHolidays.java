@@ -13,6 +13,8 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 /** GOV.UK's bank holidays feed, fetched or as copied into the SDK. */
 final class GovUkBankHolidays {
@@ -57,8 +59,8 @@ final class GovUkBankHolidays {
 
   /**
    * The feed's bank holidays: {@code {"england-and-wales": {"events": [{"title", "date", "notes"}]}}}
-   * and so on for each division. A feed missing a division is refused, so it never replaces one
-   * that had it.
+   * and so on for each division. A feed missing a division, or a year between a division's first
+   * and last, is refused, so it never replaces bank holidays that had them.
    */
   static List<BankHoliday> parse(JsonNode feed) {
     List<BankHoliday> holidays = new ArrayList<>();
@@ -67,10 +69,16 @@ final class GovUkBankHolidays {
       if (!events.isArray() || events.isEmpty()) {
         throw new IllegalArgumentException("GOV.UK bank holidays have no " + division.govUkName() + " events");
       }
-      events.forEach(event -> holidays.add(new BankHoliday(division,
-          LocalDate.parse(event.path("date").asText()),
-          event.path("title").asText(),
-          event.path("notes").asText(""))));
+      SortedSet<Integer> years = new TreeSet<>();
+      events.forEach(event -> {
+        LocalDate date = LocalDate.parse(event.path("date").asText());
+        years.add(date.getYear());
+        holidays.add(new BankHoliday(division, date, event.path("title").asText(), event.path("notes").asText("")));
+      });
+      if (years.size() != years.last() - years.first() + 1) {
+        throw new IllegalArgumentException("GOV.UK bank holidays for " + division.govUkName()
+            + " miss a year between " + years.first() + " and " + years.last());
+      }
     }
     return holidays;
   }

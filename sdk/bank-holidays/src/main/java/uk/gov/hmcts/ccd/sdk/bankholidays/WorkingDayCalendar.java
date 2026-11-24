@@ -28,15 +28,18 @@ public final class WorkingDayCalendar {
     return division;
   }
 
-  /** Whether the date is one of the division's bank holidays. */
-  public boolean isHoliday(LocalDate date) {
+  /**
+   * Whether the date is one of the division's bank holidays. Unlike a working-day calendar's
+   * holidays in some libraries, Saturdays and Sundays are not, unless GOV.UK lists them.
+   */
+  public boolean isBankHoliday(LocalDate date) {
     requireKnown(date);
     return holidays.containsKey(date);
   }
 
   /** Whether the date is a working day: Monday to Friday and not a bank holiday. */
   public boolean isWorkingDay(LocalDate date) {
-    return !isWeekend(date) && !isHoliday(date);
+    return !isBankHoliday(date) && !isWeekend(date);
   }
 
   /**
@@ -47,7 +50,7 @@ public final class WorkingDayCalendar {
     requireKnown(date);
     int step = workingDays < 0 ? -1 : 1;
     LocalDate result = date;
-    for (int remaining = Math.abs(workingDays); remaining > 0; ) {
+    for (long remaining = Math.abs((long) workingDays); remaining > 0; ) {
       result = result.plusDays(step);
       if (isWorkingDay(result)) {
         remaining--;
@@ -74,19 +77,37 @@ public final class WorkingDayCalendar {
     return result;
   }
 
+  /**
+   * The division's bank holidays from the first date to before the second, earliest first. Equal
+   * dates give none.
+   *
+   * @throws IllegalArgumentException if the second date is before the first
+   * @throws UnknownBankHolidaysException if the dates reach a year GOV.UK has not published
+   */
+  public List<BankHoliday> holidays(LocalDate from, LocalDate toExclusive) {
+    Objects.requireNonNull(from, "from");
+    Objects.requireNonNull(toExclusive, "toExclusive");
+    if (toExclusive.isBefore(from)) {
+      throw new IllegalArgumentException(toExclusive + " is before " + from);
+    }
+    if (from.equals(toExclusive)) {
+      return List.of();
+    }
+    requireKnown(from);
+    requireKnown(toExclusive.minusDays(1));
+    return List.copyOf(holidays.subMap(from, true, toExclusive, false).values());
+  }
+
   /** The last date the division's bank holidays are known for: 31 December of its last year. */
   public LocalDate knownUntil() {
     requireAny();
     return holidays.lastKey().withMonth(12).withDayOfMonth(31);
   }
 
-  List<BankHoliday> between(LocalDate from, LocalDate toExclusive) {
-    if (!from.isBefore(toExclusive)) {
-      return List.of();
-    }
-    requireKnown(from);
-    requireKnown(toExclusive.minusDays(1));
-    return List.copyOf(holidays.subMap(from, true, toExclusive, false).values());
+  @Override
+  public String toString() {
+    return "WorkingDayCalendar[" + division
+        + (holidays.isEmpty() ? ", none known]" : ", known " + knownFrom() + " to " + knownUntil() + "]");
   }
 
   private LocalDate knownFrom() {
@@ -97,14 +118,14 @@ public final class WorkingDayCalendar {
   private void requireKnown(LocalDate date) {
     Objects.requireNonNull(date, "date");
     if (date.isBefore(knownFrom()) || date.isAfter(knownUntil())) {
-      throw new UnknownBankHolidaysException(division + " bank holidays are not known for " + date
-          + "; they are known from " + knownFrom() + " to " + knownUntil());
+      throw new UnknownBankHolidaysException(division, date, division + " bank holidays are not known for "
+          + date + "; they are known from " + knownFrom() + " to " + knownUntil());
     }
   }
 
   private void requireAny() {
     if (holidays.isEmpty()) {
-      throw new UnknownBankHolidaysException("No " + division + " bank holidays are known");
+      throw new UnknownBankHolidaysException(division, null, "No " + division + " bank holidays are known");
     }
   }
 

@@ -11,6 +11,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -21,7 +23,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The bank holidays in the {@code bank_holidays} schema. Changes are made in their own transaction,
- * under a lock so that instances refreshing at once take turns.
+ * under a lock so that instances refreshing at once take turns, and replace whole years: a year
+ * stored is never removed, so the dates bank holidays are known for never shrink.
  */
 class BankHolidayStore {
 
@@ -74,11 +77,18 @@ class BankHolidayStore {
     }));
   }
 
-  /** Records a successful fetch, replacing the bank holidays if they changed. */
+  /**
+   * Records a successful fetch, replacing the bank holidays of the years it has if they changed.
+   * Years it no longer has are kept, so dates once known stay known.
+   */
   void fetched(List<BankHoliday> holidays) {
     transaction.executeWithoutResult(status -> {
       jdbc.getJdbcTemplate().execute(LOCK);
-      if (!new HashSet<>(holidays).equals(new HashSet<>(read()))) {
+      Set<DivisionYear> years = yearsOf(holidays);
+      Set<BankHoliday> stored = read().stream()
+          .filter(holiday -> years.contains(DivisionYear.of(holiday)))
+          .collect(Collectors.toSet());
+      if (!new HashSet<>(holidays).equals(stored)) {
         write(holidays, Source.GOV_UK);
       }
       // GOV.UK publishing what the SDK's copy has makes them GOV.UK's.
@@ -119,8 +129,13 @@ class BankHolidayStore {
         LocalDate.class));
   }
 
+  /** Replaces the bank holidays of the years the given ones are in. */
   private void write(List<BankHoliday> holidays, Source source) {
-    jdbc.getJdbcTemplate().update("delete from bank_holidays.bank_holiday");
+    jdbc.batchUpdate("delete from bank_holidays.bank_holiday where division = :division "
+            + "and date >= make_date(:year, 1, 1) and date < make_date(:year + 1, 1, 1)",
+        yearsOf(holidays).stream().map(year -> (SqlParameterSource) new MapSqlParameterSource()
+            .addValue("division", year.division().name())
+            .addValue("year", year.year())).toArray(SqlParameterSource[]::new));
     jdbc.batchUpdate("insert into bank_holidays.bank_holiday (division, date, title, notes) "
             + "values (:division, :date, :title, :notes)",
         holidays.stream().map(holiday -> (SqlParameterSource) new MapSqlParameterSource()
@@ -131,6 +146,16 @@ class BankHolidayStore {
     jdbc.update("insert into bank_holidays.fetch_state (id, source, updated_at) values (1, :source, :now) "
             + "on conflict (id) do update set source = excluded.source, updated_at = excluded.updated_at",
         Map.of("source", source.name(), "now", now()));
+  }
+
+  private static Set<DivisionYear> yearsOf(List<BankHoliday> holidays) {
+    return holidays.stream().map(DivisionYear::of).collect(Collectors.toSet());
+  }
+
+  private record DivisionYear(Division division, int year) {
+    static DivisionYear of(BankHoliday holiday) {
+      return new DivisionYear(holiday.division(), holiday.date().getYear());
+    }
   }
 
   private Timestamp now() {

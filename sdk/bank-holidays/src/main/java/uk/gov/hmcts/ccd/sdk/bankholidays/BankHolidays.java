@@ -27,10 +27,22 @@ public class BankHolidays {
     this.source = source;
   }
 
-  /** Bank holidays fixed to the given ones, for tests. */
+  /**
+   * Bank holidays fixed to the given ones, for tests. Each division's are known for the whole years
+   * from its earliest given holiday to its latest; a division given none has none known.
+   *
+   * @throws IllegalArgumentException if a division is given the same date twice
+   */
   public static BankHolidays of(Collection<BankHoliday> holidays) {
     List<BankHoliday> fixed = List.copyOf(holidays);
-    return new BankHolidays(() -> fixed);
+    BankHolidays bankHolidays = new BankHolidays(() -> fixed);
+    bankHolidays.reload();
+    return bankHolidays;
+  }
+
+  /** The copy of GOV.UK's bank holidays in this version of the SDK, without a database, for tests. */
+  public static BankHolidays bundled() {
+    return of(GovUkBankHolidays.seed());
   }
 
   /** The division's working days as they are now, to calculate with. */
@@ -39,12 +51,11 @@ public class BankHolidays {
   }
 
   /**
-   * The division's bank holidays from the first date to before the second, earliest first.
-   *
-   * @throws UnknownBankHolidaysException if the dates reach a year GOV.UK has not published
+   * The division's bank holidays from the first date to before the second, earliest first: the
+   * same as {@code calendar(division).holidays(from, toExclusive)}.
    */
   public List<BankHoliday> holidays(Division division, LocalDate from, LocalDate toExclusive) {
-    return calendar(division).between(from, toExclusive);
+    return calendar(division).holidays(from, toExclusive);
   }
 
   /** Reads the bank holidays again from their source. */
@@ -53,7 +64,12 @@ public class BankHolidays {
     for (Division division : Division.values()) {
       byDivision.put(division, new TreeMap<>());
     }
-    source.get().forEach(holiday -> byDivision.get(holiday.division()).put(holiday.date(), holiday));
+    for (BankHoliday holiday : source.get()) {
+      if (byDivision.get(holiday.division()).putIfAbsent(holiday.date(), holiday) != null) {
+        throw new IllegalArgumentException(holiday.division() + " has more than one bank holiday on "
+            + holiday.date());
+      }
+    }
     Map<Division, WorkingDayCalendar> loaded = new EnumMap<>(Division.class);
     byDivision.forEach((division, holidays) ->
         loaded.put(division, new WorkingDayCalendar(division, Collections.unmodifiableNavigableMap(holidays))));

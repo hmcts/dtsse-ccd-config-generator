@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.bankholidays.BankHolidays;
 import uk.gov.hmcts.ccd.sdk.bankholidays.Division;
+import uk.gov.hmcts.ccd.sdk.bankholidays.WorkingDayCalendar;
 
 /**
  * Working days by the non-working calendars and days of the week a delay names, as Task Management
@@ -25,27 +26,34 @@ class WorkingDayIndicator {
 
   private final BankHolidays bankHolidays;
 
-  boolean isWorkingDay(LocalDate date, List<String> calendars, List<String> nonWorkingDaysOfWeek) {
-    return !nonWorkingDaysOfWeek.contains(date.getDayOfWeek().toString())
-        && calendars.stream().noneMatch(calendar -> bankHolidays.calendar(division(calendar)).isHoliday(date));
+  /** The working days for one delay, its calendars taken once so that it is worked out with one set. */
+  WorkingDays of(List<String> calendars, List<String> nonWorkingDaysOfWeek) {
+    return new WorkingDays(calendars.stream().map(calendar -> bankHolidays.calendar(division(calendar))).toList(),
+        nonWorkingDaysOfWeek);
   }
 
-  LocalDate getNextWorkingDay(LocalDate date, List<String> calendars, List<String> nonWorkingDaysOfWeek) {
-    requireNonNull(date);
-    LocalDate next = date.plusDays(1);
-    while (!isWorkingDay(next, calendars, nonWorkingDaysOfWeek)) {
-      next = next.plusDays(1);
-    }
-    return next;
-  }
+  record WorkingDays(List<WorkingDayCalendar> calendars, List<String> nonWorkingDaysOfWeek) {
 
-  LocalDate getPreviousWorkingDay(LocalDate date, List<String> calendars, List<String> nonWorkingDaysOfWeek) {
-    requireNonNull(date);
-    LocalDate previous = date.minusDays(1);
-    while (!isWorkingDay(previous, calendars, nonWorkingDaysOfWeek)) {
-      previous = previous.minusDays(1);
+    boolean isWorkingDay(LocalDate date) {
+      return !nonWorkingDaysOfWeek.contains(date.getDayOfWeek().toString())
+          && calendars.stream().noneMatch(calendar -> calendar.isBankHoliday(date));
     }
-    return previous;
+
+    LocalDate next(LocalDate date) {
+      LocalDate next = requireNonNull(date).plusDays(1);
+      while (!isWorkingDay(next)) {
+        next = next.plusDays(1);
+      }
+      return next;
+    }
+
+    LocalDate previous(LocalDate date) {
+      LocalDate previous = requireNonNull(date).minusDays(1);
+      while (!isWorkingDay(previous)) {
+        previous = previous.minusDays(1);
+      }
+      return previous;
+    }
   }
 
   private static Division division(String calendar) {
