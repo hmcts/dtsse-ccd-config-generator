@@ -21,17 +21,11 @@ import java.util.function.Supplier;
 public class BankHolidays {
 
   private final Supplier<? extends Collection<BankHoliday>> load;
-  private volatile Map<Division, TreeMap<LocalDate, BankHoliday>> holidays;
+  private Map<Division, TreeMap<LocalDate, BankHoliday>> holidays;
 
-  private BankHolidays(Supplier<? extends Collection<BankHoliday>> load) {
+  /** Bank holidays read with the given load on the first lookup, and again on each reload. */
+  BankHolidays(Supplier<? extends Collection<BankHoliday>> load) {
     this.load = Objects.requireNonNull(load, "load");
-  }
-
-  /**
-   * Bank holidays read with the given load on the first lookup, and again on each {@link #reload()}.
-   */
-  static BankHolidays loadedOnFirstUse(Supplier<? extends Collection<BankHoliday>> load) {
-    return new BankHolidays(load);
   }
 
   /** Bank holidays fixed to the given ones, for tests. */
@@ -60,10 +54,6 @@ public class BankHolidays {
     return List.copyOf(byDivision().get(Objects.requireNonNull(division, "division")).values());
   }
 
-  /**
-   * Reads them again. Reads and publishes under one lock, so a read never replaces a later one's
-   * holidays with the older ones it read.
-   */
   synchronized void reload() {
     Map<Division, TreeMap<LocalDate, BankHoliday>> byDivision = new EnumMap<>(Division.class);
     for (Division division : Division.values()) {
@@ -73,16 +63,11 @@ public class BankHolidays {
     holidays = byDivision;
   }
 
-  private Map<Division, TreeMap<LocalDate, BankHoliday>> byDivision() {
-    Map<Division, TreeMap<LocalDate, BankHoliday>> known = holidays;
-    if (known != null) {
-      return known;
+  // Under the lock reload holds, so an older read never replaces a newer one.
+  private synchronized Map<Division, TreeMap<LocalDate, BankHoliday>> byDivision() {
+    if (holidays == null) {
+      reload();
     }
-    synchronized (this) {
-      if (holidays == null) {
-        reload();
-      }
-      return holidays;
-    }
+    return holidays;
   }
 }

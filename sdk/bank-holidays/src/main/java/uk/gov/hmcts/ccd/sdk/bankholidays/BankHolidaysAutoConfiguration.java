@@ -28,7 +28,7 @@ public class BankHolidaysAutoConfiguration {
   @Bean
   @DependsOnDatabaseInitialization
   BankHolidays bankHolidays() {
-    return BankHolidays.loadedOnFirstUse(store::load);
+    return new BankHolidays(store::load);
   }
 
   @Bean
