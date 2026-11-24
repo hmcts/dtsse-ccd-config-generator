@@ -21,7 +21,8 @@ known, rather than treat it as having none.
 - They are kept in the `bank_holidays` schema, migrated with the SDK's other library schemas (it
   needs the application's PostgreSQL `DataSource`), and read into memory at startup, so lookups
   never wait on GOV.UK.
-- An empty store is seeded from a copy of GOV.UK's feed in the SDK.
+- Years missing from the store are added from a copy of GOV.UK's feed in the SDK, so upgrading the
+  SDK brings new years even if fetching never works.
 - With scheduling enabled (`@EnableScheduling`), each instance fetches GOV.UK's feed at startup and
   daily. A fetch replaces the years it has and keeps the others; a failed fetch keeps them all.
 - `ccd.bank-holidays.url` sets the feed's address.

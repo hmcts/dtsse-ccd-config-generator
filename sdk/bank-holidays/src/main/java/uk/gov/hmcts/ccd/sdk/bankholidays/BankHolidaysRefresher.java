@@ -6,8 +6,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 
 /**
- * At startup and daily, fetches GOV.UK's bank holidays into the store. A failed fetch keeps the bank
- * holidays there were. Runs when the application enables scheduling.
+ * At startup and daily, fetches GOV.UK's bank holidays into the store, then reads the store. A failed
+ * fetch keeps the bank holidays there were. Runs when the application enables scheduling.
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -21,11 +21,13 @@ class BankHolidaysRefresher {
   void refresh() {
     try {
       store.save(govUk.fetch());
-      bankHolidays.replace(store.load());
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
+      return;
     } catch (Exception e) {
       log.warn("GOV.UK bank holidays could not be fetched; keeping those there were", e);
     }
+    // Whether or not this fetch worked, another instance's may have.
+    bankHolidays.replace(store.load());
   }
 }

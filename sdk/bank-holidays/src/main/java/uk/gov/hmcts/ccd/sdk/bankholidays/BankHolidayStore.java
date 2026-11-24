@@ -1,8 +1,10 @@
 package uk.gov.hmcts.ccd.sdk.bankholidays;
 
 import java.sql.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import javax.sql.DataSource;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -28,12 +30,18 @@ class BankHolidayStore {
     this.transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
   }
 
-  /** The stored bank holidays, seeded from the SDK's copy of GOV.UK's feed when there are none. */
+  /** The stored bank holidays, first adding the years the SDK's copy of GOV.UK's feed has that they lack. */
   List<BankHoliday> load() {
     transaction.executeWithoutResult(status -> {
       jdbc.getJdbcTemplate().execute(LOCK);
-      if (jdbc.getJdbcTemplate().queryForObject("select count(*) from bank_holidays.bank_holiday", Long.class) == 0) {
-        write(GovUkBankHolidays.seed());
+      Set<String> stored = new HashSet<>(jdbc.getJdbcTemplate().queryForList(
+          "select distinct division || ':' || extract(year from date)::int from bank_holidays.bank_holiday",
+          String.class));
+      List<BankHoliday> missing = GovUkBankHolidays.seed().stream()
+          .filter(holiday -> !stored.contains(holiday.division().name() + ":" + holiday.date().getYear()))
+          .toList();
+      if (!missing.isEmpty()) {
+        write(missing);
       }
     });
     return jdbc.query("select division, date, title, notes from bank_holidays.bank_holiday", (row, i) ->

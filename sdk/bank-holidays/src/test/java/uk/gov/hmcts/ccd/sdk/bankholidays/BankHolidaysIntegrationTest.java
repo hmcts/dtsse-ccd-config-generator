@@ -89,6 +89,17 @@ class BankHolidaysIntegrationTest {
   }
 
   @Test
+  void addsTheYearsTheSdksCopyHasThatTheStoreLacks() {
+    jdbc.update("insert into bank_holidays.bank_holiday (division, date, title, notes) values "
+        + "('ENGLAND_AND_WALES', '2020-12-25', 'Fetched from GOV.UK', '')");
+
+    withBankHolidays((bankHolidays, refresher) -> {
+      assertThat(bankHolidays.isBankHoliday(ENGLAND_AND_WALES, CHRISTMAS_2026)).isTrue();
+      assertThat(bankHolidays.isBankHoliday(ENGLAND_AND_WALES, LocalDate.of(2020, 1, 1))).isFalse();
+    });
+  }
+
+  @Test
   void knowsEachDivisionsOwnBankHolidays() {
     withBankHolidays((bankHolidays, refresher) -> {
       LocalDate secondJanuary = LocalDate.of(2026, 1, 2);
