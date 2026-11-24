@@ -3,6 +3,8 @@ package uk.gov.hmcts.ccd.sdk.bankholidays;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -54,6 +56,24 @@ class BankHolidayStore {
     return read();
   }
 
+  /**
+   * Whether this instance is to fetch from GOV.UK now, claiming the fetch so that other instances do
+   * not: when no fetch has succeeded in the last maxAge, and none was started in the last retryAfter.
+   */
+  boolean claimFetch(Duration maxAge, Duration retryAfter) {
+    return Boolean.TRUE.equals(transaction.execute(status -> {
+      jdbc.getJdbcTemplate().execute(LOCK);
+      seedIfNeeded();
+      Instant now = clock.instant();
+      return jdbc.update("update bank_holidays.fetch_state set last_attempt_at = :now "
+              + "where (fetched_at is null or fetched_at <= :staleBefore) "
+              + "and (last_attempt_at is null or last_attempt_at <= :retryBefore)",
+          new MapSqlParameterSource("now", Timestamp.from(now))
+              .addValue("staleBefore", Timestamp.from(now.minus(maxAge)))
+              .addValue("retryBefore", Timestamp.from(now.minus(retryAfter)))) == 1;
+    }));
+  }
+
   /** Records a successful fetch, replacing the bank holidays if they changed. */
   void fetched(List<BankHoliday> holidays) {
     transaction.executeWithoutResult(status -> {
@@ -63,7 +83,8 @@ class BankHolidayStore {
       }
       // GOV.UK publishing what the SDK's copy has makes them GOV.UK's.
       jdbc.update("update bank_holidays.fetch_state set source = :source", Map.of("source", Source.GOV_UK.name()));
-      recordFetch(null);
+      jdbc.update("update bank_holidays.fetch_state set fetched_at = :now, last_attempt_error = null",
+          Map.of("now", now()));
     });
   }
 
@@ -72,7 +93,7 @@ class BankHolidayStore {
     transaction.executeWithoutResult(status -> {
       jdbc.getJdbcTemplate().execute(LOCK);
       seedIfNeeded();
-      recordFetch(error);
+      jdbc.update("update bank_holidays.fetch_state set last_attempt_error = :error", Map.of("error", error));
     });
   }
 
@@ -110,11 +131,6 @@ class BankHolidayStore {
     jdbc.update("insert into bank_holidays.fetch_state (id, source, updated_at) values (1, :source, :now) "
             + "on conflict (id) do update set source = excluded.source, updated_at = excluded.updated_at",
         Map.of("source", source.name(), "now", now()));
-  }
-
-  private void recordFetch(String error) {
-    jdbc.update("update bank_holidays.fetch_state set last_fetch_at = :now, last_fetch_error = :error",
-        new MapSqlParameterSource("now", now()).addValue("error", error));
   }
 
   private Timestamp now() {

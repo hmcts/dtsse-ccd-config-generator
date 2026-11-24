@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -46,6 +47,7 @@ class BankHolidaysIntegrationTest {
   private HttpServer govUk;
   private volatile int status;
   private volatile String feed;
+  private final AtomicInteger fetches = new java.util.concurrent.atomic.AtomicInteger();
 
   @BeforeAll
   static void migrate() {
@@ -66,6 +68,7 @@ class BankHolidaysIntegrationTest {
     feed = seedFeed().toString();
     govUk = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
     govUk.createContext("/bank-holidays.json", exchange -> {
+      fetches.incrementAndGet();
       byte[] body = feed.getBytes(StandardCharsets.UTF_8);
       exchange.sendResponseHeaders(status, body.length);
       exchange.getResponseBody().write(body);
@@ -182,35 +185,63 @@ class BankHolidaysIntegrationTest {
   }
 
   @Test
+  void fetchesOnceADayForAllInstances() {
+    withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> {
+      refresher.refresh();
+      refresher.refresh();
+    });
+    // Another instance, or a restart.
+    withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> refresher.refresh());
+
+    assertThat(fetches).hasValue(1);
+
+    ageLastFetch();
+    withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> refresher.refresh());
+
+    assertThat(fetches).hasValue(2);
+  }
+
+  @Test
   void leavesTheBankHolidaysAloneWhenGovUkPublishesNoChange() {
     withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> {
       refresher.refresh();
       Timestamp updated = jdbc.queryForObject("select updated_at from bank_holidays.fetch_state", Timestamp.class);
-      Timestamp fetched = jdbc.queryForObject("select last_fetch_at from bank_holidays.fetch_state", Timestamp.class);
+      Timestamp fetched = jdbc.queryForObject("select fetched_at from bank_holidays.fetch_state", Timestamp.class);
+      ageLastFetch();
 
       refresher.refresh();
 
       assertThat(jdbc.queryForObject("select updated_at from bank_holidays.fetch_state", Timestamp.class))
           .isEqualTo(updated);
-      assertThat(jdbc.queryForObject("select last_fetch_at from bank_holidays.fetch_state", Timestamp.class))
+      assertThat(jdbc.queryForObject("select fetched_at from bank_holidays.fetch_state", Timestamp.class))
           .isAfter(fetched);
       assertThat(source()).isEqualTo("GOV_UK");
     });
   }
 
   @Test
-  void keepsTheBankHolidaysWhenGovUkFails() {
+  void keepsTheBankHolidaysWhenGovUkFailsAndTriesAgainAtTheNextCheck() {
     LocalDate oneOff = LocalDate.of(2026, 6, 1);
     feed = withEvent(seedFeed(), "england-and-wales", oneOff, "A one-off bank holiday").toString();
 
     withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> {
       refresher.refresh();
+      ageLastFetch();
       status = 503;
 
       refresher.refresh();
 
       assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).isHoliday(oneOff)).isTrue();
       assertThat(fetchError()).contains("HTTP 503");
+
+      // Not again within the hour, then at the next check.
+      refresher.refresh();
+      assertThat(fetches).hasValue(2);
+      jdbc.update("update bank_holidays.fetch_state set last_attempt_at = last_attempt_at - interval '1 hour'");
+      status = 200;
+      refresher.refresh();
+      assertThat(fetches).hasValue(3);
+      assertThat(fetchError()).isNull();
     });
   }
 
@@ -247,7 +278,8 @@ class BankHolidaysIntegrationTest {
     feed = withEvent(seedFeed(), "england-and-wales", oneOff, "A one-off bank holiday").toString();
     withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> refresher.refresh());
 
-    // A restart while GOV.UK is down.
+    // A restart a day later while GOV.UK is down.
+    ageLastFetch();
     status = 503;
     withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> {
       refresher.refresh();
@@ -275,8 +307,13 @@ class BankHolidaysIntegrationTest {
     return jdbc.queryForObject("select source from bank_holidays.fetch_state", String.class);
   }
 
+  private static void ageLastFetch() {
+    jdbc.update("update bank_holidays.fetch_state set fetched_at = fetched_at - interval '1 day', "
+        + "last_attempt_at = last_attempt_at - interval '1 day'");
+  }
+
   private static String fetchError() {
-    return jdbc.queryForObject("select last_fetch_error from bank_holidays.fetch_state", String.class);
+    return jdbc.queryForObject("select last_attempt_error from bank_holidays.fetch_state", String.class);
   }
 
   private static ObjectNode seedFeed() {

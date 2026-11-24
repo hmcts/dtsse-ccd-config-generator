@@ -16,7 +16,9 @@ create table bank_holidays.fetch_state (
     source varchar(16) not null check (source in ('GOV_UK', 'SEED')),
     -- When bank_holiday was last replaced.
     updated_at timestamptz not null,
-    -- The last fetch from GOV.UK and its error, null after a fetch that succeeded.
-    last_fetch_at timestamptz,
-    last_fetch_error text
+    -- The last successful fetch from GOV.UK; instances fetch again once it is a day old.
+    fetched_at timestamptz,
+    -- The last fetch any instance started, and its error, null when it succeeded.
+    last_attempt_at timestamptz,
+    last_attempt_error text
 );

@@ -35,6 +35,7 @@ public class BankHolidaysAutoConfiguration {
       BankHolidays bankHolidays) {
     GovUkBankHolidays govUk = properties.getUrl() == null || properties.getUrl().isBlank() ? null
         : new GovUkBankHolidays(URI.create(properties.getUrl()), properties.getTimeout());
-    return new BankHolidaysRefresher(govUk, store, bankHolidays);
+    return new BankHolidaysRefresher(govUk, store, bankHolidays, properties.getMaxAge(),
+        properties.getRefresh().getDelay());
   }
 }
