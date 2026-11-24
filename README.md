@@ -96,7 +96,7 @@ dependencies {
 
 Only declare the libraries you need, including `ccd-data-migration-support` when using
 `CcdDataMigrationTask`; `decentralised-runtime` does not bring it in. The BOM also covers
-`ccd-config-generator` and `task-management`.
+`ccd-config-generator`, `task-management` and [`bank-holidays`](docs/bank-holidays.md).
 It supplies version constraints, not forced versions: normal Gradle conflict resolution still applies.
 
 After completing a CCD data migration, follow the
