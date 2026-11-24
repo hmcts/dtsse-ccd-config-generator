@@ -27,7 +27,7 @@ class WorkingDayIndicator {
 
   boolean isWorkingDay(LocalDate date, List<String> calendars, List<String> nonWorkingDaysOfWeek) {
     return !nonWorkingDaysOfWeek.contains(date.getDayOfWeek().toString())
-        && calendars.stream().noneMatch(calendar -> bankHolidays.isBankHoliday(division(calendar), date));
+        && calendars.stream().noneMatch(calendar -> bankHolidays.calendar(division(calendar)).isHoliday(date));
   }
 
   LocalDate getNextWorkingDay(LocalDate date, List<String> calendars, List<String> nonWorkingDaysOfWeek) {

@@ -82,7 +82,7 @@ class BankHolidaysIntegrationTest {
   @Test
   void seedsTheBankHolidaysFromTheSdkBeforeTheFirstFetch() {
     withBankHolidays("", (bankHolidays, refresher) -> {
-      assertThat(bankHolidays.isBankHoliday(ENGLAND_AND_WALES, CHRISTMAS_2026)).isTrue();
+      assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).isHoliday(CHRISTMAS_2026)).isTrue();
       assertThat(source()).isEqualTo("SEED");
     });
   }
@@ -93,45 +93,74 @@ class BankHolidaysIntegrationTest {
       LocalDate secondJanuary = LocalDate.of(2026, 1, 2);
       LocalDate stPatricksDay = LocalDate.of(2026, 3, 17);
 
-      assertThat(bankHolidays.isBankHoliday(SCOTLAND, secondJanuary)).isTrue();
-      assertThat(bankHolidays.isBankHoliday(ENGLAND_AND_WALES, secondJanuary)).isFalse();
-      assertThat(bankHolidays.isBankHoliday(NORTHERN_IRELAND, stPatricksDay)).isTrue();
-      assertThat(bankHolidays.isBankHoliday(ENGLAND_AND_WALES, stPatricksDay)).isFalse();
-      assertThat(bankHolidays.between(ENGLAND_AND_WALES, LocalDate.of(2026, 12, 1), LocalDate.of(2027, 1, 2)))
+      assertThat(bankHolidays.calendar(SCOTLAND).isHoliday(secondJanuary)).isTrue();
+      assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).isHoliday(secondJanuary)).isFalse();
+      assertThat(bankHolidays.calendar(NORTHERN_IRELAND).isHoliday(stPatricksDay)).isTrue();
+      assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).isHoliday(stPatricksDay)).isFalse();
+      assertThat(bankHolidays.holidays(ENGLAND_AND_WALES, LocalDate.of(2026, 12, 1), LocalDate.of(2027, 1, 2)))
           .extracting(BankHoliday::title)
           .containsExactly("Christmas Day", "Boxing Day", "New Year’s Day");
     });
   }
 
   @Test
-  void countsWorkingDaysPastWeekendsAndBankHolidays() {
+  void shiftsByWorkingDaysPastWeekendsAndBankHolidays() {
     withBankHolidays("", (bankHolidays, refresher) -> {
+      WorkingDayCalendar calendar = bankHolidays.calendar(ENGLAND_AND_WALES);
       LocalDate christmasEve2026 = LocalDate.of(2026, 12, 24);
+      LocalDate tuesdayAfter = LocalDate.of(2026, 12, 29);
 
       // Christmas Day is a Friday, and Boxing Day's substitute the Monday after.
-      assertThat(bankHolidays.addWorkingDays(ENGLAND_AND_WALES, christmasEve2026, 1))
-          .isEqualTo(LocalDate.of(2026, 12, 29));
-      assertThat(bankHolidays.addWorkingDays(ENGLAND_AND_WALES, LocalDate.of(2026, 12, 29), -1))
-          .isEqualTo(christmasEve2026);
-      assertThat(bankHolidays.addWorkingDays(ENGLAND_AND_WALES, CHRISTMAS_2026, 0)).isEqualTo(CHRISTMAS_2026);
-      assertThat(bankHolidays.isWorkingDay(ENGLAND_AND_WALES, LocalDate.of(2026, 12, 26))).isFalse();
+      assertThat(calendar.shift(christmasEve2026, 1)).isEqualTo(tuesdayAfter);
+      assertThat(calendar.shift(tuesdayAfter, -1)).isEqualTo(christmasEve2026);
+      assertThat(calendar.shift(CHRISTMAS_2026, 1)).isEqualTo(tuesdayAfter);
+      assertThat(calendar.shift(CHRISTMAS_2026, 0)).isEqualTo(CHRISTMAS_2026);
+      assertThat(calendar.isWorkingDay(LocalDate.of(2026, 12, 28))).isFalse();
+    });
+  }
+
+  @Test
+  void rollsOntoAWorkingDay() {
+    withBankHolidays("", (bankHolidays, refresher) -> {
+      WorkingDayCalendar calendar = bankHolidays.calendar(ENGLAND_AND_WALES);
+
+      assertThat(calendar.nextOrSame(CHRISTMAS_2026)).isEqualTo(LocalDate.of(2026, 12, 29));
+      assertThat(calendar.previousOrSame(LocalDate.of(2026, 12, 28))).isEqualTo(LocalDate.of(2026, 12, 24));
+      assertThat(calendar.nextOrSame(LocalDate.of(2026, 12, 24))).isEqualTo(LocalDate.of(2026, 12, 24));
     });
   }
 
   @Test
   void refusesDatesInYearsGovUkHasNotPublished() {
     withBankHolidays("", (bankHolidays, refresher) -> {
-      LocalDate knownUntil = bankHolidays.knownUntil(ENGLAND_AND_WALES);
+      WorkingDayCalendar calendar = bankHolidays.calendar(ENGLAND_AND_WALES);
+      LocalDate knownUntil = calendar.knownUntil();
 
       assertThat(knownUntil).isEqualTo(LocalDate.of(2028, 12, 31));
-      assertThat(bankHolidays.knownFrom(ENGLAND_AND_WALES)).isEqualTo(LocalDate.of(2019, 1, 1));
-      assertThatThrownBy(() -> bankHolidays.isWorkingDay(ENGLAND_AND_WALES, knownUntil.plusDays(1)))
+      assertThatThrownBy(() -> calendar.isWorkingDay(knownUntil.plusDays(1)))
           .isInstanceOf(UnknownBankHolidaysException.class)
           .hasMessageContaining("known from 2019-01-01 to 2028-12-31");
-      assertThatThrownBy(() -> bankHolidays.addWorkingDays(ENGLAND_AND_WALES, knownUntil.minusDays(3), 5))
+      assertThatThrownBy(() -> calendar.isHoliday(LocalDate.of(2018, 12, 25)))
           .isInstanceOf(UnknownBankHolidaysException.class);
-      assertThatThrownBy(() -> bankHolidays.between(ENGLAND_AND_WALES, CHRISTMAS_2026, knownUntil.plusDays(2)))
+      assertThatThrownBy(() -> calendar.shift(knownUntil.minusDays(3), 5))
           .isInstanceOf(UnknownBankHolidaysException.class);
+      assertThatThrownBy(() -> bankHolidays.holidays(ENGLAND_AND_WALES, CHRISTMAS_2026, knownUntil.plusDays(2)))
+          .isInstanceOf(UnknownBankHolidaysException.class);
+    });
+  }
+
+  @Test
+  void keepsACalendarTakenBeforeARefresh() {
+    LocalDate oneOff = LocalDate.of(2026, 6, 1);
+    feed = withEvent(seedFeed(), "england-and-wales", oneOff, "A one-off bank holiday").toString();
+
+    withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> {
+      WorkingDayCalendar before = bankHolidays.calendar(ENGLAND_AND_WALES);
+
+      refresher.refresh();
+
+      assertThat(before.isHoliday(oneOff)).isFalse();
+      assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).isHoliday(oneOff)).isTrue();
     });
   }
 
@@ -141,12 +170,12 @@ class BankHolidaysIntegrationTest {
     feed = withEvent(seedFeed(), "england-and-wales", oneOff, "A one-off bank holiday").toString();
 
     withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> {
-      assertThat(bankHolidays.isBankHoliday(ENGLAND_AND_WALES, oneOff)).isFalse();
+      assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).isHoliday(oneOff)).isFalse();
 
       refresher.refresh();
 
-      assertThat(bankHolidays.isBankHoliday(ENGLAND_AND_WALES, oneOff)).isTrue();
-      assertThat(bankHolidays.isBankHoliday(SCOTLAND, oneOff)).isFalse();
+      assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).isHoliday(oneOff)).isTrue();
+      assertThat(bankHolidays.calendar(SCOTLAND).isHoliday(oneOff)).isFalse();
       assertThat(source()).isEqualTo("GOV_UK");
       assertThat(fetchError()).isNull();
     });
@@ -180,7 +209,7 @@ class BankHolidaysIntegrationTest {
 
       refresher.refresh();
 
-      assertThat(bankHolidays.isBankHoliday(ENGLAND_AND_WALES, oneOff)).isTrue();
+      assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).isHoliday(oneOff)).isTrue();
       assertThat(fetchError()).contains("HTTP 503");
     });
   }
@@ -194,7 +223,7 @@ class BankHolidaysIntegrationTest {
     withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> {
       refresher.refresh();
 
-      assertThat(bankHolidays.isBankHoliday(SCOTLAND, LocalDate.of(2026, 1, 2))).isTrue();
+      assertThat(bankHolidays.calendar(SCOTLAND).isHoliday(LocalDate.of(2026, 1, 2))).isTrue();
       assertThat(source()).isEqualTo("SEED");
       assertThat(fetchError()).contains("no scotland events");
     });
@@ -207,7 +236,7 @@ class BankHolidaysIntegrationTest {
     jdbc.update("insert into bank_holidays.fetch_state (source, updated_at) values ('GOV_UK', now())");
 
     withBankHolidays("", (bankHolidays, refresher) -> {
-      assertThat(bankHolidays.isBankHoliday(ENGLAND_AND_WALES, CHRISTMAS_2026)).isTrue();
+      assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).isHoliday(CHRISTMAS_2026)).isTrue();
       assertThat(source()).isEqualTo("SEED");
     });
   }
@@ -223,7 +252,7 @@ class BankHolidaysIntegrationTest {
     withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> {
       refresher.refresh();
 
-      assertThat(bankHolidays.isBankHoliday(ENGLAND_AND_WALES, oneOff)).isTrue();
+      assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).isHoliday(oneOff)).isTrue();
     });
   }
 
