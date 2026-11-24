@@ -32,7 +32,8 @@ class BankHolidayStore {
 
   /** The stored bank holidays, first adding the years the SDK's copy of GOV.UK's feed has that they lack. */
   List<BankHoliday> load() {
-    transaction.executeWithoutResult(status -> {
+    // Read in the transaction that adds them, so a caller's own transaction can't hide what it added.
+    return transaction.execute(status -> {
       jdbc.getJdbcTemplate().execute(LOCK);
       Set<String> stored = new HashSet<>(jdbc.getJdbcTemplate().queryForList(
           "select distinct division || ':' || extract(year from date)::int from bank_holidays.bank_holiday",
@@ -43,10 +44,10 @@ class BankHolidayStore {
       if (!missing.isEmpty()) {
         write(missing);
       }
+      return jdbc.query("select division, date, title, notes from bank_holidays.bank_holiday", (row, i) ->
+          new BankHoliday(Division.valueOf(row.getString("division")), row.getDate("date").toLocalDate(),
+              row.getString("title"), row.getString("notes")));
     });
-    return jdbc.query("select division, date, title, notes from bank_holidays.bank_holiday", (row, i) ->
-        new BankHoliday(Division.valueOf(row.getString("division")), row.getDate("date").toLocalDate(),
-            row.getString("title"), row.getString("notes")));
   }
 
   /** Replaces the bank holidays of the divisions and years the given ones are in, keeping the rest. */

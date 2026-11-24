@@ -193,6 +193,21 @@ class BankHolidaysIntegrationTest {
   }
 
   @Test
+  void startsWithoutItsDatabaseAndReadsTheStoreOnTheFirstLookup() {
+    // Nothing listens on port 1, as when an application starts to generate its CCD definition.
+    new ApplicationContextRunner()
+        .withConfiguration(AutoConfigurations.of(BankHolidaysAutoConfiguration.class))
+        .withBean(DataSource.class, () -> new DriverManagerDataSource("jdbc:postgresql://localhost:1/none"))
+        .run(context -> assertThat(context).hasNotFailed().hasSingleBean(BankHolidays.class));
+
+    withBankHolidays((bankHolidays, refresher) -> {
+      assertThat(stored()).isZero();
+      assertThat(bankHolidays.isBankHoliday(ENGLAND_AND_WALES, CHRISTMAS_2026)).isTrue();
+      assertThat(stored()).isPositive();
+    });
+  }
+
+  @Test
   void anApplicationsOwnBankHolidaysReplaceTheStoreAndFetch() {
     new ApplicationContextRunner()
         .withConfiguration(AutoConfigurations.of(BankHolidaysAutoConfiguration.class))
