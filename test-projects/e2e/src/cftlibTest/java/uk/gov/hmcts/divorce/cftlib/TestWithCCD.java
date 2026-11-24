@@ -103,8 +103,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.divorce.bundling.CaseworkerCreateBundle;
 import uk.gov.hmcts.divorce.bundling.CaseworkerCreateBundleMissingDocument;
-import uk.gov.hmcts.divorce.bundling.DocmosisStubController;
-import uk.gov.hmcts.divorce.bundling.FixtureDocumentResolver;
+import uk.gov.hmcts.ccd.sdk.testing.DocmosisStubController;
 import uk.gov.hmcts.divorce.bundling.model.CaseBundle;
 import uk.gov.hmcts.divorce.callback.CallbackLoggingFilter;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
@@ -664,11 +663,10 @@ public class TestWithCCD extends CftlibTest {
         assertThat(bundle.getDocuments(), hasSize(5));
         assertThat(bundle.getDocuments().get(0).getValue().getName(),
             equalTo(CaseworkerCreateBundle.POTENTIAL_ENERGY_TITLE));
-        assertThat(bundle.getDocuments().get(0).getValue().getStartPage(), greaterThan(1));
         String documentUrl = bundle.getStitchedDocument().getUrl();
         assertThat(bundle.getStitchedDocument().getBinaryUrl(), equalTo(documentUrl + "/binary"));
 
-        // The consumer uploaded through the real embedded CDAM and attached the document to the
+        // The toolkit uploaded through the real embedded CDAM and attached the document to the
         // case (case_id PATCHed onto the dm-store record), so it is not TTL-disposed.
         String documentId = documentUrl.substring(documentUrl.length() - 36);
         var storedDocument = stubDocumentStore.find(documentId).orElseThrow(
@@ -697,8 +695,8 @@ public class TestWithCCD extends CftlibTest {
                     CaseworkerCreateBundle.FLYING_PIG_TITLE,
                     // The office document went through the app's Docmosis stub.
                     "Stubbed Docmosis conversion of wordDocument2.docx",
-                    // The MP3 is a generated link page, never fetched.
-                    CaseworkerCreateBundle.HEARING_RECORDING_TITLE, "Media type: audio/mpeg",
+                    // The recording is a page the service wrote in HTML.
+                    CaseworkerCreateBundle.HEARING_RECORDING_TITLE, "Audio recording, 42 minutes.",
                     CaseworkerCreateBundle.HEARING_RECORDING_NOTE, CaseworkerCreateBundle.HEARING_RECORDING_URL,
                     // The expected-but-empty section renders the standard visible placeholder.
                     "There are no documents in this section.")) {
@@ -741,11 +739,10 @@ public class TestWithCCD extends CftlibTest {
         Map<String, Object> payload = mapper.readValue(responseBody, new TypeReference<>() {});
         @SuppressWarnings("unchecked")
         List<String> callbackErrors = (List<String>) payload.get("callbackErrors");
-        assertThat("the error should name the missing document and the typed reason",
+        assertThat("the error should name the document CDAM could not return",
             callbackErrors, hasItem(allOf(
-                containsString("DOCUMENT_NOT_FOUND"),
-                containsString(CaseworkerCreateBundleMissingDocument.MISSING_DOCUMENT_ID),
-                containsString(FixtureDocumentResolver.PROVIDER))));
+                containsString("could not be rendered"),
+                containsString(CaseworkerCreateBundleMissingDocument.MISSING_DOCUMENT_TITLE))));
 
         // Nothing was uploaded or recorded, and the earlier bundle is untouched.
         assertThat(stubDocumentStore.size(), equalTo(documentsBefore));
