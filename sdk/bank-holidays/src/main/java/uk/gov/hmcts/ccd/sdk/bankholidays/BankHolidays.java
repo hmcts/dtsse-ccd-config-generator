@@ -75,7 +75,8 @@ public class BankHolidays {
     }
   }
 
-  void replace(Collection<BankHoliday> replacement) {
+  // Under the same lock as the first lookup, so a refresh is never overwritten by an older first read.
+  synchronized void replace(Collection<BankHoliday> replacement) {
     Map<Division, TreeMap<LocalDate, BankHoliday>> byDivision = new EnumMap<>(Division.class);
     for (Division division : Division.values()) {
       byDivision.put(division, new TreeMap<>());
