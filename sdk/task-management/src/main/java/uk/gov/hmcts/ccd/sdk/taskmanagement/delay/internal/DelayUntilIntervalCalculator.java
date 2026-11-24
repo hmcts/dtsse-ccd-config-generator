@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement.delay.internal;
 
 import static uk.gov.hmcts.ccd.sdk.taskmanagement.delay.internal.DelayUntilIntervalData.MUST_BE_WORKING_DAY_NEXT;
+import static uk.gov.hmcts.ccd.sdk.taskmanagement.delay.internal.DelayUntilIntervalData.MUST_BE_WORKING_DAY_NO;
 import static uk.gov.hmcts.ccd.sdk.taskmanagement.delay.internal.DelayUntilIntervalData.MUST_BE_WORKING_DAY_PREVIOUS;
 
 import java.time.LocalDate;
@@ -39,8 +40,11 @@ class DelayUntilIntervalCalculator implements DelayUntilCalculator {
   }
 
   private LocalDate considerAllDaysAsWorking(DelayUntilIntervalData delayUntilIntervalData, LocalDate localDate) {
-    WorkingDayIndicator.WorkingDays workingDays = workingDaysOf(delayUntilIntervalData);
     LocalDate calculatedDate = localDate.plusDays(delayUntilIntervalData.getIntervalDays());
+    if (delayUntilIntervalData.getMustBeWorkingDay().equalsIgnoreCase(MUST_BE_WORKING_DAY_NO)) {
+      return calculatedDate;
+    }
+    WorkingDayIndicator.WorkingDays workingDays = workingDaysOf(delayUntilIntervalData);
     if (workingDays.isWorkingDay(calculatedDate)) {
       return calculatedDate;
     }

@@ -294,6 +294,34 @@ class DelayUntilIntervalCalculatorTest {
         .isInstanceOf(UnknownBankHolidaysException.class);
   }
 
+  @Test
+  void shouldNotNeedBankHolidaysForCalendarDaysThatNeedNotBeWorkingDays() {
+    DelayUntilRequest delayUntilRequest = DelayUntilRequest.builder()
+        .delayUntilOrigin("2030-01-01T20:00")
+        .delayUntilIntervalDays(3)
+        .delayUntilNonWorkingCalendar(CALENDAR_URI)
+        .delayUntilSkipNonWorkingDays(false)
+        .delayUntilMustBeWorkingDay(MUST_BE_WORKING_DAY_NO)
+        .build();
+
+    assertThat(delayUntilIntervalCalculator.calculateDate(delayUntilRequest))
+        .isEqualTo(LocalDateTime.of(2030, 1, 4, 20, 0));
+  }
+
+  @Test
+  void shouldRefuseEveryDayOfTheWeekBeingNonWorking() {
+    DelayUntilRequest delayUntilRequest = DelayUntilRequest.builder()
+        .delayUntilOrigin(GIVEN_DATE.format(DATE_FORMATTER) + "T20:00")
+        .delayUntilIntervalDays(1)
+        .delayUntilNonWorkingCalendar(CALENDAR_URI)
+        .delayUntilNonWorkingDaysOfWeek("MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY")
+        .build();
+
+    assertThatThrownBy(() -> delayUntilIntervalCalculator.calculateDate(delayUntilRequest))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageStartingWith("Every day of the week is non-working");
+  }
+
   private static DelayUntilIntervalCalculator calculator(LocalDate... bankHolidays) {
     return new DelayUntilIntervalCalculator(new WorkingDayIndicator(BankHolidays.of(Stream.concat(
             Arrays.stream(BANK_HOLIDAYS_2022), Arrays.stream(bankHolidays))

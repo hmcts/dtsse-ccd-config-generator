@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement.delay.internal;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
@@ -19,6 +20,9 @@ class WorkingDayIndicator {
   private final BankHolidays bankHolidays;
 
   WorkingDays of(List<String> calendars, List<String> nonWorkingDaysOfWeek) {
+    if (Arrays.stream(DayOfWeek.values()).allMatch(day -> nonWorkingDaysOfWeek.contains(day.toString()))) {
+      throw new IllegalArgumentException("Every day of the week is non-working: " + nonWorkingDaysOfWeek);
+    }
     return new WorkingDays(calendars.stream().map(WorkingDayIndicator::division).toList(), nonWorkingDaysOfWeek);
   }
 
