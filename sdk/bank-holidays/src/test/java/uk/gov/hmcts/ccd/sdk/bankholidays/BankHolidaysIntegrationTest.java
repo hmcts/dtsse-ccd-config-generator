@@ -16,7 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -40,6 +40,7 @@ class BankHolidaysIntegrationTest {
 
   private static final ObjectMapper JSON = new ObjectMapper();
   private static final LocalDate CHRISTMAS_2026 = LocalDate.of(2026, 12, 25);
+  private static final LocalDate ONE_OFF = LocalDate.of(2026, 6, 1);
 
   private static DataSource dataSource;
   private static JdbcTemplate jdbc;
@@ -47,7 +48,6 @@ class BankHolidaysIntegrationTest {
   private HttpServer govUk;
   private volatile int status;
   private volatile String feed;
-  private final AtomicInteger fetches = new AtomicInteger();
 
   @BeforeAll
   static void migrate() {
@@ -63,13 +63,10 @@ class BankHolidaysIntegrationTest {
   @BeforeEach
   void startGovUk() throws Exception {
     jdbc.update("delete from bank_holidays.bank_holiday");
-    jdbc.update("update bank_holidays.fetch_state set fetched_at = null, last_attempt_at = null, "
-        + "last_attempt_error = null");
     status = 200;
     feed = seedFeed().toString();
     govUk = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
     govUk.createContext("/bank-holidays.json", exchange -> {
-      fetches.incrementAndGet();
       byte[] body = feed.getBytes(StandardCharsets.UTF_8);
       exchange.sendResponseHeaders(status, body.length);
       exchange.getResponseBody().write(body);
@@ -84,212 +81,70 @@ class BankHolidaysIntegrationTest {
   }
 
   @Test
-  void seedsTheBankHolidaysFromTheSdkBeforeTheFirstFetch() {
-    withBankHolidays("", (bankHolidays, refresher) -> {
-      assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).isBankHoliday(CHRISTMAS_2026)).isTrue();
-      assertThat(storedHolidays()).isPositive();
+  void seedsAnEmptyStoreFromTheSdksCopy() {
+    withBankHolidays((bankHolidays, refresher) -> {
+      assertThat(bankHolidays.isBankHoliday(ENGLAND_AND_WALES, CHRISTMAS_2026)).isTrue();
+      assertThat(stored()).isPositive();
     });
   }
 
   @Test
   void knowsEachDivisionsOwnBankHolidays() {
-    withBankHolidays("", (bankHolidays, refresher) -> {
+    withBankHolidays((bankHolidays, refresher) -> {
       LocalDate secondJanuary = LocalDate.of(2026, 1, 2);
       LocalDate stPatricksDay = LocalDate.of(2026, 3, 17);
 
-      assertThat(bankHolidays.calendar(SCOTLAND).isBankHoliday(secondJanuary)).isTrue();
-      assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).isBankHoliday(secondJanuary)).isFalse();
-      assertThat(bankHolidays.calendar(NORTHERN_IRELAND).isBankHoliday(stPatricksDay)).isTrue();
-      assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).isBankHoliday(stPatricksDay)).isFalse();
-      assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).holidays(LocalDate.of(2026, 12, 1), LocalDate.of(2027, 1, 2)))
-          .extracting(BankHoliday::title)
-          .containsExactly("Christmas Day", "Boxing Day", "New Year’s Day");
+      assertThat(bankHolidays.isBankHoliday(SCOTLAND, secondJanuary)).isTrue();
+      assertThat(bankHolidays.isBankHoliday(ENGLAND_AND_WALES, secondJanuary)).isFalse();
+      assertThat(bankHolidays.isBankHoliday(NORTHERN_IRELAND, stPatricksDay)).isTrue();
+      assertThat(bankHolidays.isBankHoliday(ENGLAND_AND_WALES, stPatricksDay)).isFalse();
+      assertThat(bankHolidays.holidays(ENGLAND_AND_WALES))
+          .extracting(BankHoliday::date)
+          .isSorted()
+          .contains(CHRISTMAS_2026);
     });
   }
 
   @Test
-  void shiftsByWorkingDaysPastWeekendsAndBankHolidays() {
-    withBankHolidays("", (bankHolidays, refresher) -> {
-      WorkingDayCalendar calendar = bankHolidays.calendar(ENGLAND_AND_WALES);
-      LocalDate christmasEve2026 = LocalDate.of(2026, 12, 24);
-      LocalDate tuesdayAfter = LocalDate.of(2026, 12, 29);
+  void refusesDatesInYearsWithNoBankHolidaysKnown() {
+    BankHolidays bankHolidays = BankHolidays.of(List.of(
+        new BankHoliday(ENGLAND_AND_WALES, CHRISTMAS_2026, "Christmas Day", ""),
+        new BankHoliday(ENGLAND_AND_WALES, LocalDate.of(2028, 12, 25), "Christmas Day", "")));
 
-      // Christmas Day is a Friday, and Boxing Day's substitute the Monday after.
-      assertThat(calendar.shift(christmasEve2026, 1)).isEqualTo(tuesdayAfter);
-      assertThat(calendar.shift(tuesdayAfter, -1)).isEqualTo(christmasEve2026);
-      assertThat(calendar.shift(CHRISTMAS_2026, 1)).isEqualTo(tuesdayAfter);
-      assertThat(calendar.shift(CHRISTMAS_2026, 0)).isEqualTo(CHRISTMAS_2026);
-      assertThat(calendar.isWorkingDay(LocalDate.of(2026, 12, 28))).isFalse();
-    });
-  }
-
-  @Test
-  void rollsOntoAWorkingDay() {
-    withBankHolidays("", (bankHolidays, refresher) -> {
-      WorkingDayCalendar calendar = bankHolidays.calendar(ENGLAND_AND_WALES);
-
-      assertThat(calendar.nextOrSame(CHRISTMAS_2026)).isEqualTo(LocalDate.of(2026, 12, 29));
-      assertThat(calendar.previousOrSame(LocalDate.of(2026, 12, 28))).isEqualTo(LocalDate.of(2026, 12, 24));
-      assertThat(calendar.nextOrSame(LocalDate.of(2026, 12, 24))).isEqualTo(LocalDate.of(2026, 12, 24));
-    });
-  }
-
-  @Test
-  void refusesDatesInYearsGovUkHasNotPublished() {
-    withBankHolidays("", (bankHolidays, refresher) -> {
-      WorkingDayCalendar calendar = bankHolidays.calendar(ENGLAND_AND_WALES);
-      LocalDate knownUntil = calendar.knownUntil();
-
-      assertThat(knownUntil).isEqualTo(LocalDate.of(2028, 12, 31));
-      assertThatThrownBy(() -> calendar.isWorkingDay(knownUntil.plusDays(1)))
-          .isInstanceOf(UnknownBankHolidaysException.class)
-          .hasMessageContaining("known from 2019-01-01 to 2028-12-31");
-      assertThatThrownBy(() -> calendar.isBankHoliday(LocalDate.of(2018, 12, 25)))
-          .isInstanceOf(UnknownBankHolidaysException.class);
-      assertThatThrownBy(() -> calendar.shift(knownUntil.minusDays(3), 5))
-          .isInstanceOf(UnknownBankHolidaysException.class);
-      assertThatThrownBy(() -> calendar.holidays(CHRISTMAS_2026, knownUntil.plusDays(2)))
-          .isInstanceOf(UnknownBankHolidaysException.class);
-    });
-  }
-
-  @Test
-  void keepsACalendarTakenBeforeARefresh() {
-    LocalDate oneOff = LocalDate.of(2026, 6, 1);
-    feed = withEvent(seedFeed(), "england-and-wales", oneOff, "A one-off bank holiday").toString();
-
-    withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> {
-      WorkingDayCalendar before = bankHolidays.calendar(ENGLAND_AND_WALES);
-
-      refresher.refresh();
-
-      assertThat(before.isBankHoliday(oneOff)).isFalse();
-      assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).isBankHoliday(oneOff)).isTrue();
-    });
+    assertThat(bankHolidays.isBankHoliday(ENGLAND_AND_WALES, LocalDate.of(2026, 12, 24))).isFalse();
+    assertThatThrownBy(() -> bankHolidays.isBankHoliday(ENGLAND_AND_WALES, LocalDate.of(2027, 12, 25)))
+        .isInstanceOf(UnknownBankHolidaysException.class)
+        .hasMessage("ENGLAND_AND_WALES bank holidays are not known for 2027");
+    assertThatThrownBy(() -> bankHolidays.isBankHoliday(SCOTLAND, CHRISTMAS_2026))
+        .isInstanceOf(UnknownBankHolidaysException.class);
   }
 
   @Test
   void takesTheBankHolidaysGovUkPublishes() {
-    LocalDate oneOff = LocalDate.of(2026, 6, 1);
-    feed = withEvent(seedFeed(), "england-and-wales", oneOff, "A one-off bank holiday").toString();
+    feed = withEvent(seedFeed(), ONE_OFF).toString();
 
-    withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> {
-      assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).isBankHoliday(oneOff)).isFalse();
+    withBankHolidays((bankHolidays, refresher) -> {
+      assertThat(bankHolidays.isBankHoliday(ENGLAND_AND_WALES, ONE_OFF)).isFalse();
 
       refresher.refresh();
 
-      assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).isBankHoliday(oneOff)).isTrue();
-      assertThat(bankHolidays.calendar(SCOTLAND).isBankHoliday(oneOff)).isFalse();
-      assertThat(fetchError()).isNull();
+      assertThat(bankHolidays.isBankHoliday(ENGLAND_AND_WALES, ONE_OFF)).isTrue();
     });
+    // Another instance, or a restart, reads them from the store.
+    withBankHolidays((bankHolidays, refresher) ->
+        assertThat(bankHolidays.isBankHoliday(ENGLAND_AND_WALES, ONE_OFF)).isTrue());
   }
 
   @Test
-  void fetchesOnceADayForAllInstances() {
-    withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> {
-      refresher.refresh();
-      refresher.refresh();
-    });
-    // Another instance, or a restart.
-    withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> refresher.refresh());
+  void takesGovUksCorrectionsToAYearItPublishes() {
+    feed = withEvent(seedFeed(), ONE_OFF).toString();
+    withBankHolidays((bankHolidays, refresher) -> refresher.refresh());
 
-    assertThat(fetches).hasValue(1);
-
-    ageLastFetch();
-    withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> refresher.refresh());
-
-    assertThat(fetches).hasValue(2);
-  }
-
-  @Test
-  void keepsTheBankHolidaysWhenGovUkFailsAndTriesAgainAtTheNextCheck() {
-    LocalDate oneOff = LocalDate.of(2026, 6, 1);
-    feed = withEvent(seedFeed(), "england-and-wales", oneOff, "A one-off bank holiday").toString();
-
-    withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> {
-      refresher.refresh();
-      ageLastFetch();
-      status = 503;
-
+    feed = seedFeed().toString();
+    withBankHolidays((bankHolidays, refresher) -> {
       refresher.refresh();
 
-      assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).isBankHoliday(oneOff)).isTrue();
-      assertThat(fetchError()).contains("HTTP 503");
-
-      // Not again within the hour, then at the next check.
-      refresher.refresh();
-      assertThat(fetches).hasValue(2);
-      jdbc.update("update bank_holidays.fetch_state set last_attempt_at = last_attempt_at - interval '1 hour'");
-      status = 200;
-      refresher.refresh();
-      assertThat(fetches).hasValue(3);
-      assertThat(fetchError()).isNull();
-    });
-  }
-
-  @Test
-  void refusesAFeedMissingADivision() {
-    ObjectNode partial = seedFeed();
-    partial.remove("scotland");
-    feed = partial.toString();
-
-    withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> {
-      refresher.refresh();
-
-      assertThat(bankHolidays.calendar(SCOTLAND).isBankHoliday(LocalDate.of(2026, 1, 2))).isTrue();
-      assertThat(fetchError()).contains("no scotland events");
-    });
-  }
-
-  @Test
-  void prefersTheSdksCopyToStoredBankHolidaysItReachesBeyond() {
-    jdbc.update("insert into bank_holidays.bank_holiday (division, date, title, notes) values "
-        + "('ENGLAND_AND_WALES', '2020-12-25', 'Christmas Day', '')");
-
-    withBankHolidays("", (bankHolidays, refresher) -> {
-      assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).isBankHoliday(CHRISTMAS_2026)).isTrue();
-    });
-  }
-
-  @Test
-  void keepsStoredBankHolidaysThatReachAsFarAsTheSdksCopy() {
-    LocalDate oneOff = LocalDate.of(2026, 6, 1);
-    feed = withEvent(seedFeed(), "england-and-wales", oneOff, "A one-off bank holiday").toString();
-    withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> refresher.refresh());
-
-    // A restart a day later while GOV.UK is down.
-    ageLastFetch();
-    status = 503;
-    withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> {
-      refresher.refresh();
-
-      assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).isBankHoliday(oneOff)).isTrue();
-    });
-  }
-
-  @Test
-  void refusesWeekendsAndShiftsOutsideTheKnownYears() {
-    withBankHolidays("", (bankHolidays, refresher) -> {
-      WorkingDayCalendar calendar = bankHolidays.calendar(ENGLAND_AND_WALES);
-      LocalDate unknownSaturday = LocalDate.of(2018, 12, 29);
-
-      assertThatThrownBy(() -> calendar.isWorkingDay(unknownSaturday))
-          .isInstanceOf(UnknownBankHolidaysException.class);
-      assertThatThrownBy(() -> calendar.nextOrSame(unknownSaturday))
-          .isInstanceOf(UnknownBankHolidaysException.class);
-      assertThatThrownBy(() -> calendar.shift(CHRISTMAS_2026, Integer.MIN_VALUE))
-          .isInstanceOf(UnknownBankHolidaysException.class);
-    });
-  }
-
-  @Test
-  void refusesAReversedRangeAndGivesNoneForAnEmptyOne() {
-    withBankHolidays("", (bankHolidays, refresher) -> {
-      WorkingDayCalendar calendar = bankHolidays.calendar(ENGLAND_AND_WALES);
-
-      assertThat(calendar.holidays(CHRISTMAS_2026, CHRISTMAS_2026)).isEmpty();
-      assertThatThrownBy(() -> calendar.holidays(CHRISTMAS_2026, CHRISTMAS_2026.minusDays(1)))
-          .isInstanceOf(IllegalArgumentException.class);
+      assertThat(bankHolidays.isBankHoliday(ENGLAND_AND_WALES, ONE_OFF)).isFalse();
     });
   }
 
@@ -306,85 +161,54 @@ class BankHolidaysIntegrationTest {
     });
     feed = later.toString();
 
-    withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> {
+    withBankHolidays((bankHolidays, refresher) -> {
       refresher.refresh();
 
-      assertThat(fetchError()).isNull();
-      assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).isBankHoliday(LocalDate.of(2019, 12, 25))).isTrue();
+      assertThat(bankHolidays.isBankHoliday(ENGLAND_AND_WALES, LocalDate.of(2019, 12, 25))).isTrue();
     });
   }
 
   @Test
-  void refusesAFeedMissingAYear() {
-    ObjectNode gap = seedFeed();
-    ArrayNode events = (ArrayNode) gap.path("england-and-wales").path("events");
-    for (int i = events.size() - 1; i >= 0; i--) {
-      if (events.get(i).path("date").asText().startsWith("2024")) {
-        events.remove(i);
-      }
-    }
-    feed = gap.toString();
+  void keepsTheBankHolidaysWhenGovUkFails() {
+    feed = withEvent(seedFeed(), ONE_OFF).toString();
+    withBankHolidays((bankHolidays, refresher) -> refresher.refresh());
 
-    withBankHolidays(govUkUrl(), (bankHolidays, refresher) -> {
+    status = 503;
+    withBankHolidays((bankHolidays, refresher) -> {
       refresher.refresh();
 
-      assertThat(fetchError()).contains("miss a year between 2019 and 2028");
-      assertThat(bankHolidays.calendar(ENGLAND_AND_WALES).isBankHoliday(LocalDate.of(2024, 12, 25))).isTrue();
+      assertThat(bankHolidays.isBankHoliday(ENGLAND_AND_WALES, ONE_OFF)).isTrue();
     });
   }
 
   @Test
-  void anApplicationsOwnBankHolidaysReplaceTheStoreAndRefresh() {
+  void anApplicationsOwnBankHolidaysReplaceTheStoreAndFetch() {
     new ApplicationContextRunner()
         .withConfiguration(AutoConfigurations.of(BankHolidaysAutoConfiguration.class))
         .withBean(DataSource.class, () -> dataSource)
         .withBean(BankHolidays.class, BankHolidays::bundled)
-        .withPropertyValues("ccd.bank-holidays.url=" + govUkUrl())
         .run(context -> {
           assertThat(context).hasSingleBean(BankHolidays.class).doesNotHaveBean(BankHolidaysRefresher.class);
-          assertThat(context.getBean(BankHolidays.class).calendar(ENGLAND_AND_WALES).isBankHoliday(CHRISTMAS_2026))
-              .isTrue();
+          assertThat(context.getBean(BankHolidays.class).isBankHoliday(ENGLAND_AND_WALES, CHRISTMAS_2026)).isTrue();
         });
 
-    assertThat(storedHolidays()).isZero();
-    assertThat(fetches).hasValue(0);
+    assertThat(stored()).isZero();
   }
 
-  @Test
-  void refusesTwoBankHolidaysOnOneDate() {
-    BankHoliday christmas = new BankHoliday(ENGLAND_AND_WALES, CHRISTMAS_2026, "Christmas Day", "");
-
-    assertThatThrownBy(() -> BankHolidays.of(List.of(christmas, christmas)))
-        .isInstanceOf(IllegalArgumentException.class);
-  }
-
-  /** An instance of the application, fetching from the URL, or not fetching when it is empty. */
-  private void withBankHolidays(String url, BankHolidaysTest test) {
+  private void withBankHolidays(BiConsumer<BankHolidays, BankHolidaysRefresher> test) {
     new ApplicationContextRunner()
         .withConfiguration(AutoConfigurations.of(BankHolidaysAutoConfiguration.class))
         .withBean(DataSource.class, () -> dataSource)
-        .withPropertyValues(url.isEmpty() ? "ccd.bank-holidays.fetch=false" : "ccd.bank-holidays.url=" + url)
+        .withPropertyValues("ccd.bank-holidays.url=http://localhost:" + govUk.getAddress().getPort()
+            + "/bank-holidays.json")
         .run(context -> {
           assertThat(context).hasNotFailed();
-          test.run(context.getBean(BankHolidays.class), context.getBean(BankHolidaysRefresher.class));
+          test.accept(context.getBean(BankHolidays.class), context.getBean(BankHolidaysRefresher.class));
         });
   }
 
-  private String govUkUrl() {
-    return "http://localhost:" + govUk.getAddress().getPort() + "/bank-holidays.json";
-  }
-
-  private static int storedHolidays() {
+  private static int stored() {
     return jdbc.queryForObject("select count(*) from bank_holidays.bank_holiday", Integer.class);
-  }
-
-  private static void ageLastFetch() {
-    jdbc.update("update bank_holidays.fetch_state set fetched_at = fetched_at - interval '1 day', "
-        + "last_attempt_at = last_attempt_at - interval '1 day'");
-  }
-
-  private static String fetchError() {
-    return jdbc.queryForObject("select last_attempt_error from bank_holidays.fetch_state", String.class);
   }
 
   private static ObjectNode seedFeed() {
@@ -396,14 +220,9 @@ class BankHolidaysIntegrationTest {
     }
   }
 
-  private static ObjectNode withEvent(ObjectNode feed, String division, LocalDate date, String title) {
-    ((ArrayNode) feed.path(division).path("events"))
-        .add(JSON.valueToTree(Map.of("title", title, "date", date.toString(), "notes", "", "bunting", true)));
+  private static ObjectNode withEvent(ObjectNode feed, LocalDate date) {
+    ((ArrayNode) feed.path("england-and-wales").path("events")).add(JSON.valueToTree(
+        Map.of("title", "A one-off bank holiday", "date", date.toString(), "notes", "", "bunting", true)));
     return feed;
-  }
-
-  @FunctionalInterface
-  private interface BankHolidaysTest {
-    void run(BankHolidays bankHolidays, BankHolidaysRefresher refresher) throws Exception;
   }
 }

@@ -10,12 +10,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "ccd.bank-holidays")
 public class BankHolidaysProperties {
 
-  /**
-   * Whether to fetch from GOV.UK. Off, the bank holidays are those already stored, or the SDK's
-   * copy, as for tests.
-   */
-  private boolean fetch = true;
-
   /** GOV.UK's bank holidays feed. */
   private URI url = URI.create("https://www.gov.uk/bank-holidays.json");
 }
