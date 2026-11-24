@@ -13,8 +13,10 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 
 /** GOV.UK's bank holidays feed, fetched or as copied into the SDK. */
+@RequiredArgsConstructor
 final class GovUkBankHolidays {
 
   static final String SEED = "bank-holidays-seed.json";
@@ -25,10 +27,6 @@ final class GovUkBankHolidays {
   private final URI url;
   private final HttpClient client = HttpClient.newBuilder().connectTimeout(TIMEOUT)
       .followRedirects(HttpClient.Redirect.NORMAL).build();
-
-  GovUkBankHolidays(URI url) {
-    this.url = url;
-  }
 
   List<BankHoliday> fetch() throws IOException, InterruptedException {
     HttpResponse<byte[]> response = client.send(HttpRequest.newBuilder(url).timeout(TIMEOUT).build(),
@@ -54,7 +52,7 @@ final class GovUkBankHolidays {
   static List<BankHoliday> parse(JsonNode feed) {
     List<BankHoliday> holidays = new ArrayList<>();
     for (Division division : Division.values()) {
-      feed.path(division.govUkName()).path("events").forEach(event -> holidays.add(new BankHoliday(division,
+      feed.path(division.getGovUkName()).path("events").forEach(event -> holidays.add(new BankHoliday(division,
           LocalDate.parse(event.path("date").asText()), event.path("title").asText(),
           event.path("notes").asText(""))));
     }

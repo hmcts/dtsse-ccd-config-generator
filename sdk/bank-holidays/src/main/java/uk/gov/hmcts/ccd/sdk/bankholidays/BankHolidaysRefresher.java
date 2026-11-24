@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.bankholidays;
 
 import java.util.concurrent.TimeUnit;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 
@@ -9,17 +10,12 @@ import org.springframework.scheduling.annotation.Scheduled;
  * holidays there were. Runs when the application enables scheduling.
  */
 @Slf4j
+@RequiredArgsConstructor
 class BankHolidaysRefresher {
 
   private final GovUkBankHolidays govUk;
   private final BankHolidayStore store;
   private final BankHolidays bankHolidays;
-
-  BankHolidaysRefresher(GovUkBankHolidays govUk, BankHolidayStore store, BankHolidays bankHolidays) {
-    this.govUk = govUk;
-    this.store = store;
-    this.bankHolidays = bankHolidays;
-  }
 
   @Scheduled(fixedDelay = 1, timeUnit = TimeUnit.DAYS)
   void refresh() {

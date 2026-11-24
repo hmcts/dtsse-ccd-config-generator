@@ -22,15 +22,11 @@ class WorkingDayIndicator {
     return new WorkingDays(calendars.stream().map(WorkingDayIndicator::division).toList(), nonWorkingDaysOfWeek);
   }
 
+  @RequiredArgsConstructor
   class WorkingDays {
 
     private final List<Division> divisions;
     private final List<String> nonWorkingDaysOfWeek;
-
-    WorkingDays(List<Division> divisions, List<String> nonWorkingDaysOfWeek) {
-      this.divisions = divisions;
-      this.nonWorkingDaysOfWeek = nonWorkingDaysOfWeek;
-    }
 
     boolean isWorkingDay(LocalDate date) {
       return !nonWorkingDaysOfWeek.contains(date.getDayOfWeek().toString())
@@ -56,7 +52,7 @@ class WorkingDayIndicator {
 
   private static Division division(String calendar) {
     return Arrays.stream(Division.values())
-        .filter(division -> calendar.equals("https://www.gov.uk/bank-holidays/" + division.govUkName() + ".json"))
+        .filter(division -> calendar.equals("https://www.gov.uk/bank-holidays/" + division.getGovUkName() + ".json"))
         .findFirst()
         .orElseThrow(() -> new IllegalArgumentException("Unsupported non-working calendar " + calendar
             + "; use GOV.UK's bank holidays for a division, such as "
