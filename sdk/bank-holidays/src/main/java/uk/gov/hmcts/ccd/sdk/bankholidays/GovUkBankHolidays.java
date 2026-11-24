@@ -23,21 +23,21 @@ final class GovUkBankHolidays {
 
   private static final ObjectMapper JSON = new ObjectMapper();
 
+  private static final Duration TIMEOUT = Duration.ofSeconds(10);
+
   private final URI url;
-  private final Duration timeout;
   private final HttpClient client;
 
-  GovUkBankHolidays(URI url, Duration timeout) {
+  GovUkBankHolidays(URI url) {
     this.url = url;
-    this.timeout = timeout;
-    this.client = HttpClient.newBuilder().connectTimeout(timeout).followRedirects(HttpClient.Redirect.NORMAL)
+    this.client = HttpClient.newBuilder().connectTimeout(TIMEOUT).followRedirects(HttpClient.Redirect.NORMAL)
         .build();
   }
 
   /** The bank holidays GOV.UK publishes now. */
   List<BankHoliday> fetch() throws IOException, InterruptedException {
     HttpResponse<byte[]> response = client.send(
-        HttpRequest.newBuilder(url).timeout(timeout).header("Accept", "application/json").GET().build(),
+        HttpRequest.newBuilder(url).timeout(TIMEOUT).header("Accept", "application/json").GET().build(),
         HttpResponse.BodyHandlers.ofByteArray());
     if (response.statusCode() != 200) {
       throw new IOException("GOV.UK bank holidays returned HTTP " + response.statusCode());

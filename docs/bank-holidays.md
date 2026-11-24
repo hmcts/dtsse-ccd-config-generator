@@ -36,20 +36,16 @@ A deadline of so many calendar days that runs to the next working day is
   `bank_holidays.fetch_state.last_attempt_error`, and is tried again at the next check.
 - Without scheduling the bank holidays are never fetched, and the application logs a warning at
   startup: they run out at the end of the last year in the SDK's copy.
-- Before the first fetch they are seeded from a copy of the feed in the SDK. A newer SDK's copy
-  replaces stored bank holidays it reaches later years than.
+- Before the first fetch they are seeded from a copy of the feed in the SDK, as they are again by a
+  newer SDK whose copy reaches a later year than those stored.
 - A calendar taken with `calendar(...)` does not change when the bank holidays are refreshed.
-- Every method throws `UnknownBankHolidaysException`, a `DateTimeException` giving the division and
-  date, for a date in a year GOV.UK has not published, rather than treat it as having none.
+- Every method throws `UnknownBankHolidaysException`, a `DateTimeException`, for a date in a year
+  GOV.UK has not published, rather than treat it as having none.
 
 | Property | Default |
 | --- | --- |
-| `ccd.bank-holidays.refresh.enabled` | `true`; `false` never fetches, keeping those stored or the SDK's copy |
+| `ccd.bank-holidays.fetch` | `true`; `false` never fetches, keeping those stored or the SDK's copy |
 | `ccd.bank-holidays.url` | `https://www.gov.uk/bank-holidays.json` |
-| `ccd.bank-holidays.timeout` | `10s` |
-| `ccd.bank-holidays.max-age` | `P1D`: how old the last fetch may be before one is made again |
-| `ccd.bank-holidays.refresh.delay` | `PT1H`: how often each instance checks |
-| `ccd.bank-holidays.refresh.initial-delay` | `PT0S`: how long after startup the first check is |
 
 ## In tests
 

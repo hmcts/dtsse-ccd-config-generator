@@ -7,6 +7,7 @@ dependencies {
     implementation 'org.springframework:spring-tx'
     implementation 'com.fasterxml.jackson.core:jackson-databind'
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-sql'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-jdbc'

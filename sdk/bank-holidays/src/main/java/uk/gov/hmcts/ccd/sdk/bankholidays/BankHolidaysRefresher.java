@@ -1,56 +1,31 @@
 package uk.gov.hmcts.ccd.sdk.bankholidays;
 
-import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.SmartInitializingSingleton;
-import org.springframework.scheduling.annotation.SchedulingConfigurer;
-import org.springframework.scheduling.config.FixedDelayTask;
-import org.springframework.scheduling.config.ScheduledTaskRegistrar;
+import org.springframework.scheduling.annotation.Scheduled;
 
 /**
- * Loads the bank holidays at startup, then checks hourly, by default, whether GOV.UK's are a day old,
- * and if so fetches them into the store; one instance fetches for all. Each check reads the store
- * again, so each instance picks up a fetch another made. A failed fetch keeps the bank holidays
- * there were, and is tried again at the next check. Checks run when the application enables
- * scheduling.
+ * Hourly, and at startup, fetches GOV.UK's bank holidays into the store when the last fetch is a day
+ * old, one instance for all, then reads the store again, so each instance picks up a fetch another
+ * made. A failed fetch keeps the bank holidays there were and is tried again an hour later. Runs when
+ * the application enables scheduling.
  */
 @Slf4j
-class BankHolidaysRefresher implements SchedulingConfigurer, SmartInitializingSingleton {
+class BankHolidaysRefresher {
 
   private final GovUkBankHolidays govUk;
   private final BankHolidayStore store;
   private final BankHolidays bankHolidays;
-  private final BankHolidaysProperties properties;
-  private final boolean schedulingEnabled;
 
-  BankHolidaysRefresher(GovUkBankHolidays govUk, BankHolidayStore store, BankHolidays bankHolidays,
-      BankHolidaysProperties properties, boolean schedulingEnabled) {
+  BankHolidaysRefresher(GovUkBankHolidays govUk, BankHolidayStore store, BankHolidays bankHolidays) {
     this.govUk = govUk;
     this.store = store;
     this.bankHolidays = bankHolidays;
-    this.properties = properties;
-    this.schedulingEnabled = schedulingEnabled;
   }
 
-  @Override
-  public void afterSingletonsInstantiated() {
-    bankHolidays.reload();
-    if (govUk != null && !schedulingEnabled) {
-      log.warn("Scheduling is not enabled, so bank holidays will not be fetched from GOV.UK and will run out "
-          + "after {}. Enable it with @EnableScheduling", bankHolidays.calendar(Division.ENGLAND_AND_WALES)
-          .knownUntil());
-    }
-  }
-
-  @Override
-  public void configureTasks(ScheduledTaskRegistrar registrar) {
-    BankHolidaysProperties.Refresh refresh = properties.getRefresh();
-    registrar.addFixedDelayTask(new FixedDelayTask(this::refresh, refresh.getDelay(), refresh.getInitialDelay()));
-  }
-
+  @Scheduled(fixedDelay = 1, timeUnit = TimeUnit.HOURS)
   void refresh() {
-    Duration retryAfter = properties.getRefresh().getDelay();
-    if (govUk != null && store.claimFetch(properties.getMaxAge(), retryAfter)) {
+    if (govUk != null && store.claimFetch()) {
       try {
         store.fetched(govUk.fetch());
       } catch (InterruptedException e) {
@@ -61,6 +36,6 @@ class BankHolidaysRefresher implements SchedulingConfigurer, SmartInitializingSi
         store.fetchFailed(String.valueOf(e));
       }
     }
-    bankHolidays.reload();
+    bankHolidays.replace(store.load());
   }
 }

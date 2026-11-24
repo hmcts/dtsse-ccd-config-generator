@@ -24,10 +24,6 @@ public final class WorkingDayCalendar {
     this.holidays = holidays;
   }
 
-  public Division division() {
-    return division;
-  }
-
   /**
    * Whether the date is one of the division's bank holidays. Unlike a working-day calendar's
    * holidays in some libraries, Saturdays and Sundays are not, unless GOV.UK lists them.
@@ -104,12 +100,6 @@ public final class WorkingDayCalendar {
     return holidays.lastKey().withMonth(12).withDayOfMonth(31);
   }
 
-  @Override
-  public String toString() {
-    return "WorkingDayCalendar[" + division
-        + (holidays.isEmpty() ? ", none known]" : ", known " + knownFrom() + " to " + knownUntil() + "]");
-  }
-
   private LocalDate knownFrom() {
     requireAny();
     return holidays.firstKey().withDayOfYear(1);
@@ -118,14 +108,14 @@ public final class WorkingDayCalendar {
   private void requireKnown(LocalDate date) {
     Objects.requireNonNull(date, "date");
     if (date.isBefore(knownFrom()) || date.isAfter(knownUntil())) {
-      throw new UnknownBankHolidaysException(division, date, division + " bank holidays are not known for "
-          + date + "; they are known from " + knownFrom() + " to " + knownUntil());
+      throw new UnknownBankHolidaysException(division + " bank holidays are not known for " + date
+          + "; they are known from " + knownFrom() + " to " + knownUntil());
     }
   }
 
   private void requireAny() {
     if (holidays.isEmpty()) {
-      throw new UnknownBankHolidaysException(division, null, "No " + division + " bank holidays are known");
+      throw new UnknownBankHolidaysException("No " + division + " bank holidays are known");
     }
   }
 
