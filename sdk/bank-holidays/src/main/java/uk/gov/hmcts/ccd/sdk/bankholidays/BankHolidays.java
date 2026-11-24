@@ -23,23 +23,21 @@ public class BankHolidays {
   private final Supplier<? extends Collection<BankHoliday>> load;
   private volatile Map<Division, TreeMap<LocalDate, BankHoliday>> holidays;
 
-  BankHolidays(Collection<BankHoliday> holidays) {
-    this.load = null;
-    replace(holidays);
-  }
-
   private BankHolidays(Supplier<? extends Collection<BankHoliday>> load) {
     this.load = Objects.requireNonNull(load, "load");
   }
 
-  /** Bank holidays read with the given load on the first lookup, unless replaced before it. */
+  /**
+   * Bank holidays read with the given load on the first lookup, and again on each {@link #reload()}.
+   */
   static BankHolidays loadedOnFirstUse(Supplier<? extends Collection<BankHoliday>> load) {
     return new BankHolidays(load);
   }
 
   /** Bank holidays fixed to the given ones, for tests. */
   public static BankHolidays of(Collection<BankHoliday> holidays) {
-    return new BankHolidays(holidays);
+    List<BankHoliday> fixed = List.copyOf(holidays);
+    return new BankHolidays(() -> fixed);
   }
 
   /** The copy of GOV.UK's bank holidays in this version of the SDK, for tests. */
@@ -62,6 +60,19 @@ public class BankHolidays {
     return List.copyOf(byDivision().get(Objects.requireNonNull(division, "division")).values());
   }
 
+  /**
+   * Reads them again. Reads and publishes under one lock, so a read never replaces a later one's
+   * holidays with the older ones it read.
+   */
+  synchronized void reload() {
+    Map<Division, TreeMap<LocalDate, BankHoliday>> byDivision = new EnumMap<>(Division.class);
+    for (Division division : Division.values()) {
+      byDivision.put(division, new TreeMap<>());
+    }
+    load.get().forEach(holiday -> byDivision.get(holiday.division()).put(holiday.date(), holiday));
+    holidays = byDivision;
+  }
+
   private Map<Division, TreeMap<LocalDate, BankHoliday>> byDivision() {
     Map<Division, TreeMap<LocalDate, BankHoliday>> known = holidays;
     if (known != null) {
@@ -69,19 +80,9 @@ public class BankHolidays {
     }
     synchronized (this) {
       if (holidays == null) {
-        replace(load.get());
+        reload();
       }
       return holidays;
     }
-  }
-
-  // Under the same lock as the first lookup, so a refresh is never overwritten by an older first read.
-  synchronized void replace(Collection<BankHoliday> replacement) {
-    Map<Division, TreeMap<LocalDate, BankHoliday>> byDivision = new EnumMap<>(Division.class);
-    for (Division division : Division.values()) {
-      byDivision.put(division, new TreeMap<>());
-    }
-    replacement.forEach(holiday -> byDivision.get(holiday.division()).put(holiday.date(), holiday));
-    holidays = byDivision;
   }
 }

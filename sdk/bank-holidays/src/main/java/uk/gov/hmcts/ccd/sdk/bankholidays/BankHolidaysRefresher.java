@@ -28,6 +28,6 @@ class BankHolidaysRefresher {
       log.warn("GOV.UK bank holidays could not be fetched; keeping those there were", e);
     }
     // Whether or not this fetch worked, another instance's may have.
-    bankHolidays.replace(store.load());
+    bankHolidays.reload();
   }
 }
