@@ -643,9 +643,11 @@ role-assignment-service:
   url: http://localhost:4096
   maxResults: 20
 ccd:
-  bundling:
+  doc-toolkit:
+    # Local runs and the cftlib suite use the SDK's Docmosis stub (DocmosisStubController in
+    # ccd-sdk-test-support), so office conversion round-trips without the shared service.
+    docmosis-stub:
+      enabled: true
     docmosis:
-      # The e2e app hosts its own Docmosis stub (DocmosisStubController), preserving the
-      # "runs locally without shared services" goal. Office conversion round-trips through it.
       convert-endpoint: ${DOCMOSIS_ENDPOINT:http://localhost:4013/stub/rs/convert}
       access-key: ${DOCMOSIS_ACCESS_KEY:stub-access-key}
