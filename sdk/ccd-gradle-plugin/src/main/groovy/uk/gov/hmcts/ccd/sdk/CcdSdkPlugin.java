@@ -134,7 +134,8 @@ public class CcdSdkPlugin implements Plugin<Project> {
   private void addElasticsearchClientDependency(Project project) {
     ExternalModuleDependency dependency = (ExternalModuleDependency) project.getDependencies()
         .create("co.elastic.clients:elasticsearch-java");
-    dependency.version(version -> version.strictly("[9, 10)"));
+    // Pinned: a newer 9.x client needs a newer httpclient5 than Spring Boot 3 manages.
+    dependency.version(version -> version.strictly("9.4.5"));
     project.getDependencies().add("implementation", dependency);
   }
 

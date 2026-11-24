@@ -31,8 +31,7 @@ dependencies {
 
     implementation('co.elastic.clients:elasticsearch-java') {
         version {
-            strictly '[9, 10)'
-            prefer elasticsearchClientVersion
+            strictly elasticsearchClientVersion
         }
     }
     implementation 'com.fasterxml.jackson.core:jackson-databind'

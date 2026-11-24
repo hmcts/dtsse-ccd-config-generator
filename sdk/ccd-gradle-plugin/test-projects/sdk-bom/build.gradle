@@ -78,6 +78,6 @@ tasks.register('verifySdkDependencies') {
         def elasticsearch = configurations.implementation.dependencies.find {
             it.group == 'co.elastic.clients' && it.name == 'elasticsearch-java'
         }
-        assert elasticsearch.versionConstraint.strictVersion == '[9, 10)'
+        assert elasticsearch.versionConstraint.strictVersion == '9.4.5'
     }
 }
