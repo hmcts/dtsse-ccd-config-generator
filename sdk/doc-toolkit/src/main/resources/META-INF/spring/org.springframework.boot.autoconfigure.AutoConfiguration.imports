@@ -1,0 +1,3 @@
+uk.gov.hmcts.ccd.sdk.doctoolkit.spring.DocToolkitAutoConfiguration
+uk.gov.hmcts.ccd.sdk.doctoolkit.spring.DocJobsAutoConfiguration
+uk.gov.hmcts.ccd.sdk.doctoolkit.spring.DocToolkitFlywayAutoConfiguration
