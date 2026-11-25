@@ -17,11 +17,12 @@ import uk.gov.hmcts.reform.ccd.document.am.feign.CaseDocumentClientApi;
  * print-ready letters for bulk print. Spring Boot services get one auto-configured; inject it.
  *
  * <pre>{@code
- * UploadedDoc bundle = docToolkit.renderAndUpload(
- *     BundleRequest.builder("Hearing bundle")
- *         .section(BundleSection.builder("Evidence").document(caseData.getStatement()).build())
+ * UploadedDoc bundle = docToolkit.upload(
+ *     PdfRequest.builder("Hearing bundle")
+ *         .section(PdfSection.builder("Evidence").document(caseData.getStatement()).build())
+ *         .tableOfContents()
  *         .build(),
- *     caseId, eventId);
+ *     caseReference);
  * caseData.setHearingBundle(bundle.document());
  * }</pre>
  *
@@ -140,7 +141,7 @@ public final class DocToolkit {
 
     /**
      * CDAM, for fetching {@link DocSource#of CDAM documents} and for
-     * {@link #renderAndUpload uploading}.
+     * {@link #upload uploading}.
      *
      * @param cases finds a case's type and jurisdiction, which CDAM needs to attach a document
      */

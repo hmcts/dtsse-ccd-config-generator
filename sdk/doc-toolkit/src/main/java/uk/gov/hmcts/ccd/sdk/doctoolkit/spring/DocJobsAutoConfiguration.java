@@ -44,7 +44,7 @@ public class DocJobsAutoConfiguration {
     return new DocJobs(repository);
   }
 
-  /** Runs the service's definitions after each case event; nothing to run, no hook. */
+  /** Runs the service's definitions after each case event; with none, it does nothing. */
   @Bean
   public CaseDocHook caseDocHook(ObjectProvider<CaseDocDefinition> definitions,
       DocJobRepository repository) {
