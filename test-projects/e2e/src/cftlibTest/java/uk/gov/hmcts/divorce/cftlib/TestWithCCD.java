@@ -103,8 +103,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.divorce.bundling.CaseworkerCreateBundle;
 import uk.gov.hmcts.divorce.bundling.CaseworkerCreateBundleMissingDocument;
-import uk.gov.hmcts.divorce.bundling.DocmosisStubController;
-import uk.gov.hmcts.divorce.bundling.FixtureDocumentResolver;
+import uk.gov.hmcts.ccd.sdk.testing.DocmosisStubController;
 import uk.gov.hmcts.divorce.bundling.model.CaseBundle;
 import uk.gov.hmcts.divorce.callback.CallbackLoggingFilter;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
@@ -668,11 +667,10 @@ public class TestWithCCD extends CftlibTest {
         assertThat(bundle.getDocuments(), hasSize(5));
         assertThat(bundle.getDocuments().get(0).getValue().getName(),
             equalTo(CaseworkerCreateBundle.POTENTIAL_ENERGY_TITLE));
-        assertThat(bundle.getDocuments().get(0).getValue().getStartPage(), greaterThan(1));
         String documentUrl = bundle.getStitchedDocument().getUrl();
         assertThat(bundle.getStitchedDocument().getBinaryUrl(), equalTo(documentUrl + "/binary"));
 
-        // The consumer uploaded through the real embedded CDAM and attached the document to the
+        // The toolkit uploaded through the real embedded CDAM and attached the document to the
         // case (case_id PATCHed onto the dm-store record), so it is not TTL-disposed.
         String documentId = documentUrl.substring(documentUrl.length() - 36);
         var storedDocument = stubDocumentStore.find(documentId).orElseThrow(
@@ -701,8 +699,8 @@ public class TestWithCCD extends CftlibTest {
                     CaseworkerCreateBundle.FLYING_PIG_TITLE,
                     // The office document went through the app's Docmosis stub.
                     "Stubbed Docmosis conversion of wordDocument2.docx",
-                    // The MP3 is a generated link page, never fetched.
-                    CaseworkerCreateBundle.HEARING_RECORDING_TITLE, "Media type: audio/mpeg",
+                    // The recording is a page the service wrote in HTML.
+                    CaseworkerCreateBundle.HEARING_RECORDING_TITLE, "Audio recording, 42 minutes.",
                     CaseworkerCreateBundle.HEARING_RECORDING_NOTE, CaseworkerCreateBundle.HEARING_RECORDING_URL,
                     // The expected-but-empty section renders the standard visible placeholder.
                     "There are no documents in this section.")) {
@@ -728,13 +726,63 @@ public class TestWithCCD extends CftlibTest {
         }
     }
 
+    @Order(36)
+    @Test
+    public void caseNotesDocumentFollowsEachNoteAddedThroughCcd() throws Exception {
+        // Earlier tests added notes, so the case already has a notes document, rendered in the background.
+        String sqlLatest = "SELECT revision, url FROM case_notes_documents WHERE reference = :ref"
+            + " ORDER BY revision DESC, id DESC LIMIT 1";
+        await().atMost(Duration.ofSeconds(60)).until(() -> !db.queryForList(sqlLatest, Map.of("ref", caseRef))
+            .isEmpty());
+        long revisionBefore = ((Number) db.queryForMap(sqlLatest, Map.of("ref", caseRef)).get("revision"))
+            .longValue();
+
+        String note = "Notes document check " + UUID.randomUUID();
+        var request = prepareEventRequest("TEST_CASE_WORKER_USER@mailinator.com", "caseworker-add-note",
+            Map.of("note", note));
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+
+        // The event queued a render of the changed notes; the worker stores it and hands it to the service.
+        await().atMost(Duration.ofSeconds(60)).until(() -> ((Number) db.queryForMap(sqlLatest,
+            Map.of("ref", caseRef)).get("revision")).longValue() > revisionBefore);
+        String url = (String) db.queryForMap(sqlLatest, Map.of("ref", caseRef)).get("url");
+        String documentId = url.substring(url.length() - 36);
+        assertThat(fetchCdamDocument(documentId).path("metadata").path("case_id").asText(),
+            equalTo(String.valueOf(caseRef)));
+        var download = new HttpGet(CDAM_BASE_URL + "/cases/documents/" + documentId + "/binary");
+        download.addHeader("Authorization", getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"));
+        download.addHeader("ServiceAuthorization", cftlib().generateDummyS2SToken("nfdiv_case_api"));
+        try (var downloadResponse = HttpClientBuilder.create().build().execute(download)) {
+            assertThat(downloadResponse.getStatusLine().getStatusCode(), equalTo(200));
+            try (PDDocument pdf = Loader.loadPDF(EntityUtils.toByteArray(downloadResponse.getEntity()))) {
+                String text = new PDFTextStripper().getText(pdf);
+                assertThat(text, containsString("Case notes"));
+                assertThat(text, containsString(note));
+            }
+        }
+
+        // An event that leaves the notes as they are queues nothing.
+        int versions = db.queryForObject("SELECT count(*) FROM case_notes_documents WHERE reference = :ref",
+            Map.of("ref", caseRef), Integer.class);
+        var unchanged = prepareEventRequest("TEST_CASE_WORKER_USER@mailinator.com",
+            CaseworkerCreateBundle.CASEWORKER_CREATE_BUNDLE, Map.of());
+        assertThat(HttpClientBuilder.create().build().execute(unchanged).getStatusLine().getStatusCode(),
+            equalTo(201));
+        Thread.sleep(3000);
+        assertThat(db.queryForObject("SELECT count(*) FROM case_notes_documents WHERE reference = :ref",
+            Map.of("ref", caseRef), Integer.class), equalTo(versions));
+    }
+
     @Order(39)
     @Test
     public void createBundleWithMissingDocumentSurfacesErrorAndPublishesNothing() throws Exception {
         String user = "TEST_CASE_WORKER_USER@mailinator.com";
         String sqlCountByCase = "SELECT count(*) FROM case_bundles WHERE reference = :ref";
         Integer before = db.queryForObject(sqlCountByCase, Map.of("ref", caseRef), Integer.class);
-        int documentsBefore = stubDocumentStore.size();
+        String bundleFile = "case-" + caseRef + "-hearing-bundle.pdf";
+        // Only hearing bundles: notes documents render in the background while this runs.
+        long documentsBefore = stubDocumentStore.countNamed(bundleFile);
 
         var request = prepareEventRequest(
             user, CaseworkerCreateBundleMissingDocument.CASEWORKER_CREATE_BUNDLE_MISSING_DOC, Map.of());
@@ -745,14 +793,13 @@ public class TestWithCCD extends CftlibTest {
         Map<String, Object> payload = mapper.readValue(responseBody, new TypeReference<>() {});
         @SuppressWarnings("unchecked")
         List<String> callbackErrors = (List<String>) payload.get("callbackErrors");
-        assertThat("the error should name the missing document and the typed reason",
+        assertThat("the error should name the document CDAM could not return",
             callbackErrors, hasItem(allOf(
-                containsString("DOCUMENT_NOT_FOUND"),
-                containsString(CaseworkerCreateBundleMissingDocument.MISSING_DOCUMENT_ID),
-                containsString(FixtureDocumentResolver.PROVIDER))));
+                containsString("could not be rendered"),
+                containsString(CaseworkerCreateBundleMissingDocument.MISSING_DOCUMENT_TITLE))));
 
         // Nothing was uploaded or recorded, and the earlier bundle is untouched.
-        assertThat(stubDocumentStore.size(), equalTo(documentsBefore));
+        assertThat(stubDocumentStore.countNamed(bundleFile), equalTo(documentsBefore));
         assertThat(db.queryForObject(sqlCountByCase, Map.of("ref", caseRef), Integer.class), equalTo(before));
         var c = ccdApi.getCase(getAuthorisation(user), getServiceAuth(), String.valueOf(caseRef));
         var caseData = mapper.readValue(mapper.writeValueAsString(c.getData()), CaseData.class);

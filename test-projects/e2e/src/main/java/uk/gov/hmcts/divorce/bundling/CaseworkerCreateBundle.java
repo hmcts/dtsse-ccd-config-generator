@@ -1,14 +1,13 @@
 package uk.gov.hmcts.divorce.bundling;
 
+import static uk.gov.hmcts.divorce.bundling.BundleFixtures.fixture;
 import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.CASE_WORKER;
 import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.JUDGE;
 import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.LEGAL_ADVISOR;
 import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.SUPER_USER;
 import static uk.gov.hmcts.divorce.divorcecase.model.access.Permissions.CREATE_READ_UPDATE;
 
-import java.time.Duration;
 import java.time.LocalDate;
-import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -16,29 +15,28 @@ import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.EventPayload;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundleDocument;
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundleExecutionContext;
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRenderer;
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundleResult;
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundleSection;
-import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference;
-import uk.gov.hmcts.ccd.sdk.bundling.api.EmptySectionPolicy;
-import uk.gov.hmcts.ccd.sdk.bundling.api.MediaPlaceholder;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.DocToolkit;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.HtmlPage;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.MissingDocuments;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.PageNumbers;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfPart;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfRequest;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfSection;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.UploadedDoc;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
 import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
 
 /**
- * The document-bundling SDK's worked example: a decentralised event that builds a
- * {@link BundleRequest} from case documents (fixture-backed here), renders it synchronously
- * through the auto-configured {@link BundleRenderer} — PDFs pass through, the image and the
- * office document are converted, the MP3 becomes a generated link page, the empty section
- * renders a visible placeholder — then hands the finished PDF to {@link BundlePublisher}, which
- * uploads it to CDAM, attaches it to the case and records the service's own bundle model.
+ * The doc toolkit's worked example: a decentralised event that builds a {@link PdfRequest}
+ * (from classpath fixtures here, CDAM documents in a real service) and hands it to the
+ * {@link DocToolkit}. PDFs pass through, the image and the office document are converted, the
+ * recording is a page the service writes in HTML, and the empty section gets a placeholder page.
+ * The toolkit stores the bundle in CDAM and attaches it to the case; {@link BundlePublisher}
+ * records the service's own bundle model.
  *
- * <p>Nothing is caught: a {@code BundleGenerationException} propagates, the platform rolls the
- * event back, and no bundle is published.
+ * <p>Nothing is caught: a {@code DocToolkitException} propagates, the platform rolls the event
+ * back, and no bundle is published.
  */
 @Component
 @Slf4j
@@ -60,7 +58,7 @@ public class CaseworkerCreateBundle implements CCDConfig<CaseData, State, UserRo
     public static final String HEARING_RECORDING_NOTE = "Playback requires case access";
 
     @Autowired
-    private BundleRenderer bundleRenderer;
+    private DocToolkit docToolkit;
 
     @Autowired
     private BundlePublisher bundlePublisher;
@@ -71,93 +69,66 @@ public class CaseworkerCreateBundle implements CCDConfig<CaseData, State, UserRo
             .decentralisedEvent(CASEWORKER_CREATE_BUNDLE, this::submit)
             .forAllStates()
             .name("Create hearing bundle")
-            .description("Generate the hearing bundle with the document-bundling SDK")
+            .description("Generate the hearing bundle with the SDK's doc toolkit")
             .grant(CREATE_READ_UPDATE, CASE_WORKER, SUPER_USER)
             .grantHistoryOnly(LEGAL_ADVISOR, JUDGE);
     }
 
     private SubmitResponse<State> submit(EventPayload<CaseData, State> payload) {
         final long reference = payload.caseReference();
-
-        BundleRequest request = buildRequest(reference);
-
-        BundleExecutionContext context = BundleExecutionContext.builder()
-            .caseReference(String.valueOf(reference))
-            .initiator(CASEWORKER_CREATE_BUNDLE)
+        PdfRequest request = buildRequest(reference);
+        // Rendered, stored in CDAM as the system user and attached to the case by the toolkit.
+        UploadedDoc uploaded = docToolkit.upload(request, reference);
+        bundlePublisher.publish(reference, request, uploaded);
+        log.info("Bundle generated for case {}: {} pages, {} missing", reference, uploaded.pageCount(),
+            uploaded.failures().size());
+        return SubmitResponse.<State>builder()
+            .confirmationHeader("Hearing bundle created")
+            .confirmationBody("Generated " + uploaded.pageCount() + " pages")
             .build();
-
-        // Catch nothing: a BundleGenerationException propagates, the platform rolls the event
-        // back, nothing was published and the previous bundle (if any) is untouched. The result
-        // owns the rendered PDF until closed, so it is uploaded inside the try.
-        try (BundleResult result = bundleRenderer.render(request, context)) {
-            bundlePublisher.publish(reference, request, result);
-            log.info("Bundle {} generated for case {}: {} pages, {} warnings",
-                request.externalId(), reference, result.pageCount(), result.warnings().size());
-            return SubmitResponse.<State>builder()
-                .confirmationHeader("Hearing bundle created")
-                .confirmationBody("Generated " + result.pageCount() + " pages")
-                .build();
-        }
     }
 
-    static BundleRequest buildRequest(final long caseReference) {
-        return BundleRequest.builder()
-            .externalId(UUID.randomUUID())
-            .title(BUNDLE_TITLE)
+    static PdfRequest buildRequest(final long caseReference) {
+        return PdfRequest.builder(BUNDLE_TITLE)
             .fileName("case-" + caseReference + "-hearing-bundle.pdf")
-            .root(BundleSection.builder("Case file")
-                .section(BundleSection.builder(APPLICATIONS_SECTION)
-                    .document(BundleDocument.builder()
-                        .id("app-1")
-                        .title(POTENTIAL_ENERGY_TITLE)
-                        .date(LocalDate.of(2026, 1, 12))
-                        .reference(new DocumentReference(
-                            FixtureDocumentResolver.PROVIDER,
-                            FixtureDocumentResolver.POTENTIAL_ENERGY_PDF))
-                        .build())
-                    .document(BundleDocument.builder()
-                        .id("app-2")
-                        .title(MEDICAL_REPORT_TITLE)
-                        .date(LocalDate.of(2026, 2, 3))
-                        .reference(new DocumentReference(
-                            FixtureDocumentResolver.PROVIDER,
-                            FixtureDocumentResolver.CLAIMANT_MEDICAL_REPORT_PDF))
-                        .build())
-                    .document(BundleDocument.builder()
-                        .id("app-3")
-                        .title(LOCATION_STATEMENT_TITLE)
-                        .date(LocalDate.of(2026, 2, 17))
-                        .reference(new DocumentReference(
-                            FixtureDocumentResolver.PROVIDER,
-                            FixtureDocumentResolver.WORD_DOCUMENT_DOCX))
-                        .build())
+            // The court's bundle layout; each feature is switched on.
+            .titlePage()
+            .tableOfContents()
+            .sectionCoverSheets()
+            .pageNumbers(PageNumbers.BOTTOM_CENTRE_N_OF_M)
+            .confidentialMarking()
+            .missingDocuments(MissingDocuments.PLACEHOLDER)
+            .section(PdfSection.builder(APPLICATIONS_SECTION)
+                .document(PdfPart.builder(fixture(BundleFixtures.POTENTIAL_ENERGY_PDF))
+                    .title(POTENTIAL_ENERGY_TITLE)
+                    .date(LocalDate.of(2026, 1, 12))
                     .build())
-                .section(BundleSection.builder(EVIDENCE_SECTION)
-                    .document(BundleDocument.builder()
-                        .id("ev-1")
-                        .title(FLYING_PIG_TITLE)
-                        .date(LocalDate.of(2026, 3, 1))
-                        .reference(new DocumentReference(
-                            FixtureDocumentResolver.PROVIDER,
-                            FixtureDocumentResolver.FLYING_PIG_JPG))
-                        .build())
-                    .document(BundleDocument.builder()
-                        .id("ev-2")
+                .document(PdfPart.builder(fixture(BundleFixtures.CLAIMANT_MEDICAL_REPORT_PDF))
+                    .title(MEDICAL_REPORT_TITLE)
+                    .date(LocalDate.of(2026, 2, 3))
+                    .build())
+                .document(PdfPart.builder(fixture(BundleFixtures.WORD_DOCUMENT_DOCX))
+                    .title(LOCATION_STATEMENT_TITLE)
+                    .date(LocalDate.of(2026, 2, 17))
+                    .build())
+                .build())
+            .section(PdfSection.builder(EVIDENCE_SECTION)
+                .document(PdfPart.builder(fixture(BundleFixtures.FLYING_PIG_JPG))
+                    .title(FLYING_PIG_TITLE)
+                    .date(LocalDate.of(2026, 3, 1))
+                    .build())
+                // A recording cannot go in a PDF: the service writes a page about it instead.
+                .document(PdfPart.builder(HtmlPage.builder()
                         .title(HEARING_RECORDING_TITLE)
-                        .date(LocalDate.of(2026, 3, 14))
-                        .reference(new DocumentReference(
-                            FixtureDocumentResolver.PROVIDER, "hearing-recording-day-2"))
-                        .media(MediaPlaceholder.builder()
-                            .mediaType("audio/mpeg")
-                            .accessUrl(HEARING_RECORDING_URL)
-                            .duration(Duration.ofMinutes(42))
-                            .note(HEARING_RECORDING_NOTE)
-                            .build())
+                        .body("<h1>" + HEARING_RECORDING_TITLE + "</h1>"
+                            + "<p>Audio recording, 42 minutes. " + HEARING_RECORDING_NOTE + ".</p>"
+                            + "<p><a href=\"" + HEARING_RECORDING_URL + "\">" + HEARING_RECORDING_URL + "</a></p>")
                         .build())
+                    .date(LocalDate.of(2026, 3, 14))
                     .build())
-                .section(BundleSection.builder(CORRESPONDENCE_SECTION)
-                    .emptySectionPolicy(EmptySectionPolicy.INCLUDE_PLACEHOLDER)
-                    .build())
+                .build())
+            .section(PdfSection.builder(CORRESPONDENCE_SECTION)
+                .placeholderWhenEmpty()
                 .build())
             .build();
     }
