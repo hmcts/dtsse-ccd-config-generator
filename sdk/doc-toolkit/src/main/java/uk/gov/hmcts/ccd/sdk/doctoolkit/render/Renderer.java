@@ -131,7 +131,8 @@ public final class Renderer {
         continue;
       }
       try {
-        contents.put(part, new PdfSource(toPdf(part.source(), job)));
+        contents.put(part, new PdfSource(toPdfOrPlaceholder(part.source(), job,
+            request.missingDocuments())));
       } catch (DocumentFailure failure) {
         DocFailure reported = failure.reported(part, paths.get(part));
         log.warn("{} could not be included: {} - {}", part.title(), reported.reason(),
@@ -234,6 +235,24 @@ public final class Renderer {
     } catch (IOException | RuntimeException e) {
       throw new DocToolkitException(Reason.ASSEMBLY_FAILED,
           fileName + " could not be assembled: " + e.getMessage(), false, e);
+    }
+  }
+
+  /**
+   * As {@link #toPdf}; with placeholders allowed, a type the toolkit was not configured to convert
+   * (an office document without Docmosis) gets a placeholder page rather than failing the request.
+   */
+  private Path toPdfOrPlaceholder(DocSource source, Path job, MissingDocuments missing)
+      throws DocumentFailure, IOException {
+    try {
+      return toPdf(source, job);
+    } catch (DocToolkitException e) {
+      if (missing == MissingDocuments.PLACEHOLDER && e.reason() == Reason.NOT_CONFIGURED
+          && e.getCause() instanceof ConversionException) {
+        log.warn("{} cannot be converted: {}", source.name(), e.getMessage());
+        throw new DocumentFailure(DocFailure.Reason.UNSUPPORTED_FORMAT, e.getMessage(), e);
+      }
+      throw e;
     }
   }
 

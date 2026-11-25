@@ -158,9 +158,21 @@ public final class DocJobWorker implements AutoCloseable {
 
   private void run(DocJobRepository.Claimed claimed) {
     DocJob job = claimed.job();
+    // The lease is renewed until the job is finished, handler included, so no other worker
+    // takes it over while this one is still working on it.
+    ScheduledFuture<?> renewal = renewLease(claimed);
     try (MDC.MDCCloseable ignoredJob = MDC.putCloseable("docJobId", job.id().toString());
         MDC.MDCCloseable ignoredCase = MDC.putCloseable("caseReference",
             String.valueOf(job.caseReference()))) {
+      runHeld(claimed);
+    } finally {
+      renewal.cancel(false);
+    }
+  }
+
+  private void runHeld(DocJobRepository.Claimed claimed) {
+    DocJob job = claimed.job();
+    {
       if (claimed.removal()) {
         remove(claimed);
         return;
@@ -179,7 +191,6 @@ public final class DocJobWorker implements AutoCloseable {
         uploaded = DocRequestJson.readResult(claimed.resultJson());
       } else {
         boolean finalAttempt = job.attempts() >= settings.maxAttempts();
-        ScheduledFuture<?> renewal = renewLease(claimed);
         try {
           uploaded = toolkit.renderAndUpload(request, job.caseReference(), finalAttempt);
         } catch (DocToolkitException e) {
@@ -189,8 +200,14 @@ public final class DocJobWorker implements AutoCloseable {
             fail(claimed, e.reason().name(), e.getMessage(), e.failures());
           }
           return;
-        } finally {
-          renewal.cancel(false);
+        } catch (RuntimeException e) {
+          log.error("Doc job {}: rendering failed unexpectedly", job.id(), e);
+          if (!finalAttempt) {
+            retry(claimed, e.toString());
+          } else {
+            fail(claimed, "RENDER_FAILED", "Rendering failed: " + e, List.of());
+          }
+          return;
         }
         if (!repository.recordResult(job.id(), claimed.leaseOwner(), job.revision(),
             DocRequestJson.writeResult(uploaded))) {
@@ -228,8 +245,13 @@ public final class DocJobWorker implements AutoCloseable {
         }
       });
     } catch (NotHeld notHeld) {
-      log.info("Doc job {} was superseded or lost its lease; its result is discarded", job.id());
-      toolkit.discard(uploaded);
+      if (superseded(job)) {
+        log.info("Doc job {} was superseded; its result is discarded", job.id());
+        toolkit.discard(uploaded);
+      } else {
+        // Another worker took the job over with the same stored result: the document is theirs.
+        log.warn("Doc job {} lost its lease; another worker finishes it", job.id());
+      }
       repository.releaseSuperseded(job.id(), claimed.leaseOwner());
       return;
     } catch (RuntimeException e) {
@@ -250,6 +272,19 @@ public final class DocJobWorker implements AutoCloseable {
     }
     log.info("Doc job {} completed after {} attempt(s): {}", job.id(), job.attempts(),
         uploaded.document().getUrl());
+  }
+
+  /**
+   * Whether a newer request replaced the one this worker rendered, so nobody will be given its
+   * result. A one-off job is never superseded: once its result is recorded, whichever worker
+   * finishes it hands over that same document.
+   */
+  private boolean superseded(DocJob job) {
+    if (job.key().isEmpty()) {
+      return false;
+    }
+    return repository.find(job.id()).map(current -> !current.revision().equals(job.revision()))
+        .orElse(true);
   }
 
   private void remove(DocJobRepository.Claimed claimed) {
@@ -311,14 +346,39 @@ public final class DocJobWorker implements AutoCloseable {
   private void fail(DocJobRepository.Claimed claimed, String reason, String message,
       List<DocFailure> failures) {
     DocJob job = claimed.job();
-    if (!repository.markFailed(job.id(), claimed.leaseOwner(), job.revision(), reason, message,
-        DocRequestJson.writeFailures(failures))) {
+    String documents = DocRequestJson.writeFailures(failures);
+    try {
+      // The failure is recorded and the handler told in one transaction, so the handler sees the
+      // job as it was failed, and a failure is never recorded without the handler being told.
+      transactions.executeWithoutResult(status -> {
+        if (!repository.markFailed(job.id(), claimed.leaseOwner(), job.revision(), reason,
+            message, documents)) {
+          throw new NotHeld();
+        }
+        DocJob failed = repository.find(job.id()).orElseThrow();
+        try {
+          handler.failed(failed);
+        } catch (RuntimeException e) {
+          throw new HandlerFailed(e);
+        } catch (Exception e) {
+          throw new HandlerFailed(e);
+        }
+        if (failed.key().isEmpty()) {
+          repository.deleteFailedOneOff(failed.id());
+        }
+      });
+      log.error("Doc job {} failed ({}): {}", job.id(), reason, message);
+    } catch (NotHeld notHeld) {
       // Superseded: the newer request runs instead, and this failure is nobody's concern.
       repository.releaseSuperseded(job.id(), claimed.leaseOwner());
-      return;
+    } catch (HandlerFailed e) {
+      // Record the failure without the handler, so it is not lost.
+      log.error("Doc job {}: the DocJobHandler's failed() threw", job.id(), e.getCause());
+      if (repository.markFailed(job.id(), claimed.leaseOwner(), job.revision(), reason, message,
+          documents)) {
+        log.error("Doc job {} failed ({}): {}", job.id(), reason, message);
+      }
     }
-    log.error("Doc job {} failed ({}): {}", job.id(), reason, message);
-    repository.find(job.id()).ifPresent(this::notifyFailed);
   }
 
   private void notifyFailed(DocJob job) {

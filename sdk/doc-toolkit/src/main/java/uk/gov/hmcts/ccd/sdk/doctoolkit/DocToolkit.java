@@ -90,9 +90,12 @@ public final class DocToolkit {
   UploadedDoc renderAndUpload(PdfRequest request, long caseReference, boolean finalAttempt) {
     Validate.requireNonNull(request, "request");
     requireCdam();
-    try (MDC.MDCCloseable ignoredCase = MDC.putCloseable("caseReference",
-        String.valueOf(caseReference));
-        PdfResult result = renderer.render(request, finalAttempt)) {
+    // A worker running a job has already put the case in the logging context; leave it there.
+    boolean addedCase = MDC.get("caseReference") == null;
+    if (addedCase) {
+      MDC.put("caseReference", String.valueOf(caseReference));
+    }
+    try (PdfResult result = renderer.render(request, finalAttempt)) {
       Document document;
       try {
         document = cdam.upload(result.file(), result.fileName(), caseReference,
@@ -104,6 +107,10 @@ public final class DocToolkit {
       }
       request.category().ifPresent(document::setCategoryId);
       return new UploadedDoc(document, result.pageCount(), result.failures());
+    } finally {
+      if (addedCase) {
+        MDC.remove("caseReference");
+      }
     }
   }
 

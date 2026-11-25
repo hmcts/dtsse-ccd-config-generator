@@ -186,10 +186,27 @@ class BundleFailureTest {
   }
 
   @Test
+  void anOfficeDocumentWithoutDocmosisGetsAPlaceholderPageInABundleThatAllowsThem() throws Exception {
+    Path word = Files.write(sources.resolve("statement.docx"), fixture("wordDocument2.docx"));
+    PdfRequest request = bundle("Bundle")
+        .document(DocSource.file(word, "statement.docx", DOCX))
+        .build();
+
+    try (PdfResult result = toolkit.render(request)) {
+      assertThat(result.failures()).singleElement().satisfies(failure -> {
+        assertThat(failure.title()).isEqualTo("statement.docx");
+        assertThat(failure.reason()).isEqualTo(DocFailure.Reason.UNSUPPORTED_FORMAT);
+        assertThat(failure.detail()).contains("ccd.doc-toolkit.docmosis.convert-endpoint");
+      });
+    }
+  }
+
+  @Test
   void anOfficeDocumentWithoutDocmosisFailsTheBundle() throws Exception {
     Path word = Files.write(sources.resolve("statement.docx"), fixture("wordDocument2.docx"));
     PdfRequest request = bundle("Bundle")
         .document(DocSource.file(word, "statement.docx", DOCX))
+        .missingDocuments(MissingDocuments.FAIL)
         .build();
 
     assertThatThrownBy(() -> toolkit.render(request))
