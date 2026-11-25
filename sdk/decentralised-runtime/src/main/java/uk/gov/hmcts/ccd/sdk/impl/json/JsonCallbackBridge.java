@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectReader;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -69,6 +70,7 @@ public class JsonCallbackBridge {
   private final ApplicationContext applicationContext;
   private final ObjectMapper mapper;
   private final ObjectMapper requestMapper;
+  private final ObjectReader responseReader;
   private final HttpClient httpClient;
   private final Map<String, List<HandlerMethod>> routes;
   private final String localCallbackPlaceholder;
@@ -86,6 +88,9 @@ public class JsonCallbackBridge {
     this.requestMapper = mapper.copy()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
         .setSerializationInclusion(JsonInclude.Include.ALWAYS);
+    // A callback's decimals are kept as it wrote them, rather than rounded to the nearest double.
+    this.responseReader = mapper.readerFor(Object.class)
+        .with(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
     this.externalCallbackTimeout = externalCallbackTimeout(environment);
     // Application Gateway rejects the h2c upgrade attempted by the default client for HTTP URLs.
     this.httpClient = HttpClient.newBuilder()
@@ -236,7 +241,7 @@ public class JsonCallbackBridge {
     try {
       ((HttpMessageConverter<Object>) converter).write(body, MediaType.APPLICATION_JSON, message);
       byte[] json = message.body.toByteArray();
-      return json.length == 0 ? null : mapper.readValue(json, Object.class);
+      return json.length == 0 ? null : responseReader.readValue(json);
     } catch (IOException e) {
       throw new IllegalStateException("Unable to read the response of JSON callback " + callbackUrl, e);
     }
@@ -391,7 +396,7 @@ public class JsonCallbackBridge {
       );
       assertSuccessfulResponse(callbackUrl, HttpStatusCode.valueOf(response.statusCode()));
       String body = response.body();
-      return body == null || body.isBlank() ? null : mapper.readValue(body, Object.class);
+      return body == null || body.isBlank() ? null : responseReader.readValue(body);
     } catch (HttpTimeoutException e) {
       log.warn("External JSON callback timed out after {}: {}", externalCallbackTimeout, callbackUrl);
       throw new IllegalStateException("External JSON callback timed out " + callbackUrl, e);
