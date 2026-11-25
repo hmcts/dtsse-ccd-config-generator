@@ -1,17 +1,13 @@
 package uk.gov.hmcts.ccd.sdk.doctoolkit;
 
-/** Where a queued job is. */
+/** Where a job is. */
 public enum DocJobState {
-  /** Waiting to be run, or to be retried. */
+  /** Waiting for a worker, possibly until a retry time. */
   QUEUED,
-  /** A worker is running it. */
+  /** A worker holds it. */
   IN_PROGRESS,
-  /**
-   * Stored in CDAM and handed to the service's {@link DocJobHandler}.
-   */
-  COMPLETED,
-  /**
-   * Given up on; the handler's {@link DocJobHandler#failed} was called.
-   */
+  /** Rendered and handed to the service; a kept-up-to-date document waits here for a change. */
+  DONE,
+  /** Given up on; a kept-up-to-date document is tried again when its request changes. */
   FAILED
 }

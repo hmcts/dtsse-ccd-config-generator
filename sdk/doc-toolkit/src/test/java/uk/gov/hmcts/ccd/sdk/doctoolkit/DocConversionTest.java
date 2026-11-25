@@ -40,10 +40,10 @@ class DocConversionTest {
 
   @Test
   void convertsOneDocumentToPdf() throws Exception {
-    DocConversionRequest request =
-        DocConversionRequest.of(DocSource.bytes(fixture("flying-pig.jpg"), "pig.jpg"));
+    DocSource pig = DocSource.bytes(fixture("flying-pig.jpg"), "pig.jpg");
+    PdfRequest request = PdfRequest.builder(pig.name()).document(pig).build();
 
-    try (DocResult result = toolkit.render(request); PDDocument document = load(result)) {
+    try (PdfResult result = toolkit.render(request); PDDocument document = load(result)) {
       assertThat(result.fileName()).isEqualTo("pig.jpg.pdf");
       assertThat(result.pageCount()).isEqualTo(1);
       assertThat(document.getNumberOfPages()).isEqualTo(1);
@@ -54,14 +54,14 @@ class DocConversionTest {
   @Test
   void joinsDocumentsInOrderWithNothingAdded() throws Exception {
     Path word = Files.write(sources.resolve("statement.docx"), fixture("wordDocument2.docx"));
-    DocConversionRequest request = DocConversionRequest
+    PdfRequest request = PdfRequest.builder("Joined")
         .document(DocSource.bytes(Fixtures.pdfSaying("First page"), "first.pdf"))
         .document(DocSource.file(word, "statement.docx", DOCX))
         .document(HtmlPage.of("<p>Last page</p>"))
         .fileName("joined.pdf")
         .build();
 
-    try (DocResult result = toolkit.render(request); PDDocument document = load(result)) {
+    try (PdfResult result = toolkit.render(request); PDDocument document = load(result)) {
       assertThat(result.pageCount()).isEqualTo(3);
       assertThat(text(document, 1)).contains("First page");
       assertThat(text(document, 2)).contains("Converted statement");
@@ -73,15 +73,15 @@ class DocConversionTest {
 
   @Test
   void aPrintedLetterKeepsTheCoversheetAndPadsEachPart() throws Exception {
-    DocConversionRequest request = DocConversionRequest
-        .unchanged(DocSource.bytes(Fixtures.pdfSaying("Jane Doe, 1 High Street"), "coversheet.pdf"))
+    PdfRequest request = PdfRequest.builder("CPC-01 1234-5678-9012-3456")
+        .document(PdfPart.builder(DocSource.bytes(Fixtures.pdfSaying("Jane Doe, 1 High Street"),
+            "coversheet.pdf")).unchanged().build())
         .document(DocSource.bytes(fixture("flying-pig.jpg"), "pig.jpg"))
         .document(DocSource.file(Fixtures.mixedLayoutPdf(sources)))
-        .title("CPC-01 1234-5678-9012-3456")
         .print(PrintOptions.bulkPrint())
         .build();
 
-    try (DocResult result = toolkit.render(request); PDDocument document = load(result)) {
+    try (PdfResult result = toolkit.render(request); PDDocument document = load(result)) {
       // Coversheet 1 + 1, photo 1 + 1, the three-page document 3 + 1.
       assertThat(result.pageCount()).isEqualTo(8);
       assertThat(text(document, 1)).contains("Jane Doe, 1 High Street");
@@ -94,13 +94,13 @@ class DocConversionTest {
   @Test
   void aWatermarkIsAppliedBeforePrinting() throws Exception {
     Path image = Files.write(sources.resolve("draft.png"), fixture("schmcts.png"));
-    DocConversionRequest request = DocConversionRequest
+    PdfRequest request = PdfRequest.builder("Order")
         .document(DocSource.bytes(Fixtures.pdfSaying("Order"), "order.pdf"))
         .watermark(Watermark.image(image))
         .print(PrintOptions.bulkPrint().toBuilder().padToEvenPages(false).build())
         .build();
 
-    try (DocResult result = toolkit.render(request)) {
+    try (PdfResult result = toolkit.render(request)) {
       assertThat(result.pageCount()).isEqualTo(1);
     }
   }
@@ -108,7 +108,7 @@ class DocConversionTest {
   @Test
   void aDocumentThatCannotBeConvertedFailsTheRequest() throws Exception {
     Path zip = Fixtures.zip(sources);
-    DocConversionRequest request = DocConversionRequest
+    PdfRequest request = PdfRequest.builder("Evidence")
         .document(DocSource.bytes(Fixtures.pdfSaying("Fine"), "fine.pdf"))
         .document(DocSource.file(zip, "evidence.zip", null))
         .build();
@@ -125,7 +125,7 @@ class DocConversionTest {
 
   @Test
   void aLetterOverTheSizeLimitFails() {
-    DocConversionRequest request = DocConversionRequest
+    PdfRequest request = PdfRequest.builder("Letter")
         .document(DocSource.bytes(fixture("flying-pig.jpg"), "pig.jpg"))
         .print(PrintOptions.bulkPrint().toBuilder().maxOutputBytes(10_000).build())
         .build();
@@ -134,6 +134,45 @@ class DocConversionTest {
         .isInstanceOfSatisfying(DocToolkitException.class, e ->
             assertThat(e.reason()).isEqualTo(DocToolkitException.Reason.OUTPUT_TOO_LARGE));
     assertNothingLeftBehind(work);
+  }
+
+  @Test
+  void aPlainJoinCanHavePlaceholderPagesWhenNotPrinted() throws Exception {
+    PdfRequest request = PdfRequest.builder("Evidence")
+        .document(DocSource.bytes(Fixtures.pdfSaying("Fine"), "fine.pdf"))
+        .document(DocSource.file(Fixtures.zip(sources), "evidence.zip", null))
+        .missingDocuments(MissingDocuments.PLACEHOLDER)
+        .build();
+
+    try (PdfResult result = toolkit.render(request); PDDocument document = load(result)) {
+      assertThat(result.pageCount()).isEqualTo(2);
+      assertThat(text(document, 1)).contains("Fine");
+      assertThat(text(document, 2)).contains(DocFailure.Reason.UNSUPPORTED_FORMAT.message());
+      assertThat(result.failures()).singleElement().satisfies(failure ->
+          assertThat(failure.page()).hasValue(2));
+    }
+  }
+
+  @Test
+  void aPrintedPlainJoinCannotHavePlaceholderPages() {
+    PdfRequest.Builder request = PdfRequest.builder("Letter")
+        .document(DocSource.bytes(fixture("flying-pig.jpg"), "pig.jpg"))
+        .print(PrintOptions.bulkPrint())
+        .missingDocuments(MissingDocuments.PLACEHOLDER);
+
+    assertThatThrownBy(request::build).isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void unchangedPartsAreOnlyForAPrintedPlainJoin() {
+    PdfPart coversheet = PdfPart.builder(DocSource.bytes(fixture("one-page.pdf"), "cover.pdf"))
+        .unchanged().build();
+
+    assertThatThrownBy(() -> PdfRequest.builder("Not printed").document(coversheet).build())
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> PdfRequest.builder("Printed bundle").document(coversheet)
+        .titlePage().print(PrintOptions.bulkPrint()).build())
+        .isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test
@@ -154,7 +193,8 @@ class DocConversionTest {
               + "<p>Recording held by the court</p></body></html>")
           .build();
 
-      try (DocResult result = toolkit.render(DocConversionRequest.of(page));
+      PdfRequest request = PdfRequest.builder(page.name()).document(page).build();
+      try (PdfResult result = toolkit.render(request);
           PDDocument document = load(result)) {
         assertThat(text(document)).contains("Recording held by the court");
         assertThat(document.getDocumentInformation().getTitle()).isEqualTo("Recording");

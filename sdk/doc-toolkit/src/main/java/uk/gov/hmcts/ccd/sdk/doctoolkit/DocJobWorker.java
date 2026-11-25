@@ -3,16 +3,19 @@ package uk.gov.hmcts.ccd.sdk.doctoolkit;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.transaction.support.TransactionTemplate;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.jobs.DocJobRepository;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.jobs.DocRequestJson;
 
@@ -21,9 +24,10 @@ import uk.gov.hmcts.ccd.sdk.doctoolkit.jobs.DocRequestJson;
  * {@code ccd.doc-toolkit.jobs.worker.enabled} is false, so a service can run its workers in a
  * separate deployment from the instances handling CCD callbacks.
  *
- * <p>Each poll claims what the worker has room for under a lease, renders and uploads each job,
- * then calls the {@link DocJobHandler}. A worker that dies mid-job loses its lease, and another
- * worker picks the job up.
+ * <p>Each poll claims what the worker has room for under a lease, renews the lease while
+ * rendering, uploads the result and calls the {@link DocJobHandler} in one transaction with the
+ * worker's own bookkeeping. A worker that dies mid-job loses its lease, and another worker picks
+ * the job up.
  */
 public final class DocJobWorker implements AutoCloseable {
   private static final Logger log = LoggerFactory.getLogger(DocJobWorker.class);
@@ -34,32 +38,50 @@ public final class DocJobWorker implements AutoCloseable {
    * @param maxAttempts how many times a job is tried
    * @param firstRetryDelay the wait before the second attempt; it doubles each time, up to
    *     {@code maxRetryDelay}
+   * @param placeholderRetryDelay the wait before re-running a kept-up-to-date document that had
+   *     to use placeholders for documents only temporarily unavailable
+   * @param maxPlaceholderRetries how many times that is done for one request
    */
   public record Settings(Duration pollDelay, int maxConcurrentRenders, Duration lease,
-      int maxAttempts, Duration firstRetryDelay, Duration maxRetryDelay) {
+      int maxAttempts, Duration firstRetryDelay, Duration maxRetryDelay,
+      Duration placeholderRetryDelay, int maxPlaceholderRetries) {
 
     /** One-second polls, two renders at a time, five-minute leases, three attempts. */
     public static Settings defaults() {
       return new Settings(Duration.ofSeconds(1), 2, Duration.ofMinutes(5), 3,
-          Duration.ofSeconds(30), Duration.ofMinutes(10));
+          Duration.ofSeconds(30), Duration.ofMinutes(10), Duration.ofMinutes(15), 3);
+    }
+
+    /** These settings with a different poll delay. */
+    public Settings withPollDelay(Duration delay) {
+      return new Settings(delay, maxConcurrentRenders, lease, maxAttempts, firstRetryDelay,
+          maxRetryDelay, placeholderRetryDelay, maxPlaceholderRetries);
+    }
+
+    /** These settings with a different number of concurrent renders. */
+    public Settings withMaxConcurrentRenders(int renders) {
+      return new Settings(pollDelay, renders, lease, maxAttempts, firstRetryDelay, maxRetryDelay,
+          placeholderRetryDelay, maxPlaceholderRetries);
     }
   }
 
   private final DocJobRepository repository;
   private final DocToolkit toolkit;
   private final DocJobHandler handler;
+  private final TransactionTemplate transactions;
   private final Settings settings;
   private final ExecutorService renders;
-  private final ScheduledExecutorService poller;
+  private final ScheduledExecutorService timers;
   private final AtomicInteger inFlight = new AtomicInteger();
   private final String workerId = "doc-job-worker-" + UUID.randomUUID();
 
   /** Created by the auto-configuration. */
   public DocJobWorker(DocJobRepository repository, DocToolkit toolkit, DocJobHandler handler,
-      Settings settings) {
+      TransactionTemplate transactions, Settings settings) {
     this.repository = Validate.requireNonNull(repository, "repository");
     this.toolkit = Validate.requireNonNull(toolkit, "toolkit");
     this.handler = Validate.requireNonNull(handler, "handler");
+    this.transactions = Validate.requireNonNull(transactions, "transactions");
     this.settings = Validate.requireNonNull(settings, "settings");
     AtomicInteger threads = new AtomicInteger();
     this.renders = Executors.newFixedThreadPool(settings.maxConcurrentRenders(), task -> {
@@ -67,7 +89,7 @@ public final class DocJobWorker implements AutoCloseable {
       thread.setDaemon(true);
       return thread;
     });
-    this.poller = Executors.newSingleThreadScheduledExecutor(task -> {
+    this.timers = Executors.newSingleThreadScheduledExecutor(task -> {
       Thread thread = new Thread(task, "doc-job-poller");
       thread.setDaemon(true);
       return thread;
@@ -77,7 +99,7 @@ public final class DocJobWorker implements AutoCloseable {
   /** Starts polling. */
   public void start() {
     long delay = settings.pollDelay().toMillis();
-    poller.scheduleWithFixedDelay(() -> {
+    timers.scheduleWithFixedDelay(() -> {
       try {
         poll();
       } catch (RuntimeException e) {
@@ -89,7 +111,7 @@ public final class DocJobWorker implements AutoCloseable {
   /** Stops polling and lets running jobs finish; an unfinished job is retried by another worker. */
   @Override
   public void close() {
-    poller.shutdownNow();
+    timers.shutdownNow();
     renders.shutdown();
   }
 
@@ -127,10 +149,23 @@ public final class DocJobWorker implements AutoCloseable {
     }
   }
 
+  /** The worker no longer holds the job, or its request was superseded. */
+  private static final class NotHeld extends RuntimeException {
+    NotHeld() {
+      super(null, null, false, false);
+    }
+  }
+
   private void run(DocJobRepository.Claimed claimed) {
     DocJob job = claimed.job();
-    try (MDC.MDCCloseable ignored = MDC.putCloseable("docJobId", job.id().toString())) {
-      DocRequest request;
+    try (MDC.MDCCloseable ignoredJob = MDC.putCloseable("docJobId", job.id().toString());
+        MDC.MDCCloseable ignoredCase = MDC.putCloseable("caseReference",
+            String.valueOf(job.caseReference()))) {
+      if (claimed.removal()) {
+        remove(claimed);
+        return;
+      }
+      PdfRequest request;
       try {
         request = DocRequestJson.read(claimed.requestJson());
       } catch (DocRequestJson.Unreadable e) {
@@ -144,8 +179,9 @@ public final class DocJobWorker implements AutoCloseable {
         uploaded = DocRequestJson.readResult(claimed.resultJson());
       } else {
         boolean finalAttempt = job.attempts() >= settings.maxAttempts();
+        ScheduledFuture<?> renewal = renewLease(claimed);
         try {
-          uploaded = toolkit.renderAndUpload(request, job.caseId(), job.eventId(), finalAttempt);
+          uploaded = toolkit.renderAndUpload(request, job.caseReference(), finalAttempt);
         } catch (DocToolkitException e) {
           if (e.isTransient() && !finalAttempt) {
             retry(claimed, e.getMessage());
@@ -153,31 +189,108 @@ public final class DocJobWorker implements AutoCloseable {
             fail(claimed, e.reason().name(), e.getMessage(), e.failures());
           }
           return;
+        } finally {
+          renewal.cancel(false);
         }
-        if (!repository.recordResult(job.id(), DocRequestJson.writeResult(uploaded),
-            claimed.leaseOwner())) {
-          log.warn("Doc job {} lost its lease while rendering; another worker has it", job.id());
+        if (!repository.recordResult(job.id(), claimed.leaseOwner(), job.revision(),
+            DocRequestJson.writeResult(uploaded))) {
+          log.info("Doc job {} was superseded or lost its lease while rendering", job.id());
+          toolkit.discard(uploaded);
+          repository.releaseSuperseded(job.id(), claimed.leaseOwner());
           return;
         }
       }
-      try {
-        handler.completed(withResult(job, uploaded), request, uploaded);
-      } catch (Exception e) {
-        log.error("Doc job {}: the DocJobHandler failed", job.id(), e);
-        if (job.attempts() < settings.maxAttempts()) {
-          retry(claimed, "the DocJobHandler failed: " + e);
-        } else {
-          fail(claimed, "HANDLER_FAILED", "The DocJobHandler failed " + job.attempts()
-              + " time(s); the document is stored at " + uploaded.document().getUrl()
-              + ". Last failure: " + e, List.of());
+      complete(claimed, uploaded);
+    }
+  }
+
+  private void complete(DocJobRepository.Claimed claimed, UploadedDoc uploaded) {
+    DocJob job = claimed.job();
+    Instant requeueAt = job.key().isPresent()
+        && uploaded.failures().stream().anyMatch(failure -> failure.reason().isTransient())
+        && claimed.placeholderRetries() < settings.maxPlaceholderRetries()
+        ? Instant.now().plus(settings.placeholderRetryDelay()) : null;
+    try {
+      transactions.executeWithoutResult(status -> {
+        try {
+          handler.completed(job.withResult(uploaded), uploaded);
+        } catch (RuntimeException e) {
+          throw e;
+        } catch (Exception e) {
+          throw new HandlerFailed(e);
         }
-        return;
+        boolean finished = job.key().isPresent()
+            ? repository.finishKeyed(job.id(), claimed.leaseOwner(), job.revision().getAsLong(),
+                requeueAt)
+            : repository.deleteHeld(job.id(), claimed.leaseOwner(), OptionalLong.empty());
+        if (!finished) {
+          throw new NotHeld();
+        }
+      });
+    } catch (NotHeld notHeld) {
+      log.info("Doc job {} was superseded or lost its lease; its result is discarded", job.id());
+      toolkit.discard(uploaded);
+      repository.releaseSuperseded(job.id(), claimed.leaseOwner());
+      return;
+    } catch (RuntimeException e) {
+      Throwable cause = e instanceof HandlerFailed ? e.getCause() : e;
+      log.error("Doc job {}: the DocJobHandler failed", job.id(), cause);
+      if (job.attempts() < settings.maxAttempts()) {
+        retry(claimed, "the DocJobHandler failed: " + cause);
+      } else {
+        fail(claimed, "HANDLER_FAILED", "The DocJobHandler failed " + job.attempts()
+            + " time(s); the document is stored at " + uploaded.document().getUrl()
+            + ". Last failure: " + cause, List.of());
       }
-      if (repository.markCompleted(job.id(), claimed.leaseOwner())) {
-        log.info("Doc job {} completed after {} attempt(s): {}", job.id(), job.attempts(),
-            uploaded.document().getUrl());
+      return;
+    }
+    if (requeueAt != null) {
+      log.info("Doc job {} used placeholders for documents only temporarily unavailable;"
+          + " it runs again at {}", job.id(), requeueAt);
+    }
+    log.info("Doc job {} completed after {} attempt(s): {}", job.id(), job.attempts(),
+        uploaded.document().getUrl());
+  }
+
+  private void remove(DocJobRepository.Claimed claimed) {
+    DocJob job = claimed.job();
+    try {
+      transactions.executeWithoutResult(status -> {
+        try {
+          handler.removed(job);
+        } catch (RuntimeException e) {
+          throw e;
+        } catch (Exception e) {
+          throw new HandlerFailed(e);
+        }
+        if (!repository.deleteHeld(job.id(), claimed.leaseOwner(), job.revision())) {
+          throw new NotHeld();
+        }
+      });
+      log.info("Case {} {} removed", job.caseReference(), job.key().orElse(""));
+    } catch (NotHeld notHeld) {
+      repository.releaseSuperseded(job.id(), claimed.leaseOwner());
+    } catch (RuntimeException e) {
+      Throwable cause = e instanceof HandlerFailed ? e.getCause() : e;
+      log.error("Doc job {}: the DocJobHandler's removed() failed", job.id(), cause);
+      if (job.attempts() < settings.maxAttempts()) {
+        retry(claimed, "the DocJobHandler's removed() failed: " + cause);
+      } else {
+        fail(claimed, "HANDLER_FAILED", "The DocJobHandler's removed() failed: " + cause,
+            List.of());
       }
     }
+  }
+
+  private ScheduledFuture<?> renewLease(DocJobRepository.Claimed claimed) {
+    long every = Math.max(1, settings.lease().toMillis() / 3);
+    return timers.scheduleAtFixedRate(() -> {
+      try {
+        repository.renewLease(claimed.job().id(), claimed.leaseOwner(), settings.lease());
+      } catch (RuntimeException e) {
+        log.warn("Could not renew the lease on doc job {}", claimed.job().id(), e);
+      }
+    }, every, every, TimeUnit.MILLISECONDS);
   }
 
   private void retry(DocJobRepository.Claimed claimed, String why) {
@@ -187,32 +300,52 @@ public final class DocJobWorker implements AutoCloseable {
       delay = Math.min(delay * 2, settings.maxRetryDelay().toMillis());
     }
     Instant next = Instant.now().plusMillis(delay);
-    if (repository.requeue(job.id(), next, claimed.leaseOwner())) {
+    if (repository.requeue(job.id(), claimed.leaseOwner(), job.revision(), next)) {
       log.warn("Doc job {} attempt {} failed and is retried at {}: {}", job.id(), job.attempts(),
           next, why);
+    } else {
+      repository.releaseSuperseded(job.id(), claimed.leaseOwner());
     }
   }
 
   private void fail(DocJobRepository.Claimed claimed, String reason, String message,
       List<DocFailure> failures) {
-    UUID id = claimed.job().id();
-    if (repository.markFailed(id, reason, message, DocRequestJson.writeFailures(failures),
-        claimed.leaseOwner())) {
-      log.error("Doc job {} failed ({}): {}", id, reason, message);
-      repository.find(id).ifPresent(this::notifyFailed);
+    DocJob job = claimed.job();
+    if (!repository.markFailed(job.id(), claimed.leaseOwner(), job.revision(), reason, message,
+        DocRequestJson.writeFailures(failures))) {
+      // Superseded: the newer request runs instead, and this failure is nobody's concern.
+      repository.releaseSuperseded(job.id(), claimed.leaseOwner());
+      return;
     }
+    log.error("Doc job {} failed ({}): {}", job.id(), reason, message);
+    repository.find(job.id()).ifPresent(this::notifyFailed);
   }
 
   private void notifyFailed(DocJob job) {
     try {
-      handler.failed(job);
-    } catch (Exception e) {
-      log.error("Doc job {}: the DocJobHandler's failed() threw", job.id(), e);
+      transactions.executeWithoutResult(status -> {
+        try {
+          handler.failed(job);
+        } catch (RuntimeException e) {
+          throw e;
+        } catch (Exception e) {
+          throw new HandlerFailed(e);
+        }
+        if (job.key().isEmpty()) {
+          repository.deleteFailedOneOff(job.id());
+        }
+      });
+    } catch (RuntimeException e) {
+      // The job stays failed, so the failure is not lost.
+      log.error("Doc job {}: the DocJobHandler's failed() threw", job.id(),
+          e instanceof HandlerFailed ? e.getCause() : e);
     }
   }
 
-  private static DocJob withResult(DocJob job, UploadedDoc uploaded) {
-    return new DocJob(job.id(), job.state(), job.caseId(), job.eventId(), job.attempts(),
-        job.submittedAt(), job.updatedAt(), java.util.Optional.of(uploaded), job.failure());
+  /** A checked exception from the handler, carried out of the transaction callback. */
+  private static final class HandlerFailed extends RuntimeException {
+    HandlerFailed(Exception cause) {
+      super(cause);
+    }
   }
 }

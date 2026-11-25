@@ -1,20 +1,42 @@
 package uk.gov.hmcts.ccd.sdk.doctoolkit;
 
+import java.util.List;
+import java.util.Optional;
+import java.util.OptionalInt;
+
 /**
- * A document that could not be included, and why. In a bundle that uses
- * {@link MissingDocuments#PLACEHOLDER} its place is taken by a page giving {@link Reason#message()}.
+ * A document that could not be included, and why. With {@link MissingDocuments#PLACEHOLDER} its
+ * place is taken by a page giving {@link Reason#message()}.
  *
- * @param title the document's title (or its source's name)
+ * @param id the part's id, when the caller gave one
+ * @param title the part's title
+ * @param sectionPath the titles of the sections holding it, outermost first, starting with the
+ *     request's title; empty when the failure is not of a part in a section
+ * @param page the placeholder's page in the output, when one was made
  * @param reason why it could not be included
- * @param detail what went wrong, for logs and support; never shown to readers of the bundle
+ * @param detail what went wrong, for logs and support; never shown to readers
  */
-public record DocFailure(String title, Reason reason, String detail) {
+public record DocFailure(Optional<String> id, String title, List<String> sectionPath,
+    OptionalInt page, Reason reason, String detail) {
 
   /** Validates the fields. */
   public DocFailure {
+    Validate.requireNonNull(id, "DocFailure.id");
     Validate.requireNonBlank(title, "DocFailure.title");
+    sectionPath = List.copyOf(Validate.requireNonNull(sectionPath, "DocFailure.sectionPath"));
+    Validate.requireNonNull(page, "DocFailure.page");
     Validate.requireNonNull(reason, "DocFailure.reason");
     detail = detail == null ? "" : detail;
+  }
+
+  /** A failure with no id, section or page: of a whole request, or before assembly. */
+  public DocFailure(String title, Reason reason, String detail) {
+    this(Optional.empty(), title, List.of(), OptionalInt.empty(), reason, detail);
+  }
+
+  /** This failure with the page its placeholder landed on. */
+  public DocFailure onPage(int page) {
+    return new DocFailure(id, title, sectionPath, OptionalInt.of(page), reason, detail);
   }
 
   /** Why a document could not be included. */

@@ -42,15 +42,16 @@ class UploadTest {
 
   @Test
   void storesTheResultAsTheSystemUserAndAttachesItToTheCase() throws Exception {
-    BundleRequest request = BundleRequest.builder("Case bundle")
+    PdfRequest request = PdfRequest.builder("Case bundle")
         .fileName("1234-case-bundle.pdf")
         .document(DocSource.cdam(source))
         .build();
 
-    UploadedDoc uploaded = toolkit.renderAndUpload(request, CASE_ID, "createBundle");
+    UploadedDoc uploaded = toolkit.upload(request, CASE_ID);
 
     FakeCdam.Upload upload = cdam.uploads.getFirst();
     assertThat(upload.authorisation()).isEqualTo("Bearer system-user");
+    assertThat(upload.classification()).isEqualTo("PUBLIC");
     assertThat(upload.caseTypeId()).isEqualTo("PCS");
     assertThat(upload.jurisdiction()).isEqualTo("POSSESSIONS");
     assertThat(upload.fileName()).isEqualTo("1234-case-bundle.pdf");
@@ -69,16 +70,46 @@ class UploadTest {
     assertThat(uploaded.document().getBinaryUrl()).isEqualTo(FakeCdam.HOST + upload.id() + "/binary");
     assertThat(uploaded.document().getFilename()).isEqualTo("1234-case-bundle.pdf");
     assertThat(uploaded.document().getUploadTimestamp()).isNotNull();
+    assertThat(uploaded.document().getCategoryId()).isNull();
     assertThat(uploaded.failures()).isEmpty();
     assertNothingLeftBehind(work);
   }
 
   @Test
+  void theRequestsCategoryAndClassificationGoWithTheUpload() {
+    PdfRequest request = PdfRequest.builder("Hearing bundle")
+        .document(DocSource.cdam(source))
+        .category("bundles")
+        .classification(Classification.RESTRICTED)
+        .build();
+
+    UploadedDoc uploaded = toolkit.upload(request, CASE_ID);
+
+    assertThat(cdam.uploads).singleElement().satisfies(upload ->
+        assertThat(upload.classification()).isEqualTo("RESTRICTED"));
+    assertThat(uploaded.document().getCategoryId()).isEqualTo("bundles");
+  }
+
+  @Test
+  void aDeletedDocumentIsGoneFromCdam() {
+    PdfRequest request = PdfRequest.builder("Claim").document(DocSource.cdam(source)).build();
+    UploadedDoc uploaded = toolkit.upload(request, CASE_ID);
+    UUID id = cdam.uploads.getFirst().id();
+    assertThat(cdam.get(id)).isNotNull();
+
+    toolkit.delete(uploaded.document());
+
+    assertThat(cdam.get(id)).isNull();
+    assertThat(cdam.deleted).containsExactly(id);
+    assertThat(cdam.get(source)).isNotNull();
+  }
+
+  @Test
   void aDocumentThatCannotBeAttachedIsDeletedAndTheUploadFails() {
     cdam.failAttaching(new IllegalStateException("CDAM refused the hash token"));
-    DocConversionRequest request = DocConversionRequest.of(DocSource.cdam(source));
+    PdfRequest request = PdfRequest.builder("Claim").document(DocSource.cdam(source)).build();
 
-    assertThatThrownBy(() -> toolkit.renderAndUpload(request, CASE_ID, "createBundle"))
+    assertThatThrownBy(() -> toolkit.upload(request, CASE_ID))
         .isInstanceOfSatisfying(DocToolkitException.class, e -> {
           assertThat(e.reason()).isEqualTo(DocToolkitException.Reason.UPLOAD_FAILED);
           assertThat(e.isTransient()).isTrue();
@@ -90,10 +121,10 @@ class UploadTest {
   @Test
   void uploadingWithoutCdamIsNotConfigured() {
     DocToolkit local = DocToolkit.builder().tempDirectory(work).build();
-    DocConversionRequest request =
-        DocConversionRequest.of(DocSource.bytes(fixture("one-page.pdf"), "one-page.pdf"));
+    PdfRequest request = PdfRequest.builder("One page")
+        .document(DocSource.bytes(fixture("one-page.pdf"), "one-page.pdf")).build();
 
-    assertThatThrownBy(() -> local.renderAndUpload(request, CASE_ID, "createBundle"))
+    assertThatThrownBy(() -> local.upload(request, CASE_ID))
         .isInstanceOfSatisfying(DocToolkitException.class, e ->
             assertThat(e.reason()).isEqualTo(DocToolkitException.Reason.NOT_CONFIGURED));
     assertThat(List.of(cdam.uploads, cdam.attachments)).allMatch(List::isEmpty);

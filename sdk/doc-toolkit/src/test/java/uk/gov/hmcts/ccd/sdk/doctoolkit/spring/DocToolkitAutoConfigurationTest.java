@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,14 +20,16 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.DocConversionRequest;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.DocJob;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocJobHandler;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocJobs;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.DocResult;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocSource;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocToolkit;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocToolkitException;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocToolkitSystemUser;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfRequest;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfResult;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.UploadedDoc;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.convert.testsupport.Fixtures;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.convert.testsupport.StubDocmosis;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.docmosis.DocmosisRenderService;
@@ -82,8 +85,8 @@ class DocToolkitAutoConfigurationTest {
             "ccd.doc-toolkit.temp-directory=" + temp)
         .run(context -> {
           DocToolkit toolkit = context.getBean(DocToolkit.class);
-          try (DocResult result = toolkit.render(
-              DocConversionRequest.of(DocSource.file(word, "statement.docx", DOCX)))) {
+          try (PdfResult result = toolkit.render(
+              single(DocSource.file(word, "statement.docx", DOCX)))) {
             assertThat(result.pageCount()).isEqualTo(1);
             assertThat(result.file()).startsWith(temp);
           }
@@ -99,8 +102,8 @@ class DocToolkitAutoConfigurationTest {
             "ccd.doc-toolkit.docmosis.convert-endpoint=" + convertEndpoint(),
             "ccd.doc-toolkit.docmosis.access-key=key")
         .run(context -> {
-          try (DocResult ignored = context.getBean(DocToolkit.class).render(
-              DocConversionRequest.of(DocSource.file(word, "statement.docx", DOCX)))) {
+          try (PdfResult ignored = context.getBean(DocToolkit.class).render(
+              single(DocSource.file(word, "statement.docx", DOCX)))) {
             assertThat(own.calls()).hasSize(1);
           }
           assertThat(docmosisCalls).hasValue(0);
@@ -110,7 +113,7 @@ class DocToolkitAutoConfigurationTest {
   @Test
   void withoutDocmosisOfficeDocumentsAreNotConfigured() {
     runner.run(context -> assertThatThrownBy(() -> context.getBean(DocToolkit.class).render(
-            DocConversionRequest.of(DocSource.file(word, "statement.docx", DOCX))))
+            single(DocSource.file(word, "statement.docx", DOCX))))
         .isInstanceOfSatisfying(DocToolkitException.class, e ->
             assertThat(e.reason()).isEqualTo(DocToolkitException.Reason.NOT_CONFIGURED)));
   }
@@ -125,8 +128,8 @@ class DocToolkitAutoConfigurationTest {
         .withBean(JdbcTemplate.class,
             () -> new JdbcTemplate(new DriverManagerDataSource("jdbc:unused")))
         .run(context -> {
-          try (DocResult result = context.getBean(DocToolkit.class)
-              .render(DocConversionRequest.of(DocSource.cdam(id)))) {
+          try (PdfResult result = context.getBean(DocToolkit.class)
+              .render(single(DocSource.cdam(id)))) {
             assertThat(result.pageCount()).isEqualTo(1);
           }
           assertThat(cdam.fetchedAs).containsExactly("Bearer system-user Bearer service");
@@ -140,23 +143,21 @@ class DocToolkitAutoConfigurationTest {
     runner.withBean(CaseDocumentClientApi.class, () -> cdam)
         .withBean(AuthTokenGenerator.class, () -> () -> "Bearer service")
         .run(context -> assertThatThrownBy(() -> context.getBean(DocToolkit.class)
-                .render(DocConversionRequest.of(DocSource.cdam(id))))
+                .render(single(DocSource.cdam(id))))
             .isInstanceOfSatisfying(DocToolkitException.class, e ->
                 assertThat(e.reason()).isEqualTo(DocToolkitException.Reason.NOT_CONFIGURED)));
   }
 
   @Test
   void jobsAreOffUnlessEnabled() {
-    runner.withConfiguration(AutoConfigurations.of(DocJobsAutoConfiguration.class))
-        .withBean(NamedParameterJdbcTemplate.class, DocToolkitAutoConfigurationTest::unusedJdbc)
+    jobsRunner()
         .run(context -> assertThat(context).doesNotHaveBean(DocJobs.class)
             .doesNotHaveBean(DocJobsAutoConfiguration.DocJobWorkerLifecycle.class));
   }
 
   @Test
   void anInstanceThatOnlyQueuesJobsNeedsNoHandler() {
-    runner.withConfiguration(AutoConfigurations.of(DocJobsAutoConfiguration.class))
-        .withBean(NamedParameterJdbcTemplate.class, DocToolkitAutoConfigurationTest::unusedJdbc)
+    jobsRunner()
         .withPropertyValues("ccd.doc-toolkit.jobs.enabled=true",
             "ccd.doc-toolkit.jobs.worker.enabled=false")
         .run(context -> assertThat(context).hasSingleBean(DocJobs.class)
@@ -165,21 +166,41 @@ class DocToolkitAutoConfigurationTest {
 
   @Test
   void theWorkerNeedsTheServicesHandler() {
-    runner.withConfiguration(AutoConfigurations.of(DocJobsAutoConfiguration.class))
-        .withBean(NamedParameterJdbcTemplate.class, DocToolkitAutoConfigurationTest::unusedJdbc)
+    jobsRunner()
         .withPropertyValues("ccd.doc-toolkit.jobs.enabled=true")
         .run(context -> assertThat(context).hasFailed().getFailure()
             .rootCause().hasMessageContaining("one DocJobHandler bean"));
-    runner.withConfiguration(AutoConfigurations.of(DocJobsAutoConfiguration.class))
-        .withBean(NamedParameterJdbcTemplate.class, DocToolkitAutoConfigurationTest::unusedJdbc)
-        .withBean(DocJobHandler.class, () -> (job, request, uploaded) -> { })
+    jobsRunner()
+        .withBean(DocJobHandler.class, NoOpHandler::new)
         .withPropertyValues("ccd.doc-toolkit.jobs.enabled=true")
         .run(context -> assertThat(context)
             .hasSingleBean(DocJobsAutoConfiguration.DocJobWorkerLifecycle.class));
   }
 
-  private static NamedParameterJdbcTemplate unusedJdbc() {
-    return new NamedParameterJdbcTemplate(new DriverManagerDataSource("jdbc:unused"));
+  private static PdfRequest single(DocSource source) {
+    return PdfRequest.builder(source.name()).document(source).build();
+  }
+
+  private static final class NoOpHandler implements DocJobHandler {
+    @Override
+    public void completed(DocJob job, UploadedDoc uploaded) {
+    }
+
+    @Override
+    public void failed(DocJob job) {
+    }
+
+    @Override
+    public void removed(DocJob job) {
+    }
+  }
+
+  /** With the jobs configuration and a database it never reaches. */
+  private ApplicationContextRunner jobsRunner() {
+    DataSource unused = new DriverManagerDataSource("jdbc:unused");
+    return runner.withConfiguration(AutoConfigurations.of(DocJobsAutoConfiguration.class))
+        .withBean(DataSource.class, () -> unused)
+        .withBean(NamedParameterJdbcTemplate.class, () -> new NamedParameterJdbcTemplate(unused));
   }
 
   private static byte[] pdfSaying() {

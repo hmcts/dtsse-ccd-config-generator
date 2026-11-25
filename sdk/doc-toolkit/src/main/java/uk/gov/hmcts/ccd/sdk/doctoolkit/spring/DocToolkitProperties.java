@@ -43,6 +43,10 @@ public class DocToolkitProperties {
     public static class Worker {
       /** False on instances that only queue jobs, when a separate deployment runs them. */
       private boolean enabled = true;
+      /** How many jobs one worker renders at a time. */
+      private int maxConcurrentRenders = 2;
+      /** How often the worker looks for jobs. */
+      private java.time.Duration pollDelay = java.time.Duration.ofSeconds(1);
     }
   }
 }

@@ -10,12 +10,12 @@ import java.util.List;
  * A rendered PDF in a temporary directory. Close it to delete the file.
  *
  * <pre>{@code
- * try (DocResult result = toolkit.render(request)) {
+ * try (PdfResult result = toolkit.render(request)) {
  *   store(result.open());
  * }
  * }</pre>
  */
-public final class DocResult implements AutoCloseable {
+public final class PdfResult implements AutoCloseable {
   private final Path file;
   private final String fileName;
   private final int pageCount;
@@ -23,7 +23,7 @@ public final class DocResult implements AutoCloseable {
   private final Runnable cleanup;
 
   /** Created by the toolkit. */
-  public DocResult(Path file, String fileName, int pageCount, List<DocFailure> failures,
+  public PdfResult(Path file, String fileName, int pageCount, List<DocFailure> failures,
       Runnable cleanup) {
     this.file = Validate.requireNonNull(file, "file");
     this.fileName = Validate.requireNonBlank(fileName, "fileName");

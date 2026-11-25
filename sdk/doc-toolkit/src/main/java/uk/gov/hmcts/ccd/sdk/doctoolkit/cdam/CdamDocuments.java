@@ -95,11 +95,11 @@ public final class CdamDocuments {
    *
    * @return the value for a CCD document field
    */
-  public Document upload(Path file, String fileName, long caseId) {
+  public Document upload(Path file, String fileName, long caseId, String classification) {
     CaseLocator.CaseType caseType = cases.locate(caseId);
     String user = systemUser.authorisation();
     var stored = client.uploadDocuments(user, serviceTokens.generate(),
-            new DocumentUploadRequest("PUBLIC", caseType.caseTypeId(), caseType.jurisdiction(),
+            new DocumentUploadRequest(classification, caseType.caseTypeId(), caseType.jurisdiction(),
                 List.of(new PdfFile(file, fileName))))
         .getDocuments()
         .getFirst();
@@ -130,6 +130,11 @@ public final class CdamDocuments {
         .filename(fileName)
         .uploadTimestamp(LocalDateTime.now())
         .build();
+  }
+
+  /** Deletes a document permanently. */
+  public void delete(UUID documentId) {
+    client.deleteDocument(systemUser.authorisation(), serviceTokens.generate(), documentId, true);
   }
 
   private static CdamFetchException failure(UUID documentId, FeignException e) {

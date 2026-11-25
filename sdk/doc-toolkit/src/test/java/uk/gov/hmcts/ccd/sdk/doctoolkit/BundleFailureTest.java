@@ -7,6 +7,7 @@ import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.ONE_CASE_T
 import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.SERVICE_TOKENS;
 import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.SYSTEM_USER;
 import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.assertNothingLeftBehind;
+import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.bundle;
 import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.fixture;
 import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.load;
 import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.outline;
@@ -14,6 +15,8 @@ import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.text;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,16 +58,16 @@ class BundleFailureTest {
 
   @Test
   void documentsThatCannotBeFetchedAreReplacedByPagesSayingWhy() throws Exception {
-    BundleRequest request = BundleRequest.builder("Bundle")
-        .section(BundleSection.builder("Evidence")
-            .document(BundleDocument.builder(DocSource.cdam(present)).title("Present").build())
-            .document(BundleDocument.builder(DocSource.cdam(cdam.failing(404))).title("Deleted").build())
-            .document(BundleDocument.builder(DocSource.cdam(cdam.failing(403))).title("Forbidden").build())
-            .document(BundleDocument.builder(DocSource.cdam(cdam.failing(503))).title("Outage").build())
+    PdfRequest request = bundle("Bundle")
+        .section(PdfSection.builder("Evidence")
+            .document(PdfPart.builder(DocSource.cdam(present)).title("Present").build())
+            .document(PdfPart.builder(DocSource.cdam(cdam.failing(404))).title("Deleted").build())
+            .document(PdfPart.builder(DocSource.cdam(cdam.failing(403))).title("Forbidden").build())
+            .document(PdfPart.builder(DocSource.cdam(cdam.failing(503))).title("Outage").build())
             .build())
         .build();
 
-    try (DocResult result = toolkit.render(request); PDDocument document = load(result)) {
+    try (PdfResult result = toolkit.render(request); PDDocument document = load(result)) {
       assertThat(result.failures()).extracting(DocFailure::title, DocFailure::reason).containsExactly(
           tuple("Deleted", Reason.NOT_FOUND), tuple("Forbidden", Reason.ACCESS_DENIED),
           tuple("Outage", Reason.UNAVAILABLE));
@@ -79,17 +82,52 @@ class BundleFailureTest {
   }
 
   @Test
+  void aMissingDocumentsFailureSaysWhichPartItWasAndWhereItsPlaceholderIs() throws Exception {
+    PdfRequest request = bundle("Hearing bundle")
+        .document(PdfPart.builder(DocSource.cdam(present)).title("Cover letter").build())
+        .section(PdfSection.builder("Evidence")
+            .document(PdfPart.builder(DocSource.cdam(present)).title("Expert report").build())
+            .section(PdfSection.builder("Statements")
+                .document(PdfPart.builder(DocSource.cdam(present)).title("Claimant").build())
+                .document(PdfPart.builder(DocSource.cdam(cdam.failing(404))).id("statement-42")
+                    .title("Witness statement").build())
+                .build())
+            .build())
+        .build();
+
+    try (PdfResult result = toolkit.render(request); PDDocument document = load(result)) {
+      assertThat(result.failures()).singleElement().satisfies(failure -> {
+        assertThat(failure.id()).contains("statement-42");
+        assertThat(failure.title()).isEqualTo("Witness statement");
+        assertThat(failure.sectionPath())
+            .containsExactly("Hearing bundle", "Evidence", "Statements");
+        assertThat(failure.reason()).isEqualTo(Reason.NOT_FOUND);
+        assertThat(failure.page()).isPresent();
+      });
+      int page = result.failures().getFirst().page().getAsInt();
+      List<Integer> placeholderPages = new ArrayList<>();
+      for (int i = 1; i <= document.getNumberOfPages(); i++) {
+        if (text(document, i).contains("This document is missing from the bundle")) {
+          placeholderPages.add(i);
+        }
+      }
+      assertThat(placeholderPages).containsExactly(page);
+      assertThat(text(document, page)).contains(Reason.NOT_FOUND.message());
+    }
+  }
+
+  @Test
   void documentsThatCannotBeConvertedAreReplacedByPagesSayingWhy() throws Exception {
     Path encrypted = Fixtures.encryptedPdf(sources);
     Path zip = Fixtures.zip(sources);
-    BundleRequest request = BundleRequest.builder("Bundle")
-        .document(BundleDocument.builder(DocSource.file(encrypted)).title("Encrypted").build())
-        .document(BundleDocument.builder(DocSource.file(zip, "statement.pdf", "application/pdf"))
+    PdfRequest request = bundle("Bundle")
+        .document(PdfPart.builder(DocSource.file(encrypted)).title("Encrypted").build())
+        .document(PdfPart.builder(DocSource.file(zip, "statement.pdf", "application/pdf"))
             .title("Not a PDF").build())
-        .document(BundleDocument.builder(DocSource.file(zip)).title("Archive").build())
+        .document(PdfPart.builder(DocSource.file(zip)).title("Archive").build())
         .build();
 
-    try (DocResult result = toolkit.render(request)) {
+    try (PdfResult result = toolkit.render(request)) {
       assertThat(result.failures()).extracting(DocFailure::title, DocFailure::reason).containsExactly(
           tuple("Encrypted", Reason.UNREADABLE), tuple("Not a PDF", Reason.UNREADABLE),
           tuple("Archive", Reason.UNSUPPORTED_FORMAT));
@@ -100,15 +138,15 @@ class BundleFailureTest {
   @Test
   void aDocmosisOutageIsUnavailableAndARejectionIsAConversionFailure() throws Exception {
     Path word = Files.write(sources.resolve("statement.docx"), fixture("wordDocument2.docx"));
-    BundleRequest request = BundleRequest.builder("Bundle")
+    PdfRequest request = bundle("Bundle")
         .document(DocSource.file(word, "statement.docx", DOCX))
         .build();
 
-    try (DocResult result = toolkit(StubDocmosis.failing(
+    try (PdfResult result = toolkit(StubDocmosis.failing(
         new DocmosisRenderException("Docmosis returned 503", true))).render(request)) {
       assertThat(result.failures()).extracting(DocFailure::reason).containsExactly(Reason.UNAVAILABLE);
     }
-    try (DocResult result = toolkit(StubDocmosis.failing(
+    try (PdfResult result = toolkit(StubDocmosis.failing(
         new DocmosisRenderException("Docmosis returned 400", false))).render(request)) {
       assertThat(result.failures()).extracting(DocFailure::reason)
           .containsExactly(Reason.CONVERSION_FAILED);
@@ -117,11 +155,11 @@ class BundleFailureTest {
 
   @Test
   void aBundleOfOnlyMissingDocumentsStillRenders() throws Exception {
-    BundleRequest request = BundleRequest.builder("Bundle")
-        .document(BundleDocument.builder(DocSource.cdam(cdam.failing(404))).title("Gone").build())
+    PdfRequest request = bundle("Bundle")
+        .document(PdfPart.builder(DocSource.cdam(cdam.failing(404))).title("Gone").build())
         .build();
 
-    try (DocResult result = toolkit.render(request); PDDocument document = load(result)) {
+    try (PdfResult result = toolkit.render(request); PDDocument document = load(result)) {
       assertThat(result.failures()).hasSize(1);
       assertThat(text(document)).contains("This document is missing from the bundle");
     }
@@ -129,10 +167,10 @@ class BundleFailureTest {
 
   @Test
   void theFailPolicyFailsTheBundleListingEveryMissingDocument() {
-    BundleRequest request = BundleRequest.builder("Bundle")
-        .document(BundleDocument.builder(DocSource.cdam(present)).title("Present").build())
-        .document(BundleDocument.builder(DocSource.cdam(cdam.failing(503))).title("Outage").build())
-        .document(BundleDocument.builder(DocSource.cdam(cdam.failing(404))).title("Gone").build())
+    PdfRequest request = bundle("Bundle")
+        .document(PdfPart.builder(DocSource.cdam(present)).title("Present").build())
+        .document(PdfPart.builder(DocSource.cdam(cdam.failing(503))).title("Outage").build())
+        .document(PdfPart.builder(DocSource.cdam(cdam.failing(404))).title("Gone").build())
         .missingDocuments(MissingDocuments.FAIL)
         .build();
 
@@ -150,7 +188,7 @@ class BundleFailureTest {
   @Test
   void anOfficeDocumentWithoutDocmosisFailsTheBundle() throws Exception {
     Path word = Files.write(sources.resolve("statement.docx"), fixture("wordDocument2.docx"));
-    BundleRequest request = BundleRequest.builder("Bundle")
+    PdfRequest request = bundle("Bundle")
         .document(DocSource.file(word, "statement.docx", DOCX))
         .build();
 
@@ -165,7 +203,7 @@ class BundleFailureTest {
   @Test
   void aCdamDocumentWithoutCdamFailsTheBundle() {
     DocToolkit withoutCdam = DocToolkit.builder().tempDirectory(work).build();
-    BundleRequest request = BundleRequest.builder("Bundle").document(DocSource.cdam(present)).build();
+    PdfRequest request = bundle("Bundle").document(DocSource.cdam(present)).build();
 
     assertThatThrownBy(() -> withoutCdam.render(request))
         .isInstanceOfSatisfying(DocToolkitException.class, e -> {

@@ -4,12 +4,13 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.BundleDocument;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.BundleRequest;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.BundleSection;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfPart;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfRequest;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfSection;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.pdf.AssemblyContent;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.pdf.AssemblyFolder;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.pdf.AssemblyItem;
@@ -20,29 +21,40 @@ import uk.gov.hmcts.ccd.sdk.doctoolkit.pdf.EmptySectionPage;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.pdf.MissingDocumentPage;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.pdf.Watermark;
 
-/** Maps a bundle request, with each document's converted content, to the assembler's model. */
+/** Maps a request, with each part's converted content, to the assembler's model. */
 final class AssemblyMapping {
   private AssemblyMapping() {
   }
 
   /**
+   * The assembler request, and the part behind each item the assembler will place, in the order
+   * it places them (null for an empty-section page).
+   */
+  record Mapped(AssemblyRequest request, List<PdfPart> itemParts) {
+  }
+
+  /**
    * The assembler request for {@code request}.
    *
-   * @param contents each document's content, by identity
+   * @param contents each part's content, by identity
    */
-  static AssemblyRequest map(BundleRequest request, Map<BundleDocument, AssemblyContent> contents,
+  static Mapped map(PdfRequest request, Map<PdfPart, AssemblyContent> contents,
       Optional<Path> coverPage, Optional<Watermark> watermark, String outputFileName) {
-    BundleSection root = request.root();
-    List<AssemblyNode> items = children(root, contents);
+    List<PdfPart> itemParts = new ArrayList<>();
+    PdfSection root = request.root();
+    List<AssemblyNode> items = children(root, contents, itemParts);
     if (items.isEmpty() && root.placeholderWhenEmpty()) {
+      itemParts.add(null);
       items = List.of(new AssemblyItem(root.title(), Optional.empty(), false,
           new EmptySectionPage()));
     }
     BundlePresentation presentation = new BundlePresentation(request.tableOfContents(),
         request.sectionCoverSheets(), request.documentCoverSheets(), request.pageNumbers(),
         request.confidentialMarking());
-    return new AssemblyRequest(request.title(), outputFileName, Optional.empty(), presentation,
-        true, coverPage, watermark, items);
+    AssemblyRequest assembly = new AssemblyRequest(request.title(), outputFileName,
+        Optional.empty(), presentation, request.titlePage(), coverPage, watermark, items);
+    // Nulls mark empty-section pages, so List.copyOf (which rejects them) is not used.
+    return new Mapped(assembly, Collections.unmodifiableList(itemParts));
   }
 
   /** The request's watermark, its image written to the job directory for the assembler. */
@@ -60,20 +72,22 @@ final class AssemblyMapping {
         watermark.get().behindContent()));
   }
 
-  private static List<AssemblyNode> children(BundleSection section,
-      Map<BundleDocument, AssemblyContent> contents) {
+  private static List<AssemblyNode> children(PdfSection section,
+      Map<PdfPart, AssemblyContent> contents, List<PdfPart> itemParts) {
     List<AssemblyNode> nodes = new ArrayList<>();
-    for (BundleDocument document : section.documents()) {
-      AssemblyContent content = contents.get(document);
+    for (PdfPart part : section.parts()) {
+      AssemblyContent content = contents.get(part);
+      itemParts.add(part);
       nodes.add(new AssemblyItem(
-          content instanceof MissingDocumentPage ? document.title() + " (missing)" : document.title(),
-          document.date(), document.confidential(), content));
+          content instanceof MissingDocumentPage ? part.title() + " (missing)" : part.title(),
+          part.date(), part.confidential(), content));
     }
-    for (BundleSection child : section.sections()) {
-      List<AssemblyNode> grandchildren = children(child, contents);
+    for (PdfSection child : section.sections()) {
+      List<AssemblyNode> grandchildren = children(child, contents, itemParts);
       if (!grandchildren.isEmpty()) {
         nodes.add(new AssemblyFolder(child.title(), grandchildren));
       } else if (child.placeholderWhenEmpty()) {
+        itemParts.add(null);
         nodes.add(new AssemblyItem(child.title(), Optional.empty(), false, new EmptySectionPage()));
       }
     }

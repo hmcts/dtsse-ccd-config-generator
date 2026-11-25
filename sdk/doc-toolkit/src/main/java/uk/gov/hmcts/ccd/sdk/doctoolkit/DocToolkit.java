@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.doctoolkit;
 
 import java.nio.file.Path;
+import java.util.UUID;
 import org.slf4j.MDC;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.cdam.CaseLocator;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.cdam.CdamDocuments;
@@ -28,6 +29,7 @@ import uk.gov.hmcts.reform.ccd.document.am.feign.CaseDocumentClientApi;
  * caller's thread. The toolkit is thread-safe.
  */
 public final class DocToolkit {
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DocToolkit.class);
   private final Renderer renderer;
   private final CdamDocuments cdam;
 
@@ -42,49 +44,80 @@ public final class DocToolkit {
   }
 
   /**
-   * Renders the request to a temporary PDF. Close the result to delete it.
+   * Renders the request to a temporary PDF, for output the service sends elsewhere (bulk print),
+   * previews and tests. Close the result to delete it.
    *
    * @throws DocToolkitException if it cannot be rendered
    */
-  public DocResult render(DocRequest request) {
+  public PdfResult render(PdfRequest request) {
     Validate.requireNonNull(request, "request");
     return renderer.render(request);
   }
 
   /**
-   * Renders the request, stores the PDF in CDAM as the system user and attaches it to the case.
+   * Renders the request, stores the PDF in CDAM as the system user with the request's
+   * classification, and attaches it to the case. The returned document carries the request's
+   * category.
    *
-   * @param caseId the case the document is attached to
-   * @param eventId the event rendering it, for logs
+   * @param caseReference the case the document is attached to; it must exist
    * @throws DocToolkitException if it cannot be rendered or stored
    */
-  public UploadedDoc renderAndUpload(DocRequest request, long caseId, String eventId) {
-    return renderAndUpload(request, caseId, eventId, true);
+  public UploadedDoc upload(PdfRequest request, long caseReference) {
+    return renderAndUpload(request, caseReference, true);
   }
 
   /**
-   * As {@link #renderAndUpload(DocRequest, long, String)}; a queued job's retries pass false.
+   * Deletes a document from CDAM, for a service pruning versions it no longer keeps.
+   *
+   * @throws DocToolkitException if CDAM is not configured or refuses
    */
-  UploadedDoc renderAndUpload(DocRequest request, long caseId, String eventId,
-      boolean finalAttempt) {
+  public void delete(Document document) {
+    Validate.requireNonNull(document, "document");
+    requireCdam();
+    UUID id = ((DocSource.Cdam) DocSource.of(document)).documentId();
+    try {
+      cdam.delete(id);
+    } catch (RuntimeException e) {
+      throw new DocToolkitException(DocToolkitException.Reason.UPLOAD_FAILED,
+          id + " could not be deleted from CDAM: " + e.getMessage(), true, e);
+    }
+  }
+
+  /** As {@link #upload}; a queued job's earlier attempts pass false. */
+  UploadedDoc renderAndUpload(PdfRequest request, long caseReference, boolean finalAttempt) {
     Validate.requireNonNull(request, "request");
+    requireCdam();
+    try (MDC.MDCCloseable ignoredCase = MDC.putCloseable("caseReference",
+        String.valueOf(caseReference));
+        PdfResult result = renderer.render(request, finalAttempt)) {
+      Document document;
+      try {
+        document = cdam.upload(result.file(), result.fileName(), caseReference,
+            request.classification().name());
+      } catch (RuntimeException e) {
+        throw new DocToolkitException(DocToolkitException.Reason.UPLOAD_FAILED,
+            result.fileName() + " could not be stored in CDAM for case " + caseReference + ": "
+                + e.getMessage(), true, e);
+      }
+      request.category().ifPresent(document::setCategoryId);
+      return new UploadedDoc(document, result.pageCount(), result.failures());
+    }
+  }
+
+  /** Deletes an upload nobody will be given; failures are logged, not thrown. */
+  void discard(UploadedDoc uploaded) {
+    try {
+      delete(uploaded.document());
+    } catch (RuntimeException e) {
+      log.warn("Could not delete discarded upload {}", uploaded.document().getUrl(), e);
+    }
+  }
+
+  private void requireCdam() {
     if (cdam == null) {
       throw new DocToolkitException(DocToolkitException.Reason.NOT_CONFIGURED,
           "Uploading needs CDAM: the service's CaseDocumentClientApi, AuthTokenGenerator and a"
               + " DocToolkitSystemUser bean.", false, null);
-    }
-    try (MDC.MDCCloseable ignoredCase = MDC.putCloseable("caseId", String.valueOf(caseId));
-        MDC.MDCCloseable ignoredEvent = MDC.putCloseable("eventId", String.valueOf(eventId));
-        DocResult result = renderer.render(request, finalAttempt)) {
-      Document document;
-      try {
-        document = cdam.upload(result.file(), result.fileName(), caseId);
-      } catch (RuntimeException e) {
-        throw new DocToolkitException(DocToolkitException.Reason.UPLOAD_FAILED,
-            result.fileName() + " could not be stored in CDAM for case " + caseId + ": "
-                + e.getMessage(), true, e);
-      }
-      return new UploadedDoc(document, result.pageCount(), result.failures());
     }
   }
 

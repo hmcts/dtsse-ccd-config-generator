@@ -6,17 +6,12 @@ import uk.gov.hmcts.ccd.sdk.doctoolkit.jobs.DocJobRepository;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.jobs.DocRequestJson;
 
 /**
- * Queues renders to run in the background. Spring Boot services get one when
- * {@code ccd.doc-toolkit.jobs.enabled} is true.
+ * Background rendering. Spring Boot services get one when {@code ccd.doc-toolkit.jobs.enabled}
+ * is true.
  *
- * <pre>{@code
- * docJobs.submit(BundleRequest.builder("Hearing bundle")...build(), caseId, eventId);
- * }</pre>
- *
- * <p>The job is written in the caller's transaction, so it is only queued if the event that
- * queued it commits. A worker renders it, stores the PDF in CDAM, attaches it to the case and
- * hands the stored document to the service's {@link DocJobHandler}. A render that fails for a
- * reason that may pass (CDAM, Docmosis or upload trouble) is retried, up to three attempts.
+ * <p>One-off documents (letters, orders) are queued with {@link #submit}. Documents kept up to
+ * date with their case are declared with a {@link CaseDocDefinition} and queued by case events;
+ * {@link #status} says where one is.
  */
 public final class DocJobs {
   private final DocJobRepository repository;
@@ -27,23 +22,27 @@ public final class DocJobs {
   }
 
   /**
-   * Queues the request.
+   * Queues a one-off document in the caller's transaction, so it is queued only if that commits.
+   * A worker renders it, stores it in CDAM, attaches it to the case and hands it to the service's
+   * {@link DocJobHandler}.
    *
-   * @param caseId the case the document is stored against
-   * @param eventId the event queuing it, passed back to the {@link DocJobHandler}
-   * @throws IllegalArgumentException if a document is a local file, which the instance running
-   *     the job may not have; queue its content with {@link DocSource#bytes} instead
+   * @throws IllegalArgumentException if a part is a local file, which the instance running the
+   *     job may not have; queue its content with {@link DocSource#bytes} instead
    */
-  public DocJob submit(DocRequest request, long caseId, String eventId) {
+  public DocJob submit(PdfRequest request, long caseReference) {
     Validate.requireNonNull(request, "request");
-    Validate.requireNonBlank(eventId, "eventId");
     UUID id = UUID.randomUUID();
-    repository.insert(id, DocRequestJson.write(request), caseId, eventId);
+    repository.insertOneOff(id, caseReference, DocRequestJson.write(request));
     return repository.find(id).orElseThrow();
   }
 
-  /** A job, by id. */
+  /** A job still in flight, by id. One-off jobs are deleted once handled. */
   public Optional<DocJob> find(UUID id) {
     return repository.find(Validate.requireNonNull(id, "id"));
+  }
+
+  /** Where a case's kept-up-to-date document is; empty if it has never had one. */
+  public Optional<CaseDocStatus> status(String key, long caseReference) {
+    return repository.status(caseReference, Validate.requireNonBlank(key, "key"));
   }
 }

@@ -15,7 +15,10 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineItem;
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineNode;
 import org.apache.pdfbox.text.PDFTextStripper;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.DocResult;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.MissingDocuments;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.PageNumbers;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfRequest;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfResult;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocToolkitSystemUser;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.cdam.CaseLocator;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
@@ -30,6 +33,20 @@ public final class ToolkitFixtures {
   private ToolkitFixtures() {
   }
 
+  /**
+   * A request with every bundle feature on: title page, contents, section cover sheets, page
+   * numbers, confidential marking, and placeholder pages for missing documents.
+   */
+  public static PdfRequest.Builder bundle(String title) {
+    return PdfRequest.builder(title)
+        .titlePage()
+        .tableOfContents()
+        .sectionCoverSheets()
+        .pageNumbers(PageNumbers.BOTTOM_CENTRE_N_OF_M)
+        .confidentialMarking()
+        .missingDocuments(MissingDocuments.PLACEHOLDER);
+  }
+
   /** A file under {@code src/test/resources/fixtures}. */
   public static byte[] fixture(String name) {
     try (InputStream in = ToolkitFixtures.class.getResourceAsStream("/fixtures/" + name)) {
@@ -40,7 +57,7 @@ public final class ToolkitFixtures {
   }
 
   /** The result's PDF, loaded. */
-  public static PDDocument load(DocResult result) throws IOException {
+  public static PDDocument load(PdfResult result) throws IOException {
     return Loader.loadPDF(result.file().toFile());
   }
 

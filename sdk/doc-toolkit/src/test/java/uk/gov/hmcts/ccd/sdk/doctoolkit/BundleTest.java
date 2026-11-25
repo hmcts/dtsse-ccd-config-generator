@@ -6,6 +6,7 @@ import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.ONE_CASE_T
 import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.SERVICE_TOKENS;
 import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.SYSTEM_USER;
 import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.assertNothingLeftBehind;
+import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.bundle;
 import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.fixture;
 import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.load;
 import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.outline;
@@ -58,26 +59,26 @@ class BundleTest {
   @Test
   void rendersSectionsFromCdamLocalFilesAndHtmlPages() throws Exception {
     Path photo = Files.write(sources.resolve("photo.jpg"), fixture("flying-pig.jpg"));
-    BundleRequest request = BundleRequest.builder("Final hearing bundle")
+    PdfRequest request = bundle("Final hearing bundle")
         .fileName("final-hearing-bundle.pdf")
-        .document(BundleDocument.builder(DocSource.of(Document.builder()
+        .document(PdfPart.builder(DocSource.of(Document.builder()
                 .url(FakeCdam.HOST + cover).filename("cover-letter.pdf").build()))
             .title("Cover letter").date(LocalDate.of(2026, 3, 14)).build())
-        .section(BundleSection.builder("Evidence")
-            .document(BundleDocument.builder(DocSource.cdam(report)).title("Expert report").build())
-            .document(BundleDocument.builder(DocSource.file(photo)).title("Site photograph").build())
-            .document(BundleDocument.builder(DocSource.bytes(fixture("schmcts.png"), "logo.png"))
+        .section(PdfSection.builder("Evidence")
+            .document(PdfPart.builder(DocSource.cdam(report)).title("Expert report").build())
+            .document(PdfPart.builder(DocSource.file(photo)).title("Site photograph").build())
+            .document(PdfPart.builder(DocSource.bytes(fixture("schmcts.png"), "logo.png"))
                 .title("Court logo").build())
             .build())
-        .section(BundleSection.builder("Recordings")
+        .section(PdfSection.builder("Recordings")
             .document(HtmlPage.builder().title("Hearing recording, day 2")
                 .body("<h1>Hearing recording, day 2</h1><p>Held by the court: 42 minutes.</p>")
                 .build())
             .build())
-        .section(BundleSection.builder("Correspondence").placeholderWhenEmpty().build())
+        .section(PdfSection.builder("Correspondence").placeholderWhenEmpty().build())
         .build();
 
-    DocResult result = toolkit.render(request);
+    PdfResult result = toolkit.render(request);
     try (result; PDDocument document = load(result)) {
       assertThat(result.fileName()).isEqualTo("final-hearing-bundle.pdf");
       assertThat(result.failures()).isEmpty();
@@ -102,11 +103,11 @@ class BundleTest {
 
   @Test
   void aDocumentIsListedUnderItsFileNameWhenGivenNoTitle() throws Exception {
-    BundleRequest request = BundleRequest.builder("Bundle")
+    PdfRequest request = bundle("Bundle")
         .document(Document.builder().url(FakeCdam.HOST + cover).filename("Claim form.pdf").build())
         .build();
 
-    try (DocResult result = toolkit.render(request); PDDocument document = load(result)) {
+    try (PdfResult result = toolkit.render(request); PDDocument document = load(result)) {
       assertThat(outline(document)).contains("Claim form.pdf");
       assertThat(result.fileName()).isEqualTo("Bundle.pdf");
     }
@@ -114,12 +115,12 @@ class BundleTest {
 
   @Test
   void theCoverPageComesFirstBeforeTheTitleAndContents() throws Exception {
-    BundleRequest request = BundleRequest.builder("Bundle")
+    PdfRequest request = bundle("Bundle")
         .coverPage(HtmlPage.builder().body("<p>Front sheet for the court</p>").build())
         .document(DocSource.cdam(cover))
         .build();
 
-    try (DocResult result = toolkit.render(request); PDDocument document = load(result)) {
+    try (PdfResult result = toolkit.render(request); PDDocument document = load(result)) {
       assertThat(text(document, 1)).contains("Front sheet for the court");
       assertThat(outline(document)).startsWith("Bundle", "Cover Page");
     }
@@ -128,13 +129,13 @@ class BundleTest {
   @Test
   void theWatermarkMarksDocumentPagesOnly() throws Exception {
     Path image = Files.write(sources.resolve("draft.png"), fixture("schmcts.png"));
-    BundleRequest request = BundleRequest.builder("Bundle")
-        .section(BundleSection.builder("Evidence")
+    PdfRequest request = bundle("Bundle")
+        .section(PdfSection.builder("Evidence")
             .document(DocSource.bytes(Fixtures.pdfSaying("Evidence"), "evidence.pdf")).build())
         .watermark(Watermark.image(image))
         .build();
 
-    try (DocResult result = toolkit.render(request); PDDocument document = load(result)) {
+    try (PdfResult result = toolkit.render(request); PDDocument document = load(result)) {
       // Title, contents and section cover sheet are generated; only the document is marked.
       assertThat(images(document, 0)).isZero();
       assertThat(images(document, 1)).isZero();
@@ -146,24 +147,28 @@ class BundleTest {
   @Test
   void theContentDecidesTheTypeWhenTheDeclarationIsWrong() throws Exception {
     Path photo = Files.write(sources.resolve("photo.pdf"), fixture("flying-pig.jpg"));
-    BundleRequest request = BundleRequest.builder("Bundle")
+    PdfRequest request = bundle("Bundle")
         .document(DocSource.file(photo, "photo.pdf", "application/pdf"))
         .build();
 
-    try (DocResult result = toolkit.render(request)) {
+    try (PdfResult result = toolkit.render(request)) {
       assertThat(result.failures()).isEmpty();
     }
   }
 
   @Test
   void aPrintedBundleIsLaidOutForBulkPrint() throws Exception {
-    BundleRequest request = BundleRequest.builder("Bundle")
-        .tableOfContents(false)
+    PdfRequest request = PdfRequest.builder("Bundle")
+        .titlePage()
+        .sectionCoverSheets()
+        .pageNumbers(PageNumbers.BOTTOM_CENTRE_N_OF_M)
+        .confidentialMarking()
+        .missingDocuments(MissingDocuments.PLACEHOLDER)
         .document(DocSource.cdam(report))
         .print(PrintOptions.bulkPrint())
         .build();
 
-    try (DocResult result = toolkit.render(request); PDDocument document = load(result)) {
+    try (PdfResult result = toolkit.render(request); PDDocument document = load(result)) {
       // Title page plus the report, padded to an even count.
       int pages = 1 + reportPages;
       assertThat(result.pageCount()).isEqualTo(pages + pages % 2);
@@ -173,15 +178,40 @@ class BundleTest {
   }
 
   @Test
-  void aBundleWithNothingInItIsRejected() {
-    BundleRequest request = BundleRequest.builder("Empty")
-        .section(BundleSection.builder("Nothing").build())
+  void aRequestWithNothingInItIsRejectedWhenBuilt() {
+    PdfRequest.Builder request = bundle("Empty")
+        .section(PdfSection.builder("Nothing").build());
+
+    assertThatThrownBy(request::build)
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Empty");
+  }
+
+  @Test
+  void aRequestWithOnlyAnEmptySectionPageRenders() throws Exception {
+    PdfRequest request = PdfRequest.builder("Empty")
+        .section(PdfSection.builder("Nothing").placeholderWhenEmpty().build())
         .build();
 
-    assertThatThrownBy(() -> toolkit.render(request))
-        .isInstanceOfSatisfying(DocToolkitException.class, e ->
-            assertThat(e.reason()).isEqualTo(DocToolkitException.Reason.INVALID_REQUEST));
+    try (PdfResult result = toolkit.render(request); PDDocument document = load(result)) {
+      assertThat(result.pageCount()).isEqualTo(1);
+      assertThat(text(document)).contains("There are no documents in this section.");
+    }
     assertNothingLeftBehind(work);
+  }
+
+  @Test
+  void aPlainJoinHasNothingButTheDocuments() throws Exception {
+    PdfRequest request = PdfRequest.builder("Joined")
+        .document(DocSource.cdam(cover))
+        .document(DocSource.cdam(report))
+        .build();
+
+    try (PdfResult result = toolkit.render(request); PDDocument document = load(result)) {
+      assertThat(request.assembled()).isFalse();
+      assertThat(result.pageCount()).isEqualTo(1 + reportPages);
+      assertThat(text(document)).doesNotContain("Index Page", "1 of " + (1 + reportPages));
+    }
   }
 
   private static int images(PDDocument document, int pageIndex) throws Exception {

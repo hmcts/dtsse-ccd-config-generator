@@ -35,8 +35,9 @@ public final class FakeCdam implements CaseDocumentClientApi {
   }
 
   /** An upload CDAM received. */
-  public record Upload(String authorisation, String caseTypeId, String jurisdiction,
-      String fileName, String contentType, byte[] content, UUID id, String hashToken) {
+  public record Upload(String authorisation, String classification, String caseTypeId,
+      String jurisdiction, String fileName, String contentType, byte[] content, UUID id,
+      String hashToken) {
   }
 
   private final Map<UUID, Stored> documents = new ConcurrentHashMap<>();
@@ -105,8 +106,9 @@ public final class FakeCdam implements CaseDocumentClientApi {
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
-    uploads.add(new Upload(authorisation, request.getCaseTypeId(), request.getJurisdictionId(),
-        file.getOriginalFilename(), file.getContentType(), content, id, hashToken));
+    uploads.add(new Upload(authorisation, request.getClassification(), request.getCaseTypeId(),
+        request.getJurisdictionId(), file.getOriginalFilename(), file.getContentType(), content, id,
+        hashToken));
     documents.put(id, new Stored(content, file.getContentType(), file.getOriginalFilename()));
     Document.Link self = new Document.Link();
     self.href = HOST + id;

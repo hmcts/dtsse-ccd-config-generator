@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.doctoolkit.spring;
 
 import java.util.List;
+import javax.sql.DataSource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -8,6 +9,11 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.CaseDocDefinition;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.CaseDocHook;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocJobHandler;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocJobWorker;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocJobs;
@@ -15,12 +21,14 @@ import uk.gov.hmcts.ccd.sdk.doctoolkit.DocToolkit;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.jobs.DocJobRepository;
 
 /**
- * The job outbox, when {@code ccd.doc-toolkit.jobs.enabled} is true: {@link DocJobs} to queue
- * renders and, unless {@code ccd.doc-toolkit.jobs.worker.enabled} is false, a
- * {@link DocJobWorker} running them, which needs the service's {@link DocJobHandler}.
+ * Background rendering, on with {@code ccd.doc-toolkit.jobs.enabled=true}: the job store,
+ * {@link DocJobs}, the case event hook that runs {@link CaseDocDefinition}s, and a worker unless
+ * {@code ccd.doc-toolkit.jobs.worker.enabled} is false.
  */
 @AutoConfiguration(after = DocToolkitAutoConfiguration.class,
-    afterName = "org.springframework.boot.jdbc.autoconfigure.JdbcTemplateAutoConfiguration")
+    afterName = {"org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration",
+        "org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration",
+        "org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration"})
 @ConditionalOnProperty(prefix = "ccd.doc-toolkit.jobs", name = "enabled", havingValue = "true")
 public class DocJobsAutoConfiguration {
 
@@ -36,22 +44,39 @@ public class DocJobsAutoConfiguration {
     return new DocJobs(repository);
   }
 
+  /** Runs the service's definitions after each case event; nothing to run, no hook. */
+  @Bean
+  public CaseDocHook caseDocHook(ObjectProvider<CaseDocDefinition> definitions,
+      DocJobRepository repository) {
+    return new CaseDocHook(definitions.orderedStream().toList(), repository);
+  }
+
   @Bean
   @ConditionalOnProperty(prefix = "ccd.doc-toolkit.jobs.worker", name = "enabled",
       matchIfMissing = true)
   public DocJobWorkerLifecycle docJobWorker(DocJobRepository repository, DocToolkit toolkit,
-      ObjectProvider<DocJobHandler> handlers) {
+      ObjectProvider<DocJobHandler> handlers,
+      ObjectProvider<PlatformTransactionManager> transactionManagers, DataSource dataSource,
+      DocToolkitProperties properties) {
     List<DocJobHandler> found = handlers.orderedStream().toList();
     if (found.size() != 1) {
       throw new IllegalStateException("The doc job worker needs one DocJobHandler bean to hand"
           + " finished documents to, but found " + found.size() + ". Provide one, or set"
           + " ccd.doc-toolkit.jobs.worker.enabled=false on instances that only queue jobs.");
     }
+    // The handler and the worker's bookkeeping share the application's transaction manager, so a
+    // JPA handler and the toolkit's JDBC writes commit or roll back together.
+    PlatformTransactionManager transactionManager = transactionManagers.getIfAvailable(
+        () -> new DataSourceTransactionManager(dataSource));
+    DocToolkitProperties.Jobs.Worker worker = properties.getJobs().getWorker();
+    DocJobWorker.Settings settings = DocJobWorker.Settings.defaults()
+        .withMaxConcurrentRenders(worker.getMaxConcurrentRenders())
+        .withPollDelay(worker.getPollDelay());
     return new DocJobWorkerLifecycle(new DocJobWorker(repository, toolkit, found.getFirst(),
-        DocJobWorker.Settings.defaults()));
+        new TransactionTemplate(transactionManager), settings));
   }
 
-  /** Starts the worker with the application and stops it on shutdown. */
+  /** Starts and stops the worker with the application. */
   public static final class DocJobWorkerLifecycle implements SmartLifecycle {
     private final DocJobWorker worker;
     private volatile boolean running;
@@ -60,7 +85,6 @@ public class DocJobsAutoConfiguration {
       this.worker = worker;
     }
 
-    /** The worker. */
     public DocJobWorker worker() {
       return worker;
     }

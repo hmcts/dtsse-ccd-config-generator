@@ -1,11 +1,13 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -13,6 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
+import uk.gov.hmcts.ccd.sdk.CaseEventContext;
+import uk.gov.hmcts.ccd.sdk.CaseEventHook;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.reform.ccd.client.model.SignificantItem;
 
@@ -27,6 +31,7 @@ class CaseEventTransactionCoordinator {
   private final AuditEventService auditEventService;
   private final CaseDataRepository caseDataRepository;
   private final CaseProjectionService caseProjectionService;
+  private final ObjectProvider<CaseEventHook> hooks;
 
   @Transactional(rollbackFor = Exception.class)
   public <T> TransactionResult<T> execute(
@@ -47,8 +52,9 @@ class CaseEventTransactionCoordinator {
     long caseEventId = auditEventService.reserveCaseEventId();
     CaseEventWrite<T> write = Objects.requireNonNull(work.get(), "Case event work must return a write");
 
-    upsertCase(write.event(), write.dataUpdate());
+    long revision = upsertCase(write.event(), write.dataUpdate());
     TransactionAspectSupport.currentTransactionStatus().flush();
+    runHooks(write.event(), caseReference, caseEventId, revision);
     DecentralisedCaseDetails savedCase = caseProjectionService.load(caseReference);
     auditEventService.saveAuditRecord(
         caseEventId,
@@ -62,9 +68,29 @@ class CaseEventTransactionCoordinator {
     return TransactionResult.created(caseEventId, savedCase, write.result());
   }
 
-  private void upsertCase(DecentralisedCaseEvent event, Optional<JsonNode> dataUpdate) {
+  /**
+   * Runs the hooks after the case row is written and before the projection is loaded for the
+   * audit snapshot, so anything a hook writes is part of the snapshot. A hook that throws fails
+   * the event.
+   */
+  private void runHooks(DecentralisedCaseEvent event, long caseReference, long caseEventId,
+      long revision) {
+    List<CaseEventHook> registered = hooks.orderedStream().toList();
+    if (registered.isEmpty()) {
+      return;
+    }
+    CaseEventContext context = new CaseEventContext(caseReference,
+        event.getCaseDetails().getCaseTypeId(), event.getCaseDetails().getJurisdiction(),
+        event.getEventDetails().getEventId(), caseEventId, revision);
+    for (CaseEventHook hook : registered) {
+      hook.afterCaseEvent(context);
+    }
+    TransactionAspectSupport.currentTransactionStatus().flush();
+  }
+
+  private long upsertCase(DecentralisedCaseEvent event, Optional<JsonNode> dataUpdate) {
     try {
-      caseDataRepository.upsertCase(event, dataUpdate);
+      return caseDataRepository.upsert(event, dataUpdate).revision();
     } catch (EmptyResultDataAccessException e) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Case was updated concurrently", e);
     }

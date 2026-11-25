@@ -11,17 +11,16 @@ import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.BundleDocument;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.BundleRequest;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.DocConversionRequest;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocFailure;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.DocRequest;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.DocResult;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocSource;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocToolkitException;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocToolkitException.Reason;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.HtmlPage;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.MissingDocuments;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfPart;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfRequest;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfResult;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfSection;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.PrintOptions;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.cdam.CdamDocuments;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.cdam.CdamFetchException;
@@ -72,16 +71,16 @@ public final class Renderer {
   }
 
   /** Renders the request into a new temporary directory, which the result deletes on close. */
-  public DocResult render(DocRequest request) {
+  public PdfResult render(PdfRequest request) {
     return render(request, true);
   }
 
   /**
-   * Renders the request. When {@code finalAttempt} is false, a bundle document that is only
-   * temporarily unavailable fails the render, so a queued job retries it, rather than becoming a
-   * placeholder page.
+   * Renders the request. When {@code finalAttempt} is false, a part that is only temporarily
+   * unavailable fails the render, so a queued job retries it, rather than becoming a placeholder
+   * page.
    */
-  public DocResult render(DocRequest request, boolean finalAttempt) {
+  public PdfResult render(PdfRequest request, boolean finalAttempt) {
     Path job;
     try {
       job = JobDirectory.create(tempDirectory);
@@ -91,13 +90,12 @@ public final class Renderer {
     }
     boolean handedOver = false;
     try {
-      Rendered rendered = switch (request) {
-        case BundleRequest bundle -> bundle(bundle, job, finalAttempt);
-        case DocConversionRequest conversion -> conversion(conversion, job);
-      };
+      Rendered rendered = request.print().isPresent() && !request.assembled()
+          ? printedJoin(request, request.print().get(), job)
+          : assembled(request, job, finalAttempt);
       log.info("Rendered {}: {} pages, {} document(s) missing", request.fileName(),
           rendered.pages(), rendered.failures().size());
-      DocResult result = new DocResult(rendered.file(), request.fileName(), rendered.pages(),
+      PdfResult result = new PdfResult(rendered.file(), request.fileName(), rendered.pages(),
           rendered.failures(), () -> JobDirectory.deleteRecursively(job));
       handedOver = true;
       return result;
@@ -114,22 +112,36 @@ public final class Renderer {
   private record Rendered(Path file, int pages, List<DocFailure> failures) {
   }
 
-  private Rendered bundle(BundleRequest request, Path job, boolean finalAttempt)
+  /** Each part with the titles of the sections holding it, outermost first. */
+  private static void withPaths(PdfSection section, List<String> path,
+      Map<PdfPart, List<String>> into) {
+    List<String> here = new ArrayList<>(path);
+    here.add(section.title());
+    section.parts().forEach(part -> into.putIfAbsent(part, List.copyOf(here)));
+    section.sections().forEach(child -> withPaths(child, here, into));
+  }
+
+  private Rendered assembled(PdfRequest request, Path job, boolean finalAttempt)
       throws IOException {
-    Map<BundleDocument, AssemblyContent> contents = new IdentityHashMap<>();
+    Map<PdfPart, List<String>> paths = new IdentityHashMap<>();
+    withPaths(request.root(), List.of(), paths);
+    Map<PdfPart, AssemblyContent> contents = new IdentityHashMap<>();
+    Map<PdfPart, DocFailure> failed = new IdentityHashMap<>();
+    // In request order, for the exception's message and failures.
     List<DocFailure> failures = new ArrayList<>();
-    for (BundleDocument document : request.allDocuments()) {
-      if (contents.containsKey(document)) {
+    for (PdfPart part : request.allParts()) {
+      if (contents.containsKey(part)) {
         continue;
       }
       try {
-        contents.put(document, new PdfSource(toPdf(document.source(), job)));
+        contents.put(part, new PdfSource(toPdf(part.source(), job)));
       } catch (DocumentFailure failure) {
-        DocFailure reported = failure.reported(document.title());
-        log.warn("{} could not be included: {} - {}", document.title(), reported.reason(),
+        DocFailure reported = failure.reported(part, paths.get(part));
+        log.warn("{} could not be included: {} - {}", part.title(), reported.reason(),
             reported.detail());
+        failed.put(part, reported);
         failures.add(reported);
-        contents.put(document, new MissingDocumentPage(reported.reason().message()));
+        contents.put(part, new MissingDocumentPage(reported.reason().message()));
       }
     }
     if (!failures.isEmpty() && request.missingDocuments() == MissingDocuments.FAIL) {
@@ -137,9 +149,9 @@ public final class Renderer {
     }
     if (!finalAttempt && failures.stream().anyMatch(failure -> failure.reason().isTransient())) {
       // Worth another attempt before settling for placeholder pages.
-      DocToolkitException failed = documentsFailed(request.fileName(), failures);
-      throw new DocToolkitException(Reason.DOCUMENTS_FAILED, failed.getMessage(), true, failures,
-          null);
+      DocToolkitException failedRender = documentsFailed(request.fileName(), failures);
+      throw new DocToolkitException(Reason.DOCUMENTS_FAILED, failedRender.getMessage(), true,
+          failures, null);
     }
     Optional<Path> cover = Optional.empty();
     if (request.coverPage().isPresent()) {
@@ -147,53 +159,45 @@ public final class Renderer {
       try {
         cover = Optional.of(toPdf(coverPage, job));
       } catch (DocumentFailure failure) {
-        throw documentsFailed(request.fileName(), List.of(failure.reported(coverPage.name())));
+        throw documentsFailed(request.fileName(),
+            List.of(new DocFailure(coverPage.name(), failure.reason, failure.getMessage())));
       }
     }
-    AssemblyRequest assembly = AssemblyMapping.map(request, contents, cover,
-        AssemblyMapping.watermark(request.watermark(), job), "bundle.pdf");
-    if (assembly.items().isEmpty()) {
+    AssemblyMapping.Mapped mapped = AssemblyMapping.map(request, contents, cover,
+        AssemblyMapping.watermark(request.watermark(), job), "output.pdf");
+    if (mapped.request().items().isEmpty()) {
       throw new DocToolkitException(Reason.INVALID_REQUEST,
           request.fileName() + " has no documents and no placeholder pages", false, null);
     }
-    AssemblyResult assembled = assemble(assembly, job, request.fileName());
+    AssemblyResult assembled = assemble(mapped.request(), job, request.fileName());
+    // The assembler places items in the order they were mapped.
+    List<DocFailure> placed = new ArrayList<>();
+    for (int i = 0; i < mapped.itemParts().size() && i < assembled.items().size(); i++) {
+      PdfPart part = mapped.itemParts().get(i);
+      DocFailure failure = part == null ? null : failed.get(part);
+      if (failure != null) {
+        placed.add(failure.onPage(assembled.items().get(i).startPage()));
+      }
+    }
     if (request.print().isEmpty()) {
-      return new Rendered(assembled.outputPdf(), assembled.totalPages(), failures);
+      return new Rendered(assembled.outputPdf(), assembled.totalPages(), placed);
     }
-    ConversionSource bundle = new ConversionSource(assembled.outputPdf(), "bundle.pdf", PDF);
-    return print(request.title(), List.of(PrintPart.convert(bundle)), request.print().get(), job,
-        failures);
+    ConversionSource whole = new ConversionSource(assembled.outputPdf(), "output.pdf", PDF);
+    return print(request.title(), List.of(PrintPart.convert(whole)), request.print().get(), job,
+        placed);
   }
 
-  private Rendered conversion(DocConversionRequest request, Path job) throws IOException {
-    Optional<PrintOptions> print = request.print();
-    if (print.isPresent()) {
-      List<PrintPart> parts = new ArrayList<>();
-      for (DocConversionRequest.Part part : request.parts()) {
-        parts.add(printPart(part, request, job));
-      }
-      return print(request.title(), parts, print.get(), job, List.of());
+  /** A plain join for print: each part laid out on its own, so each starts on a new sheet. */
+  private Rendered printedJoin(PdfRequest request, PrintOptions options, Path job)
+      throws IOException {
+    List<PrintPart> parts = new ArrayList<>();
+    for (PdfPart part : request.allParts()) {
+      parts.add(printPart(part, request, job));
     }
-    List<AssemblyNode> items = new ArrayList<>();
-    for (DocConversionRequest.Part part : request.parts()) {
-      Path pdf;
-      try {
-        pdf = toPdf(part.source(), job);
-      } catch (DocumentFailure failure) {
-        throw documentsFailed(request.fileName(), List.of(failure.reported(part.source().name())));
-      }
-      items.add(new AssemblyItem(part.source().name(), Optional.empty(), false,
-          new PdfSource(pdf)));
-    }
-    AssemblyRequest joined = new AssemblyRequest(request.title(), "document.pdf",
-        Optional.empty(), BundlePresentation.bare(), false, Optional.empty(),
-        AssemblyMapping.watermark(request.watermark(), job), items);
-    AssemblyResult assembled = assemble(joined, job, request.fileName());
-    return new Rendered(assembled.outputPdf(), assembled.totalPages(), List.of());
+    return print(request.title(), parts, options, job, List.of());
   }
 
-  private PrintPart printPart(DocConversionRequest.Part part, DocConversionRequest request,
-      Path job) throws IOException {
+  private PrintPart printPart(PdfPart part, PdfRequest request, Path job) throws IOException {
     try {
       if (part.unchanged()) {
         return PrintPart.asIs(prepare(part.source(), job).file(), part.source().name());
@@ -206,7 +210,7 @@ public final class Renderer {
       }
       return PrintPart.convert(prepare(part.source(), job));
     } catch (DocumentFailure failure) {
-      throw documentsFailed(request.fileName(), List.of(failure.reported(part.source().name())));
+      throw documentsFailed(request.fileName(), List.of(failure.reported(part, List.of())));
     }
   }
 
@@ -339,8 +343,9 @@ public final class Renderer {
       this.reason = reason;
     }
 
-    DocFailure reported(String title) {
-      return new DocFailure(title, reason, getMessage());
+    DocFailure reported(PdfPart part, List<String> sectionPath) {
+      return new DocFailure(part.id(), part.title(), sectionPath == null ? List.of() : sectionPath,
+          java.util.OptionalInt.empty(), reason, getMessage());
     }
   }
 }
