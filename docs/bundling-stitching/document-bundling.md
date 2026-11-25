@@ -87,7 +87,7 @@ configured) still fail the render.
 
 A source that is only temporarily unavailable (a timeout, a 5xx, a Docmosis outage) should not
 end up as a placeholder if a retry would fetch it. `render(request, context, RenderAttempt.RETRYABLE)`
-fails such a render instead; the durable worker passes `RETRYABLE` while the job has retries left
+fails such a render instead; a caller that retries passes `RETRYABLE` while it has retries left
 and `FINAL` on its last attempt. A plain `render(request, context)` is a final attempt. A
 document still unavailable on the final attempt, including one Docmosis could not convert because
 it was down, gets the `UNAVAILABLE` reason.
@@ -128,126 +128,6 @@ when a render fails, whose message is complete on its own. `result.timings()` ha
 in each stage. If a Micrometer `MeterRegistry` bean exists (or you call `.meterRegistry(...)` on
 the builder) the renderer publishes `ccd.bundling.stage` timers and `ccd.bundling.documents`,
 `pages`, `bytes`, `warnings{code}` and `failures{code}` counters.
-
-## Asynchronous bundling (job outbox)
-
-For bundles that should not be rendered inside a request, switch on the outbox with
-`ccd.bundling.job.enabled=true`. `OutboxBundleJobService.submit` inserts one row into
-`bundling.bundle_job` in your service's database using the caller's transaction, so the job exists
-exactly when the event that triggered it commits. `externalId` is the idempotency key: submitting
-the same id again returns the existing job.
-
-```java
-@Transactional
-public void onHearingListed(BundleRequest request) {
-  bundleJobService.submit(request, BundleExecutionContext.builder().caseReference(ref).build());
-}
-```
-
-`BundleJobWorker` polls (your service needs `@EnableScheduling`), claims rows with
-`SELECT ... FOR UPDATE SKIP LOCKED` under a lease, renders, and hands the open `BundleResult` to
-your `BundleJobCompletionHandler` bean. The handler stores the PDF and returns a small summary
-that is saved in the job's `result` column; the worker closes the result afterwards. The
-`BundleJobContext` it receives carries the selector parameters and execution context the job was
-submitted with, so the handler knows which case the bundle belongs to.
-
-```java
-@Bean
-BundleJobCompletionHandler bundleCompletion(CaseDocumentClient cdam) {
-  return (job, jobContext, request, result) -> {
-    try (InputStream pdf = result.artifact().open()) {
-      return Map.of("documentUrl", cdam.upload(request.fileName(), pdf).url());
-    }
-  };
-}
-```
-
-Fetch and conversion failures are retried with backoff and the history is kept on the job;
-everything else, including an exception from your handler (`COMPLETION_FAILED`), fails the job
-on the spot. A worker that outlives its lease cannot overwrite the outcome recorded by the worker
-that took over. A `BundleDocumentSelector` bean lets you pick the documents at run time instead of
-at submit time, and `BundleProgressListener` beans receive state changes. The table
-`bundling.bundle_job` is created by the SDK's standard library migration (`SdkFlywayMigration`,
-run by the decentralised runtime's Flyway strategy before the application's own migrations).
-
-### A bundle that is always current
-
-To regenerate a bundle whenever its inputs change (say, every time a document is added to the
-case), submit selector parameters under a coalesce key from the transaction that made the change,
-and register a `BundleDocumentSelector` that compiles the request when the job runs:
-
-```java
-bundleJobService.submitCoalesced("case-bundle:" + caseId, Map.of("caseId", caseId.toString()),
-    BundleExecutionContext.builder().caseReference(ref).build());
-```
-
-Submissions with the same key collapse onto the job that is still waiting for its first claim.
-Ten documents uploaded in one event, or in ten quick events, give one render, and the job's
-`coalescedSubmissions` counts what it absorbed. Joining a waiting job is an upsert that locks its
-row until the submitting transaction commits, and the worker's `SKIP LOCKED` claim passes over a
-locked row, so a joined job is never claimed before the change that joined it is visible to its
-selector. Once a job is claimed it stops absorbing submissions: a change made mid-render queues one
-follow-up. Two concurrent transactions submitting the same key end up on the same job, the second
-waiting on the first's row. Because joining takes a row lock, a transaction submitting several keys
-should submit them in a consistent order, or two such transactions can deadlock.
-
-The waiting job keeps the selector parameters and execution context it was first submitted with,
-so make the parameters a function of the key; a submission whose parameters differ is logged and
-its parameters ignored. Keys are at most 255 characters. Submit under READ COMMITTED: under
-REPEATABLE READ or SERIALIZABLE a racing coalesced submission can fail with a serialization error
-(SQLSTATE 40001) that the caller must retry.
-
-Renders for one key can still overlap (an in-flight job and its follow-up on different pods), and
-a retried job can finish after a newer one. Among completed jobs, the one with the greatest
-`BundleJob.claimedAt()` reflects the newest state: its selector ran after that claim, so it saw
-every change submitted before it. Break ties by `externalId`, and fall back to `submittedAt` for a
-job claimed before `claimed_at` existed. `findLatest(key)` returns the job that reflects the newest
-state, for a "regenerating..." status: the waiting job if there is one, otherwise the most recently
-claimed. A delayed re-run for unavailable documents counts as waiting only once it is due. The completion handler receives the job's `BundleJobContext` (selector parameters and
-execution context), so it knows which case the bundle is for. Rows are never deleted by the
-module; an always-current bundle adds one per burst of changes, so purge old terminal rows on your
-own schedule if the table grows.
-
-When a job completes, the worker records the bundle it rendered in `bundling.bundle`, in the same
-statement that marks the job completed, so a row exists exactly when its job completed and never
-for a worker that lost its lease. The row holds everything about the bundle except the PDF: the
-request that was rendered (for a selector-driven job, the documents it selected), where each
-document landed, the missing documents and why, the warnings, the PDF's file name, media type,
-size, checksum and page count, the job's coalesce key and case reference, and when its documents
-were selected. Missing documents carry the selected `title` and `sectionPath` (outermost to
-innermost, excluding the request root), so they can be listed without searching the request. The
-completion handler still receives the full `BundleResult`, so the service stores the PDF wherever
-it keeps documents, as an ordinary document carrying the job id, and reads everything else back
-through `OutboxBundleJobService`. A handler that returns a `StoredBundleDocument` (the stored
-PDF's id, URL and binary URL) has it recorded on the bundle row, and is told through `discarded`
-when its job could not be marked completed, so it can delete the PDF. A handler failure fails the
-job, unless the handler's `retryable` says to retry it like a transient render failure.
-
-- `findBundleForJob(jobId)`: the bundle a job rendered, for describing a stored PDF ("pages 40 to
-  52", "two documents are missing"). Empty until the job completes, and for a job whose handler
-  failed.
-- `findLatestBundle(key)`: of the bundles rendered under a coalesce key, the one whose documents
-  were selected last. A waiting or in-progress job (`findLatest(key)`) may be about to replace it.
-
-The bundle table has no foreign key to `bundle_job`, so job rows can be purged without losing the
-description of a bundle still in use; bundle rows for bundles the service no longer holds can be
-purged on its own schedule. The bundle is recorded for every service that runs the job worker,
-since the worker needs the service's own database (a decentralised service's) for its outbox
-anyway; a service rendering directly with `BundleRenderer` records nothing and gets only the
-`BundleResult`.
-
-A coalesced bundle completed with placeholders for `UNAVAILABLE` documents is re-run later, so it
-fills in once the source is back: the worker queues a job under the same key that is not claimable
-for `requeue.delay`. A change to the case in the meantime joins it and makes it immediate. A bundle
-is re-run at most `requeue.max-attempts` times in a row for unavailable documents (counted in the
-execution context attribute `bundling.unavailableRequeues`).
-
-For a case bundle that follows document changes, the managed layer below does all of this.
-
-Properties under `ccd.bundling.job.*`: `enabled` (default `false`), `worker.enabled` (`true`), `worker.poll-delay` (`1s`), `worker.batch-size` (`5`),
-`worker.max-concurrent-renders` (`2`), `worker.lease-duration` (`5m`), `retry.max-attempts` (`3`),
-`retry.initial-delay` (`5s`), `retry.multiplier` (`2.0`), `retry.max-delay` (`5m`),
-`requeue.enabled` (`true`), `requeue.delay` (`15m`), `requeue.max-attempts` (`3`).
 
 ## Extending it
 
@@ -382,52 +262,4 @@ your event handlers can fake it.
 
 ## What comes next
 
-[document-bundling-scope.md](document-bundling-scope.md) has the design goals, the delivery plan,
-the feature matrix and the one-click bundle requirements coverage. Every rendering feature the
-microservice offers is now in the module; built-in CDAM adapters and the items in the scope
-document's section 4 come later.
-
-## Managed case bundles
-
-For a case bundle that should follow document changes, opt into the managed layer:
-
-```yaml
-ccd.bundling.managed.enabled: true
-ccd.bundling.job.enabled: true
-```
-
-Register a `CaseBundleDefinition` bean. Its `name()` identifies the bundle, and `select(caseKey)`
-returns a `SelectedCaseBundle`: the case reference, case type, jurisdiction and an ordered
-`BundleRequest`. The library calls it in a short repeatable-read transaction, so the documents and
-whatever decides their visibility are read consistently. Selection and visibility rules stay
-application code. Several definitions can share the managed layer.
-
-Call `CaseBundles.changed(definition, caseKey)` in the transaction that changes the bundle's
-sources. It queues a coalesced job under the key `managed:<definition>:<caseKey>`; repeated calls
-join that job, and a rollback cancels it. The SDK does not detect changes itself:
-a JPA entity listener on each entity the selection reads is the simplest way to cover every write
-path, including cascades. Native SQL changes must call it explicitly.
-
-Each job selects afresh, renders, uploads the PDF to CDAM and attaches it to the case, and the
-worker records it on the bundle row. The case's current bundle is the one whose documents were
-selected last, so a slower, older render never replaces a newer one. `cleanUp` (every
-`ccd.bundling.managed.cleanup-delay`, default one minute) deletes a replaced bundle's PDF 12 hours
-after its replacement, so a link a reader already has keeps working, and sets the row's
-`deleted_at`. A failed attachment deletes its upload and retries; a worker that lost
-its lease deletes its upload. A PDF uploaded by a worker that dies before recording it stays in
-CDAM, unreadable: CDAM serves a document only to a user who can see it in the case data.
-
-`CaseBundles.view(definition, caseKey)` returns the current bundle's `BundleMetadata`, including
-where its PDF is stored, and a lifecycle worked out from the key's latest job and bundle: `NONE`,
-`PREPARING` (no bundle yet), `UPDATING`, `UP_TO_DATE` or `FAILED`. **This is sensitive data, and
-these Java methods do not authorise readers.** There is no SDK HTTP endpoint. Expose the reference
-and report only through an authorised application projection with restrictive CCD field
-permissions. Do not add the bundle to a general document collection: CDAM checks references
-anywhere in a caller's permission-filtered case data when authorising a download.
-
-The standard CDAM adapter uses the application's `CaseDocumentClientApi`, `AuthTokenGenerator`
-and a `BundleSystemUser` bean supplying its cached system token. The deployed CDAM configuration
-must grant that service CREATE, ATTACH and DELETE for the destination case type. A different store
-can implement `BundleDocumentStore`, whose `store` must leave nothing stored when it fails. Managed mode owns the worker's selector and completion
-handler; do not register another, or submit other jobs to that worker. A
-`CdamBundleDocumentResolver` bean of your own replaces the default one.
+Built-in CDAM adapters and background rendering come later.
