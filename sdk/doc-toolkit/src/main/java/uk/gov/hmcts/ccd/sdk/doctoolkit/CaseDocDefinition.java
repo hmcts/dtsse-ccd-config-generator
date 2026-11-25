@@ -21,7 +21,9 @@ import java.util.Set;
  */
 public interface CaseDocDefinition {
 
-  /** Names the document, unique within the service, for example {@code case-bundle}. */
+  /**
+   * Names the document, unique within the service, for example {@code case-bundle}.
+   */
   String key();
 
   /** The case types it applies to; events of other case types skip it. */

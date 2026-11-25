@@ -30,7 +30,9 @@ public interface DocJobHandler {
    */
   void completed(DocJob job, UploadedDoc uploaded) throws Exception;
 
-  /** The job was given up on; {@link DocJob#failure()} says why. */
+  /**
+   * The job was given up on; {@link DocJob#failure()} says why.
+   */
   void failed(DocJob job) throws Exception;
 
   /**

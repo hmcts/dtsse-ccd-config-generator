@@ -53,7 +53,9 @@ public final class PdfPart {
     return source;
   }
 
-  /** The caller's id for the part, echoed in {@link DocFailure#id()}. */
+  /**
+   * The caller's id for the part, echoed in {@link DocFailure#id()}.
+   */
   public Optional<String> id() {
     return Optional.ofNullable(id);
   }
@@ -81,7 +83,9 @@ public final class PdfPart {
     return unchanged;
   }
 
-  /** Builds a {@link PdfPart}. */
+  /**
+   * Builds a {@link PdfPart}.
+   */
   public static final class Builder {
     private final DocSource source;
     private String id;

@@ -84,7 +84,9 @@ public final class DocToolkit {
     }
   }
 
-  /** As {@link #upload}; a queued job's earlier attempts pass false. */
+  /**
+   * As {@link #upload}; a queued job's earlier attempts pass false.
+   */
   UploadedDoc renderAndUpload(PdfRequest request, long caseReference, boolean finalAttempt) {
     Validate.requireNonNull(request, "request");
     requireCdam();

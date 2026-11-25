@@ -226,7 +226,9 @@ public class DocJobRepository {
         """, params("id", id, "owner", owner)) == 1;
   }
 
-  /** Puts a held job back in the queue to try again at {@code next}. */
+  /**
+   * Puts a held job back in the queue to try again at {@code next}.
+   */
   public boolean requeue(UUID id, String owner, OptionalLong revision, Instant next) {
     return jdbc.update("""
         update bundling.doc_job

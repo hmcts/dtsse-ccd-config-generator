@@ -159,13 +159,17 @@ public final class PdfRequest {
         || root.placeholderWhenEmpty();
   }
 
-  /** A file name for {@code title}: unsafe characters replaced, {@code .pdf} added. */
+  /**
+   * A file name for {@code title}: unsafe characters replaced, {@code .pdf} added.
+   */
   static String fileNameFor(String title) {
     String base = title.trim().replaceAll("[^A-Za-z0-9._ -]", "").replaceAll("\\s+", "-");
     return (base.isEmpty() ? "document" : base) + ".pdf";
   }
 
-  /** Builds a {@link PdfRequest}. */
+  /**
+   * Builds a {@link PdfRequest}.
+   */
   public static final class Builder {
     private final String title;
     private final PdfSection.Builder root;
@@ -188,7 +192,9 @@ public final class PdfRequest {
       this.root = PdfSection.builder(title);
     }
 
-    /** The result's file name; defaults to the title plus {@code .pdf}. */
+    /**
+     * The result's file name; defaults to the title plus {@code .pdf}.
+     */
     public Builder fileName(String fileName) {
       this.fileName = Validate.requireNonBlank(fileName, "PdfRequest.fileName");
       return this;

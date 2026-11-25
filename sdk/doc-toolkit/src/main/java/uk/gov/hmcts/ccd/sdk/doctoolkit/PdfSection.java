@@ -4,7 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 import uk.gov.hmcts.ccd.sdk.type.Document;
 
-/** A titled section of a {@link PdfRequest}: its parts, then its sub-sections, in order. */
+/**
+ * A titled section of a {@link PdfRequest}: its parts, then its sub-sections, in order.
+ */
 public final class PdfSection {
   private final String title;
   private final List<PdfPart> parts;
@@ -54,7 +56,9 @@ public final class PdfSection {
     sections.forEach(section -> section.collectParts(into));
   }
 
-  /** Builds a {@link PdfSection}. */
+  /**
+   * Builds a {@link PdfSection}.
+   */
   public static final class Builder {
     private final String title;
     private final List<PdfPart> parts = new ArrayList<>();
