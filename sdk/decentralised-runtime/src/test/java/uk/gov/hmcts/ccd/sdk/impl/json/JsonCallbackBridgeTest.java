@@ -7,8 +7,10 @@ import com.sun.net.httpserver.HttpServer;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.math.BigDecimal;
 import java.net.InetSocketAddress;
 import java.net.http.HttpTimeoutException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
@@ -29,6 +31,9 @@ import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
 
 class JsonCallbackBridgeTest {
+
+  // More significant digits than a double holds.
+  private static final String EXACT_DECIMAL = "0.12345678901234567890123456789";
 
   private final ObjectMapper mapper = new CcdCaseDataMapperConfiguration()
       .ccdCaseDataObjectMapper(new ObjectMapper().setSerializationInclusion(JsonInclude.Include.NON_EMPTY));
@@ -94,6 +99,68 @@ class JsonCallbackBridgeTest {
 
     NocCaseData responseData = (NocCaseData) response.getData();
     assertThat(responseData.changeOrganisationRequestField().OrganisationToAdd()).isNotNull();
+  }
+
+  @Test
+  void preservesEmptyNestedCaseDataObjectsAsTheApplicationWritesThemOverHttp() {
+    // The application leaves out empty values, but still writes an object whose fields are all null as {}, which
+    // notice of change relies on.
+    ObjectMapper applicationMapper = new ObjectMapper().setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
+    JsonCallbackBridge bridge = bridgeWith(
+        new MockEnvironment().withProperty("decentralisation.local-callback-placeholder", "ET_COS_URL"),
+        applicationMapper,
+        new LocalCallbackController()
+    );
+    CaseDetails<Object, Object> caseDetails = CaseDetails.builder()
+        .data(new NocCaseData(null))
+        .build();
+
+    AboutToStartOrSubmitResponse response = bridge.aboutToSubmit(
+        "${ET_COS_URL}/callbacks/noc-about-to-submit",
+        "local"
+    ).handle(caseDetails, null);
+
+    NocCaseData responseData = (NocCaseData) response.getData();
+    assertThat(responseData.changeOrganisationRequestField().OrganisationToAdd()).isNotNull();
+  }
+
+  @Test
+  void keepsALocalCallbacksDecimalsExact() {
+    ObjectMapper applicationMapper = new ObjectMapper().setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
+    JsonCallbackBridge bridge = bridgeWith(
+        new MockEnvironment().withProperty("decentralisation.local-callback-placeholder", "ET_COS_URL"),
+        applicationMapper,
+        new LocalCallbackController()
+    );
+
+    Object response = bridge.invoke("${ET_COS_URL}/callbacks/decimal", Map.of());
+
+    assertThat(response).isEqualTo(Map.of("data", Map.of("rate", new BigDecimal(EXACT_DECIMAL))));
+  }
+
+  @Test
+  void keepsAnExternalCallbacksDecimalsExact() throws Exception {
+    HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+    server.createContext("/callback", exchange -> {
+      byte[] body = ("{\"data\": {\"rate\": " + EXACT_DECIMAL + "}}").getBytes(StandardCharsets.UTF_8);
+      exchange.getResponseHeaders().add("Content-Type", "application/json");
+      exchange.sendResponseHeaders(200, body.length);
+      exchange.getResponseBody().write(body);
+      exchange.close();
+    });
+    server.start();
+    try {
+      JsonCallbackBridge bridge = bridgeWith(new MockEnvironment());
+
+      Object response = bridge.invoke(
+          "http://localhost:%s/callback".formatted(server.getAddress().getPort()),
+          Map.of()
+      );
+
+      assertThat(response).isEqualTo(Map.of("data", Map.of("rate", new BigDecimal(EXACT_DECIMAL))));
+    } finally {
+      server.stop(0);
+    }
   }
 
   @Test
@@ -249,6 +316,11 @@ class JsonCallbackBridgeTest {
     @PostMapping("/entity-with-empty-values")
     ResponseEntity<Map<String, Object>> entityWithEmptyValues(@RequestBody Map<String, Object> request) {
       return ResponseEntity.ok(Map.of("data", Map.of("kept", "value", "emptyText", "", "emptyList", List.of())));
+    }
+
+    @PostMapping("/decimal")
+    Map<String, Object> decimal(@RequestBody Map<String, Object> request) {
+      return Map.of("data", Map.of("rate", new BigDecimal(EXACT_DECIMAL)));
     }
 
     @PostMapping("/significant-item")
