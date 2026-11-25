@@ -53,6 +53,9 @@ import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
 import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
+import uk.gov.hmcts.ccd.sdk.impl.ClientContextPassthrough;
+import uk.gov.hmcts.ccd.sdk.json.JsonCallbackHandler;
+import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.SignificantItem;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
@@ -62,6 +65,7 @@ public class JsonCallbackBridge {
 
   private static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() {};
   private static final String SERVICE_AUTHORIZATION = "ServiceAuthorization";
+  private static final String CLIENT_CONTEXT = ClientContextPassthrough.CLIENT_CONTEXT;
   private static final String LOCAL_CALLBACK_PLACEHOLDER = "decentralisation.local-callback-placeholder";
   private static final String EXTERNAL_CALLBACK_BASE_URLS = "decentralisation.external-callback-base-urls";
   private static final String EXTERNAL_CALLBACK_TIMEOUT = "decentralisation.external-callback-timeout";
@@ -106,7 +110,9 @@ public class JsonCallbackBridge {
 
   public void validate(String callbackUrl) {
     if (shouldInvokeLocally(callbackUrl)) {
-      localHandler(callbackUrl);
+      if (serviceHandler(callbackUrl).isEmpty()) {
+        localHandler(callbackUrl);
+      }
     } else {
       externalUri(callbackUrl);
     }
@@ -182,18 +188,19 @@ public class JsonCallbackBridge {
       return invokeExternal(callbackUrl, payload);
     }
 
+    HttpHeaders headers = callbackHeaders();
+    Optional<JsonCallbackHandler> serviceHandler = serviceHandler(callbackUrl);
+    if (serviceHandler.isPresent()) {
+      CallbackRequest request = requestMapper.convertValue(payload, CallbackRequest.class);
+      return body(callbackUrl, serviceHandler.get().handle(normalise(callbackUrl), request, headers));
+    }
+
     HandlerMethod handler = localHandler(callbackUrl);
     Object bean = resolveBean(handler);
     Method method = handler.getMethod();
-    HttpHeaders headers = callbackHeaders();
     Object[] args = resolveArguments(method, payload, headers);
     try {
-      Object result = method.invoke(bean, args);
-      if (result instanceof ResponseEntity<?> response) {
-        assertSuccessfulResponse(callbackUrl, response.getStatusCode());
-        return asSentOverHttp(callbackUrl, response.getBody());
-      }
-      return asSentOverHttp(callbackUrl, result);
+      return body(callbackUrl, method.invoke(bean, args));
     } catch (IllegalAccessException e) {
       throw new IllegalStateException("Unable to invoke JSON callback " + callbackUrl, e);
     } catch (InvocationTargetException e) {
@@ -278,6 +285,31 @@ public class JsonCallbackBridge {
     return handler;
   }
 
+  /**
+   * A service's own handler takes precedence over resolving the callback to a controller method by its path.
+   * Looked up per call because the handlers are application beans, created after this bridge.
+   */
+  private Optional<JsonCallbackHandler> serviceHandler(String callbackUrl) {
+    String path = normalise(callbackUrl);
+    List<JsonCallbackHandler> handlers = applicationContext.getBeanProvider(JsonCallbackHandler.class)
+        .orderedStream()
+        .filter(handler -> handler.handles(path))
+        .toList();
+    if (handlers.size() > 1) {
+      throw new IllegalStateException("Multiple JsonCallbackHandlers handle JSON callback " + callbackUrl);
+    }
+    return handlers.stream().findFirst();
+  }
+
+  private Object body(String callbackUrl, Object result) {
+    if (result instanceof ResponseEntity<?> response) {
+      assertSuccessfulResponse(callbackUrl, response.getStatusCode());
+      ClientContextPassthrough.returned(response.getHeaders().getFirst(CLIENT_CONTEXT));
+      return asSentOverHttp(callbackUrl, response.getBody());
+    }
+    return asSentOverHttp(callbackUrl, result);
+  }
+
   private void validateSupported(HandlerMethod handler) {
     Method method = handler.getMethod();
     for (int i = 0; i < method.getParameterCount(); i++) {
@@ -355,6 +387,7 @@ public class JsonCallbackBridge {
     HttpHeaders headers = new HttpHeaders();
     headers.set(HttpHeaders.AUTHORIZATION, currentRequestHeader(HttpHeaders.AUTHORIZATION));
     headers.set(SERVICE_AUTHORIZATION, currentRequestHeader(SERVICE_AUTHORIZATION));
+    ClientContextPassthrough.current().ifPresent(clientContext -> headers.set(CLIENT_CONTEXT, clientContext));
     return headers;
   }
 
@@ -375,7 +408,9 @@ public class JsonCallbackBridge {
   }
 
   private boolean isSupportedHeader(String name) {
-    return "authorization".equalsIgnoreCase(name) || "serviceauthorization".equalsIgnoreCase(name);
+    return "authorization".equalsIgnoreCase(name)
+        || "serviceauthorization".equalsIgnoreCase(name)
+        || CLIENT_CONTEXT.equalsIgnoreCase(name);
   }
 
   private String headerName(RequestHeader requestHeader) {
@@ -395,6 +430,7 @@ public class JsonCallbackBridge {
           HttpResponse.BodyHandlers.ofString()
       );
       assertSuccessfulResponse(callbackUrl, HttpStatusCode.valueOf(response.statusCode()));
+      response.headers().firstValue(CLIENT_CONTEXT).ifPresent(ClientContextPassthrough::returned);
       String body = response.body();
       return body == null || body.isBlank() ? null : responseReader.readValue(body);
     } catch (HttpTimeoutException e) {
@@ -415,6 +451,7 @@ public class JsonCallbackBridge {
         .POST(HttpRequest.BodyPublishers.ofByteArray(requestMapper.writeValueAsBytes(payload)));
     copyHeader(request, headers, HttpHeaders.AUTHORIZATION);
     copyHeader(request, headers, SERVICE_AUTHORIZATION);
+    copyHeader(request, headers, CLIENT_CONTEXT);
     return request.build();
   }
 

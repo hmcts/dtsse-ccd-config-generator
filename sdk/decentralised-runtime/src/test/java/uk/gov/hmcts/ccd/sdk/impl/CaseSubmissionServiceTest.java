@@ -1,20 +1,28 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
@@ -98,6 +106,67 @@ class CaseSubmissionServiceTest {
     service.submit(event, "raw-token", IDEMPOTENCY_KEY);
 
     verifyNoInteractions(legacyHandler);
+  }
+
+  @Test
+  void keepsTheReturnedClientContextForAReplay() {
+    RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
+    String context = Base64.getEncoder().encodeToString("{\"client_context\":{}}".getBytes());
+    DecentralisedCaseEvent event = event();
+    Event<?, ?, ?> eventConfig = mock(Event.class);
+    doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("TestCase", "submit");
+    when(eventConfig.hasSubmitHandler()).thenReturn(false);
+    when(eventConfig.isConcurrent()).thenReturn(true);
+    when(idam.retrieveUser("raw-token")).thenReturn(user());
+    when(legacyHandler.apply(eq(event), any())).thenReturn(new CaseSubmissionHandler.CaseSubmissionHandlerResult(
+        Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+        () -> {
+          // The submitted callback runs when the response is built, after the event is committed.
+          ClientContextPassthrough.returned(context);
+          return SubmitResponse.builder().build();
+        }
+    ));
+    when(transactionCoordinator.execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any(), any()))
+        .thenAnswer(invocation -> CaseEventTransactionCoordinator.TransactionResult.created(
+            42L,
+            savedCaseDetails(),
+            invocation
+                .<Supplier<CaseEventTransactionCoordinator.CaseEventWrite<Supplier<SubmitResponse<?>>>>>getArgument(3)
+                .get().result()
+        ));
+
+    service.submit(event, "raw-token", IDEMPOTENCY_KEY);
+
+    verify(caseDataRepository).saveClientContext(42L, context);
+  }
+
+  @Test
+  void replayReturnsTheClientContextTheSubmissionReturned() {
+    RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
+    Event<?, ?, ?> eventConfig = mock(Event.class);
+    doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("TestCase", "submit");
+    when(idam.retrieveUser("raw-token")).thenReturn(user());
+    when(transactionCoordinator.execute(eq(123456789L), eq(IDEMPOTENCY_KEY), any(), any()))
+        .thenReturn(CaseEventTransactionCoordinator.TransactionResult.replayed(99L));
+    when(caseDataRepository.caseDetailsAtEvent(123456789L, 99L)).thenReturn(savedCaseDetails());
+    when(caseDataRepository.clientContextAtEvent(99L)).thenReturn(Optional.of("saved-context"));
+
+    service.submit(event(), "raw-token", IDEMPOTENCY_KEY);
+
+    assertThat(ClientContextPassthrough.returned()).contains("saved-context");
+    verify(caseDataRepository, never()).saveClientContext(anyLong(), any());
+  }
+
+  @AfterEach
+  void resetRequestContext() {
+    RequestContextHolder.resetRequestAttributes();
+  }
+
+  private IdamService.User user() {
+    return new IdamService.User(
+        "Bearer raw-token",
+        new UserInfo("sub", "uid", "name", "given", "family", List.of("caseworker"))
+    );
   }
 
   private DecentralisedCaseEvent event() {
