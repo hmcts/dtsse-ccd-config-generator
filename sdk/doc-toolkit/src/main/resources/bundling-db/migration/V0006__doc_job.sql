@@ -1,14 +1,14 @@
--- The doc toolkit's jobs: one row per case and kept-up-to-date document (a case bundle), deleted
--- when the case no longer has the document. A newer case revision replaces its queued request,
--- and an unchanged request (same fingerprint) writes nothing. Rows go with their case; the check
--- waits for commit, so a job can be queued in the event creating the case.
+-- The doc toolkit's jobs: one row per case and document key (a case bundle). A changed request
+-- replaces the last one and moves the revision on; an unchanged request (same fingerprint) writes
+-- nothing. Rows go with their case; the check waits for commit, so a job can be queued in the
+-- event creating the case.
 create table bundling.doc_job (
     id                  uuid primary key,
     case_reference      bigint not null references ccd.case_data (reference) on delete cascade
                             deferrable initially deferred,
-    -- The definition's key.
+    -- The key the service submitted it under.
     job_key             text not null,
-    -- The case revision the request was built at.
+    -- Moves on with each changed request, so a worker can tell its render was superseded.
     revision            bigint not null,
     -- sha256 of the request as jsonb text.
     fingerprint         bytea not null,

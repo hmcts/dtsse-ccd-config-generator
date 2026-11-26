@@ -7,8 +7,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.util.Base64;
 import java.util.List;
-import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.UUID;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.Classification;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocFailure;
@@ -122,33 +120,11 @@ public final class DocRequestJson {
     return serialise(failures(failures));
   }
 
-  /** The stored documents that could not be included. */
-  public static List<DocFailure> readFailures(String json) {
-    if (json == null) {
-      return List.of();
-    }
-    return failures(List.of(parse(json, FailureJson[].class)));
-  }
-
   private static List<FailureJson> failures(List<DocFailure> failures) {
     return failures.stream().map(failure -> new FailureJson(failure.id().orElse(null),
         failure.title(), failure.sectionPath(),
         failure.page().isPresent() ? failure.page().getAsInt() : null, failure.reason().name(),
         failure.detail())).toList();
-  }
-
-  private static List<DocFailure> failures(Iterable<FailureJson> stored) {
-    List<DocFailure> failures = new java.util.ArrayList<>();
-    if (stored == null) {
-      return failures;
-    }
-    for (FailureJson failure : stored) {
-      failures.add(new DocFailure(Optional.ofNullable(failure.id()), failure.title(),
-          failure.sectionPath() == null ? List.of() : failure.sectionPath(),
-          failure.page() == null ? OptionalInt.empty() : OptionalInt.of(failure.page()),
-          DocFailure.Reason.valueOf(failure.reason()), failure.detail()));
-    }
-    return List.copyOf(failures);
   }
 
   private static SectionJson section(PdfSection section) {

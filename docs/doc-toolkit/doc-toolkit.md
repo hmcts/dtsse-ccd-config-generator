@@ -9,8 +9,8 @@ service:
 - **print-ready letters** for bulk print: PDF/X-1a, capped resolution and a blank margin.
 
 It fetches documents from CDAM and stores what it makes there, as your service's system user. A
-document is either made on the spot, or **kept up to date with its case**: the toolkit rebuilds
-it after every case event and renders it in the background when it changed.
+document is either made on the spot, or **submitted** to render in the background, each version
+handed back to your service; submitting after every case event keeps a document up to date.
 
 ## Getting started
 
@@ -26,7 +26,7 @@ ccd:
       access-key: ${DOCMOSIS_ACCESS_KEY}
     temp-directory: /tmp/docs                  # optional; defaults to java.io.tmpdir
     jobs:
-      enabled: true                            # background rendering and kept-up-to-date documents
+      enabled: true                            # background rendering
       worker:
         enabled: true                          # false on instances that only queue
         max-concurrent-renders: 2
@@ -160,29 +160,32 @@ Both run on the calling thread. Errors are `DocToolkitException` with `reason()`
 (`INVALID_REQUEST`, `DOCUMENTS_FAILED`, `NOT_CONFIGURED`, `OUTPUT_TOO_LARGE`, `ASSEMBLY_FAILED`,
 `UPLOAD_FAILED`, `IO_FAILURE`), `isTransient()` and `failures()`.
 
-## Documents kept up to date
+## Rendering in the background
 
-With `ccd.doc-toolkit.jobs.enabled`, declare the document; case events do the rest:
+With `ccd.doc-toolkit.jobs.enabled`, inject `DocJobs` and submit a request for a case:
+
+```java
+docJobs.submit(caseReference, "case-bundle", request);
+```
+
+A case has one job per key. A submitted request is compared, by SHA-256, with the last one: a
+changed request replaces it, and an unchanged one writes nothing unless the last render failed. So the usual way to keep a
+document up to date is to submit it after every case event, from a `CaseEventHook`, without
+working out what changed:
 
 ```java
 @Component
-class CaseBundle implements CaseDocDefinition {
-  public String key() { return "case-bundle"; }
-  public Set<String> caseTypes() { return Set.of("PCS"); }
-  public Optional<PdfRequest> build(long caseReference) { ... }   // empty: the case has none
+class CaseBundleHook implements CaseEventHook {
+  public void afterCaseEvent(CaseEventContext event) {
+    docJobs.submit(event.caseReference(), "case-bundle", bundle.build(event.caseReference()));
+  }
 }
 ```
 
-After every case event of those case types, including system events, the toolkit calls `build`
-inside the event's transaction and compares the request's SHA-256 with the last one queued. A
-changed request is queued at the event's case revision; an unchanged one writes nothing. The
-service never detects changes, so whatever `build` reads (visibility, folders, titles) is covered.
-Case events are the only trigger: a change made outside an event is not seen.
-
-`build` must be read-only, deterministic and local (no remote calls). If it throws, the event
-fails. Its request may hold up to 1 MiB inline; keep documents in CDAM. When it returns empty, the
-toolkit forgets the case's job: a render in flight is handed to nobody, and versions the service
-already has stay its own.
+Submit inside the case event's transaction, building the request from the case there: the case
+lock puts submissions in the order the case changed, and nothing is queued if the event rolls
+back. Building the request must be cheap and local (no remote calls), as it runs in the event. A
+request may hold up to 1 MiB inline; keep documents in CDAM.
 
 A worker renders each queued request, stores the PDF in CDAM unattached and hands it to your
 service's one `DocJobHandler`:
@@ -191,52 +194,40 @@ service's one `DocJobHandler`:
 @Component
 class Bundles implements DocJobHandler {
   public void completed(DocJob job, UploadedDoc uploaded) {
-    versions.append(job.caseReference(), job.key(), job.revision(), uploaded);
+    versions.append(job.caseReference(), job.key(), uploaded);
   }
 }
 ```
 
 In one transaction, through the application's transaction manager, the worker finishes the job,
-calls the handler and attaches the PDF to the case. Finishing first means a superseded render
-never reaches the handler; once finished, the job's row stays locked, so a case event on that case
-waits for the handler to commit. If the handler or the attach fails, everything rolls back and
-the job is rendered again.
+calls the handler and attaches the PDF to the case. Finishing first means a render superseded by
+a newer submit never reaches the handler, so versions arrive in the order they were submitted;
+once finished, the job's row stays locked, so a submit for that case waits for the handler to
+commit. If the handler or the attach fails, everything rolls back and the job is rendered again.
 
 The toolkit never deletes a document. What the handler is given is the service's: keep each
 version, since a reader may have an older one open, refer to them from case data, since CDAM
 serves a document only then, and prune through CDAM if you want to. A render nobody is given is
 never attached, so CDAM's time to live has dm-store delete it.
 
-`docJobs.status(key, caseReference)` says where a document is: `QUEUED` or `IN_PROGRESS` while a
-newer version is on its way, `DONE`, or `FAILED` with `failure()`. Combine it with what the handler
-stored to show "preparing", "updating" or "failed". Failures are also logged.
-
 Behaviour:
 
-- One row per case and key, deleted with the case. A newer revision replaces a queued request; a
-  burst of events leaves at most one render running and one queued. Renders for a key do not
-  overlap while leases hold.
+- One row per case and key, deleted with the case. A burst of submits leaves at most one render
+  running and one queued. Renders for a key do not overlap while leases hold.
 - Three attempts, 30 seconds then a minute apart, for failures that may pass: a document only
-  temporarily unavailable, a failed upload or attach, or a failing handler. After the last the
-  job is `FAILED`, the service keeps the version it had, and the case's next event tries again.
+  temporarily unavailable, a failed upload or attach, or a failing handler. After the last, the
+  failure is logged, the service keeps the version it had, and the next submit tries again.
 - Attempts are counted when a job is claimed, so a render that kills its worker counts; a job
   whose every worker died fails as `CRASHED`. Leases are five minutes, renewed while rendering.
 - A change to the toolkit's rendering bumps `DocRequestJson.RENDERING_VERSION`, which changes
-  every request, so each case re-renders on its next event.
-
-### The case event hook
-
-Kept-up-to-date documents use `CaseEventHook` from `decentralised-runtime`, which any library can
-implement. Hooks run in every locally saved event, after the case row is written (with its new
-revision) and before the audit snapshot, in the event's transaction; a hook that throws fails the
-event. Hooks read the case and write only their own tables.
+  every request, so each document re-renders on its next submit.
 
 ## Storage
 
 Jobs live in `bundling.doc_job`, created by the SDK's library migrations (location
 `bundling-db`) after the runtime's `ccd` schema. Each row references its case in `ccd.case_data`
-and is deleted with it; the check is deferred to commit, so a document can be queued in the event
-that creates its case. Earlier migrations created document-bundling's tables; `V0005` drops them.
+and is deleted with it; the check is deferred to commit, so a document can be submitted in the
+event that creates its case. Earlier migrations created document-bundling's tables; `V0005` drops them.
 
 ## Local runs and tests
 

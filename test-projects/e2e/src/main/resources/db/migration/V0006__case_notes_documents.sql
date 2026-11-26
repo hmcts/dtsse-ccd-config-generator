@@ -2,10 +2,9 @@
 create table case_notes_documents (
     id          bigserial primary key,
     reference   bigint not null references ccd.case_data(reference) on delete cascade,
-    revision    bigint not null,
     url         text not null unique,
     page_count  integer not null,
     created_at  timestamptz not null default now()
 );
 
-create index case_notes_documents_reference_idx on case_notes_documents (reference, revision desc);
+create index case_notes_documents_reference_idx on case_notes_documents (reference, id desc);

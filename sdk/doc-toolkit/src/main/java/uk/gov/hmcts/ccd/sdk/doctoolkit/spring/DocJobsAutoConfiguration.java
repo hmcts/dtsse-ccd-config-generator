@@ -12,8 +12,6 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.CaseDocDefinition;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.CaseDocHook;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocJobHandler;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocJobWorker;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocJobs;
@@ -22,8 +20,7 @@ import uk.gov.hmcts.ccd.sdk.doctoolkit.jobs.DocJobRepository;
 
 /**
  * Background rendering, on with {@code ccd.doc-toolkit.jobs.enabled=true}: the job store,
- * {@link DocJobs}, the case event hook that runs {@link CaseDocDefinition}s, and a worker unless
- * {@code ccd.doc-toolkit.jobs.worker.enabled} is false.
+ * {@link DocJobs}, and a worker unless {@code ccd.doc-toolkit.jobs.worker.enabled} is false.
  */
 @AutoConfiguration(after = DocToolkitAutoConfiguration.class,
     afterName = {"org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration",
@@ -42,13 +39,6 @@ public class DocJobsAutoConfiguration {
   @ConditionalOnMissingBean
   public DocJobs docJobs(DocJobRepository repository) {
     return new DocJobs(repository);
-  }
-
-  /** Runs the service's definitions after each case event; with none, it does nothing. */
-  @Bean
-  public CaseDocHook caseDocHook(ObjectProvider<CaseDocDefinition> definitions,
-      DocJobRepository repository) {
-    return new CaseDocHook(definitions.orderedStream().toList(), repository);
   }
 
   @Bean

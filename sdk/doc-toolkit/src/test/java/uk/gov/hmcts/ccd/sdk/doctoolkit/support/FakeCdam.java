@@ -61,6 +61,12 @@ public final class FakeCdam implements CaseDocumentClientApi {
     return id;
   }
 
+  /** Makes a failing document answer with this content from now on. */
+  public void recover(UUID id, byte[] content) {
+    documents.put(id, new Stored(content, "application/pdf", "recovered.pdf"));
+    failures.remove(id);
+  }
+
   /** Makes attaching documents to cases fail, or with null succeed again. */
   public void failAttaching(RuntimeException failure) {
     this.attachFailure = failure;

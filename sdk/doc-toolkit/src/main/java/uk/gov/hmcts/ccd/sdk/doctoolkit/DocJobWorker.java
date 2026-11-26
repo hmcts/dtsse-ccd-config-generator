@@ -112,8 +112,8 @@ public final class DocJobWorker implements AutoCloseable {
   /** Fails crashed jobs, then claims as many as there is room for and runs them. */
   public void poll() {
     for (DocJob crashed : repository.failCrashed(settings.maxAttempts())) {
-      log.error("Doc job {} for case {} failed: {}", crashed.id(), crashed.caseReference(),
-          crashed.failure().map(DocJob.Failure::message).orElse(""));
+      log.error("Doc job {} for case {} failed: each worker stopped before finishing it; the"
+          + " render most likely ran out of memory", crashed.id(), crashed.caseReference());
     }
     int room = settings.maxConcurrentRenders() - inFlight.get();
     if (room <= 0) {
@@ -173,7 +173,7 @@ public final class DocJobWorker implements AutoCloseable {
           + e.getMessage(), List.of());
       return;
     }
-    boolean finalAttempt = job.attempts() >= settings.maxAttempts();
+    boolean finalAttempt = claimed.attempts() >= settings.maxAttempts();
     DocToolkit.Stored stored;
     try {
       stored = toolkit.renderAndStore(request, job.caseReference());
@@ -208,7 +208,7 @@ public final class DocJobWorker implements AutoCloseable {
     UploadedDoc uploaded = stored.uploaded();
     try {
       transactions.executeWithoutResult(status -> {
-        if (!repository.finish(job.id(), claimed.leaseOwner(), job.revision())) {
+        if (!repository.finish(job.id(), claimed.leaseOwner(), claimed.revision())) {
           throw new NotHeld();
         }
         try {
@@ -230,15 +230,16 @@ public final class DocJobWorker implements AutoCloseable {
       boolean attaching = e instanceof DocToolkitException;
       String what = attaching ? "attaching the document" : "the DocJobHandler";
       log.error("Doc job {}: {} failed", job.id(), what, cause);
-      if (job.attempts() < settings.maxAttempts()) {
+      if (claimed.attempts() < settings.maxAttempts()) {
         retry(claimed, what + " failed: " + cause);
       } else {
         fail(claimed, attaching ? "UPLOAD_FAILED" : "HANDLER_FAILED",
-            what + " failed " + job.attempts() + " time(s). Last failure: " + cause, List.of());
+            what + " failed " + claimed.attempts() + " time(s). Last failure: " + cause,
+            List.of());
       }
       return;
     }
-    log.info("Doc job {} completed after {} attempt(s): {}", job.id(), job.attempts(),
+    log.info("Doc job {} completed after {} attempt(s): {}", job.id(), claimed.attempts(),
         uploaded.document().getUrl());
   }
 
@@ -256,12 +257,12 @@ public final class DocJobWorker implements AutoCloseable {
   private void retry(DocJobRepository.Claimed claimed, String why) {
     DocJob job = claimed.job();
     long delay = settings.firstRetryDelay().toMillis();
-    for (int attempt = 1; attempt < job.attempts(); attempt++) {
+    for (int attempt = 1; attempt < claimed.attempts(); attempt++) {
       delay = Math.min(delay * 2, settings.maxRetryDelay().toMillis());
     }
     Instant next = Instant.now().plusMillis(delay);
-    if (repository.requeue(job.id(), claimed.leaseOwner(), job.revision(), next)) {
-      log.warn("Doc job {} attempt {} failed and is retried at {}: {}", job.id(), job.attempts(),
+    if (repository.requeue(job.id(), claimed.leaseOwner(), claimed.revision(), next)) {
+      log.warn("Doc job {} attempt {} failed and is retried at {}: {}", job.id(), claimed.attempts(),
           next, why);
     } else {
       repository.releaseSuperseded(job.id(), claimed.leaseOwner());
@@ -271,7 +272,7 @@ public final class DocJobWorker implements AutoCloseable {
   private void fail(DocJobRepository.Claimed claimed, String reason, String message,
       List<DocFailure> failures) {
     DocJob job = claimed.job();
-    if (repository.markFailed(job.id(), claimed.leaseOwner(), job.revision(), reason, message,
+    if (repository.markFailed(job.id(), claimed.leaseOwner(), claimed.revision(), reason, message,
         DocRequestJson.writeFailures(failures))) {
       log.error("Doc job {} for case {} failed ({}): {}", job.id(), job.caseReference(), reason,
           message);
