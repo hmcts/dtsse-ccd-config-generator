@@ -54,7 +54,12 @@ class MessagePublisher {
       long instanceId,
       LocalDateTime timestamp
   ) {
-    CaseTypeDefinition caseType = definitionRegistry.find(caseDetails.getCaseTypeId()).orElse(null);
+    var definitions = definitionRegistry.loadDefinitions();
+    if (definitions.isEmpty()) {
+      return;
+    }
+
+    CaseTypeDefinition caseType = definitions.get(caseDetails.getCaseTypeId());
     if (caseType == null) {
       log.error("Case type {} is not known", caseDetails.getCaseTypeId());
       return;

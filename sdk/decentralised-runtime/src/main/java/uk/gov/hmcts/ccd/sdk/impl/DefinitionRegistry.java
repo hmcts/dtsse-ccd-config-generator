@@ -63,7 +63,7 @@ class DefinitionRegistry {
     }
 
     if (loaded.isEmpty()) {
-      log.warn("DefinitionRegistry: no definition snapshots found");
+      log.debug("DefinitionRegistry: no definition snapshots found");
       this.definitions = Map.of();
       return this.definitions;
     }
