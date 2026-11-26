@@ -117,6 +117,7 @@ subprojects.each { subproject ->
                 task.dependsOn gradle.includedBuild('sdk').task(':task-management:jar')
                 task.dependsOn gradle.includedBuild('sdk').task(':document-bundling:jar')
                 task.dependsOn gradle.includedBuild('sdk').task(':document-conversion:jar')
+                task.dependsOn gradle.includedBuild('sdk').task(':bank-holidays:jar')
             }
         }
     }

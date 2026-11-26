@@ -3,12 +3,9 @@ package uk.gov.hmcts.ccd.sdk.taskmanagement.delay.internal;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.delay.internal.calendar.DelayUntilCalendarConfiguration;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.delay.internal.calendar.WorkingDayIndicator;
+import uk.gov.hmcts.ccd.sdk.bankholidays.BankHolidays;
 
 @Configuration
-@Import(DelayUntilCalendarConfiguration.class)
 public class DelayUntilInternalConfiguration {
 
   @Bean
@@ -25,7 +22,7 @@ public class DelayUntilInternalConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  DelayUntilIntervalCalculator delayUntilIntervalCalculator(WorkingDayIndicator workingDayIndicator) {
-    return new DelayUntilIntervalCalculator(workingDayIndicator);
+  DelayUntilIntervalCalculator delayUntilIntervalCalculator(BankHolidays bankHolidays) {
+    return new DelayUntilIntervalCalculator(new WorkingDayIndicator(bankHolidays));
   }
 }

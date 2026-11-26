@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement.delay.internal;
 
 import static uk.gov.hmcts.ccd.sdk.taskmanagement.delay.internal.DelayUntilIntervalData.MUST_BE_WORKING_DAY_NEXT;
+import static uk.gov.hmcts.ccd.sdk.taskmanagement.delay.internal.DelayUntilIntervalData.MUST_BE_WORKING_DAY_NO;
 import static uk.gov.hmcts.ccd.sdk.taskmanagement.delay.internal.DelayUntilIntervalData.MUST_BE_WORKING_DAY_PREVIOUS;
 
 import java.time.LocalDate;
@@ -11,7 +12,6 @@ import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.delay.DelayUntilRequest;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.delay.internal.calendar.WorkingDayIndicator;
 
 @RequiredArgsConstructor
 class DelayUntilIntervalCalculator implements DelayUntilCalculator {
@@ -41,50 +41,37 @@ class DelayUntilIntervalCalculator implements DelayUntilCalculator {
 
   private LocalDate considerAllDaysAsWorking(DelayUntilIntervalData delayUntilIntervalData, LocalDate localDate) {
     LocalDate calculatedDate = localDate.plusDays(delayUntilIntervalData.getIntervalDays());
-    boolean workingDay = workingDayIndicator.isWorkingDay(
-        calculatedDate,
-        delayUntilIntervalData.getNonWorkingCalendars(),
-        delayUntilIntervalData.getNonWorkingDaysOfWeek()
-    );
-    if (delayUntilIntervalData.getMustBeWorkingDay()
-        .equalsIgnoreCase(MUST_BE_WORKING_DAY_NEXT) && !workingDay) {
-      calculatedDate = workingDayIndicator.getNextWorkingDay(
-          calculatedDate,
-          delayUntilIntervalData.getNonWorkingCalendars(),
-          delayUntilIntervalData.getNonWorkingDaysOfWeek()
-      );
+    if (delayUntilIntervalData.getMustBeWorkingDay().equalsIgnoreCase(MUST_BE_WORKING_DAY_NO)) {
+      return calculatedDate;
     }
-    if (delayUntilIntervalData.getMustBeWorkingDay()
-        .equalsIgnoreCase(MUST_BE_WORKING_DAY_PREVIOUS) && !workingDay) {
-      calculatedDate = workingDayIndicator.getPreviousWorkingDay(
-          calculatedDate,
-          delayUntilIntervalData.getNonWorkingCalendars(),
-          delayUntilIntervalData.getNonWorkingDaysOfWeek()
-      );
+    WorkingDayIndicator.WorkingDays workingDays = workingDaysOf(delayUntilIntervalData);
+    if (workingDays.isWorkingDay(calculatedDate)) {
+      return calculatedDate;
+    }
+    if (delayUntilIntervalData.getMustBeWorkingDay().equalsIgnoreCase(MUST_BE_WORKING_DAY_NEXT)) {
+      return workingDays.next(calculatedDate);
+    }
+    if (delayUntilIntervalData.getMustBeWorkingDay().equalsIgnoreCase(MUST_BE_WORKING_DAY_PREVIOUS)) {
+      return workingDays.previous(calculatedDate);
     }
     return calculatedDate;
   }
 
   private LocalDate skipNonWorkingDays(DelayUntilIntervalData delayUntilIntervalData, LocalDate localDate) {
+    WorkingDayIndicator.WorkingDays workingDays = workingDaysOf(delayUntilIntervalData);
     LocalDate calculatedDate = localDate;
-    if (delayUntilIntervalData.getIntervalDays() < 0) {
-      for (long counter = delayUntilIntervalData.getIntervalDays(); counter < 0; counter++) {
-        calculatedDate = workingDayIndicator.getPreviousWorkingDay(
-            calculatedDate,
-            delayUntilIntervalData.getNonWorkingCalendars(),
-            delayUntilIntervalData.getNonWorkingDaysOfWeek()
-        );
-      }
-    } else {
-      for (int counter = 0; counter < delayUntilIntervalData.getIntervalDays(); counter++) {
-        calculatedDate = workingDayIndicator.getNextWorkingDay(
-            calculatedDate,
-            delayUntilIntervalData.getNonWorkingCalendars(),
-            delayUntilIntervalData.getNonWorkingDaysOfWeek()
-        );
-      }
+    for (long counter = Math.abs(delayUntilIntervalData.getIntervalDays()); counter > 0; counter--) {
+      calculatedDate = delayUntilIntervalData.getIntervalDays() < 0
+          ? workingDays.previous(calculatedDate)
+          : workingDays.next(calculatedDate);
     }
     return calculatedDate;
+  }
+
+  private WorkingDayIndicator.WorkingDays workingDaysOf(DelayUntilIntervalData delayUntilIntervalData) {
+    return workingDayIndicator.of(
+        delayUntilIntervalData.getNonWorkingCalendars(),
+        delayUntilIntervalData.getNonWorkingDaysOfWeek());
   }
 
   private LocalDateTime calculateTime(String dateTypeTime, LocalDateTime referenceDate, LocalDate calculateDate) {
