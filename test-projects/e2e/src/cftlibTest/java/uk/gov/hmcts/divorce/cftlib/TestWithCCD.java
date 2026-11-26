@@ -788,19 +788,18 @@ public class TestWithCCD extends CftlibTest {
         assertThat(bundles, hasSize(before + 1));
         CaseBundle requested = bundles.get(bundles.size() - 1);
 
-        // The render then fails, naming the document CDAM could not return.
-        String sqlJob = "SELECT state, failure_message FROM bundling.doc_job WHERE case_reference = :ref AND job_key = :key";
-        Map<String, Object> job = Map.of("ref", caseRef, "key", BundlePublisher.KEY_PREFIX + requested.getId());
-        await().atMost(Duration.ofSeconds(60)).until(() -> "FAILED".equals(db.queryForMap(sqlJob, job).get("state")));
-        assertThat((String) db.queryForMap(sqlJob, job).get("failure_message"), allOf(
-            containsString("could not be rendered"),
-            containsString(CaseworkerCreateBundleMissingDocument.MISSING_DOCUMENT_TITLE)));
+        // The render then fails on the document CDAM cannot return: the service's handler is told, and
+        // marks the bundle failed; nothing is left queued.
+        await().atMost(Duration.ofSeconds(60)).until(() -> {
+            List<CaseBundle> now = caseBundles(user);
+            return "FAILED".equals(now.get(now.size() - 1).getStitchStatus());
+        });
+        assertThat(db.queryForObject("SELECT count(*) FROM bundling.doc_job WHERE case_reference = :ref AND job_key = :key",
+            Map.of("ref", caseRef, "key", BundlePublisher.KEY_PREFIX + requested.getId()), Integer.class), equalTo(0));
 
-        // Nothing was stored, the service marked the bundle failed, and the earlier bundle is untouched.
+        // Nothing was stored, and the earlier bundle is untouched.
         assertThat(stubDocumentStore.countNamed(bundleFile), equalTo(documentsBefore));
-        bundles = caseBundles(user);
-        assertThat(bundles.get(bundles.size() - 1).getStitchStatus(), equalTo("FAILED"));
-        assertThat(bundles.get(0).getStitchStatus(), equalTo("DONE"));
+        assertThat(caseBundles(user).get(0).getStitchStatus(), equalTo("DONE"));
     }
 
     private List<CaseBundle> caseBundles(String user) throws Exception {

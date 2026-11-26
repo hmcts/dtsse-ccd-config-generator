@@ -9,7 +9,6 @@ import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.Classification;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.DocFailure;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocSource;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.HtmlPage;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.MissingDocuments;
@@ -112,18 +111,6 @@ public final class DocRequestJson {
     } catch (IllegalArgumentException | NullPointerException e) {
       throw new Unreadable("the stored request is invalid: " + e.getMessage(), e);
     }
-  }
-
-  /** Documents that could not be included, as stored. */
-  public static String writeFailures(List<DocFailure> failures) {
-    return serialise(failures(failures));
-  }
-
-  private static List<FailureJson> failures(List<DocFailure> failures) {
-    return failures.stream().map(failure -> new FailureJson(failure.id().orElse(null),
-        failure.title(), failure.sectionPath(),
-        failure.page().isPresent() ? failure.page().getAsInt() : null, failure.reason().name(),
-        failure.detail())).toList();
   }
 
   private static SectionJson section(PdfSection section) {
@@ -271,9 +258,5 @@ public final class DocRequestJson {
   record PrintJson(String pageSize, double marginMillimetres, int resolutionDpi, String colour,
       String standard, ConditionJson outputCondition, boolean rotateLandscapePages,
       boolean padToEvenPages, long maxOutputBytes, double greyscaleAboveFraction) {
-  }
-
-  record FailureJson(String id, String title, List<String> sectionPath, Integer page,
-      String reason, String detail) {
   }
 }

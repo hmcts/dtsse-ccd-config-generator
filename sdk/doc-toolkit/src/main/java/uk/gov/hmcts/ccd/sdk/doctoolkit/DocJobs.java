@@ -1,7 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.doctoolkit;
 
 import java.nio.charset.StandardCharsets;
-import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.jobs.DocJobRepository;
@@ -41,8 +40,9 @@ public final class DocJobs {
   /**
    * Renders {@code request} as the case's document {@code key}. A case has one job per key: a
    * newer request replaces one not yet handed over, and a render of a replaced request is handed
-   * to nobody. A request the same as the last one submitted does nothing, so it is cheap to
-   * submit after every case event, unless that one failed: then it is tried again. A document
+   * to nobody. A request the same as the one last handed to the service does nothing, and cancels
+   * any newer one still pending, so it is cheap to submit after every case event. One that could
+   * not be made is tried again when submitted again. A document
    * made once, such as an order, is submitted under a key of its own, such as
    * {@code "order-" + orderId}.
    *
@@ -65,7 +65,7 @@ public final class DocJobs {
           + " is " + size + " bytes, over " + MAX_REQUEST_BYTES
           + ": put large content in CDAM rather than inline");
     }
-    if (repository.queue(UUID.randomUUID(), caseReference, key, json)) {
+    if (repository.submit(caseReference, key, json)) {
       log.info("Case {} {} changed; render queued", caseReference, key);
     }
   }

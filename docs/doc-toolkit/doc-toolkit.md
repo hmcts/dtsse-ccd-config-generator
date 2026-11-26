@@ -166,8 +166,10 @@ With `ccd.doc-toolkit.jobs.enabled`, inject `DocJobs` and submit a request for a
 docJobs.submit(caseReference, "case-bundle", request);
 ```
 
-A case has one job per key. A submitted request is compared, by SHA-256, with the last one: a
-changed request replaces it, and an unchanged one writes nothing unless the last render failed. So the usual way to keep a
+A case has one document per key. A submitted request is compared, by fingerprint, with the one last
+handed to the service: the same request does nothing (and cancels any newer one still pending),
+and a different one is queued, replacing any pending request. A request that could not be made is
+never recorded as handed over, so submitting it again retries it. So the usual way to keep a
 document up to date is to submit it after every case event, from a `CaseEventHook`, without
 working out what changed:
 
@@ -217,12 +219,13 @@ class Bundles implements DocJobHandler {
 ```
 
 In one transaction, through the application's transaction manager, the worker takes the case
-lock (the `for update` on `ccd.case_data` every case event takes first), finishes the job, calls
-the handler and attaches the PDF to the case. Holding the case lock means an event on that case
-waits for the handler to commit, and the handler may write rows referencing the case without
-deadlocking with an event. Finishing first means a render superseded by a newer submit never
-reaches the handler, so versions arrive in the order they were submitted. If the handler or the
-attach fails, everything rolls back and the job is rendered again.
+lock (the `for update` on `ccd.case_data` every case event takes first), takes the job off the
+queue, records what the service is given, calls the handler and attaches the PDF to the case.
+Holding the case lock means an event on that case waits for the handler to commit, and the handler
+may write rows referencing the case without deadlocking with an event. Taking the job off the queue
+is guarded by the case revision rendered and the worker's lease token, so a render superseded by a
+newer submit never reaches the handler, and versions arrive in the order they were submitted. If
+the handler or the attach fails, everything rolls back and the job is rendered again.
 
 When the toolkit gives up on a document (it failed permanently, every attempt failed, or every
 worker died), it calls `failed` the same way: once, in one transaction holding the case lock, and
@@ -237,8 +240,8 @@ never attached, so CDAM's time to live has dm-store delete it.
 
 Behaviour:
 
-- One row per case and key, deleted with the case. A burst of submits leaves at most one render
-  running and one queued. Renders for a key do not overlap while leases hold.
+- At most one pending request per case and key; a burst of submits leaves one render running and
+  one queued. Renders for a key do not overlap while leases hold.
 - Three attempts, 30 seconds then a minute apart, for failures that may pass: a document only
   temporarily unavailable, a failed upload or attach, or a failing handler. After the last, the
   handler's `failed` is called, the service keeps the version it had, and the next submit tries
@@ -251,9 +254,12 @@ Behaviour:
 
 ## Storage
 
-Jobs live in `bundling.doc_job`, created by the SDK's library migrations (location
-`bundling-db`) after the runtime's `ccd` schema. Each row references its case in `ccd.case_data`
-and is deleted with it. A case event's hooks run after its case row is written, so a document can
+Two tables, created by the SDK's library migrations (location `bundling-db`) after the runtime's
+`ccd` schema: `bundling.doc_job` holds work not yet done, a row deleted once its document is handed
+over or given up on, and `bundling.doc_rendered` the fingerprint last handed to the service for
+each case and key. Rows reference their case in `ccd.case_data` and are deleted with it. Requests
+are stored as `jsonb` in one format; a change to it ships with a migration that truncates
+`bundling.doc_job`. A case event's hooks run after its case row is written, so a document can
 be submitted in the event that creates its case. Earlier migrations created document-bundling's tables; `V0005` drops them.
 
 ## Local runs and tests

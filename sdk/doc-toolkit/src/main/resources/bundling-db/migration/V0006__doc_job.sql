@@ -1,32 +1,29 @@
--- The doc toolkit's jobs: one row per case and document key (a case bundle). A changed request
--- replaces the last one and moves the revision on; an unchanged request (same fingerprint) writes
--- nothing. Rows go with their case.
+-- The doc toolkit's jobs. doc_job holds work not yet done, one row per case and document key; a
+-- row is deleted when its document is handed to the service or given up on. doc_rendered holds the
+-- fingerprint of the request last handed to the service, so an unchanged request is not rendered
+-- again. Both go with their case.
 create table bundling.doc_job (
-    id                  uuid primary key,
     case_reference      bigint not null references ccd.case_data (reference) on delete cascade,
     -- The key the service submitted it under.
     job_key             text not null,
-    -- Moves on with each changed request, so a worker can tell its render was superseded.
-    revision            bigint not null,
-    -- The case's revision when the request was submitted, handed to the service with the result.
+    -- The case revision the request was submitted at.
     case_revision       bigint not null,
-    -- sha256 of the request as jsonb text.
-    fingerprint         bytea not null,
+    -- md5 of the request as jsonb text: change detection, not security.
+    fingerprint         uuid not null,
     request             jsonb not null,
-    state               varchar(16) not null,
     attempts            integer not null default 0,
     next_attempt_at     timestamptz,
-    lease_owner         text,
+    lease_token         uuid,
     lease_expires_at    timestamptz,
-    failure_reason      varchar(64),
-    failure_message     text,
-    failure_documents   jsonb,
     submitted_at        timestamptz not null default now(),
-    updated_at          timestamptz not null default now(),
-    unique (case_reference, job_key)
+    primary key (case_reference, job_key)
 );
 
-create index idx_doc_job_runnable on bundling.doc_job (next_attempt_at, submitted_at)
-    where state = 'QUEUED';
-create index idx_doc_job_leased on bundling.doc_job (lease_expires_at)
-    where state = 'IN_PROGRESS';
+create index idx_doc_job_due on bundling.doc_job (coalesce(next_attempt_at, submitted_at));
+
+create table bundling.doc_rendered (
+    case_reference      bigint not null references ccd.case_data (reference) on delete cascade,
+    job_key             text not null,
+    fingerprint         uuid not null,
+    primary key (case_reference, job_key)
+);

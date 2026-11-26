@@ -66,7 +66,6 @@ public final class DocJobWorker implements AutoCloseable {
   private final ExecutorService renders;
   private final ScheduledExecutorService timers;
   private final AtomicInteger inFlight = new AtomicInteger();
-  private final String workerId = "doc-job-worker-" + UUID.randomUUID();
 
   /** Created by the auto-configuration. */
   public DocJobWorker(DocJobRepository repository, DocToolkit toolkit, DocJobHandler handler,
@@ -108,7 +107,7 @@ public final class DocJobWorker implements AutoCloseable {
     renders.shutdown();
   }
 
-  /** Fails crashed jobs, then claims as many as there is room for and runs them. */
+  /** Gives up crashed jobs, then claims as many as there is room for and runs them. */
   public void poll() {
     for (DocJobRepository.Claimed crashed : repository.crashed(settings.maxAttempts())) {
       fail(crashed, "CRASHED", "The job was claimed " + crashed.attempts() + " time(s) and each"
@@ -119,9 +118,7 @@ public final class DocJobWorker implements AutoCloseable {
     if (room <= 0) {
       return;
     }
-    // A lease owner per poll, so a job this worker reclaims after its own lease expired is new.
-    String leaseOwner = workerId + "/" + UUID.randomUUID();
-    for (DocJobRepository.Claimed claimed : repository.claim(room, leaseOwner, settings.lease(),
+    for (DocJobRepository.Claimed claimed : repository.claim(room, settings.lease(),
         settings.maxAttempts())) {
       inFlight.incrementAndGet();
       try {
@@ -129,7 +126,7 @@ public final class DocJobWorker implements AutoCloseable {
           try {
             run(claimed);
           } catch (RuntimeException e) {
-            log.error("Doc job {} failed unexpectedly", claimed.job().id(), e);
+            log.error("Doc job {} failed unexpectedly", claimed.job(), e);
           } finally {
             inFlight.decrementAndGet();
           }
@@ -137,12 +134,12 @@ public final class DocJobWorker implements AutoCloseable {
       } catch (RejectedExecutionException e) {
         inFlight.decrementAndGet();
         log.warn("Doc job {} was not started; another worker takes it when its lease expires",
-            claimed.job().id());
+            claimed.job());
       }
     }
   }
 
-  /** The worker no longer holds the job, or its request was superseded. */
+  /** The worker no longer holds the job at the revision it rendered. */
   private static final class NotHeld extends RuntimeException {
     NotHeld() {
       super(null, null, false, false);
@@ -151,7 +148,7 @@ public final class DocJobWorker implements AutoCloseable {
 
   private void run(DocJobRepository.Claimed claimed) {
     DocJob job = claimed.job();
-    try (MDC.MDCCloseable ignoredJob = MDC.putCloseable("docJobId", job.id().toString());
+    try (MDC.MDCCloseable ignoredJob = MDC.putCloseable("docJobKey", job.key());
         MDC.MDCCloseable ignoredCase = MDC.putCloseable("caseReference",
             String.valueOf(job.caseReference()))) {
       runHeld(claimed);
@@ -164,8 +161,8 @@ public final class DocJobWorker implements AutoCloseable {
     try {
       request = DocRequestJson.read(claimed.requestJson());
     } catch (DocRequestJson.Unreadable e) {
-      fail(claimed, "UNREADABLE_REQUEST", "Doc job " + job.id() + " cannot be read: "
-          + e.getMessage(), List.of());
+      fail(claimed, "UNREADABLE_REQUEST", "Doc job " + job + " cannot be read: " + e.getMessage(),
+          List.of());
       return;
     }
     boolean finalAttempt = claimed.attempts() >= settings.maxAttempts();
@@ -180,7 +177,7 @@ public final class DocJobWorker implements AutoCloseable {
       }
       return;
     } catch (RuntimeException e) {
-      log.error("Doc job {}: rendering failed unexpectedly", job.id(), e);
+      log.error("Doc job {}: rendering failed unexpectedly", job, e);
       if (!finalAttempt) {
         retry(claimed, e.toString());
       } else {
@@ -192,10 +189,11 @@ public final class DocJobWorker implements AutoCloseable {
   }
 
   /**
-   * Finishes the job, hands the document to the service and attaches it to the case, in one
-   * transaction holding the case lock, so no case event runs on the case meanwhile. Finishing comes
-   * first: if the worker no longer holds the job, nothing else happens. Anything that fails leaves
-   * the upload unattached, so it expires in CDAM, and the job is rendered again.
+   * Takes the job off the queue, records what the service is given, hands it the document and
+   * attaches it to the case, in one transaction holding the case lock, so no case event runs on the
+   * case meanwhile. Dequeuing comes first: if the worker no longer holds the job at the revision it
+   * rendered, nothing else happens. Anything that fails rolls back, leaving the upload unattached to
+   * expire in CDAM, and the job is rendered again.
    */
   private void complete(DocJobRepository.Claimed claimed, DocToolkit.Stored stored) {
     DocJob job = claimed.job();
@@ -205,9 +203,8 @@ public final class DocJobWorker implements AutoCloseable {
         // The case lock first, as a case event takes it: the handler's writes may need the case's
         // rows, and an event holding them may be waiting to submit to this job.
         repository.lockCase(job.caseReference());
-        if (!repository.finish(job.id(), claimed.leaseOwner(), claimed.revision())) {
-          throw new NotHeld();
-        }
+        UUID fingerprint = repository.dequeue(claimed).orElseThrow(NotHeld::new);
+        repository.rendered(job, fingerprint);
         try {
           handler.completed(job, uploaded);
         } catch (RuntimeException e) {
@@ -218,15 +215,14 @@ public final class DocJobWorker implements AutoCloseable {
         toolkit.attach(stored, job.caseReference());
       });
     } catch (NotHeld notHeld) {
-      log.info("Doc job {} was superseded or lost its lease; its result is handed to nobody",
-          job.id());
-      repository.releaseSuperseded(job.id(), claimed.leaseOwner());
+      log.info("Doc job {} was superseded or lost its lease; its result is handed to nobody", job);
+      repository.release(claimed);
       return;
     } catch (RuntimeException e) {
       Throwable cause = e instanceof HandlerFailed ? e.getCause() : e;
       boolean attaching = e instanceof DocToolkitException;
       String what = attaching ? "attaching the document" : "the DocJobHandler";
-      log.error("Doc job {}: {} failed", job.id(), what, cause);
+      log.error("Doc job {}: {} failed", job, what, cause);
       if (claimed.attempts() < settings.maxAttempts()) {
         retry(claimed, what + " failed: " + cause);
       } else {
@@ -236,40 +232,38 @@ public final class DocJobWorker implements AutoCloseable {
       }
       return;
     }
-    log.info("Doc job {} completed after {} attempt(s): {}", job.id(), claimed.attempts(),
+    log.info("Doc job {} completed after {} attempt(s): {}", job, claimed.attempts(),
         uploaded.document().getUrl());
   }
 
   private void retry(DocJobRepository.Claimed claimed, String why) {
-    DocJob job = claimed.job();
     long delay = settings.firstRetryDelay().toMillis();
     for (int attempt = 1; attempt < claimed.attempts(); attempt++) {
       delay = Math.min(delay * 2, settings.maxRetryDelay().toMillis());
     }
     Instant next = Instant.now().plusMillis(delay);
-    if (repository.requeue(job.id(), claimed.leaseOwner(), claimed.revision(), next)) {
-      log.warn("Doc job {} attempt {} failed and is retried at {}: {}", job.id(), claimed.attempts(),
-          next, why);
+    if (repository.retryAt(claimed, next)) {
+      log.warn("Doc job {} attempt {} failed and is retried at {}: {}", claimed.job(),
+          claimed.attempts(), next, why);
     } else {
-      repository.releaseSuperseded(job.id(), claimed.leaseOwner());
+      repository.release(claimed);
     }
   }
 
   /**
-   * Fails the job and tells the service, in one transaction holding the case lock, as completing
-   * does. A handler that throws is logged and the job failed without it.
+   * Gives the job up and tells the service, in one transaction holding the case lock, as completing
+   * does. What the service was last given stays recorded, so submitting the request again retries
+   * it. A handler that throws is logged and the job given up without it.
    */
   private void fail(DocJobRepository.Claimed claimed, String reason, String message,
       List<DocFailure> failures) {
     DocJob job = claimed.job();
     DocJobFailure failure = new DocJobFailure(reason, message, failures);
-    String documents = DocRequestJson.writeFailures(failures);
     boolean failed;
     try {
       failed = Boolean.TRUE.equals(transactions.execute(status -> {
         repository.lockCase(job.caseReference());
-        if (!repository.markFailed(job.id(), claimed.leaseOwner(), claimed.revision(), reason,
-            message, documents)) {
+        if (repository.dequeue(claimed).isEmpty()) {
           return false;
         }
         try {
@@ -282,17 +276,15 @@ public final class DocJobWorker implements AutoCloseable {
         return true;
       }));
     } catch (RuntimeException e) {
-      log.error("Doc job {}: the DocJobHandler could not be told it failed; failing it without",
-          job.id(), e instanceof HandlerFailed ? e.getCause() : e);
-      failed = repository.markFailed(job.id(), claimed.leaseOwner(), claimed.revision(), reason,
-          message, documents);
+      log.error("Doc job {}: the DocJobHandler could not be told it failed; giving it up without",
+          job, e instanceof HandlerFailed ? e.getCause() : e);
+      failed = repository.dequeue(claimed).isPresent();
     }
     if (failed) {
-      log.error("Doc job {} for case {} failed ({}): {}", job.id(), job.caseReference(), reason,
-          message);
+      log.error("Doc job {} failed ({}): {}", job, reason, message);
     } else {
       // Superseded: the newer request runs instead, and this failure is nobody's concern.
-      repository.releaseSuperseded(job.id(), claimed.leaseOwner());
+      repository.release(claimed);
     }
   }
 

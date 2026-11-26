@@ -57,6 +57,7 @@ class DocJobsTest {
   @BeforeEach
   void setUp() {
     jdbc.update("delete from bundling.doc_job", Map.of());
+    jdbc.update("delete from bundling.doc_rendered", Map.of());
     insertCase(CASE);
     jdbc.update("drop table if exists handled", Map.of());
     jdbc.update("drop table if exists handled_failures", Map.of());
@@ -89,7 +90,7 @@ class DocJobsTest {
         .category("bundles")
         .build();
     submit(request);
-    runUntil(() -> state().equals("DONE"));
+    runUntil(this::idle);
 
     assertThat(cdam.uploads).singleElement().satisfies(upload -> {
       assertThat(upload.fileName()).isEqualTo("hearing-bundle.pdf");
@@ -114,36 +115,62 @@ class DocJobsTest {
       jobs.submit(CASE, KEY, bundleOf("one-page.pdf"));
       status.setRollbackOnly();
     });
-    assertThat(job()).isEmpty();
+    assertThat(pending()).isEmpty();
 
     submit(bundleOf("one-page.pdf"));
-    assertThat(job()).isPresent();
+    assertThat(pending()).isPresent();
   }
 
   @Test
   void anUnchangedRequestQueuesNothing() {
     submit(bundleOf("one-page.pdf"));
-    runUntil(() -> state().equals("DONE"));
+    runUntil(this::idle);
 
     submit(bundleOf("one-page.pdf"));
     submit(bundleOf("one-page.pdf"));
 
-    assertThat(state()).isEqualTo("DONE");
+    assertThat(pending()).isEmpty();
     worker.poll();
     assertThat(cdam.uploads).hasSize(1);
+  }
+
+  @Test
+  void anUnchangedPendingRequestKeepsItsRevisionSoItsRenderCanFinish() {
+    long first = nextCaseRevision();
+    submit(bundleOf("one-page.pdf"));
+    nextCaseRevision();
+    submit(bundleOf("one-page.pdf"));
+
+    assertThat(pending().orElseThrow().caseRevision()).isEqualTo(first);
+    runUntil(this::idle);
+    assertThat(handledRevisions()).containsExactly(first);
+  }
+
+  @Test
+  void returningToTheDeliveredRequestCancelsThePendingOne() {
+    submit(bundleOf("one-page.pdf"));
+    runUntil(this::idle);
+    submit(bundleOf("Potential_Energy_PDF.pdf"));
+    assertThat(pending()).isPresent();
+
+    submit(bundleOf("one-page.pdf"));
+
+    assertThat(pending()).isEmpty();
+    worker.poll();
+    assertThat(handled()).containsExactly("one-page.pdf");
   }
 
   @Test
   void theServiceIsGivenTheCaseRevisionTheChangedRequestWasSubmittedAt() {
     long first = nextCaseRevision();
     submit(bundleOf("one-page.pdf"));
-    runUntil(() -> state().equals("DONE"));
+    runUntil(this::idle);
     // A later event leaves the request as it is: the version still shows the case as it was.
     nextCaseRevision();
     submit(bundleOf("one-page.pdf"));
     long third = nextCaseRevision();
     submit(bundleOf("Potential_Energy_PDF.pdf"));
-    runUntil(() -> state().equals("DONE"));
+    runUntil(this::idle);
 
     assertThat(handledRevisions()).containsExactly(first, third);
   }
@@ -153,7 +180,7 @@ class DocJobsTest {
     submit(bundleOf("one-page.pdf"));
     submit(bundleOf("Potential_Energy_PDF.pdf"));
 
-    runUntil(() -> state().equals("DONE"));
+    runUntil(this::idle);
 
     assertThat(handled()).containsExactly("Potential_Energy_PDF.pdf");
   }
@@ -199,14 +226,14 @@ class DocJobsTest {
   @Test
   void aRenderSupersededBeforeItFinishesIsNeverAttached() {
     submit(bundleOf("one-page.pdf"));
-    DocJobRepository.Claimed claimed =
-        repository.claim(1, "worker-a", Duration.ofMinutes(1), 3).getFirst();
+    DocJobRepository.Claimed claimed = repository.claim(1, Duration.ofMinutes(1), 3).getFirst();
+    nextCaseRevision();
     submit(bundleOf("Potential_Energy_PDF.pdf"));
 
-    // Worker A's render finished after a newer request arrived: it cannot finish the job.
-    assertThat(repository.finish(claimed.job().id(), "worker-a", claimed.revision())).isFalse();
-    repository.releaseSuperseded(claimed.job().id(), "worker-a");
-    runUntil(() -> state().equals("DONE"));
+    // Worker A's render finished after a newer request arrived: it cannot dequeue the job.
+    assertThat(repository.dequeue(claimed)).isEmpty();
+    repository.release(claimed);
+    runUntil(this::idle);
 
     assertThat(cdam.attached()).hasSize(1);
     assertThat(handled()).containsExactly("Potential_Energy_PDF.pdf");
@@ -218,11 +245,11 @@ class DocJobsTest {
     submit(bundleOf("one-page.pdf"));
     worker.poll();
     await().atMost(Duration.ofSeconds(30)).until(() -> !cdam.uploads.isEmpty()
-        && state().equals("QUEUED"));
+        && pending().filter(job -> !job.leased()).isPresent());
     assertThat(handled()).isEmpty();
 
     cdam.failAttaching(null);
-    runUntil(() -> state().equals("DONE"));
+    runUntil(this::idle);
 
     // The first upload was never attached, so it expires in CDAM.
     assertThat(cdam.uploads).hasSize(2);
@@ -252,6 +279,8 @@ class DocJobsTest {
   @Test
   void deletingACaseDeletesItsJobs() {
     submit(bundleOf("one-page.pdf"));
+    runUntil(this::idle);
+    submit(bundleOf("Potential_Energy_PDF.pdf"));
 
     tx.executeWithoutResult(status -> {
       jdbc.queryForObject("select set_config('ccd.audit_disabled', 'true', true)", Map.of(),
@@ -261,12 +290,14 @@ class DocJobsTest {
 
     assertThat(jdbc.queryForObject("select count(*) from bundling.doc_job", Map.of(),
         Integer.class)).isZero();
+    assertThat(jdbc.queryForObject("select count(*) from bundling.doc_rendered", Map.of(),
+        Integer.class)).isZero();
   }
 
   @Test
   void anUnavailableDocumentIsRetriedThenFailsTheJobWithoutAPlaceholder() {
     submit(bundleOf("one-page.pdf"));
-    runUntil(() -> state().equals("DONE"));
+    runUntil(this::idle);
 
     UUID outage = cdam.failing(503);
     submit(PdfRequest.builder("Bundle")
@@ -274,12 +305,10 @@ class DocJobsTest {
         .tableOfContents()
         .missingDocuments(MissingDocuments.PLACEHOLDER)
         .build());
-    runUntil(() -> state().equals("FAILED"));
+    runUntil(this::idle);
 
-    assertThat(job().orElseThrow()).satisfies(job -> {
-      assertThat(job.attempts()).isEqualTo(3);
-      assertThat(job.failureDocuments()).contains("doc-1", "Outage", "UNAVAILABLE");
-    });
+    // The first version's one fetch, then the outage document tried on each of three attempts.
+    assertThat(cdam.fetchedAs).hasSize(1 + 3);
     // The service keeps the version it had and is told the newer one failed; nothing with a
     // placeholder was published.
     assertThat(handled()).containsExactly("one-page.pdf");
@@ -298,11 +327,11 @@ class DocJobsTest {
         .document(PdfPart.builder(DocSource.cdam(outage)).title("Outage").build())
         .build();
     submit(request);
-    runUntil(() -> state().equals("FAILED"));
+    runUntil(this::idle);
 
     cdam.recover(outage, fixture("one-page.pdf"));
     submit(request);
-    runUntil(() -> state().equals("DONE"));
+    runUntil(this::idle);
 
     assertThat(handled()).containsExactly("outage.pdf");
   }
@@ -312,7 +341,7 @@ class DocJobsTest {
     handler.failuresBeforeSuccess.set(1);
 
     submit(bundleOf("one-page.pdf"));
-    runUntil(() -> state().equals("DONE"));
+    runUntil(this::idle);
 
     // Only the document the service kept is attached; the first expires in CDAM.
     assertThat(handler.completed).hasSize(2);
@@ -326,15 +355,14 @@ class DocJobsTest {
     handler.failuresBeforeSuccess.set(Integer.MAX_VALUE);
     submit(bundleOf("one-page.pdf"));
 
-    runUntil(() -> state().equals("FAILED"));
+    runUntil(this::idle);
 
-    assertThat(job().orElseThrow()).satisfies(job -> {
-      assertThat(job.failureReason()).isEqualTo("HANDLER_FAILED");
-      assertThat(job.failureMessage()).contains("the service's database is down");
-    });
     assertThat(handled()).isEmpty();
     assertThat(cdam.attached()).isEmpty();
-    assertThat(handler.failed).extracting(DocJobFailure::reason).containsExactly("HANDLER_FAILED");
+    assertThat(handler.failed).singleElement().satisfies(failure -> {
+      assertThat(failure.reason()).isEqualTo("HANDLER_FAILED");
+      assertThat(failure.message()).contains("the service's database is down");
+    });
   }
 
   @Test
@@ -343,14 +371,10 @@ class DocJobsTest {
         .document(PdfPart.builder(DocSource.cdam(cdam.failing(404))).title("Gone").build())
         .build());
 
-    runUntil(() -> state().equals("FAILED"));
+    runUntil(this::idle);
 
-    assertThat(job().orElseThrow()).satisfies(job -> {
-      assertThat(job.attempts()).isEqualTo(1);
-      assertThat(job.failureReason()).isEqualTo("DOCUMENTS_FAILED");
-      assertThat(job.failureDocuments()).contains("Gone", "NOT_FOUND");
-    });
     assertThat(handler.completed).isEmpty();
+    assertThat(cdam.fetchedAs).hasSize(1);
     assertThat(cdam.uploads).isEmpty();
     assertThat(handler.failed).singleElement().satisfies(failure -> {
       assertThat(failure.reason()).isEqualTo("DOCUMENTS_FAILED");
@@ -363,15 +387,15 @@ class DocJobsTest {
   @Test
   void aFailureOfASupersededRenderIsNotReported() {
     submit(bundleOf("one-page.pdf"));
-    DocJobRepository.Claimed claimed =
-        repository.claim(1, "worker-a", Duration.ofMinutes(1), 3).getFirst();
+    DocJobRepository.Claimed claimed = repository.claim(1, Duration.ofMinutes(1), 3).getFirst();
+    nextCaseRevision();
     submit(bundleOf("Potential_Energy_PDF.pdf"));
 
-    assertThat(repository.markFailed(claimed.job().id(), "worker-a", claimed.revision(),
-        "DOCUMENTS_FAILED", "lost", "[]")).isFalse();
-    assertThat(repository.releaseSuperseded(claimed.job().id(), "worker-a")).isTrue();
+    // Giving up worker A's render starts with the same guarded dequeue, which finds nothing.
+    assertThat(repository.dequeue(claimed)).isEmpty();
+    repository.release(claimed);
 
-    runUntil(() -> state().equals("DONE"));
+    runUntil(this::idle);
     assertThat(handled()).containsExactly("Potential_Energy_PDF.pdf");
     assertThat(handler.failed).isEmpty();
   }
@@ -381,15 +405,13 @@ class DocJobsTest {
     submit(bundleOf("one-page.pdf"));
     // Three workers claim it and die: their leases run out without a result.
     for (int attempt = 0; attempt < 3; attempt++) {
-      assertThat(repository.claim(1, "dead-worker-" + attempt, Duration.ofMillis(1), 3))
-          .hasSize(1);
+      assertThat(repository.claim(1, Duration.ofMillis(1), 3)).hasSize(1);
       await().pollDelay(Duration.ofMillis(5)).until(() -> true);
     }
 
     worker.poll();
 
-    assertThat(state()).isEqualTo("FAILED");
-    assertThat(job().orElseThrow().failureReason()).isEqualTo("CRASHED");
+    assertThat(pending()).isEmpty();
     assertThat(handler.failed).extracting(DocJobFailure::reason).containsExactly("CRASHED");
     // Another worker's poll finds nothing more to fail.
     worker.poll();
@@ -401,9 +423,8 @@ class DocJobsTest {
     submit(bundleOf("one-page.pdf"));
     jdbc.update("update bundling.doc_job set request = '{\"title\":\"x\"}'::jsonb", Map.of());
 
-    runUntil(() -> state().equals("FAILED"));
+    runUntil(this::idle);
 
-    assertThat(job().orElseThrow().failureReason()).isEqualTo("UNREADABLE_REQUEST");
     assertThat(handler.failed).extracting(DocJobFailure::reason).containsExactly("UNREADABLE_REQUEST");
   }
 
@@ -414,9 +435,9 @@ class DocJobsTest {
         .document(PdfPart.builder(DocSource.cdam(cdam.failing(404))).title("Gone").build())
         .build());
 
-    runUntil(() -> state().equals("FAILED"));
+    runUntil(this::idle);
 
-    assertThat(job().orElseThrow().failureReason()).isEqualTo("DOCUMENTS_FAILED");
+    assertThat(pending()).isEmpty();
     assertThat(failedKeys()).isEmpty();
   }
 
@@ -446,22 +467,21 @@ class DocJobsTest {
     tx.executeWithoutResult(status -> jobs.submit(CASE, KEY, request));
   }
 
-  private record JobRow(String state, int attempts, String failureReason, String failureMessage,
-      String failureDocuments) {
+  private record PendingRow(long caseRevision, int attempts, boolean leased) {
   }
 
-  private Optional<JobRow> job() {
+  /** The case's work not yet done. */
+  private Optional<PendingRow> pending() {
     return jdbc.query("""
-        select state, attempts, failure_reason, failure_message,
-               failure_documents::text as failure_documents
+        select case_revision, attempts, lease_expires_at > now() as leased
         from bundling.doc_job where case_reference = :ref and job_key = :key
-        """, Map.of("ref", CASE, "key", KEY), (rs, n) -> new JobRow(rs.getString("state"),
-        rs.getInt("attempts"), rs.getString("failure_reason"), rs.getString("failure_message"),
-        rs.getString("failure_documents"))).stream().findFirst();
+        """, Map.of("ref", CASE, "key", KEY), (rs, n) -> new PendingRow(rs.getLong("case_revision"),
+        rs.getInt("attempts"), rs.getBoolean("leased"))).stream().findFirst();
   }
 
-  private String state() {
-    return job().map(JobRow::state).orElse("NONE");
+  /** Nothing left to do: the document was handed over or given up on. */
+  private boolean idle() {
+    return pending().isEmpty();
   }
 
   private PdfRequest bundleOf(String fixture) {

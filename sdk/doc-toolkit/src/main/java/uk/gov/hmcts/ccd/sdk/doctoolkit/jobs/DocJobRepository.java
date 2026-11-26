@@ -7,21 +7,24 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocJob;
 
 /**
- * JDBC access to {@code bundling.doc_job}: one row per case and document key. Each submit of a
- * changed request moves the row's revision on; every write a worker makes is guarded by its lease
- * and the revision it is rendering, so a worker that lost its lease, or whose request was
- * superseded, changes nothing.
+ * JDBC access to {@code bundling.doc_job}, the work not yet done, and {@code bundling.doc_rendered},
+ * what was last handed to the service. Submitting joins the case event's transaction. Every write a
+ * worker makes is guarded by the case revision it rendered and its lease token, so a worker whose
+ * request was superseded, or whose lease ran out, changes nothing.
  */
 public class DocJobRepository {
-  /** Whether a worker still holds the job, at the revision it claimed. */
+
+  /** The job a worker holds, at the revision it rendered. */
   private static final String HELD = " " + """
-      id = :id and lease_owner = :owner and revision = :revision and state = 'IN_PROGRESS'
+      case_reference = :case and job_key = :key and case_revision = :revision
+        and lease_token = :token
       """;
 
   private final NamedParameterJdbcTemplate jdbc;
@@ -30,80 +33,81 @@ public class DocJobRepository {
     this.jdbc = jdbc;
   }
 
-  /** A job a worker has claimed, at the revision and attempt it claimed. */
-  public record Claimed(DocJob job, long revision, int attempts, String requestJson,
-      String leaseOwner) {
+  /** A job a worker has claimed, with the attempt it is on and its lease token. */
+  public record Claimed(DocJob job, int attempts, String requestJson, UUID leaseToken) {
   }
 
   /**
-   * Queues a case's document, unless the row already has the same request and did not fail. A
-   * newer request, or one tried again, moves the revision on and records the case's revision as it
-   * stands in this transaction; a row a worker holds stays held, and the newer request runs once
-   * that worker lets go. A case that does not exist fails it.
+   * Submits a case's document at the case's revision in this transaction. A request the same as
+   * the one last handed to the service cancels any pending work; one the same as the pending
+   * request leaves it, and its revision, as they are; anything else replaces the pending request.
+   * A row a worker holds stays held: the worker's result is refused, and the newer request runs
+   * once it lets go.
    *
-   * @return whether anything was queued
+   * @return whether a render is now queued for it
    */
-  public boolean queue(UUID id, long caseReference, String key, String requestJson) {
+  public boolean submit(long caseReference, String key, String requestJson) {
+    MapSqlParameterSource params = params("case", caseReference, "key", key,
+        "request", requestJson);
+    boolean delivered = !jdbc.queryForList("""
+        select 1 from bundling.doc_rendered
+        where case_reference = :case and job_key = :key
+          and fingerprint = md5(cast(:request as jsonb)::text)::uuid
+        """, params, Integer.class).isEmpty();
+    if (delivered) {
+      jdbc.update("delete from bundling.doc_job where case_reference = :case and job_key = :key",
+          params);
+      return false;
+    }
     return jdbc.update("""
-        insert into bundling.doc_job
-          (id, case_reference, job_key, revision, case_revision, request, fingerprint, state)
-        values (:id, :case, :key, 1,
-          (select case_revision from ccd.case_data where reference = :case),
-          cast(:request as jsonb),
-          sha256(convert_to(cast(:request as jsonb)::text, 'UTF8')), 'QUEUED')
+        insert into bundling.doc_job (case_reference, job_key, case_revision, fingerprint, request)
+        values (:case, :key, (select case_revision from ccd.case_data where reference = :case),
+          md5(cast(:request as jsonb)::text)::uuid, cast(:request as jsonb))
         on conflict (case_reference, job_key) do update
-          set revision = doc_job.revision + 1, case_revision = excluded.case_revision,
-              request = excluded.request, fingerprint = excluded.fingerprint,
-              attempts = 0, next_attempt_at = null,
-              failure_reason = null, failure_message = null, failure_documents = null,
-              state = case when doc_job.state = 'IN_PROGRESS' then 'IN_PROGRESS' else 'QUEUED' end,
-              updated_at = now()
-          where doc_job.fingerprint is distinct from excluded.fingerprint
-             or doc_job.state = 'FAILED'
-        """, params("id", id, "case", caseReference, "key", key,
-        "request", requestJson)) == 1;
+          set case_revision = excluded.case_revision, fingerprint = excluded.fingerprint,
+              request = excluded.request, attempts = 0, next_attempt_at = null,
+              submitted_at = now()
+          where doc_job.fingerprint <> excluded.fingerprint
+        """, params) == 1;
   }
 
   /**
-   * Claims up to {@code limit} runnable jobs: queued and due, or held by a worker whose lease
-   * expired. Attempts are counted here, so an attempt whose worker dies counts.
+   * Claims up to {@code limit} runnable jobs, due and not held by a live lease, each under a new
+   * lease token. Attempts are counted here, so an attempt whose worker dies counts.
    */
-  public List<Claimed> claim(int limit, String leaseOwner, Duration lease, int maxAttempts) {
+  public List<Claimed> claim(int limit, Duration lease, int maxAttempts) {
     return jdbc.query("""
         with claimable as (
-          select id from bundling.doc_job
-          where ((state = 'QUEUED' and (next_attempt_at is null or next_attempt_at <= now()))
-                 or (state = 'IN_PROGRESS' and lease_expires_at <= now()
-                     and attempts < :maxAttempts))
-          order by coalesce(next_attempt_at, submitted_at), id
+          select case_reference, job_key from bundling.doc_job
+          where (lease_expires_at is null or lease_expires_at <= now())
+            and (next_attempt_at is null or next_attempt_at <= now())
+            and attempts < :maxAttempts
+          order by coalesce(next_attempt_at, submitted_at)
           limit :limit
           for update skip locked
         )
         update bundling.doc_job job
-        set state = 'IN_PROGRESS', attempts = job.attempts + 1, lease_owner = :owner,
+        set attempts = job.attempts + 1, lease_token = gen_random_uuid(),
             lease_expires_at = now() + (:leaseMillis * interval '1 millisecond'),
-            next_attempt_at = null, updated_at = now()
-        from claimable where job.id = claimable.id
-        returning job.id, job.case_reference, job.job_key, job.case_revision, job.revision,
-            job.attempts, job.request::text as request
-        """,
-        params("limit", limit, "owner", leaseOwner, "leaseMillis", lease.toMillis(),
-            "maxAttempts", maxAttempts),
-        (rs, n) -> new Claimed(map(rs), rs.getLong("revision"), rs.getInt("attempts"),
-            rs.getString("request"), leaseOwner));
+            next_attempt_at = null
+        from claimable
+        where job.case_reference = claimable.case_reference and job.job_key = claimable.job_key
+        returning job.case_reference, job.job_key, job.case_revision, job.attempts,
+            job.lease_token, job.request::text as request
+        """, params("limit", limit, "leaseMillis", lease.toMillis(), "maxAttempts", maxAttempts),
+        (rs, n) -> claimed(rs, rs.getString("request")));
   }
 
   /**
-   * Jobs whose every attempt's worker died: still held, at their last attempt, by a lease that
-   * expired. Each is returned as held by that dead worker, so failing it is guarded as usual.
+   * Jobs whose every attempt's worker died: at their last attempt, under a lease that expired.
+   * Each is returned as held by that dead worker, so giving it up is guarded as usual.
    */
   public List<Claimed> crashed(int maxAttempts) {
     return jdbc.query("""
-        select id, case_reference, job_key, case_revision, revision, attempts, lease_owner
+        select case_reference, job_key, case_revision, attempts, lease_token
         from bundling.doc_job
-        where state = 'IN_PROGRESS' and lease_expires_at <= now() and attempts >= :maxAttempts
-        """, params("maxAttempts", maxAttempts), (rs, n) -> new Claimed(map(rs),
-        rs.getLong("revision"), rs.getInt("attempts"), null, rs.getString("lease_owner")));
+        where lease_expires_at <= now() and attempts >= :maxAttempts
+        """, params("maxAttempts", maxAttempts), (rs, n) -> claimed(rs, null));
   }
 
   /**
@@ -112,62 +116,59 @@ public class DocJobRepository {
    * with them.
    */
   public void lockCase(long caseReference) {
-    jdbc.queryForList("select id from ccd.case_data where reference = :case for update",
+    jdbc.queryForList("select reference from ccd.case_data where reference = :case for update",
         params("case", caseReference));
   }
 
   /**
-   * Finishes a held job. Its row stays locked until the transaction ends, so no case event
-   * supersedes it meanwhile.
+   * Takes a held job off the queue, returning the fingerprint of the request it rendered; empty if
+   * the worker no longer holds it at that revision.
    */
-  public boolean finish(UUID id, String owner, long revision) {
-    return jdbc.update("""
-        update bundling.doc_job
-        set state = 'DONE', attempts = 0, lease_owner = null, lease_expires_at = null,
-            next_attempt_at = null, failure_reason = null, failure_message = null,
-            failure_documents = null, updated_at = now()
-        where""" + HELD, held(id, owner, revision)) == 1;
+  public Optional<UUID> dequeue(Claimed claimed) {
+    return jdbc.query("delete from bundling.doc_job where" + HELD + "returning fingerprint",
+        held(claimed), (rs, n) -> rs.getObject("fingerprint", UUID.class)).stream().findFirst();
+  }
+
+  /** Records the request last handed to the service. */
+  public void rendered(DocJob job, UUID fingerprint) {
+    jdbc.update("""
+        insert into bundling.doc_rendered (case_reference, job_key, fingerprint)
+        values (:case, :key, :fingerprint)
+        on conflict (case_reference, job_key) do update set fingerprint = excluded.fingerprint
+        """, params("case", job.caseReference(), "key", job.key(), "fingerprint", fingerprint));
   }
 
   /**
-   * Lets go of a job whose request was superseded while it ran, so the newer request runs. Does
-   * nothing if the worker no longer holds it.
+   * Puts a held job back to try again at {@code next}.
    */
-  public boolean releaseSuperseded(UUID id, String owner) {
+  public boolean retryAt(Claimed claimed, Instant next) {
     return jdbc.update("""
         update bundling.doc_job
-        set state = 'QUEUED', next_attempt_at = null, lease_owner = null, lease_expires_at = null,
-            updated_at = now()
-        where id = :id and lease_owner = :owner and state = 'IN_PROGRESS'
-        """, params("id", id, "owner", owner)) == 1;
-  }
-
-  /**
-   * Puts a held job back in the queue to try again at {@code next}.
-   */
-  public boolean requeue(UUID id, String owner, long revision, Instant next) {
-    return jdbc.update("""
-        update bundling.doc_job
-        set state = 'QUEUED', next_attempt_at = :next, lease_owner = null,
-            lease_expires_at = null, updated_at = now()
-        where""" + HELD, held(id, owner, revision)
+        set lease_token = null, lease_expires_at = null, next_attempt_at = :next
+        where""" + HELD, held(claimed)
         .addValue("next", OffsetDateTime.ofInstant(next, ZoneOffset.UTC))) == 1;
   }
 
-  /** Fails a held job. */
-  public boolean markFailed(UUID id, String owner, long revision, String reason, String message,
-      String documentsJson) {
-    return jdbc.update("""
-        update bundling.doc_job
-        set state = 'FAILED', failure_reason = :reason, failure_message = :message,
-            failure_documents = cast(:documents as jsonb), lease_owner = null,
-            lease_expires_at = null, next_attempt_at = null, updated_at = now()
-        where""" + HELD, held(id, owner, revision).addValue("reason", reason)
-        .addValue("message", message).addValue("documents", documentsJson)) == 1;
+  /**
+   * Lets go of a job whose request was superseded while it ran, so the newer request runs at once.
+   * Does nothing if the worker's lease is no longer on it.
+   */
+  public void release(Claimed claimed) {
+    jdbc.update("""
+        update bundling.doc_job set lease_token = null, lease_expires_at = null
+        where case_reference = :case and job_key = :key and lease_token = :token
+        """, held(claimed));
   }
 
-  private static MapSqlParameterSource held(UUID id, String owner, long revision) {
-    return params("id", id, "owner", owner, "revision", revision);
+  private static Claimed claimed(ResultSet rs, String requestJson) throws SQLException {
+    return new Claimed(new DocJob(rs.getLong("case_reference"), rs.getString("job_key"),
+        rs.getLong("case_revision")), rs.getInt("attempts"), requestJson,
+        rs.getObject("lease_token", UUID.class));
+  }
+
+  private static MapSqlParameterSource held(Claimed claimed) {
+    return params("case", claimed.job().caseReference(), "key", claimed.job().key(),
+        "revision", claimed.job().caseRevision(), "token", claimed.leaseToken());
   }
 
   private static MapSqlParameterSource params(Object... keysAndValues) {
@@ -176,10 +177,5 @@ public class DocJobRepository {
       params.addValue((String) keysAndValues[i], keysAndValues[i + 1]);
     }
     return params;
-  }
-
-  private static DocJob map(ResultSet rs) throws SQLException {
-    return new DocJob(rs.getObject("id", UUID.class), rs.getLong("case_reference"),
-        rs.getString("job_key"), rs.getLong("case_revision"));
   }
 }
