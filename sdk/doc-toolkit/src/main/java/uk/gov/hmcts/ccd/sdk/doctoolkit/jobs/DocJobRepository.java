@@ -37,20 +37,24 @@ public class DocJobRepository {
 
   /**
    * Queues a case's document, unless the row already has the same request and did not fail. A
-   * newer request, or one tried again, moves
-   * the revision on; a row a worker holds stays held, and the newer request runs once that worker
-   * lets go.
+   * newer request, or one tried again, moves the revision on and records the case's revision as it
+   * stands in this transaction; a row a worker holds stays held, and the newer request runs once
+   * that worker lets go. A case that does not exist fails it.
    *
    * @return whether anything was queued
    */
   public boolean queue(UUID id, long caseReference, String key, String requestJson) {
     return jdbc.update("""
         insert into bundling.doc_job
-          (id, case_reference, job_key, revision, request_version, request, fingerprint, state)
-        values (:id, :case, :key, 1, :version, cast(:request as jsonb),
+          (id, case_reference, job_key, revision, case_revision, request_version, request,
+           fingerprint, state)
+        values (:id, :case, :key, 1,
+          (select case_revision from ccd.case_data where reference = :case),
+          :version, cast(:request as jsonb),
           sha256(convert_to(cast(:request as jsonb)::text, 'UTF8')), 'QUEUED')
         on conflict (case_reference, job_key) do update
-          set revision = doc_job.revision + 1, request_version = excluded.request_version,
+          set revision = doc_job.revision + 1, case_revision = excluded.case_revision,
+              request_version = excluded.request_version,
               request = excluded.request, fingerprint = excluded.fingerprint,
               attempts = 0, next_attempt_at = null,
               failure_reason = null, failure_message = null, failure_documents = null,
@@ -83,8 +87,8 @@ public class DocJobRepository {
             lease_expires_at = now() + (:leaseMillis * interval '1 millisecond'),
             next_attempt_at = null, updated_at = now()
         from claimable where job.id = claimable.id
-        returning job.id, job.case_reference, job.job_key, job.revision, job.attempts,
-            job.request::text as request
+        returning job.id, job.case_reference, job.job_key, job.case_revision, job.revision,
+            job.attempts, job.request::text as request
         """,
         params("limit", limit, "owner", leaseOwner, "leaseMillis", lease.toMillis(),
             "maxAttempts", maxAttempts, "version", DocRequestJson.REQUEST_VERSION),
@@ -103,7 +107,7 @@ public class DocJobRepository {
             lease_owner = null, lease_expires_at = null, next_attempt_at = null,
             updated_at = now()
         where state = 'IN_PROGRESS' and lease_expires_at <= now() and attempts >= :maxAttempts
-        returning id, case_reference, job_key
+        returning id, case_reference, job_key, case_revision
         """, params("maxAttempts", maxAttempts), (rs, n) -> map(rs));
   }
 
@@ -180,6 +184,6 @@ public class DocJobRepository {
 
   private static DocJob map(ResultSet rs) throws SQLException {
     return new DocJob(rs.getObject("id", UUID.class), rs.getLong("case_reference"),
-        rs.getString("job_key"));
+        rs.getString("job_key"), rs.getLong("case_revision"));
   }
 }

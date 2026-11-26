@@ -184,7 +184,9 @@ class CaseBundleHook implements CaseEventHook {
 
 Submit inside the case event's transaction, building the request from the case there: the case
 lock puts submissions in the order the case changed, and nothing is queued if the event rolls
-back. Building the request must be cheap and local (no remote calls), as it runs in the event. A
+back. The toolkit records the case's revision at that point and hands it back as
+`job.caseRevision()`: the document shows the case as it was at that revision, and stays accurate
+until a later event changes the request. It only increases, so it orders a document's versions. Building the request must be cheap and local (no remote calls), as it runs in the event. A
 request may hold up to 1 MiB inline; keep documents in CDAM.
 
 A worker renders each queued request, stores the PDF in CDAM unattached and hands it to your
@@ -194,7 +196,7 @@ service's one `DocJobHandler`:
 @Component
 class Bundles implements DocJobHandler {
   public void completed(DocJob job, UploadedDoc uploaded) {
-    versions.append(job.caseReference(), job.key(), uploaded);
+    versions.append(job.caseReference(), job.key(), job.caseRevision(), uploaded);
   }
 }
 ```
@@ -226,8 +228,8 @@ Behaviour:
 
 Jobs live in `bundling.doc_job`, created by the SDK's library migrations (location
 `bundling-db`) after the runtime's `ccd` schema. Each row references its case in `ccd.case_data`
-and is deleted with it; the check is deferred to commit, so a document can be submitted in the
-event that creates its case. Earlier migrations created document-bundling's tables; `V0005` drops them.
+and is deleted with it. A case event's hooks run after its case row is written, so a document can
+be submitted in the event that creates its case. Earlier migrations created document-bundling's tables; `V0005` drops them.
 
 ## Local runs and tests
 

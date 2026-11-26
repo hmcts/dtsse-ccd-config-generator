@@ -42,11 +42,13 @@ public final class DocJobs {
    *
    * <p>Submit from inside the case event's transaction (a {@code CaseEventHook}), building the
    * request from the case there: the case lock then puts submissions in the order the case
-   * changed, and nothing is queued if the event rolls back.
+   * changed, and nothing is queued if the event rolls back. The case's revision in that
+   * transaction is recorded with the request and handed back as {@link DocJob#caseRevision()}.
    *
    * @throws IllegalArgumentException if the request holds a local file, which a worker elsewhere
    *     cannot read; use {@link DocSource#bytes} or CDAM
    * @throws IllegalStateException if the request is over 1 MiB; put large content in CDAM
+   * @throws org.springframework.dao.DataIntegrityViolationException if the case does not exist
    */
   public void submit(long caseReference, String key, PdfRequest request) {
     Validate.requireNonBlank(key, "key");

@@ -17,7 +17,7 @@ package uk.gov.hmcts.ccd.sdk.doctoolkit;
  * @Component
  * class Bundles implements DocJobHandler {
  *   public void completed(DocJob job, UploadedDoc uploaded) {
- *     versions.append(job.caseReference(), job.key(), uploaded);
+ *     versions.append(job.caseReference(), job.key(), job.caseRevision(), uploaded);
  *   }
  * }
  * }</pre>

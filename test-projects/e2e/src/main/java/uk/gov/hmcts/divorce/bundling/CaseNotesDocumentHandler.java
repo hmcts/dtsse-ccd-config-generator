@@ -17,9 +17,9 @@ public class CaseNotesDocumentHandler implements DocJobHandler {
 
     @Override
     public void completed(final DocJob job, final UploadedDoc uploaded) {
-        db.update("insert into case_notes_documents (reference, url, page_count)"
-                + " values (:reference, :url, :pages)",
-            Map.of("reference", job.caseReference(), "url", uploaded.document().getUrl(),
-                "pages", uploaded.pageCount()));
+        db.update("insert into case_notes_documents (reference, case_revision, url, page_count)"
+                + " values (:reference, :revision, :url, :pages)",
+            Map.of("reference", job.caseReference(), "revision", job.caseRevision(),
+                "url", uploaded.document().getUrl(), "pages", uploaded.pageCount()));
     }
 }

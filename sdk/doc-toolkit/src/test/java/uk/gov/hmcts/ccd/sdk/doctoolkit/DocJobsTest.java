@@ -57,7 +57,8 @@ class DocJobsTest {
     jdbc.update("delete from bundling.doc_job", Map.of());
     insertCase(CASE);
     jdbc.update("drop table if exists handled", Map.of());
-    jdbc.update("create table handled (n serial, file text, url text)", Map.of());
+    jdbc.update("create table handled (n serial, file text, url text, case_revision bigint)",
+        Map.of());
     toolkit = DocToolkit.builder().tempDirectory(work)
         .cdam(cdam, SERVICE_TOKENS, SYSTEM_USER, ONE_CASE_TYPE).build();
     worker = new DocJobWorker(repository, toolkit, handler, tx, QUICK);
@@ -125,6 +126,21 @@ class DocJobsTest {
     assertThat(state()).isEqualTo("DONE");
     worker.poll();
     assertThat(cdam.uploads).hasSize(1);
+  }
+
+  @Test
+  void theServiceIsGivenTheCaseRevisionTheChangedRequestWasSubmittedAt() {
+    long first = nextCaseRevision();
+    submit(bundleOf("one-page.pdf"));
+    runUntil(() -> state().equals("DONE"));
+    // A later event leaves the request as it is: the version still shows the case as it was.
+    nextCaseRevision();
+    submit(bundleOf("one-page.pdf"));
+    long third = nextCaseRevision();
+    submit(bundleOf("Potential_Energy_PDF.pdf"));
+    runUntil(() -> state().equals("DONE"));
+
+    assertThat(handledRevisions()).containsExactly(first, third);
   }
 
   @Test
@@ -198,8 +214,8 @@ class DocJobsTest {
   void aDocumentCanBeQueuedInTheEventThatCreatesItsCase() {
     long created = CASE + 1;
     tx.executeWithoutResult(status -> {
-      jobs.submit(created, KEY, bundleOf("one-page.pdf"));
       insertCase(created);
+      jobs.submit(created, KEY, bundleOf("one-page.pdf"));
     });
 
     assertThat(jdbc.queryForObject("select count(*) from bundling.doc_job"
@@ -207,10 +223,10 @@ class DocJobsTest {
   }
 
   @Test
-  void aDocumentForACaseThatDoesNotExistIsRejectedAtCommit() {
+  void aDocumentForACaseThatDoesNotExistIsRejected() {
     assertThatThrownBy(() -> tx.executeWithoutResult(status ->
         jobs.submit(CASE + 2, KEY, bundleOf("one-page.pdf"))))
-        .rootCause().hasMessageContaining("doc_job");
+        .rootCause().hasMessageContaining("case_revision");
   }
 
   @Test
@@ -423,6 +439,16 @@ class DocJobsTest {
     return jdbc.queryForList("select url from handled order by n", Map.of(), String.class);
   }
 
+  private List<Long> handledRevisions() {
+    return jdbc.queryForList("select case_revision from handled order by n", Map.of(), Long.class);
+  }
+
+  /** Moves the case on a revision, as an event does, returning the new one. */
+  private long nextCaseRevision() {
+    return jdbc.queryForObject("update ccd.case_data set case_revision = case_revision + 1"
+        + " where reference = :ref returning case_revision", Map.of("ref", CASE), Long.class);
+  }
+
   /** The file names of the versions the service kept, in order. */
   private List<String> handled() {
     return jdbc.queryForList("select file from handled order by n", Map.of(), String.class);
@@ -453,8 +479,9 @@ class DocJobsTest {
     @Override
     public void completed(DocJob job, UploadedDoc uploaded) throws Exception {
       completed.add(new Completed(job, uploaded));
-      jdbc.update("insert into handled (file, url) values (:file, :url)",
-          Map.of("file", uploaded.document().getFilename(), "url", uploaded.document().getUrl()));
+      jdbc.update("insert into handled (file, url, case_revision) values (:file, :url, :revision)",
+          Map.of("file", uploaded.document().getFilename(), "url", uploaded.document().getUrl(),
+              "revision", job.caseRevision()));
       CountDownLatch entered = blockEntered;
       if (entered != null) {
         blockEntered = null;

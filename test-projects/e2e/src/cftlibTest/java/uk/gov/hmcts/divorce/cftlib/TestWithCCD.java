@@ -734,14 +734,15 @@ public class TestWithCCD extends CftlibTest {
             Map.of("note", note));
         var response = HttpClientBuilder.create().build().execute(request);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+        long revision = db.queryForObject("SELECT case_revision FROM ccd.case_data WHERE reference = :ref",
+            Map.of("ref", caseRef), Long.class);
 
-        // The event submitted the changed notes; the worker renders and stores them and hands them over.
-        String sqlLatest = "SELECT url FROM case_notes_documents WHERE reference = :ref ORDER BY id DESC LIMIT 1";
-        Map<String, Object> byCase = Map.of("ref", caseRef);
-        await().atMost(Duration.ofSeconds(60)).until(() -> db.queryForList(sqlLatest, byCase, String.class).stream()
-            .anyMatch(latest -> stubDocumentStore.find(latest.substring(latest.length() - 36))
-                .map(stored -> pdfText(stored.content()).contains(note)).orElse(false)));
-        String url = db.queryForObject(sqlLatest, byCase, String.class);
+        // The event submitted the changed notes at its revision; the worker renders and stores them and hands them
+        // over with that revision.
+        String sqlAtRevision = "SELECT url FROM case_notes_documents WHERE reference = :ref AND case_revision = :revision";
+        Map<String, Object> atRevision = Map.of("ref", caseRef, "revision", revision);
+        await().atMost(Duration.ofSeconds(60)).until(() -> !db.queryForList(sqlAtRevision, atRevision).isEmpty());
+        String url = db.queryForObject(sqlAtRevision, atRevision, String.class);
         // CDAM stored it against the case. Users read it only once case data refers to it, which this
         // example leaves out, so check what reached the document store.
         var stored = stubDocumentStore.find(url.substring(url.length() - 36)).orElseThrow();
@@ -4963,12 +4964,4 @@ public class TestWithCCD extends CftlibTest {
         }
     }
 
-
-    private static String pdfText(byte[] content) {
-        try (PDDocument pdf = Loader.loadPDF(content)) {
-            return new PDFTextStripper().getText(pdf);
-        } catch (java.io.IOException e) {
-            throw new java.io.UncheckedIOException(e);
-        }
-    }
 }
