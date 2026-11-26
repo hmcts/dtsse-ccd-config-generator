@@ -3,7 +3,6 @@ package uk.gov.hmcts.ccd.sdk.doctoolkit;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
@@ -203,8 +202,10 @@ public final class DocJobWorker implements AutoCloseable {
         // The case lock first, as a case event takes it: the handler's writes may need the case's
         // rows, and an event holding them may be waiting to submit to this job.
         repository.lockCase(job.caseReference());
-        UUID fingerprint = repository.dequeue(claimed).orElseThrow(NotHeld::new);
-        repository.rendered(job, fingerprint);
+        if (!repository.dequeue(claimed)) {
+          throw new NotHeld();
+        }
+        repository.rendered(claimed);
         try {
           handler.completed(job, uploaded);
         } catch (RuntimeException e) {
@@ -253,7 +254,8 @@ public final class DocJobWorker implements AutoCloseable {
   /**
    * Gives the job up and tells the service, in one transaction holding the case lock, as completing
    * does. What the service was last given stays recorded, so submitting the request again retries
-   * it. A handler that throws is logged and the job given up without it.
+   * it. A handler that throws is logged and the job given up without it. Anything else that fails,
+   * such as taking the case lock, leaves the job for another worker once the lease expires.
    */
   private void fail(DocJobRepository.Claimed claimed, String reason, String message,
       List<DocFailure> failures) {
@@ -263,22 +265,24 @@ public final class DocJobWorker implements AutoCloseable {
     try {
       failed = Boolean.TRUE.equals(transactions.execute(status -> {
         repository.lockCase(job.caseReference());
-        if (repository.dequeue(claimed).isEmpty()) {
+        if (!repository.dequeue(claimed)) {
           return false;
         }
         try {
           handler.failed(job, failure);
-        } catch (RuntimeException e) {
-          throw e;
         } catch (Exception e) {
           throw new HandlerFailed(e);
         }
         return true;
       }));
-    } catch (RuntimeException e) {
+    } catch (HandlerFailed e) {
       log.error("Doc job {}: the DocJobHandler could not be told it failed; giving it up without",
-          job, e instanceof HandlerFailed ? e.getCause() : e);
-      failed = repository.dequeue(claimed).isPresent();
+          job, e.getCause());
+      failed = repository.dequeue(claimed);
+    } catch (RuntimeException e) {
+      log.error("Doc job {} ({}) could not be given up; another worker takes it when its lease"
+          + " expires", job, reason, e);
+      return;
     }
     if (failed) {
       log.error("Doc job {} failed ({}): {}", job, reason, message);

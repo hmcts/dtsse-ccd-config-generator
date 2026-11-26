@@ -223,15 +223,16 @@ lock (the `for update` on `ccd.case_data` every case event takes first), takes t
 queue, records what the service is given, calls the handler and attaches the PDF to the case.
 Holding the case lock means an event on that case waits for the handler to commit, and the handler
 may write rows referencing the case without deadlocking with an event. Taking the job off the queue
-is guarded by the case revision rendered and the worker's lease token, so a render superseded by a
-newer submit never reaches the handler, and versions arrive in the order they were submitted. If
+is guarded by the case revision and request rendered and the worker's lease token, so a render
+superseded by a newer submit never reaches the handler, and versions arrive in the order they were submitted. If
 the handler or the attach fails, everything rolls back and the job is rendered again.
 
 When the toolkit gives up on a document (it failed permanently, every attempt failed, or every
 worker died), it calls `failed` the same way: once, in one transaction holding the case lock, and
 only for the request still current. A one-off document uses it to show that it could not be made;
 a document kept up to date can ignore it and keep its last version. If `failed` throws, the job is
-failed without it and the error logged.
+failed without it and the error logged; if giving up fails for any other reason, such as waiting
+too long for the case lock, the job is left for another worker once its lease expires.
 
 The toolkit never deletes a document. What the handler is given is the service's: keep each
 version, since a reader may have an older one open, refer to them from case data, since CDAM

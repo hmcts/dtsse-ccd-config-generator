@@ -11,6 +11,9 @@ import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.fixture;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -21,12 +24,14 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.jdbc.datasource.DelegatingDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.jobs.DocJobRepository;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.support.FakeCdam;
@@ -231,12 +236,30 @@ class DocJobsTest {
     submit(bundleOf("Potential_Energy_PDF.pdf"));
 
     // Worker A's render finished after a newer request arrived: it cannot dequeue the job.
-    assertThat(repository.dequeue(claimed)).isEmpty();
+    assertThat(repository.dequeue(claimed)).isFalse();
     repository.release(claimed);
     runUntil(this::idle);
 
     assertThat(cdam.attached()).hasSize(1);
     assertThat(handled()).containsExactly("Potential_Energy_PDF.pdf");
+  }
+
+  @Test
+  void aRequestReplacedAtTheSameRevisionIsNotDeliveredByTheWorkerRenderingTheOldOne() {
+    submit(bundleOf("one-page.pdf"));
+    DocJobRepository.Claimed claimed = repository.claim(1, Duration.ofMinutes(1), 3).getFirst();
+    // Submitted again with nothing changing the case: same revision, and the row keeps its lease.
+    submit(bundleOf("Potential_Energy_PDF.pdf"));
+
+    assertThat(repository.retryAt(claimed, java.time.Instant.now())).isFalse();
+    assertThat(repository.dequeue(claimed)).isFalse();
+    repository.release(claimed);
+    runUntil(this::idle);
+
+    assertThat(handled()).containsExactly("Potential_Energy_PDF.pdf");
+    // The newer request is the one recorded as delivered, so the older one is queued again.
+    submit(bundleOf("one-page.pdf"));
+    assertThat(pending()).isPresent();
   }
 
   @Test
@@ -392,7 +415,7 @@ class DocJobsTest {
     submit(bundleOf("Potential_Energy_PDF.pdf"));
 
     // Giving up worker A's render starts with the same guarded dequeue, which finds nothing.
-    assertThat(repository.dequeue(claimed)).isEmpty();
+    assertThat(repository.dequeue(claimed)).isFalse();
     repository.release(claimed);
 
     runUntil(this::idle);
@@ -442,6 +465,59 @@ class DocJobsTest {
   }
 
   @Test
+  void aJobThatCannotTakeTheCaseLockToFailIsLeftForAnotherWorker() throws Exception {
+    // A worker whose connections give up waiting for a lock after a moment.
+    DataSource timingOut = new DelegatingDataSource(OutboxDatabase.dataSource()) {
+      @Override
+      public Connection getConnection() throws SQLException {
+        Connection connection = super.getConnection();
+        try (Statement statement = connection.createStatement()) {
+          statement.execute("set lock_timeout = '200ms'");
+        }
+        return connection;
+      }
+    };
+    DocJobRepository timingOutRepository =
+        new DocJobRepository(new NamedParameterJdbcTemplate(timingOut));
+    submit(PdfRequest.builder("Bundle")
+        .document(PdfPart.builder(DocSource.cdam(cdam.failing(404))).title("Gone").build())
+        .build());
+
+    CountDownLatch locked = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    Thread event = new Thread(() -> tx.executeWithoutResult(status -> {
+      jdbc.queryForList("select id from ccd.case_data where reference = :ref for update",
+          Map.of("ref", CASE));
+      locked.countDown();
+      try {
+        release.await(30, TimeUnit.SECONDS);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    }));
+    event.start();
+    assertThat(locked.await(30, TimeUnit.SECONDS)).isTrue();
+    try (DocJobWorker timingOutWorker = new DocJobWorker(timingOutRepository, toolkit, handler,
+        new TransactionTemplate(new DataSourceTransactionManager(timingOut)), QUICK)) {
+      timingOutWorker.poll();
+      // The render fails for good, and giving it up waits for the case lock, then gives up.
+      await().atMost(Duration.ofSeconds(30)).until(() -> waitingForALock() == 1);
+      await().atMost(Duration.ofSeconds(30)).until(() -> waitingForALock() == 0);
+    } finally {
+      release.countDown();
+      event.join();
+    }
+
+    assertThat(handler.failed).isEmpty();
+    assertThat(pending()).hasValueSatisfying(job -> assertThat(job.leased()).isTrue());
+
+    jdbc.update("update bundling.doc_job set lease_expires_at = now()", Map.of());
+    runUntil(this::idle);
+    assertThat(handler.failed).extracting(DocJobFailure::reason)
+        .containsExactly("DOCUMENTS_FAILED");
+  }
+
+  @Test
   void aLocalFileCannotBeQueued() throws Exception {
     Path letter = Files.write(work.resolve("letter.pdf"), fixture("one-page.pdf"));
 
@@ -477,6 +553,11 @@ class DocJobsTest {
         from bundling.doc_job where case_reference = :ref and job_key = :key
         """, Map.of("ref", CASE, "key", KEY), (rs, n) -> new PendingRow(rs.getLong("case_revision"),
         rs.getInt("attempts"), rs.getBoolean("leased"))).stream().findFirst();
+  }
+
+  private int waitingForALock() {
+    return jdbc.queryForObject("select count(*) from pg_stat_activity where wait_event_type = 'Lock'"
+        + " and datname = current_database()", Map.of(), Integer.class);
   }
 
   /** Nothing left to do: the document was handed over or given up on. */

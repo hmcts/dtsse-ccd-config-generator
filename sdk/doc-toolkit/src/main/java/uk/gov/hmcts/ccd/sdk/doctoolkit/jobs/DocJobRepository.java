@@ -7,7 +7,6 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -16,15 +15,18 @@ import uk.gov.hmcts.ccd.sdk.doctoolkit.DocJob;
 /**
  * JDBC access to {@code bundling.doc_job}, the work not yet done, and {@code bundling.doc_rendered},
  * what was last handed to the service. Submitting joins the case event's transaction. Every write a
- * worker makes is guarded by the case revision it rendered and its lease token, so a worker whose
- * request was superseded, or whose lease ran out, changes nothing.
+ * worker makes is guarded by the case revision and request it rendered and its lease token, so a
+ * worker whose request was superseded, or whose lease ran out, changes nothing.
  */
 public class DocJobRepository {
 
-  /** The job a worker holds, at the revision it rendered. */
+  /**
+   * The job a worker holds, at the revision and request it rendered. A request replaced at the same
+   * revision keeps the lease, so the fingerprint is what tells the worker it was superseded.
+   */
   private static final String HELD = " " + """
       case_reference = :case and job_key = :key and case_revision = :revision
-        and lease_token = :token
+        and fingerprint = :fingerprint and lease_token = :token
       """;
 
   private final NamedParameterJdbcTemplate jdbc;
@@ -33,8 +35,9 @@ public class DocJobRepository {
     this.jdbc = jdbc;
   }
 
-  /** A job a worker has claimed, with the attempt it is on and its lease token. */
-  public record Claimed(DocJob job, int attempts, String requestJson, UUID leaseToken) {
+  /** A job a worker has claimed: the request it renders, the attempt it is on and its lease. */
+  public record Claimed(DocJob job, UUID fingerprint, int attempts, String requestJson,
+      UUID leaseToken) {
   }
 
   /**
@@ -92,8 +95,8 @@ public class DocJobRepository {
             next_attempt_at = null
         from claimable
         where job.case_reference = claimable.case_reference and job.job_key = claimable.job_key
-        returning job.case_reference, job.job_key, job.case_revision, job.attempts,
-            job.lease_token, job.request::text as request
+        returning job.case_reference, job.job_key, job.case_revision, job.fingerprint,
+            job.attempts, job.lease_token, job.request::text as request
         """, params("limit", limit, "leaseMillis", lease.toMillis(), "maxAttempts", maxAttempts),
         (rs, n) -> claimed(rs, rs.getString("request")));
   }
@@ -104,7 +107,7 @@ public class DocJobRepository {
    */
   public List<Claimed> crashed(int maxAttempts) {
     return jdbc.query("""
-        select case_reference, job_key, case_revision, attempts, lease_token
+        select case_reference, job_key, case_revision, fingerprint, attempts, lease_token
         from bundling.doc_job
         where lease_expires_at <= now() and attempts >= :maxAttempts
         """, params("maxAttempts", maxAttempts), (rs, n) -> claimed(rs, null));
@@ -121,21 +124,20 @@ public class DocJobRepository {
   }
 
   /**
-   * Takes a held job off the queue, returning the fingerprint of the request it rendered; empty if
-   * the worker no longer holds it at that revision.
+   * Takes a held job off the queue; false if the worker no longer holds it at the revision and
+   * request it rendered.
    */
-  public Optional<UUID> dequeue(Claimed claimed) {
-    return jdbc.query("delete from bundling.doc_job where" + HELD + "returning fingerprint",
-        held(claimed), (rs, n) -> rs.getObject("fingerprint", UUID.class)).stream().findFirst();
+  public boolean dequeue(Claimed claimed) {
+    return jdbc.update("delete from bundling.doc_job where" + HELD, held(claimed)) == 1;
   }
 
-  /** Records the request last handed to the service. */
-  public void rendered(DocJob job, UUID fingerprint) {
+  /** Records the claimed request as the one last handed to the service. */
+  public void rendered(Claimed claimed) {
     jdbc.update("""
         insert into bundling.doc_rendered (case_reference, job_key, fingerprint)
         values (:case, :key, :fingerprint)
         on conflict (case_reference, job_key) do update set fingerprint = excluded.fingerprint
-        """, params("case", job.caseReference(), "key", job.key(), "fingerprint", fingerprint));
+        """, held(claimed));
   }
 
   /**
@@ -162,13 +164,14 @@ public class DocJobRepository {
 
   private static Claimed claimed(ResultSet rs, String requestJson) throws SQLException {
     return new Claimed(new DocJob(rs.getLong("case_reference"), rs.getString("job_key"),
-        rs.getLong("case_revision")), rs.getInt("attempts"), requestJson,
-        rs.getObject("lease_token", UUID.class));
+        rs.getLong("case_revision")), rs.getObject("fingerprint", UUID.class),
+        rs.getInt("attempts"), requestJson, rs.getObject("lease_token", UUID.class));
   }
 
   private static MapSqlParameterSource held(Claimed claimed) {
     return params("case", claimed.job().caseReference(), "key", claimed.job().key(),
-        "revision", claimed.job().caseRevision(), "token", claimed.leaseToken());
+        "revision", claimed.job().caseRevision(), "fingerprint", claimed.fingerprint(),
+        "token", claimed.leaseToken());
   }
 
   private static MapSqlParameterSource params(Object... keysAndValues) {
