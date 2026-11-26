@@ -43,7 +43,11 @@ const nodes = {
   },
   heading: {
     ...basicNodes.heading,
-    attrs: { level: { default: 1, validate: validHeadingLevel } },
+    attrs: {
+      level: { default: 1, validate: validHeadingLevel },
+      // Docweave generates no headings, but acceptChanges gives one the reader wrote an ID.
+      id: { default: null, validate: "string|null" },
+    },
   },
   text: basicNodes.text,
   hard_break: { ...basicNodes.hard_break, leafText: () => "\n" },

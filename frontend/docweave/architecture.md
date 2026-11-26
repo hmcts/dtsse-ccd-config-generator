@@ -104,6 +104,15 @@ else, statically, what the reader saw. A clause is
 the same unit the editor marks and reverts, described under
 [Editing generated clauses](#editing-generated-clauses).
 
+`acceptChanges(snapshot)` hands the reader's document on to someone else to
+edit, such as court staff checking a judge's order. It takes the document as
+if Docweave had generated it: each clause and list the reader wrote gets a
+managed `accepted:` ID, so the next reader can reword it but not delete or
+move it, and reverting a clause restores the wording as accepted. Their
+changes are no longer marked or counted, so the next reader sees only their
+own. The accepted snapshot is not rendered again, since a render would remove
+the accepted clauses its document does not generate.
+
 ### Generated node identity
 
 Internally, generated paragraphs, list items, ordered lists and generated text

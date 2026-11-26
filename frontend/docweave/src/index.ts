@@ -23,7 +23,7 @@ export {
   type InvalidSnapshotCode,
   parseSnapshot,
 } from "./snapshot.js";
-export { describeChanges, type DocumentChanges } from "./changes.js";
+export { acceptChanges, describeChanges, type DocumentChanges } from "./changes.js";
 export { renderHtml, type RenderHtmlOptions, renderText } from "./html.js";
 export {
   createHttpTemplateProvider,

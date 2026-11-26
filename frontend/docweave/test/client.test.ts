@@ -318,6 +318,25 @@ describe("public editor API", () => {
     controller.destroy();
   });
 
+  it("reverts a clause to the wording it was accepted with", async () => {
+    const { acceptChanges, createDocEditor, renderText } = await import("../src/index.js");
+    const { clauses, edited, generatedOrder, userClause } = await import("./fixtures/order.js");
+    const accepted = acceptChanges(edited(generatedOrder(), (current) => {
+      clauses(current).push(userClause("The claim is adjourned."));
+    }));
+    const controller = createDocEditor({
+      mount: "#editor",
+      initialSnapshot: edited(accepted, (current) => {
+        clauses(current)[2]!.content![0]!.content = [{ type: "text", text: "The claim is struck out." }];
+      }),
+    });
+
+    dom.window.document.querySelector<HTMLButtonElement>("#editor .docweave-editor__revert")!.click();
+
+    assert.equal(renderText(controller.getSnapshot()), renderText(accepted));
+    controller.destroy();
+  });
+
   it("refuses a mount point that already has an editor", async () => {
     const { createDocEditor } = await import("../src/index.js");
     const controller = createDocEditor({ mount: "#editor" });

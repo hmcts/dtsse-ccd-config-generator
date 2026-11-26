@@ -109,3 +109,38 @@ export function describeChanges(snapshot: DocWeaveSnapshot): DocumentChanges {
   });
   return changes;
 }
+
+/**
+ * Takes the reader's document as if Docweave had generated it, so that
+ * someone else can edit it from there: every clause and list the reader wrote
+ * gets a managed ID, so it can be reworded but not deleted or moved, and
+ * reverting a clause restores the wording in this snapshot. Their changes are
+ * no longer marked or counted. Use it on a document that will not be rendered
+ * again, since a render removes the accepted clauses it does not generate.
+ * Throws an InvalidSnapshotError for a snapshot that is not valid.
+ */
+export function acceptChanges(snapshot: DocWeaveSnapshot): DocWeaveSnapshot {
+  const { current } = readSnapshot(snapshot);
+  const taken = new Set<string>();
+  current.descendants((node) => {
+    if (typeof node.attrs.id === "string") taken.add(node.attrs.id);
+  });
+  let count = 0;
+  const nextId = (): string => {
+    let id: string;
+    do id = `accepted:${++count}`; while (taken.has(id));
+    return id;
+  };
+
+  const accept = (node: ProseMirrorNode, parent: ProseMirrorNode | null): ProseMirrorNode => {
+    if (node.isText) return node;
+    const attrs = node.attrs.id === null && (isList(node) || isClauseNode(node, parent, current))
+      ? { ...node.attrs, id: nextId() }
+      : node.attrs;
+    const children: ProseMirrorNode[] = [];
+    node.forEach((child) => children.push(accept(child, node)));
+    return node.type.create(attrs, children, node.marks);
+  };
+  const accepted = accept(current, null).toJSON() as Record<string, unknown>;
+  return { schema: "docweave-document", version: 1, current: accepted, generated: accepted };
+}
