@@ -26,7 +26,6 @@ import uk.gov.hmcts.ccd.sdk.doctoolkit.DocJobs;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocSource;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocToolkit;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocToolkitException;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.DocToolkitSystemUser;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfRequest;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfResult;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.UploadedDoc;
@@ -36,6 +35,7 @@ import uk.gov.hmcts.ccd.sdk.doctoolkit.docmosis.DocmosisRenderService;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.support.FakeCdam;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
 import uk.gov.hmcts.reform.ccd.document.am.feign.CaseDocumentClientApi;
+import uk.gov.hmcts.reform.idam.client.IdamClient;
 
 class DocToolkitAutoConfigurationTest {
   private static final String DOCX =
@@ -124,7 +124,14 @@ class DocToolkitAutoConfigurationTest {
     UUID id = cdam.store(fixture("one-page.pdf"), "application/pdf", "one-page.pdf");
     runner.withBean(CaseDocumentClientApi.class, () -> cdam)
         .withBean(AuthTokenGenerator.class, () -> () -> "Bearer service")
-        .withBean(DocToolkitSystemUser.class, () -> () -> "Bearer system-user")
+        .withBean(IdamClient.class, () -> new IdamClient(null, null) {
+          @Override
+          public String getAccessToken(String username, String password) {
+            return "Bearer " + username + ":" + password;
+          }
+        })
+        .withPropertyValues("ccd.doc-toolkit.system-user.username=system-user",
+            "ccd.doc-toolkit.system-user.password=secret")
         .withBean(JdbcTemplate.class,
             () -> new JdbcTemplate(new DriverManagerDataSource("jdbc:unused")))
         .run(context -> {
@@ -132,7 +139,7 @@ class DocToolkitAutoConfigurationTest {
               .render(single(DocSource.cdam(id)))) {
             assertThat(result.pageCount()).isEqualTo(1);
           }
-          assertThat(cdam.fetchedAs).containsExactly("Bearer system-user Bearer service");
+          assertThat(cdam.fetchedAs).containsExactly("Bearer system-user:secret Bearer service");
         });
   }
 

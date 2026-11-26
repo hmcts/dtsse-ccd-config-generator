@@ -121,6 +121,16 @@ public class DocJobRepository {
   }
 
   /**
+   * Locks the case's row until the transaction ends: the lock every case event takes first, so a
+   * transaction taking it before anything else is ordered with case events and cannot deadlock
+   * with them.
+   */
+  public void lockCase(long caseReference) {
+    jdbc.queryForList("select id from ccd.case_data where reference = :case for update",
+        params("case", caseReference));
+  }
+
+  /**
    * Finishes a held job. Its row stays locked until the transaction ends, so no case event
    * supersedes it meanwhile.
    */

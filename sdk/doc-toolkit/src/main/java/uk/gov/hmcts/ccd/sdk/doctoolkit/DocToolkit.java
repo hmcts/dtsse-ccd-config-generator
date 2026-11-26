@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.doctoolkit;
 
 import java.nio.file.Path;
+import java.util.function.Supplier;
 import org.slf4j.MDC;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.cdam.CaseLocator;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.cdam.CdamDocuments;
@@ -120,8 +121,8 @@ public final class DocToolkit {
   private void requireCdam() {
     if (cdam == null) {
       throw new DocToolkitException(DocToolkitException.Reason.NOT_CONFIGURED,
-          "Uploading needs CDAM: the service's CaseDocumentClientApi, AuthTokenGenerator and a"
-              + " DocToolkitSystemUser bean.", false, null);
+          "Uploading needs CDAM: the service's CaseDocumentClientApi, AuthTokenGenerator and"
+              + " IdamClient beans, and ccd.doc-toolkit.system-user.", false, null);
     }
   }
 
@@ -146,10 +147,11 @@ public final class DocToolkit {
      * CDAM, for fetching {@link DocSource#of CDAM documents} and for
      * {@link #upload uploading}.
      *
+     * @param systemUser a bearer token for the user documents are fetched and stored as
      * @param cases finds a case's type and jurisdiction, which CDAM needs to attach a document
      */
     public Builder cdam(CaseDocumentClientApi client, AuthTokenGenerator serviceTokens,
-        DocToolkitSystemUser systemUser, CaseLocator cases) {
+        Supplier<String> systemUser, CaseLocator cases) {
       this.cdam = new CdamDocuments(Validate.requireNonNull(client, "client"),
           Validate.requireNonNull(serviceTokens, "serviceTokens"),
           Validate.requireNonNull(systemUser, "systemUser"),

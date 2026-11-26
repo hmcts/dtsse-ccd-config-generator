@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
+import java.util.function.Supplier;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineItem;
@@ -19,13 +20,12 @@ import uk.gov.hmcts.ccd.sdk.doctoolkit.MissingDocuments;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.PageNumbers;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfRequest;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfResult;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.DocToolkitSystemUser;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.cdam.CaseLocator;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
 
 /** Fixture files and readers for the toolkit's own tests. */
 public final class ToolkitFixtures {
-  public static final DocToolkitSystemUser SYSTEM_USER = () -> "Bearer system-user";
+  public static final Supplier<String> SYSTEM_USER = () -> "Bearer system-user";
   public static final AuthTokenGenerator SERVICE_TOKENS = () -> "Bearer service";
   public static final CaseLocator ONE_CASE_TYPE =
       caseId -> new CaseLocator.CaseType("E2E", "DIVORCE");

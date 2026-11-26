@@ -243,7 +243,7 @@ class BundleFailureTest {
     assertThatThrownBy(() -> withoutCdam.render(request))
         .isInstanceOfSatisfying(DocToolkitException.class, e -> {
           assertThat(e.reason()).isEqualTo(DocToolkitException.Reason.NOT_CONFIGURED);
-          assertThat(e.getMessage()).contains("DocToolkitSystemUser");
+          assertThat(e.getMessage()).contains("ccd.doc-toolkit.system-user");
         });
   }
 }

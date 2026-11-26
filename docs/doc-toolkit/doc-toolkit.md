@@ -21,6 +21,9 @@ implementation 'com.github.hmcts:doc-toolkit'
 ```yaml
 ccd:
   doc-toolkit:
+    system-user:                               # the IDAM user CDAM documents are fetched and stored as
+      username: ${IDAM_SYSTEM_USERNAME}
+      password: ${IDAM_SYSTEM_PASSWORD}
     docmosis:                                  # leave out if you only use PDFs, images and HTML
       convert-endpoint: ${DOCMOSIS_ENDPOINT}   # /rs/convert
       access-key: ${DOCMOSIS_ACCESS_KEY}
@@ -32,14 +35,9 @@ ccd:
         max-concurrent-renders: 2
 ```
 
-Give the toolkit the user to act as in CDAM:
-
-```java
-@Bean
-DocToolkitSystemUser docToolkitSystemUser(IdamService idam) {
-  return () -> idam.retrieveSystemUpdateUserDetails().getAuthToken();
-}
-```
+The toolkit signs the system user in through the service's `IdamClient` and reuses the token for
+half an hour. CDAM also needs the service's `CaseDocumentClientApi` and `AuthTokenGenerator`
+beans; without them, or without `system-user`, CDAM documents fail as `NOT_CONFIGURED`.
 
 ## Requests
 
@@ -201,11 +199,13 @@ class Bundles implements DocJobHandler {
 }
 ```
 
-In one transaction, through the application's transaction manager, the worker finishes the job,
-calls the handler and attaches the PDF to the case. Finishing first means a render superseded by
-a newer submit never reaches the handler, so versions arrive in the order they were submitted;
-once finished, the job's row stays locked, so a submit for that case waits for the handler to
-commit. If the handler or the attach fails, everything rolls back and the job is rendered again.
+In one transaction, through the application's transaction manager, the worker takes the case
+lock (the `for update` on `ccd.case_data` every case event takes first), finishes the job, calls
+the handler and attaches the PDF to the case. Holding the case lock means an event on that case
+waits for the handler to commit, and the handler may write rows referencing the case without
+deadlocking with an event. Finishing first means a render superseded by a newer submit never
+reaches the handler, so versions arrive in the order they were submitted. If the handler or the
+attach fails, everything rolls back and the job is rendered again.
 
 The toolkit never deletes a document. What the handler is given is the service's: keep each
 version, since a reader may have an older one open, refer to them from case data, since CDAM

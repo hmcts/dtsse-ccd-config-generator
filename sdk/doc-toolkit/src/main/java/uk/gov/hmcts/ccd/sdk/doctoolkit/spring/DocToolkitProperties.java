@@ -18,7 +18,17 @@ public class DocToolkitProperties {
    */
   private Path tempDirectory;
   private Docmosis docmosis = new Docmosis();
+  private SystemUser systemUser = new SystemUser();
   private Jobs jobs = new Jobs();
+
+  /** The IDAM user the toolkit fetches and stores CDAM documents as, usually the system user. */
+  @Data
+  public static class SystemUser {
+    private String username;
+    // Kept out of toString, so logging the properties does not expose it.
+    @ToString.Exclude
+    private String password;
+  }
 
   /** The shared Docmosis service, for office formats. */
   @Data

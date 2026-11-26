@@ -644,6 +644,10 @@ role-assignment-service:
   maxResults: 20
 ccd:
   doc-toolkit:
+    # CDAM documents are fetched and stored as the system update user.
+    system-user:
+      username: ${IDAM_SYSTEM_UPDATE_USERNAME:dummysystemupdate@test.com}
+      password: ${IDAM_SYSTEM_UPDATE_PASSWORD:dummy}
     # Documents kept up to date with their case (CaseNotesDocument) render in the background.
     jobs:
       enabled: true

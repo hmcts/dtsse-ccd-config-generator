@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.InvalidMediaTypeException;
@@ -20,7 +21,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocFailure;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.DocToolkitSystemUser;
 import uk.gov.hmcts.ccd.sdk.type.Document;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
 import uk.gov.hmcts.reform.ccd.document.am.feign.CaseDocumentClientApi;
@@ -34,11 +34,11 @@ public final class CdamDocuments {
 
   private final CaseDocumentClientApi client;
   private final AuthTokenGenerator serviceTokens;
-  private final DocToolkitSystemUser systemUser;
+  private final Supplier<String> systemUser;
   private final CaseLocator cases;
 
   public CdamDocuments(CaseDocumentClientApi client, AuthTokenGenerator serviceTokens,
-      DocToolkitSystemUser systemUser, CaseLocator cases) {
+      Supplier<String> systemUser, CaseLocator cases) {
     this.client = client;
     this.serviceTokens = serviceTokens;
     this.systemUser = systemUser;
@@ -58,7 +58,7 @@ public final class CdamDocuments {
     ResponseEntity<Resource> response;
     try {
       response = client.getDocumentBinary(
-          systemUser.authorisation(), serviceTokens.generate(), documentId);
+          systemUser.get(), serviceTokens.generate(), documentId);
     } catch (FeignException e) {
       throw failure(documentId, e);
     }
@@ -105,7 +105,7 @@ public final class CdamDocuments {
    */
   public Stored store(Path file, String fileName, long caseId, String classification) {
     CaseLocator.CaseType caseType = cases.locate(caseId);
-    var stored = client.uploadDocuments(systemUser.authorisation(), serviceTokens.generate(),
+    var stored = client.uploadDocuments(systemUser.get(), serviceTokens.generate(),
             new DocumentUploadRequest(classification, caseType.caseTypeId(), caseType.jurisdiction(),
                 List.of(new PdfFile(file, fileName))))
         .getDocuments()
@@ -125,7 +125,7 @@ public final class CdamDocuments {
   public void attach(Stored stored, long caseId) {
     CaseLocator.CaseType caseType = cases.locate(caseId);
     String url = stored.document().getUrl();
-    client.patchDocument(systemUser.authorisation(), serviceTokens.generate(),
+    client.patchDocument(systemUser.get(), serviceTokens.generate(),
         CaseDocumentsMetadata.builder()
             .caseId(String.valueOf(caseId))
             .caseTypeId(caseType.caseTypeId())

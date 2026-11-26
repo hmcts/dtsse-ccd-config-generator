@@ -198,16 +198,18 @@ public final class DocJobWorker implements AutoCloseable {
 
   /**
    * Finishes the job, hands the document to the service and attaches it to the case, in one
-   * transaction. Finishing comes first: if the worker no longer holds the job, nothing else
-   * happens, and once it has finished, the job's row stays locked, so no case event supersedes
-   * it before the transaction ends. Anything that fails leaves the upload unattached, so it
-   * expires in CDAM, and the job is rendered again.
+   * transaction holding the case lock, so no case event runs on the case meanwhile. Finishing comes
+   * first: if the worker no longer holds the job, nothing else happens. Anything that fails leaves
+   * the upload unattached, so it expires in CDAM, and the job is rendered again.
    */
   private void complete(DocJobRepository.Claimed claimed, DocToolkit.Stored stored) {
     DocJob job = claimed.job();
     UploadedDoc uploaded = stored.uploaded();
     try {
       transactions.executeWithoutResult(status -> {
+        // The case lock first, as a case event takes it: the handler's writes may need the case's
+        // rows, and an event holding them may be waiting to submit to this job.
+        repository.lockCase(job.caseReference());
         if (!repository.finish(job.id(), claimed.leaseOwner(), claimed.revision())) {
           throw new NotHeld();
         }

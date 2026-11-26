@@ -165,15 +165,15 @@ class DocJobsTest {
     Thread first = new Thread(worker::poll);
     first.start();
     assertThat(inHandler.await(30, TimeUnit.SECONDS)).isTrue();
-    // An event while the first version's handler is running writes the case row, as the runtime
-    // does, then submits, which waits for the handler. The handler then writes a row referencing
-    // the case: its key-share lock does not conflict with the event's, so neither deadlocks.
+    // An event while the first version's handler is running takes the case lock first, as the
+    // runtime does, so it waits for the handler, which holds that lock too. Were the event to hold
+    // it while waiting to submit, the handler's write referencing the case would deadlock.
     PdfRequest next = bundleOf("Potential_Energy_PDF.pdf");
     AtomicReference<Throwable> eventFailure = new AtomicReference<>();
     Thread second = new Thread(() -> {
       try {
         tx.executeWithoutResult(status -> {
-          jdbc.update("update ccd.case_data set last_modified = now() where reference = :ref",
+          jdbc.queryForList("select id from ccd.case_data where reference = :ref for update",
               Map.of("ref", CASE));
           jobs.submit(CASE, KEY, next);
         });
