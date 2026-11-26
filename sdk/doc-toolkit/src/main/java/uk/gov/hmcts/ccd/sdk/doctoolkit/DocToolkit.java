@@ -16,17 +16,15 @@ import uk.gov.hmcts.reform.ccd.document.am.feign.CaseDocumentClientApi;
  * print-ready letters for bulk print. Spring Boot services get one auto-configured; inject it.
  *
  * <pre>{@code
- * UploadedDoc bundle = docToolkit.upload(
- *     PdfRequest.builder("Hearing bundle")
- *         .section(PdfSection.builder("Evidence").document(caseData.getStatement()).build())
- *         .tableOfContents()
- *         .build(),
- *     caseReference);
- * caseData.setHearingBundle(bundle.document());
+ * try (PdfResult letter = docToolkit.render(PdfRequest.builder("Claim pack")
+ *     .document(coversheet).document(claimForm).print(PrintOptions.bulkPrint()).build())) {
+ *   sendLetter(letter.open());
+ * }
  * }</pre>
  *
  * <p>Rendering is synchronous and CPU- and memory-heavy for large bundles; it runs on the
- * caller's thread. The toolkit is thread-safe.
+ * caller's thread. The toolkit is thread-safe. To store a document on a case, submit it to
+ * {@link DocJobs} instead, so it renders in the background, outside the case event.
  */
 public final class DocToolkit {
   private final Renderer renderer;
@@ -51,20 +49,6 @@ public final class DocToolkit {
   public PdfResult render(PdfRequest request) {
     Validate.requireNonNull(request, "request");
     return renderer.render(request);
-  }
-
-  /**
-   * Renders the request, stores the PDF in CDAM as the system user with the request's
-   * classification, and attaches it to the case. The returned document carries the request's
-   * category.
-   *
-   * @param caseReference the case the document is attached to; it must exist
-   * @throws DocToolkitException if it cannot be rendered or stored
-   */
-  public UploadedDoc upload(PdfRequest request, long caseReference) {
-    Stored stored = renderAndStore(request, caseReference);
-    attach(stored, caseReference);
-    return stored.uploaded();
   }
 
   /**
@@ -144,8 +128,7 @@ public final class DocToolkit {
     }
 
     /**
-     * CDAM, for fetching {@link DocSource#of CDAM documents} and for
-     * {@link #upload uploading}.
+     * CDAM, for fetching {@link DocSource#of CDAM documents} and storing what jobs render.
      *
      * @param systemUser a bearer token for the user documents are fetched and stored as
      * @param cases finds a case's type and jurisdiction, which CDAM needs to attach a document

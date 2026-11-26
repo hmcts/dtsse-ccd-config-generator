@@ -24,8 +24,12 @@ import uk.gov.hmcts.ccd.sdk.doctoolkit.jobs.DocRequestJson;
 public final class DocJobs {
   private static final Logger log = LoggerFactory.getLogger(DocJobs.class);
 
-  /** The largest stored request: inline content is stored and hashed on every submit. */
-  static final int MAX_REQUEST_BYTES = 1024 * 1024;
+  /**
+   * The largest stored request, room for a document the service generates itself. Inline content
+   * is stored with the job and hashed on every submit, so documents the case already has belong in
+   * CDAM, referred to by id.
+   */
+  static final int MAX_REQUEST_BYTES = 10 * 1024 * 1024;
 
   private final DocJobRepository repository;
 
@@ -38,7 +42,9 @@ public final class DocJobs {
    * Renders {@code request} as the case's document {@code key}. A case has one job per key: a
    * newer request replaces one not yet handed over, and a render of a replaced request is handed
    * to nobody. A request the same as the last one submitted does nothing, so it is cheap to
-   * submit after every case event, unless that one failed: then it is tried again.
+   * submit after every case event, unless that one failed: then it is tried again. A document
+   * made once, such as an order, is submitted under a key of its own, such as
+   * {@code "order-" + orderId}.
    *
    * <p>Submit from inside the case event's transaction (a {@code CaseEventHook}), building the
    * request from the case there: the case lock then puts submissions in the order the case
@@ -47,7 +53,7 @@ public final class DocJobs {
    *
    * @throws IllegalArgumentException if the request holds a local file, which a worker elsewhere
    *     cannot read; use {@link DocSource#bytes} or CDAM
-   * @throws IllegalStateException if the request is over 1 MiB; put large content in CDAM
+   * @throws IllegalStateException if the request is over 10 MiB; put large content in CDAM
    * @throws org.springframework.dao.DataIntegrityViolationException if the case does not exist
    */
   public void submit(long caseReference, String key, PdfRequest request) {

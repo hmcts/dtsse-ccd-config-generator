@@ -8,9 +8,10 @@ service:
 - **joins**: one or more documents put together in order;
 - **print-ready letters** for bulk print: PDF/X-1a, capped resolution and a blank margin.
 
-It fetches documents from CDAM and stores what it makes there, as your service's system user. A
-document is either made on the spot, or **submitted** to render in the background, each version
-handed back to your service; submitting after every case event keeps a document up to date.
+It fetches documents from CDAM as your service's system user. A document is either **rendered**
+on the spot, to a temporary PDF (bulk print), or **submitted**: rendered in the background, stored
+in CDAM on the case and handed back to your service. Submitting after every case event keeps a
+document up to date.
 
 ## Getting started
 
@@ -149,12 +150,11 @@ are; a printed bundle is assembled, then printed whole.
 try (PdfResult result = docToolkit.render(request)) {      // a temporary file; close deletes it
   sendLetter(result.open());
 }
-
-UploadedDoc stored = docToolkit.upload(request, caseReference);  // in CDAM, attached to the case
-caseData.setOrderPdf(stored.document());
 ```
 
-Both run on the calling thread. Errors are `DocToolkitException` with `reason()`
+It runs on the calling thread, so use it where the caller is already in the background, as bulk
+print is. A document that belongs on a case is [rendered in the background](#rendering-in-the-background)
+instead, so a case event never waits on rendering, Docmosis or CDAM. Errors are `DocToolkitException` with `reason()`
 (`INVALID_REQUEST`, `DOCUMENTS_FAILED`, `NOT_CONFIGURED`, `OUTPUT_TOO_LARGE`, `ASSEMBLY_FAILED`,
 `UPLOAD_FAILED`, `IO_FAILURE`), `isTransient()` and `failures()`.
 
@@ -180,12 +180,24 @@ class CaseBundleHook implements CaseEventHook {
 }
 ```
 
+A document made once, such as an order, is submitted under a key of its own:
+
+```java
+docJobs.submit(caseReference, "order-" + order.getId(), orderRequest);
+```
+
+It is never superseded, and submitting it again does nothing; the handler tells documents apart
+by `job.key()`.
+
 Submit inside the case event's transaction, building the request from the case there: the case
 lock puts submissions in the order the case changed, and nothing is queued if the event rolls
 back. The toolkit records the case's revision at that point and hands it back as
 `job.caseRevision()`: the document shows the case as it was at that revision, and stays accurate
-until a later event changes the request. It only increases, so it orders a document's versions. Building the request must be cheap and local (no remote calls), as it runs in the event. A
-request may hold up to 1 MiB inline; keep documents in CDAM.
+until a later event changes the request. It only increases, so it orders a document's versions.
+
+Building the request must be cheap and local (no remote calls), as it runs in the event. A
+request may hold up to 10 MiB inline, room for a document the service generates itself; documents
+the case already has are referred to by CDAM id.
 
 A worker renders each queued request, stores the PDF in CDAM unattached and hands it to your
 service's one `DocJobHandler`:

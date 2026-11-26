@@ -14,7 +14,7 @@ import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfRequest;
 /**
  * The doc toolkit's worked example of a document kept up to date with its case: the case's notes as a PDF. After
  * every event on a case with notes it submits the notes; the toolkit renders them in the background when they
- * changed and hands each version to {@link CaseNotesDocumentHandler}.
+ * changed and hands each version to {@link CaseDocumentsHandler}.
  */
 @Component
 public class CaseNotesDocument implements CaseEventHook {

@@ -15,28 +15,23 @@ import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.EventPayload;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.DocToolkit;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.HtmlPage;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.MissingDocuments;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.PageNumbers;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfPart;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfRequest;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfSection;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.UploadedDoc;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
 import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
 
 /**
- * The doc toolkit's worked example: a decentralised event that builds a {@link PdfRequest}
- * (from classpath fixtures here, CDAM documents in a real service) and hands it to the
- * {@link DocToolkit}. PDFs pass through, the image and the office document are converted, the
- * recording is a page the service writes in HTML, and the empty section gets a placeholder page.
- * The toolkit stores the bundle in CDAM and attaches it to the case; {@link BundlePublisher}
- * records the service's own bundle model.
- *
- * <p>Nothing is caught: a {@code DocToolkitException} propagates, the platform rolls the event
- * back, and no bundle is published.
+ * The doc toolkit's worked example of a document made once: a decentralised event that builds a {@link PdfRequest}
+ * (from classpath fixtures here, CDAM documents in a real service), records the bundle as requested and submits it
+ * under a key of its own. The event does not wait: the toolkit renders it in the background, stores it in CDAM on
+ * the case and hands it to {@link CaseDocumentsHandler}, which completes the bundle. PDFs pass through, the image and
+ * the office document are converted, the recording is a page the service writes in HTML, and the empty section gets
+ * a placeholder page.
  */
 @Component
 @Slf4j
@@ -58,9 +53,6 @@ public class CaseworkerCreateBundle implements CCDConfig<CaseData, State, UserRo
     public static final String HEARING_RECORDING_NOTE = "Playback requires case access";
 
     @Autowired
-    private DocToolkit docToolkit;
-
-    @Autowired
     private BundlePublisher bundlePublisher;
 
     @Override
@@ -76,15 +68,11 @@ public class CaseworkerCreateBundle implements CCDConfig<CaseData, State, UserRo
 
     private SubmitResponse<State> submit(EventPayload<CaseData, State> payload) {
         final long reference = payload.caseReference();
-        PdfRequest request = buildRequest(reference);
-        // Rendered, stored in CDAM as the system user and attached to the case by the toolkit.
-        UploadedDoc uploaded = docToolkit.upload(request, reference);
-        bundlePublisher.publish(reference, request, uploaded);
-        log.info("Bundle generated for case {}: {} pages, {} missing", reference, uploaded.pageCount(),
-            uploaded.failures().size());
+        var bundle = bundlePublisher.request(reference, buildRequest(reference));
+        log.info("Hearing bundle {} requested for case {}", bundle.getId(), reference);
         return SubmitResponse.<State>builder()
-            .confirmationHeader("Hearing bundle created")
-            .confirmationBody("Generated " + uploaded.pageCount() + " pages")
+            .confirmationHeader("Hearing bundle requested")
+            .confirmationBody("It will appear on the case once it has been made")
             .build();
     }
 

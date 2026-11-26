@@ -47,7 +47,7 @@ class UploadTest {
         .document(DocSource.cdam(source))
         .build();
 
-    UploadedDoc uploaded = toolkit.upload(request, CASE_ID);
+    UploadedDoc uploaded = upload(toolkit, request);
 
     FakeCdam.Upload upload = cdam.uploads.getFirst();
     assertThat(upload.authorisation()).isEqualTo("Bearer system-user");
@@ -83,7 +83,7 @@ class UploadTest {
         .classification(Classification.RESTRICTED)
         .build();
 
-    UploadedDoc uploaded = toolkit.upload(request, CASE_ID);
+    UploadedDoc uploaded = upload(toolkit, request);
 
     assertThat(cdam.uploads).singleElement().satisfies(upload ->
         assertThat(upload.classification()).isEqualTo("RESTRICTED"));
@@ -95,7 +95,7 @@ class UploadTest {
     cdam.failAttaching(new IllegalStateException("CDAM refused the hash token"));
     PdfRequest request = PdfRequest.builder("Claim").document(DocSource.cdam(source)).build();
 
-    assertThatThrownBy(() -> toolkit.upload(request, CASE_ID))
+    assertThatThrownBy(() -> upload(toolkit, request))
         .isInstanceOfSatisfying(DocToolkitException.class, e -> {
           assertThat(e.reason()).isEqualTo(DocToolkitException.Reason.UPLOAD_FAILED);
           assertThat(e.isTransient()).isTrue();
@@ -111,9 +111,16 @@ class UploadTest {
     PdfRequest request = PdfRequest.builder("One page")
         .document(DocSource.bytes(fixture("one-page.pdf"), "one-page.pdf")).build();
 
-    assertThatThrownBy(() -> local.upload(request, CASE_ID))
+    assertThatThrownBy(() -> upload(local, request))
         .isInstanceOfSatisfying(DocToolkitException.class, e ->
             assertThat(e.reason()).isEqualTo(DocToolkitException.Reason.NOT_CONFIGURED));
     assertThat(List.of(cdam.uploads, cdam.attachments)).allMatch(List::isEmpty);
+  }
+
+  /** Stores and attaches, as the worker does with what it renders. */
+  private static UploadedDoc upload(DocToolkit toolkit, PdfRequest request) {
+    DocToolkit.Stored stored = toolkit.renderAndStore(request, CASE_ID);
+    toolkit.attach(stored, CASE_ID);
+    return stored.uploaded();
   }
 }

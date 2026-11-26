@@ -101,6 +101,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import uk.gov.hmcts.divorce.bundling.BundlePublisher;
 import uk.gov.hmcts.divorce.bundling.CaseworkerCreateBundle;
 import uk.gov.hmcts.divorce.bundling.CaseworkerCreateBundleMissingDocument;
 import uk.gov.hmcts.ccd.sdk.testing.DocmosisStubController;
@@ -654,14 +655,14 @@ public class TestWithCCD extends CftlibTest {
         Map<String, Object> payload = mapper.readValue(responseBody, new TypeReference<>() {});
         @SuppressWarnings("unchecked")
         Map<String, Object> afterSubmit = (Map<String, Object>) payload.get("after_submit_callback_response");
-        assertThat(afterSubmit.get("confirmation_header"), equalTo("Hearing bundle created"));
+        assertThat(afterSubmit.get("confirmation_header"), equalTo("Hearing bundle requested"));
 
-        // The service's own bundle model, built from the SDK's result, is on the case.
-        var c = ccdApi.getCase(getAuthorisation(user), getServiceAuth(), String.valueOf(caseRef));
-        var caseData = mapper.readValue(mapper.writeValueAsString(c.getData()), CaseData.class);
-        assertThat(caseData.getCaseBundles(), hasSize(1));
-        CaseBundle bundle = caseData.getCaseBundles().get(0).getValue();
-        assertThat(bundle.getStitchStatus(), equalTo("DONE"));
+        // The event recorded the bundle as requested; the worker renders it in the background and the
+        // service's handler completes it with the stored PDF.
+        await().atMost(Duration.ofSeconds(60)).until(() -> "DONE".equals(caseBundles(user).get(0).getStitchStatus()));
+        List<CaseBundle> bundles = caseBundles(user);
+        assertThat(bundles, hasSize(1));
+        CaseBundle bundle = bundles.get(0);
         assertThat(bundle.getTitle(), equalTo(CaseworkerCreateBundle.BUNDLE_TITLE));
         assertThat(bundle.getFileName(), equalTo("case-" + caseRef + "-hearing-bundle.pdf"));
         assertThat(bundle.getDocuments(), hasSize(5));
@@ -779,23 +780,34 @@ public class TestWithCCD extends CftlibTest {
             user, CaseworkerCreateBundleMissingDocument.CASEWORKER_CREATE_BUNDLE_MISSING_DOC, Map.of());
         var response = HttpClientBuilder.create().build().execute(request);
         var responseBody = EntityUtils.toString(response.getEntity());
-        assertThat("bundle event should be rejected: " + responseBody,
-            response.getStatusLine().getStatusCode(), equalTo(422));
-        Map<String, Object> payload = mapper.readValue(responseBody, new TypeReference<>() {});
-        @SuppressWarnings("unchecked")
-        List<String> callbackErrors = (List<String>) payload.get("callbackErrors");
-        assertThat("the error should name the document CDAM could not return",
-            callbackErrors, hasItem(allOf(
-                containsString("could not be rendered"),
-                containsString(CaseworkerCreateBundleMissingDocument.MISSING_DOCUMENT_TITLE))));
+        // The event succeeds: it only records the bundle and submits it.
+        assertThat("bundle event should succeed: " + responseBody,
+            response.getStatusLine().getStatusCode(), equalTo(201));
+        assertThat(before, greaterThan(0));
+        List<CaseBundle> bundles = caseBundles(user);
+        assertThat(bundles, hasSize(before + 1));
+        CaseBundle requested = bundles.get(bundles.size() - 1);
 
-        // Nothing was uploaded or recorded, and the earlier bundle is untouched.
+        // The render then fails, naming the document CDAM could not return.
+        String sqlJob = "SELECT state, failure_message FROM bundling.doc_job WHERE case_reference = :ref AND job_key = :key";
+        Map<String, Object> job = Map.of("ref", caseRef, "key", BundlePublisher.KEY_PREFIX + requested.getId());
+        await().atMost(Duration.ofSeconds(60)).until(() -> "FAILED".equals(db.queryForMap(sqlJob, job).get("state")));
+        assertThat((String) db.queryForMap(sqlJob, job).get("failure_message"), allOf(
+            containsString("could not be rendered"),
+            containsString(CaseworkerCreateBundleMissingDocument.MISSING_DOCUMENT_TITLE)));
+
+        // Nothing was stored, the bundle stays requested, and the earlier bundle is untouched.
         assertThat(stubDocumentStore.countNamed(bundleFile), equalTo(documentsBefore));
-        assertThat(db.queryForObject(sqlCountByCase, Map.of("ref", caseRef), Integer.class), equalTo(before));
+        bundles = caseBundles(user);
+        assertThat(bundles.get(bundles.size() - 1).getStitchStatus(), equalTo("REQUESTED"));
+        assertThat(bundles.get(0).getStitchStatus(), equalTo("DONE"));
+    }
+
+    private List<CaseBundle> caseBundles(String user) throws Exception {
         var c = ccdApi.getCase(getAuthorisation(user), getServiceAuth(), String.valueOf(caseRef));
         var caseData = mapper.readValue(mapper.writeValueAsString(c.getData()), CaseData.class);
-        assertThat(caseData.getCaseBundles(), hasSize(before));
-        assertThat(before, greaterThan(0));
+        return caseData.getCaseBundles() == null ? List.of()
+            : caseData.getCaseBundles().stream().map(ListValue::getValue).toList();
     }
 
     private static List<String> collectBookmarkTitles(PDOutlineNode node) {
