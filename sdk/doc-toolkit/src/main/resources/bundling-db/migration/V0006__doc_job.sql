@@ -17,8 +17,6 @@ create table bundling.doc_job (
     state               varchar(16) not null,
     attempts            integer not null default 0,
     next_attempt_at     timestamptz,
-    -- Renders that used placeholders for documents only temporarily unavailable, re-run later.
-    placeholder_retries integer not null default 0,
     lease_owner         text,
     lease_expires_at    timestamptz,
     failure_reason      varchar(64),

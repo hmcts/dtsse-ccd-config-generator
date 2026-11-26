@@ -131,9 +131,12 @@ record DocFailure(Optional<String> id, String title, List<String> sectionPath, O
 ```
 
 `sectionPath` starts with the request's title; `page` is where the placeholder is. `reason` is
-one of `NOT_FOUND`, `ACCESS_DENIED`, `UNAVAILABLE` (may pass), `UNSUPPORTED_FORMAT`,
-`CONVERSION_FAILED`, `UNREADABLE`, `TOO_LARGE`; `reason().message()` is fit to show, `detail` is
-for logs.
+one of `NOT_FOUND`, `ACCESS_DENIED`, `UNSUPPORTED_FORMAT`, `CONVERSION_FAILED`, `UNREADABLE`,
+`TOO_LARGE`; `reason().message()` is fit to show, `detail` is for logs.
+
+Placeholders are for documents that will not come back. A document only temporarily
+`UNAVAILABLE` (CDAM or Docmosis down, timing out or throttling) fails the render under either
+policy, with `isTransient()` true, so it can be tried again rather than published with a gap.
 
 ### Bulk print
 
@@ -213,9 +216,9 @@ Behaviour:
 - One row per case and key, deleted with the case. A newer revision replaces a queued request; a
   burst of events leaves at most one render running and one queued. Renders for a key do not
   overlap while leases hold.
-- Three attempts, 30 seconds then a minute apart, for failures that may pass, a failing handler
-  included. A document only temporarily unavailable becomes a placeholder on the last attempt,
-  and the render is re-run 15 minutes later, up to three times.
+- Three attempts, 30 seconds then a minute apart, for failures that may pass: a document only
+  temporarily unavailable, a failed upload or attach, or a failing handler. After the last the
+  job is `FAILED`, the service keeps the version it had, and the case's next event tries again.
 - Attempts are counted when a job is claimed, so a render that kills its worker counts; a job
   whose every worker died fails as `CRASHED`. Leases are five minutes, renewed while rendering.
 - A change to the toolkit's rendering bumps `DocRequestJson.RENDERING_VERSION`, which changes

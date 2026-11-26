@@ -37,30 +37,25 @@ public final class DocJobWorker implements AutoCloseable {
    * @param maxAttempts how many times a job is tried
    * @param firstRetryDelay the wait before the second attempt; it doubles each time, up to
    *     {@code maxRetryDelay}
-   * @param placeholderRetryDelay the wait before re-running a kept-up-to-date document that had
-   *     to use placeholders for documents only temporarily unavailable
-   * @param maxPlaceholderRetries how many times that is done for one request
    */
   public record Settings(Duration pollDelay, int maxConcurrentRenders, Duration lease,
-      int maxAttempts, Duration firstRetryDelay, Duration maxRetryDelay,
-      Duration placeholderRetryDelay, int maxPlaceholderRetries) {
+      int maxAttempts, Duration firstRetryDelay, Duration maxRetryDelay) {
 
     /** One-second polls, two renders at a time, five-minute leases, three attempts. */
     public static Settings defaults() {
       return new Settings(Duration.ofSeconds(1), 2, Duration.ofMinutes(5), 3,
-          Duration.ofSeconds(30), Duration.ofMinutes(10), Duration.ofMinutes(15), 3);
+          Duration.ofSeconds(30), Duration.ofMinutes(10));
     }
 
     /** These settings with a different poll delay. */
     public Settings withPollDelay(Duration delay) {
       return new Settings(delay, maxConcurrentRenders, lease, maxAttempts, firstRetryDelay,
-          maxRetryDelay, placeholderRetryDelay, maxPlaceholderRetries);
+          maxRetryDelay);
     }
 
     /** These settings with a different number of concurrent renders. */
     public Settings withMaxConcurrentRenders(int renders) {
-      return new Settings(pollDelay, renders, lease, maxAttempts, firstRetryDelay, maxRetryDelay,
-          placeholderRetryDelay, maxPlaceholderRetries);
+      return new Settings(pollDelay, renders, lease, maxAttempts, firstRetryDelay, maxRetryDelay);
     }
   }
 
@@ -181,7 +176,7 @@ public final class DocJobWorker implements AutoCloseable {
     boolean finalAttempt = job.attempts() >= settings.maxAttempts();
     DocToolkit.Stored stored;
     try {
-      stored = toolkit.renderAndStore(request, job.caseReference(), finalAttempt);
+      stored = toolkit.renderAndStore(request, job.caseReference());
     } catch (DocToolkitException e) {
       if (e.isTransient() && !finalAttempt) {
         retry(claimed, e.getMessage());
@@ -211,13 +206,9 @@ public final class DocJobWorker implements AutoCloseable {
   private void complete(DocJobRepository.Claimed claimed, DocToolkit.Stored stored) {
     DocJob job = claimed.job();
     UploadedDoc uploaded = stored.uploaded();
-    Instant requeueAt = uploaded.failures().stream()
-        .anyMatch(failure -> failure.reason().isTransient())
-        && claimed.placeholderRetries() < settings.maxPlaceholderRetries()
-        ? Instant.now().plus(settings.placeholderRetryDelay()) : null;
     try {
       transactions.executeWithoutResult(status -> {
-        if (!repository.finish(job.id(), claimed.leaseOwner(), job.revision(), requeueAt)) {
+        if (!repository.finish(job.id(), claimed.leaseOwner(), job.revision())) {
           throw new NotHeld();
         }
         try {
@@ -246,10 +237,6 @@ public final class DocJobWorker implements AutoCloseable {
             what + " failed " + job.attempts() + " time(s). Last failure: " + cause, List.of());
       }
       return;
-    }
-    if (requeueAt != null) {
-      log.info("Doc job {} used placeholders for documents only temporarily unavailable;"
-          + " it runs again at {}", job.id(), requeueAt);
     }
     log.info("Doc job {} completed after {} attempt(s): {}", job.id(), job.attempts(),
         uploaded.document().getUrl());

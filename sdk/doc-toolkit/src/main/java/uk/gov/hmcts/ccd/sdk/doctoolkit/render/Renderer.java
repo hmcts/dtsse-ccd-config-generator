@@ -67,17 +67,12 @@ public final class Renderer {
     this.tempDirectory = tempDirectory;
   }
 
-  /** Renders the request into a new temporary directory, which the result deletes on close. */
-  public PdfResult render(PdfRequest request) {
-    return render(request, true);
-  }
-
   /**
-   * Renders the request. When {@code finalAttempt} is false, a part that is only temporarily
-   * unavailable fails the render, so a queued job retries it, rather than becoming a placeholder
-   * page.
+   * Renders the request into a new temporary directory, which the result deletes on close. A part
+   * only temporarily unavailable fails the render, so it can be tried again: placeholder pages are
+   * for documents that will not come back.
    */
-  public PdfResult render(PdfRequest request, boolean finalAttempt) {
+  public PdfResult render(PdfRequest request) {
     Path job;
     try {
       job = JobDirectory.create(tempDirectory);
@@ -89,7 +84,7 @@ public final class Renderer {
     try {
       Rendered rendered = request.print().isPresent() && !request.assembled()
           ? printedJoin(request, request.print().get(), job)
-          : assembled(request, job, finalAttempt);
+          : assembled(request, job);
       log.info("Rendered {}: {} pages, {} document(s) missing", request.fileName(),
           rendered.pages(), rendered.failures().size());
       PdfResult result = new PdfResult(rendered.file(), request.fileName(), rendered.pages(),
@@ -118,8 +113,7 @@ public final class Renderer {
     section.sections().forEach(child -> withPaths(child, here, into));
   }
 
-  private Rendered assembled(PdfRequest request, Path job, boolean finalAttempt)
-      throws IOException {
+  private Rendered assembled(PdfRequest request, Path job) throws IOException {
     Map<PdfPart, List<String>> paths = new IdentityHashMap<>();
     withPaths(request.root(), List.of(), paths);
     Map<PdfPart, AssemblyContent> contents = new IdentityHashMap<>();
@@ -145,8 +139,8 @@ public final class Renderer {
     if (!failures.isEmpty() && request.missingDocuments() == MissingDocuments.FAIL) {
       throw documentsFailed(request.fileName(), failures);
     }
-    if (!finalAttempt && failures.stream().anyMatch(failure -> failure.reason().isTransient())) {
-      // Worth another attempt before settling for placeholder pages.
+    if (failures.stream().anyMatch(failure -> failure.reason().isTransient())) {
+      // Worth trying again; a placeholder would publish an outage as if the document were gone.
       DocToolkitException failedRender = documentsFailed(request.fileName(), failures);
       throw new DocToolkitException(Reason.DOCUMENTS_FAILED, failedRender.getMessage(), true,
           failures, null);

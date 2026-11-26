@@ -40,7 +40,7 @@ class DocJobsTest {
   private static final String KEY = "case-bundle";
   private static final DocJobWorker.Settings QUICK = new DocJobWorker.Settings(
       Duration.ofHours(1), 2, Duration.ofMinutes(1), 3, Duration.ofMillis(1),
-      Duration.ofMillis(1), Duration.ofMillis(1), 2);
+      Duration.ofMillis(1));
 
   @TempDir
   private Path work;
@@ -234,7 +234,7 @@ class DocJobsTest {
     bundle.set(Optional::empty);
     event(2);
 
-    assertThat(repository.finish(claimed.job().id(), "worker-a", claimed.job().revision(), null))
+    assertThat(repository.finish(claimed.job().id(), "worker-a", claimed.job().revision()))
         .isFalse();
     assertThat(jobs.status(KEY, CASE)).isEmpty();
   }
@@ -249,7 +249,7 @@ class DocJobsTest {
     event(2);
 
     // Worker A's render finished after revision 2 arrived: it cannot finish the job.
-    assertThat(repository.finish(claimed.job().id(), "worker-a", claimed.job().revision(), null))
+    assertThat(repository.finish(claimed.job().id(), "worker-a", claimed.job().revision()))
         .isFalse();
     repository.releaseSuperseded(claimed.job().id(), "worker-a");
     runUntil(() -> jobs.status(KEY, CASE).orElseThrow().state() == DocJobState.DONE);
@@ -320,25 +320,28 @@ class DocJobsTest {
   }
 
   @Test
-  void anUnavailableDocumentIsRetriedThenPlacedAndTheBundleIsRenderedAgainLater() {
+  void anUnavailableDocumentIsRetriedThenFailsTheJobWithoutAPlaceholder() {
+    bundle.set(() -> Optional.of(bundleOf("one-page.pdf")));
+    event(1);
+    runUntil(() -> jobs.status(KEY, CASE).orElseThrow().state() == DocJobState.DONE);
+
     UUID outage = cdam.failing(503);
     bundle.set(() -> Optional.of(PdfRequest.builder("Bundle")
         .document(PdfPart.builder(DocSource.cdam(outage)).id("doc-1").title("Outage").build())
         .tableOfContents()
         .missingDocuments(MissingDocuments.PLACEHOLDER)
         .build()));
-    event(1);
+    event(2);
+    runUntil(() -> jobs.status(KEY, CASE).orElseThrow().state() == DocJobState.FAILED);
 
-    // Three attempts, the last with a placeholder; then two later re-renders, also placeholders.
-    runUntil(() -> handler.completed.size() == 3
-        && jobs.status(KEY, CASE).orElseThrow().state() == DocJobState.DONE);
-
-    assertThat(handler.completed.getFirst().uploaded().failures())
+    CaseDocStatus status = jobs.status(KEY, CASE).orElseThrow();
+    assertThat(status.attempts()).isEqualTo(3);
+    assertThat(status.failure().orElseThrow().documents())
         .extracting(DocFailure::id, DocFailure::title, DocFailure::reason)
         .containsExactly(tuple(Optional.of("doc-1"), "Outage", DocFailure.Reason.UNAVAILABLE));
-    assertThat(cdam.uploads).hasSize(3);
-    worker.poll();
-    assertThat(handler.completed).hasSize(3);
+    // The service keeps the version it had; nothing with a placeholder was published.
+    assertThat(handled()).containsExactly(1L);
+    assertThat(cdam.uploads).hasSize(1);
   }
 
   @Test

@@ -63,21 +63,36 @@ class BundleFailureTest {
             .document(PdfPart.builder(DocSource.cdam(present)).title("Present").build())
             .document(PdfPart.builder(DocSource.cdam(cdam.failing(404))).title("Deleted").build())
             .document(PdfPart.builder(DocSource.cdam(cdam.failing(403))).title("Forbidden").build())
-            .document(PdfPart.builder(DocSource.cdam(cdam.failing(503))).title("Outage").build())
             .build())
         .build();
 
     try (PdfResult result = toolkit.render(request); PDDocument document = load(result)) {
       assertThat(result.failures()).extracting(DocFailure::title, DocFailure::reason).containsExactly(
-          tuple("Deleted", Reason.NOT_FOUND), tuple("Forbidden", Reason.ACCESS_DENIED),
-          tuple("Outage", Reason.UNAVAILABLE));
-      assertThat(result.failures()).extracting(failure -> failure.reason().isTransient())
-          .containsExactly(false, false, true);
+          tuple("Deleted", Reason.NOT_FOUND), tuple("Forbidden", Reason.ACCESS_DENIED));
       assertThat(text(document)).contains(Reason.NOT_FOUND.message(),
-          Reason.ACCESS_DENIED.message(), Reason.UNAVAILABLE.message());
-      assertThat(outline(document)).contains("Present", "Deleted (missing)", "Forbidden (missing)",
-          "Outage (missing)");
+          Reason.ACCESS_DENIED.message());
+      assertThat(outline(document)).contains("Present", "Deleted (missing)", "Forbidden (missing)");
     }
+    assertNothingLeftBehind(work);
+  }
+
+  @Test
+  void aDocumentOnlyTemporarilyUnavailableFailsTheRenderSoItCanBeTriedAgain() {
+    PdfRequest request = bundle("Bundle")
+        .section(PdfSection.builder("Evidence")
+            .document(PdfPart.builder(DocSource.cdam(present)).title("Present").build())
+            .document(PdfPart.builder(DocSource.cdam(cdam.failing(404))).title("Deleted").build())
+            .document(PdfPart.builder(DocSource.cdam(cdam.failing(503))).title("Outage").build())
+            .build())
+        .build();
+
+    assertThatThrownBy(() -> toolkit.render(request))
+        .isInstanceOfSatisfying(DocToolkitException.class, e -> {
+          assertThat(e.reason()).isEqualTo(DocToolkitException.Reason.DOCUMENTS_FAILED);
+          assertThat(e.isTransient()).isTrue();
+          assertThat(e.failures()).extracting(DocFailure::title)
+              .containsExactly("Deleted", "Outage");
+        });
     assertNothingLeftBehind(work);
   }
 
@@ -142,10 +157,13 @@ class BundleFailureTest {
         .document(DocSource.file(word, "statement.docx", DOCX))
         .build();
 
-    try (PdfResult result = toolkit(StubDocmosis.failing(
-        new DocmosisRenderException("Docmosis returned 503", true))).render(request)) {
-      assertThat(result.failures()).extracting(DocFailure::reason).containsExactly(Reason.UNAVAILABLE);
-    }
+    assertThatThrownBy(() -> toolkit(StubDocmosis.failing(
+        new DocmosisRenderException("Docmosis returned 503", true))).render(request))
+        .isInstanceOfSatisfying(DocToolkitException.class, e -> {
+          assertThat(e.isTransient()).isTrue();
+          assertThat(e.failures()).extracting(DocFailure::reason)
+              .containsExactly(Reason.UNAVAILABLE);
+        });
     try (PdfResult result = toolkit(StubDocmosis.failing(
         new DocmosisRenderException("Docmosis returned 400", false))).render(request)) {
       assertThat(result.failures()).extracting(DocFailure::reason)

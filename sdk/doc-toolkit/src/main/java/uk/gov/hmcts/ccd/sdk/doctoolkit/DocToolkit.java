@@ -61,7 +61,9 @@ public final class DocToolkit {
    * @throws DocToolkitException if it cannot be rendered or stored
    */
   public UploadedDoc upload(PdfRequest request, long caseReference) {
-    return renderAndUpload(request, caseReference, true);
+    Stored stored = renderAndStore(request, caseReference);
+    attach(stored, caseReference);
+    return stored.uploaded();
   }
 
   /**
@@ -71,19 +73,10 @@ public final class DocToolkit {
   }
 
   /**
-   * As {@link #upload}; a queued job's earlier attempts pass false.
-   */
-  UploadedDoc renderAndUpload(PdfRequest request, long caseReference, boolean finalAttempt) {
-    Stored stored = renderAndStore(request, caseReference, finalAttempt);
-    attach(stored, caseReference);
-    return stored.uploaded();
-  }
-
-  /**
    * Renders the request and stores the PDF in CDAM without attaching it to the case, so CDAM's
    * time to live deletes it unless it is {@link #attach attached}.
    */
-  Stored renderAndStore(PdfRequest request, long caseReference, boolean finalAttempt) {
+  Stored renderAndStore(PdfRequest request, long caseReference) {
     Validate.requireNonNull(request, "request");
     requireCdam();
     // A worker running a job has already put the case in the logging context; leave it there.
@@ -91,7 +84,7 @@ public final class DocToolkit {
     if (addedCase) {
       MDC.put("caseReference", String.valueOf(caseReference));
     }
-    try (PdfResult result = renderer.render(request, finalAttempt)) {
+    try (PdfResult result = renderer.render(request)) {
       CdamDocuments.Stored stored;
       try {
         stored = cdam.store(result.file(), result.fileName(), caseReference,

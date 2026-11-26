@@ -40,8 +40,7 @@ public class DocJobRepository {
   }
 
   /** A job a worker has claimed. */
-  public record Claimed(DocJob job, String requestJson, int placeholderRetries,
-      String leaseOwner) {
+  public record Claimed(DocJob job, String requestJson, String leaseOwner) {
   }
 
   /**
@@ -61,7 +60,7 @@ public class DocJobRepository {
         on conflict (case_reference, job_key) do update
           set revision = excluded.revision, request_version = excluded.request_version,
               request = excluded.request, fingerprint = excluded.fingerprint,
-              attempts = 0, placeholder_retries = 0, next_attempt_at = null,
+              attempts = 0, next_attempt_at = null,
               failure_reason = null, failure_message = null, failure_documents = null,
               state = case when doc_job.state = 'IN_PROGRESS' then 'IN_PROGRESS' else 'QUEUED' end,
               updated_at = now()
@@ -114,13 +113,11 @@ public class DocJobRepository {
         from claimable where job.id = claimable.id
         returning job.id, job.case_reference, job.job_key, job.revision, job.state, job.attempts,
             job.submitted_at, job.updated_at, job.failure_reason, job.failure_message,
-            job.failure_documents::text as failure_documents, job.request::text as request,
-            job.placeholder_retries
+            job.failure_documents::text as failure_documents, job.request::text as request
         """,
         params("limit", limit, "owner", leaseOwner, "leaseMillis", lease.toMillis(),
             "maxAttempts", maxAttempts, "version", DocRequestJson.REQUEST_VERSION),
-        (rs, n) -> new Claimed(map(rs), rs.getString("request"), rs.getInt("placeholder_retries"),
-            leaseOwner));
+        (rs, n) -> new Claimed(map(rs), rs.getString("request"), leaseOwner));
   }
 
   /** Fails jobs whose every attempt's worker died, returning them. */
@@ -150,23 +147,16 @@ public class DocJobRepository {
   }
 
   /**
-   * Finishes a held job: done, or queued again at {@code requeueAt} to re-run a render that used
-   * placeholders for documents only temporarily unavailable. Its row stays locked until the
-   * transaction ends, so no event supersedes it meanwhile.
+   * Finishes a held job. Its row stays locked until the transaction ends, so no case event
+   * supersedes it meanwhile.
    */
-  public boolean finish(UUID id, String owner, long revision, Instant requeueAt) {
+  public boolean finish(UUID id, String owner, long revision) {
     return jdbc.update("""
         update bundling.doc_job
-        set state = case when cast(:requeueAt as timestamptz) is null then 'DONE' else 'QUEUED' end,
-            next_attempt_at = cast(:requeueAt as timestamptz),
-            placeholder_retries = placeholder_retries
-                + case when cast(:requeueAt as timestamptz) is null then 0 else 1 end,
-            attempts = 0, lease_owner = null, lease_expires_at = null,
-            failure_reason = null, failure_message = null, failure_documents = null,
-            updated_at = now()
-        where""" + HELD, held(id, owner, revision)
-        .addValue("requeueAt", requeueAt == null ? null
-            : OffsetDateTime.ofInstant(requeueAt, ZoneOffset.UTC))) == 1;
+        set state = 'DONE', attempts = 0, lease_owner = null, lease_expires_at = null,
+            next_attempt_at = null, failure_reason = null, failure_message = null,
+            failure_documents = null, updated_at = now()
+        where""" + HELD, held(id, owner, revision)) == 1;
   }
 
   /**
