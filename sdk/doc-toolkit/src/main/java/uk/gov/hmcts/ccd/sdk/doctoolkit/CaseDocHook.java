@@ -47,7 +47,7 @@ public final class CaseDocHook implements CaseEventHook {
       }
       Optional<PdfRequest> request = definition.build(event.caseReference());
       if (request.isEmpty()) {
-        if (repository.deleteKeyed(event.caseReference(), definition.key())) {
+        if (repository.delete(event.caseReference(), definition.key())) {
           log.info("Case {} no longer has a {}", event.caseReference(), definition.key());
         }
         continue;
@@ -59,7 +59,7 @@ public final class CaseDocHook implements CaseEventHook {
             + event.caseReference() + " is " + size + " bytes, over " + MAX_REQUEST_BYTES
             + ": put large content in CDAM rather than inline");
       }
-      if (repository.queueKeyed(UUID.randomUUID(), event.caseReference(), definition.key(),
+      if (repository.queue(UUID.randomUUID(), event.caseReference(), definition.key(),
           event.revision(), json)) {
         log.info("Case {} {} changed at revision {}; render queued", event.caseReference(),
             definition.key(), event.revision());

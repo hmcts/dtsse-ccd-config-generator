@@ -164,6 +164,19 @@ class DocConversionTest {
   }
 
   @Test
+  void aPrintedPlainJoinCannotHaveTheConfidentialMarking() {
+    PdfPart confidential = PdfPart.builder(DocSource.bytes(fixture("one-page.pdf"), "order.pdf"))
+        .confidential().build();
+
+    assertThatThrownBy(() -> PdfRequest.builder("Letter").document(confidential)
+        .print(PrintOptions.bulkPrint()).confidentialMarking().build())
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThat(PdfRequest.builder("Printed bundle").document(confidential).titlePage()
+        .print(PrintOptions.bulkPrint()).confidentialMarking().build().confidentialMarking())
+        .isTrue();
+  }
+
+  @Test
   void unchangedPartsAreOnlyForAPrintedPlainJoin() {
     PdfPart coversheet = PdfPart.builder(DocSource.bytes(fixture("one-page.pdf"), "cover.pdf"))
         .unchanged().build();

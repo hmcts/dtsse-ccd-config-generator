@@ -185,10 +185,6 @@ class DocToolkitAutoConfigurationTest {
     @Override
     public void completed(DocJob job, UploadedDoc uploaded) {
     }
-
-    @Override
-    public void failed(DocJob job) {
-    }
   }
 
   /** With the jobs configuration and a database it never reaches. */

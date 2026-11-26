@@ -729,24 +729,19 @@ public class TestWithCCD extends CftlibTest {
     @Order(36)
     @Test
     public void caseNotesDocumentFollowsEachNoteAddedThroughCcd() throws Exception {
-        // Earlier tests added notes, so the case already has a notes document, rendered in the background.
-        String sqlLatest = "SELECT revision, url FROM case_notes_documents WHERE reference = :ref"
-            + " ORDER BY revision DESC, id DESC LIMIT 1";
-        await().atMost(Duration.ofSeconds(60)).until(() -> !db.queryForList(sqlLatest, Map.of("ref", caseRef))
-            .isEmpty());
-        long revisionBefore = ((Number) db.queryForMap(sqlLatest, Map.of("ref", caseRef)).get("revision"))
-            .longValue();
-
         String note = "Notes document check " + UUID.randomUUID();
         var request = prepareEventRequest("TEST_CASE_WORKER_USER@mailinator.com", "caseworker-add-note",
             Map.of("note", note));
         var response = HttpClientBuilder.create().build().execute(request);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+        long revision = db.queryForObject("SELECT case_revision FROM ccd.case_data WHERE reference = :ref",
+            Map.of("ref", caseRef), Long.class);
 
-        // The event queued a render of the changed notes; the worker stores it and hands it to the service.
-        await().atMost(Duration.ofSeconds(60)).until(() -> ((Number) db.queryForMap(sqlLatest,
-            Map.of("ref", caseRef)).get("revision")).longValue() > revisionBefore);
-        String url = (String) db.queryForMap(sqlLatest, Map.of("ref", caseRef)).get("url");
+        // The event queued a render of the changed notes at its revision; the worker stores it and hands it over.
+        String sqlAtRevision = "SELECT url FROM case_notes_documents WHERE reference = :ref AND revision = :revision";
+        Map<String, Object> atRevision = Map.of("ref", caseRef, "revision", revision);
+        await().atMost(Duration.ofSeconds(60)).until(() -> !db.queryForList(sqlAtRevision, atRevision).isEmpty());
+        String url = db.queryForObject(sqlAtRevision, atRevision, String.class);
         // CDAM stored it against the case. Users read it only once case data refers to it, which this
         // example leaves out, so check what reached the document store.
         var stored = stubDocumentStore.find(url.substring(url.length() - 36)).orElseThrow();

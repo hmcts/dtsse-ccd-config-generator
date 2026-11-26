@@ -1,16 +1,15 @@
--- The doc toolkit's jobs. A kept-up-to-date document (a case bundle) has one row per case and
--- key, deleted when the case no longer has the document; a newer case revision replaces its
--- queued request, and an unchanged request (same fingerprint) writes nothing. A one-off job has
--- no key and no revision, and its row is deleted once the service's handler has it. Rows go with
--- their case; the check waits for commit, so a job can be queued in the event creating the case.
+-- The doc toolkit's jobs: one row per case and kept-up-to-date document (a case bundle), deleted
+-- when the case no longer has the document. A newer case revision replaces its queued request,
+-- and an unchanged request (same fingerprint) writes nothing. Rows go with their case; the check
+-- waits for commit, so a job can be queued in the event creating the case.
 create table bundling.doc_job (
     id                  uuid primary key,
     case_reference      bigint not null references ccd.case_data (reference) on delete cascade
                             deferrable initially deferred,
-    -- The definition's key; null for a one-off job.
-    job_key             text,
-    -- The case revision the request was built at; null for a one-off job.
-    revision            bigint,
+    -- The definition's key.
+    job_key             text not null,
+    -- The case revision the request was built at.
+    revision            bigint not null,
     -- sha256 of the request as jsonb text.
     fingerprint         bytea not null,
     request_version     integer not null,
@@ -22,14 +21,11 @@ create table bundling.doc_job (
     placeholder_retries integer not null default 0,
     lease_owner         text,
     lease_expires_at    timestamptz,
-    -- The uploaded document, not yet attached to the case, while only the handler is left to run.
-    result              jsonb,
     failure_reason      varchar(64),
     failure_message     text,
     failure_documents   jsonb,
     submitted_at        timestamptz not null default now(),
     updated_at          timestamptz not null default now(),
-    -- Nulls are distinct, so any number of one-off jobs share a case.
     unique (case_reference, job_key)
 );
 

@@ -92,7 +92,7 @@ class DocJobsTest {
   }
 
   @Test
-  void aOneOffJobIsAttachedHandedToTheServiceAndItsRowDeleted() throws Exception {
+  void aDocumentIsRenderedAttachedToTheCaseAndHandedToTheService() throws Exception {
     UUID claim = cdam.store(fixture("one-page.pdf"), "application/pdf", "claim.pdf");
     Path draft = Files.write(work.resolve("draft.png"), fixture("schmcts.png"));
     PdfRequest request = PdfRequest.builder("Hearing bundle")
@@ -105,13 +105,10 @@ class DocJobsTest {
         .watermark(Watermark.image(draft))
         .category("bundles")
         .build();
+    bundle.set(() -> Optional.of(request));
 
-    DocJob queued = jobs.submit(request, CASE);
-    assertThat(queued.state()).isEqualTo(DocJobState.QUEUED);
-    assertThat(queued.key()).isEmpty();
-    assertThat(queued.revision()).isEmpty();
-
-    runUntil(() -> jobs.find(queued.id()).isEmpty());
+    event(1);
+    runUntil(() -> jobs.status(KEY, CASE).orElseThrow().state() == DocJobState.DONE);
 
     assertThat(cdam.uploads).singleElement().satisfies(upload -> {
       assertThat(upload.fileName()).isEqualTo("hearing-bundle.pdf");
@@ -121,7 +118,6 @@ class DocJobsTest {
         assertThat(attached.getCaseId()).isEqualTo(String.valueOf(CASE)));
     assertThat(cdam.attached()).containsExactly(cdam.uploads.getFirst().id());
     assertThat(handler.completed).singleElement().satisfies(call -> {
-      assertThat(call.job().id()).isEqualTo(queued.id());
       assertThat(call.job().caseReference()).isEqualTo(CASE);
       assertThat(call.uploaded().document().getUrl())
           .isEqualTo(FakeCdam.HOST + cdam.uploads.getFirst().id());
@@ -131,18 +127,17 @@ class DocJobsTest {
   }
 
   @Test
-  void aJobIsOnlyQueuedIfTheTransactionQueuingItCommits() {
-    PdfRequest request = letter();
+  void aDocumentIsOnlyQueuedIfTheEventCommits() {
+    bundle.set(() -> Optional.of(bundleOf("one-page.pdf")));
 
-    UUID rolledBack = tx.execute(status -> {
-      UUID id = jobs.submit(request, CASE).id();
+    tx.executeWithoutResult(status -> {
+      hook.afterCaseEvent(new CaseEventContext(CASE, "E2E", "DIVORCE", "anEvent", 1, 1));
       status.setRollbackOnly();
-      return id;
     });
-    UUID committed = tx.execute(status -> jobs.submit(request, CASE).id());
+    assertThat(jobs.status(KEY, CASE)).isEmpty();
 
-    assertThat(jobs.find(rolledBack)).isEmpty();
-    assertThat(jobs.find(committed)).isPresent();
+    event(1);
+    assertThat(jobs.status(KEY, CASE)).isPresent();
   }
 
   @Test
@@ -157,8 +152,8 @@ class DocJobsTest {
     runUntil(() -> jobs.status(KEY, CASE).orElseThrow().state() == DocJobState.DONE);
 
     assertThat(handler.completed).singleElement().satisfies(call -> {
-      assertThat(call.job().key()).contains(KEY);
-      assertThat(call.job().revision()).hasValue(5);
+      assertThat(call.job().key()).isEqualTo(KEY);
+      assertThat(call.job().revision()).isEqualTo(5);
     });
     assertThat(handled()).containsExactly(5L);
   }
@@ -192,7 +187,7 @@ class DocJobsTest {
   }
 
   @Test
-  void aChangeWhileRenderingSupersedesTheRenderAndItsResultIsHandedToNobody() throws Exception {
+  void anEventDuringTheHandlerWaitsForItThenQueuesTheNextRevision() throws Exception {
     bundle.set(() -> Optional.of(bundleOf("one-page.pdf")));
     event(1);
     CountDownLatch inHandler = new CountDownLatch(1);
@@ -202,21 +197,19 @@ class DocJobsTest {
     Thread first = new Thread(worker::poll);
     first.start();
     assertThat(inHandler.await(30, TimeUnit.SECONDS)).isTrue();
-    // A case event while revision 1's handler is running.
+    // A case event while revision 1's handler is running waits for it to commit.
     bundle.set(() -> Optional.of(bundleOf("Potential_Energy_PDF.pdf")));
-    event(2);
+    Thread second = new Thread(() -> event(2));
+    second.start();
+    second.join(300);
+    assertThat(second.isAlive()).isTrue();
     release.countDown();
+    second.join(30_000);
     first.join();
-    await().atMost(Duration.ofSeconds(30)).until(() -> handler.completed.size() >= 1
-        && jobs.status(KEY, CASE).orElseThrow().state() != DocJobState.IN_PROGRESS);
 
-    // Revision 1's handler ran but its transaction rolled back; nothing is deleted.
-    assertThat(handled()).isEmpty();
-
-    runUntil(() -> jobs.status(KEY, CASE).orElseThrow().state() == DocJobState.DONE);
-    assertThat(handled()).containsExactly(2L);
-    assertThat(handledUrls()).containsExactly(FakeCdam.HOST + cdam.uploads.getLast().id());
-    assertThat(jobs.status(KEY, CASE).orElseThrow().revision()).isEqualTo(2);
+    runUntil(() -> jobs.status(KEY, CASE).orElseThrow().state() == DocJobState.DONE
+        && jobs.status(KEY, CASE).orElseThrow().revision() == 2);
+    assertThat(handled()).containsExactly(1L, 2L);
   }
 
   @Test
@@ -233,27 +226,21 @@ class DocJobsTest {
   }
 
   @Test
-  void aRenderInFlightWhenTheCaseLosesItsDocumentIsHandedToNobody() throws Exception {
+  void aRenderWhoseCaseLostItsDocumentIsHandedToNobody() {
     bundle.set(() -> Optional.of(bundleOf("one-page.pdf")));
     event(1);
-    CountDownLatch inHandler = new CountDownLatch(1);
-    CountDownLatch release = new CountDownLatch(1);
-    handler.blockOnce(inHandler, release);
-
-    Thread first = new Thread(worker::poll);
-    first.start();
-    assertThat(inHandler.await(30, TimeUnit.SECONDS)).isTrue();
+    DocJobRepository.Claimed claimed =
+        repository.claim(1, "worker-a", Duration.ofMinutes(1), 3).getFirst();
     bundle.set(Optional::empty);
     event(2);
-    release.countDown();
-    first.join();
 
-    assertThat(handled()).isEmpty();
+    assertThat(repository.finish(claimed.job().id(), "worker-a", claimed.job().revision(), null))
+        .isFalse();
     assertThat(jobs.status(KEY, CASE)).isEmpty();
   }
 
   @Test
-  void aRenderSupersededBeforeItIsRecordedIsNeverAttached() {
+  void aRenderSupersededBeforeItFinishesIsNeverAttached() {
     bundle.set(() -> Optional.of(bundleOf("one-page.pdf")));
     event(1);
     DocJobRepository.Claimed claimed =
@@ -261,9 +248,9 @@ class DocJobsTest {
     bundle.set(() -> Optional.of(bundleOf("Potential_Energy_PDF.pdf")));
     event(2);
 
-    // Worker A's render finished after revision 2 arrived: it cannot record its result.
-    assertThat(repository.recordResult(claimed.job().id(), "worker-a", claimed.job().revision(),
-        "{}")).isFalse();
+    // Worker A's render finished after revision 2 arrived: it cannot finish the job.
+    assertThat(repository.finish(claimed.job().id(), "worker-a", claimed.job().revision(), null))
+        .isFalse();
     repository.releaseSuperseded(claimed.job().id(), "worker-a");
     runUntil(() -> jobs.status(KEY, CASE).orElseThrow().state() == DocJobState.DONE);
 
@@ -272,46 +259,48 @@ class DocJobsTest {
   }
 
   @Test
-  void anAttachThatFailsIsRetriedWithoutRenderingAgain() {
+  void anAttachThatFailsRollsBackTheHandlerAndTheJobIsRenderedAgain() {
     cdam.failAttaching(new IllegalStateException("CDAM is down"));
     bundle.set(() -> Optional.of(bundleOf("one-page.pdf")));
     event(1);
     worker.poll();
     await().atMost(Duration.ofSeconds(30)).until(() -> !cdam.uploads.isEmpty()
         && jobs.status(KEY, CASE).orElseThrow().state() == DocJobState.QUEUED);
-    assertThat(handler.completed).isEmpty();
+    assertThat(handled()).isEmpty();
 
     cdam.failAttaching(null);
     runUntil(() -> jobs.status(KEY, CASE).orElseThrow().state() == DocJobState.DONE);
 
-    assertThat(cdam.uploads).hasSize(1);
-    assertThat(cdam.attached()).containsExactly(cdam.uploads.getFirst().id());
+    // The first upload was never attached, so it expires in CDAM.
+    assertThat(cdam.uploads).hasSize(2);
+    assertThat(cdam.attached()).containsExactly(cdam.uploads.getLast().id());
     assertThat(handled()).containsExactly(1L);
   }
 
   @Test
-  void aJobCanBeQueuedInTheTransactionThatCreatesItsCase() {
+  void aDocumentCanBeQueuedInTheEventThatCreatesItsCase() {
     long created = CASE + 1;
-    UUID id = tx.execute(status -> {
-      UUID queued = jobs.submit(letter(), created).id();
+    bundle.set(() -> Optional.of(bundleOf("one-page.pdf")));
+    tx.executeWithoutResult(status -> {
+      hook.afterCaseEvent(new CaseEventContext(created, "E2E", "DIVORCE", "create", 1, 1));
       insertCase(created);
-      return queued;
     });
 
-    assertThat(jobs.find(id)).isPresent();
+    assertThat(jobs.status(KEY, created)).isPresent();
   }
 
   @Test
-  void aJobForACaseThatDoesNotExistIsRejectedAtCommit() {
-    assertThatThrownBy(() -> tx.executeWithoutResult(status ->
-        jobs.submit(letter(), CASE + 2))).rootCause().hasMessageContaining("doc_job");
+  void aDocumentForACaseThatDoesNotExistIsRejectedAtCommit() {
+    bundle.set(() -> Optional.of(bundleOf("one-page.pdf")));
+    assertThatThrownBy(() -> tx.executeWithoutResult(status -> hook.afterCaseEvent(
+        new CaseEventContext(CASE + 2, "E2E", "DIVORCE", "anEvent", 1, 1))))
+        .rootCause().hasMessageContaining("doc_job");
   }
 
   @Test
   void deletingACaseDeletesItsJobs() {
     bundle.set(() -> Optional.of(bundleOf("one-page.pdf")));
     event(1);
-    jobs.submit(letter(), CASE);
 
     tx.executeWithoutResult(status -> {
       jdbc.queryForObject("select set_config('ccd.audit_disabled', 'true', true)", Map.of(),
@@ -353,16 +342,18 @@ class DocJobsTest {
   }
 
   @Test
-  void aFailingHandlerIsCalledAgainWithTheSameDocument() {
+  void aFailingHandlerIsRolledBackAndTheJobRenderedAgain() {
     handler.failuresBeforeSuccess.set(1);
+    bundle.set(() -> Optional.of(bundleOf("one-page.pdf")));
 
-    UUID id = jobs.submit(letter(), CASE).id();
-    runUntil(() -> jobs.find(id).isEmpty());
+    event(1);
+    runUntil(() -> jobs.status(KEY, CASE).orElseThrow().state() == DocJobState.DONE);
 
-    assertThat(cdam.uploads).hasSize(1);
-    assertThat(handler.completed).hasSize(2)
-        .extracting(call -> call.uploaded().document().getUrl())
-        .containsOnly(FakeCdam.HOST + cdam.uploads.getFirst().id());
+    // Only the document the service kept is attached; the first expires in CDAM.
+    assertThat(handler.completed).hasSize(2);
+    assertThat(cdam.uploads).hasSize(2);
+    assertThat(cdam.attached()).containsExactly(cdam.uploads.getLast().id());
+    assertThat(handledUrls()).containsExactly(FakeCdam.HOST + cdam.uploads.getLast().id());
   }
 
   @Test
@@ -375,10 +366,10 @@ class DocJobsTest {
 
     assertThat(jobs.status(KEY, CASE).orElseThrow().failure()).hasValueSatisfying(failure -> {
       assertThat(failure.reason()).isEqualTo("HANDLER_FAILED");
-      assertThat(failure.message()).contains(FakeCdam.HOST);
+      assertThat(failure.message()).contains("the service's database is down");
     });
-    assertThat(handler.failed).singleElement()
-        .satisfies(job -> assertThat(job.revision()).hasValue(1));
+    assertThat(handled()).isEmpty();
+    assertThat(cdam.attached()).isEmpty();
   }
 
   @Test
@@ -397,19 +388,8 @@ class DocJobsTest {
       assertThat(failure.documents()).extracting(DocFailure::title, DocFailure::reason)
           .containsExactly(tuple("Gone", DocFailure.Reason.NOT_FOUND));
     });
-    assertThat(handler.failed).hasSize(1);
     assertThat(handler.completed).isEmpty();
     assertThat(cdam.uploads).isEmpty();
-  }
-
-  @Test
-  void aFailedOneOffJobIsDeletedOnceTheServiceIsTold() {
-    UUID id = jobs.submit(PdfRequest.builder("Letter")
-        .document(DocSource.cdam(cdam.failing(404))).build(), CASE).id();
-
-    runUntil(() -> jobs.find(id).isEmpty());
-
-    assertThat(handler.failed).extracting(DocJob::id).containsExactly(id);
   }
 
   @Test
@@ -426,13 +406,13 @@ class DocJobsTest {
     assertThat(repository.releaseSuperseded(claimed.job().id(), "worker-a")).isTrue();
 
     runUntil(() -> jobs.status(KEY, CASE).orElseThrow().state() == DocJobState.DONE);
-    assertThat(handler.failed).isEmpty();
     assertThat(handled()).containsExactly(2L);
   }
 
   @Test
   void aJobWhoseWorkersKeepDyingIsFailed() {
-    UUID id = jobs.submit(letter(), CASE).id();
+    bundle.set(() -> Optional.of(bundleOf("one-page.pdf")));
+    event(1);
     // Three workers claim it and die: their leases run out without a result.
     for (int attempt = 0; attempt < 3; attempt++) {
       assertThat(repository.claim(1, "dead-worker-" + attempt, Duration.ofMillis(1), 3))
@@ -442,11 +422,9 @@ class DocJobsTest {
 
     worker.poll();
 
-    assertThat(handler.failed).singleElement().satisfies(job -> {
-      assertThat(job.id()).isEqualTo(id);
-      assertThat(job.failure().orElseThrow().reason()).isEqualTo("CRASHED");
-    });
-    assertThat(jobs.find(id)).isEmpty();
+    CaseDocStatus status = jobs.status(KEY, CASE).orElseThrow();
+    assertThat(status.state()).isEqualTo(DocJobState.FAILED);
+    assertThat(status.failure().orElseThrow().reason()).isEqualTo("CRASHED");
   }
 
   @Test
@@ -465,8 +443,10 @@ class DocJobsTest {
   void aLocalFileCannotBeQueued() throws Exception {
     Path letter = Files.write(work.resolve("letter.pdf"), fixture("one-page.pdf"));
 
-    assertThatThrownBy(() -> jobs.submit(
-        PdfRequest.builder("Letter").document(DocSource.file(letter)).build(), CASE))
+    bundle.set(() -> Optional.of(
+        PdfRequest.builder("Letter").document(DocSource.file(letter)).build()));
+
+    assertThatThrownBy(() -> event(1))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("DocSource.bytes");
   }
@@ -499,11 +479,6 @@ class DocJobsTest {
         .build();
   }
 
-  private static PdfRequest letter() {
-    return PdfRequest.builder("Letter")
-        .document(DocSource.bytes(fixture("one-page.pdf"), "letter.pdf")).build();
-  }
-
   private void insertCase(long reference) {
     jdbc.update("""
         insert into ccd.case_data
@@ -533,10 +508,9 @@ class DocJobsTest {
   private record Completed(DocJob job, UploadedDoc uploaded) {
   }
 
-  /** Records calls, and writes completed keyed jobs to a table in the worker's transaction. */
+  /** Records calls, and writes each version to a table in the worker's transaction. */
   private final class RecordingHandler implements DocJobHandler {
     final List<Completed> completed = new CopyOnWriteArrayList<>();
-    final List<DocJob> failed = new CopyOnWriteArrayList<>();
     final AtomicInteger failuresBeforeSuccess = new AtomicInteger();
     private volatile CountDownLatch blockEntered;
     private volatile CountDownLatch blockRelease;
@@ -549,11 +523,8 @@ class DocJobsTest {
     @Override
     public void completed(DocJob job, UploadedDoc uploaded) throws Exception {
       completed.add(new Completed(job, uploaded));
-      if (job.revision().isPresent()) {
-        jdbc.update("insert into handled (revision, url) values (:revision, :url)",
-            Map.of("revision", job.revision().getAsLong(),
-                "url", uploaded.document().getUrl()));
-      }
+      jdbc.update("insert into handled (revision, url) values (:revision, :url)",
+          Map.of("revision", job.revision(), "url", uploaded.document().getUrl()));
       CountDownLatch entered = blockEntered;
       if (entered != null) {
         blockEntered = null;
@@ -563,11 +534,6 @@ class DocJobsTest {
       if (failuresBeforeSuccess.getAndDecrement() > 0) {
         throw new IllegalStateException("the service's database is down");
       }
-    }
-
-    @Override
-    public void failed(DocJob job) {
-      failed.add(job);
     }
   }
 }

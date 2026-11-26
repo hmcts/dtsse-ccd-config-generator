@@ -6,7 +6,6 @@ import uk.gov.hmcts.ccd.sdk.doctoolkit.cdam.CaseLocator;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.cdam.CdamDocuments;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.convert.DocumentConverter;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.docmosis.DocmosisRenderService;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.jobs.DocRequestJson;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.render.Renderer;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
 import uk.gov.hmcts.reform.ccd.document.am.feign.CaseDocumentClientApi;
@@ -66,10 +65,16 @@ public final class DocToolkit {
   }
 
   /**
+   * A rendered document in CDAM, not yet attached; {@code hashToken} is what attaching needs.
+   */
+  record Stored(UploadedDoc uploaded, String hashToken) {
+  }
+
+  /**
    * As {@link #upload}; a queued job's earlier attempts pass false.
    */
   UploadedDoc renderAndUpload(PdfRequest request, long caseReference, boolean finalAttempt) {
-    DocRequestJson.StoredResult stored = renderAndStore(request, caseReference, finalAttempt);
+    Stored stored = renderAndStore(request, caseReference, finalAttempt);
     attach(stored, caseReference);
     return stored.uploaded();
   }
@@ -78,8 +83,7 @@ public final class DocToolkit {
    * Renders the request and stores the PDF in CDAM without attaching it to the case, so CDAM's
    * time to live deletes it unless it is {@link #attach attached}.
    */
-  DocRequestJson.StoredResult renderAndStore(PdfRequest request, long caseReference,
-      boolean finalAttempt) {
+  Stored renderAndStore(PdfRequest request, long caseReference, boolean finalAttempt) {
     Validate.requireNonNull(request, "request");
     requireCdam();
     // A worker running a job has already put the case in the logging context; leave it there.
@@ -98,8 +102,7 @@ public final class DocToolkit {
                 + e.getMessage(), true, e);
       }
       request.category().ifPresent(stored.document()::setCategoryId);
-      return new DocRequestJson.StoredResult(
-          new UploadedDoc(stored.document(), result.pageCount(), result.failures()),
+      return new Stored(new UploadedDoc(stored.document(), result.pageCount(), result.failures()),
           stored.hashToken());
     } finally {
       if (addedCase) {
@@ -109,7 +112,7 @@ public final class DocToolkit {
   }
 
   /** Attaches a stored document to its case; attaching it again does nothing. */
-  void attach(DocRequestJson.StoredResult stored, long caseReference) {
+  void attach(Stored stored, long caseReference) {
     requireCdam();
     try {
       cdam.attach(new CdamDocuments.Stored(stored.uploaded().document(), stored.hashToken()),

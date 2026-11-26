@@ -171,21 +171,6 @@ class DocRequestJsonTest {
   }
 
   @Test
-  void aResultSurvivesBeingStored() {
-    UploadedDoc uploaded = new UploadedDoc(Document.builder().url("http://cdam/documents/1")
-        .binaryUrl("http://cdam/documents/1/binary").filename("bundle.pdf").categoryId("bundles")
-        .uploadTimestamp(LocalDateTime.of(2026, 11, 24, 9, 30)).build(), 12,
-        List.of(new DocFailure("Gone", DocFailure.Reason.NOT_FOUND, "404"),
-            new DocFailure(Optional.of("statement-42"), "Statement",
-                List.of("Hearing bundle", "Evidence"), OptionalInt.of(7),
-                DocFailure.Reason.ACCESS_DENIED, "403")));
-
-    DocRequestJson.StoredResult stored = new DocRequestJson.StoredResult(uploaded, "hash-1");
-
-    assertThat(DocRequestJson.readResult(DocRequestJson.writeResult(stored))).isEqualTo(stored);
-  }
-
-  @Test
   void anUnknownStoredFormIsUnreadable() {
     assertThatThrownBy(() -> DocRequestJson.read("{\"type\":\"spreadsheet\"}"))
         .isInstanceOf(DocRequestJson.Unreadable.class);

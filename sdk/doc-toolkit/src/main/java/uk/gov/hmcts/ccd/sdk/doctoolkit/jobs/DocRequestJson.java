@@ -5,7 +5,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
@@ -25,9 +24,7 @@ import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfSection;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfStandard;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.PrintColour;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.PrintOptions;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.UploadedDoc;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.Watermark;
-import uk.gov.hmcts.ccd.sdk.type.Document;
 
 /**
  * The outbox's stored form of a request and of a job's result. The public types carry no
@@ -118,36 +115,6 @@ public final class DocRequestJson {
     } catch (IllegalArgumentException | NullPointerException e) {
       throw new Unreadable("the stored request is invalid: " + e.getMessage(), e);
     }
-  }
-
-  /**
-   * A job's rendered document, uploaded to CDAM and not yet attached to the case.
-   *
-   * @param hashToken what CDAM needs to attach it
-   */
-  public record StoredResult(UploadedDoc uploaded, String hashToken) {
-  }
-
-  /** A job's result as stored. */
-  public static String writeResult(StoredResult result) {
-    UploadedDoc uploaded = result.uploaded();
-    Document document = uploaded.document();
-    return serialise(new ResultJson(document.getUrl(), document.getBinaryUrl(),
-        document.getFilename(), document.getCategoryId(),
-        document.getUploadTimestamp() == null ? null : document.getUploadTimestamp().toString(),
-        uploaded.pageCount(), failures(uploaded.failures()), result.hashToken()));
-  }
-
-  /** The result a stored form describes. */
-  public static StoredResult readResult(String json) {
-    ResultJson stored = parse(json, ResultJson.class);
-    return new StoredResult(new UploadedDoc(Document.builder().url(stored.url())
-        .binaryUrl(stored.binaryUrl())
-        .filename(stored.filename())
-        .categoryId(stored.categoryId())
-        .uploadTimestamp(stored.uploadTimestamp() == null ? null
-            : LocalDateTime.parse(stored.uploadTimestamp()))
-        .build(), stored.pageCount(), failures(stored.failures())), stored.hashToken());
   }
 
   /** Documents that could not be included, as stored. */
@@ -329,10 +296,6 @@ public final class DocRequestJson {
   record PrintJson(String pageSize, double marginMillimetres, int resolutionDpi, String colour,
       String standard, ConditionJson outputCondition, boolean rotateLandscapePages,
       boolean padToEvenPages, long maxOutputBytes, double greyscaleAboveFraction) {
-  }
-
-  record ResultJson(String url, String binaryUrl, String filename, String categoryId,
-      String uploadTimestamp, int pageCount, List<FailureJson> failures, String hashToken) {
   }
 
   record FailureJson(String id, String title, List<String> sectionPath, Integer page,

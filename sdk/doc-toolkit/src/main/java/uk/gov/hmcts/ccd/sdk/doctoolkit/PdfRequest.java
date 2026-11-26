@@ -330,6 +330,10 @@ public final class PdfRequest {
         throw new IllegalArgumentException("A printed plain join cannot have placeholder pages:"
             + " a letter is sent complete or not at all");
       }
+      if (request.print != null && !request.assembled() && request.confidentialMarking) {
+        throw new IllegalArgumentException("A printed plain join cannot have the confidential"
+            + " marking: it prints each part as it is. A printed bundle carries it");
+      }
       return request;
     }
   }

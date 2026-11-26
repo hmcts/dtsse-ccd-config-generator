@@ -117,9 +117,8 @@ public final class DocJobWorker implements AutoCloseable {
   /** Fails crashed jobs, then claims as many as there is room for and runs them. */
   public void poll() {
     for (DocJob crashed : repository.failCrashed(settings.maxAttempts())) {
-      log.error("Doc job {} failed: {}", crashed.id(),
+      log.error("Doc job {} for case {} failed: {}", crashed.id(), crashed.caseReference(),
           crashed.failure().map(DocJob.Failure::message).orElse(""));
-      notifyFailed(crashed);
     }
     int room = settings.maxConcurrentRenders() - inFlight.get();
     if (room <= 0) {
@@ -179,72 +178,56 @@ public final class DocJobWorker implements AutoCloseable {
           + e.getMessage(), List.of());
       return;
     }
-    DocRequestJson.StoredResult stored;
-    if (claimed.resultJson() != null) {
-      // Rendered and uploaded on an earlier attempt; only attaching and the handler are left.
-      stored = DocRequestJson.readResult(claimed.resultJson());
-    } else {
-      boolean finalAttempt = job.attempts() >= settings.maxAttempts();
-      try {
-        stored = toolkit.renderAndStore(request, job.caseReference(), finalAttempt);
-      } catch (DocToolkitException e) {
-        if (e.isTransient() && !finalAttempt) {
-          retry(claimed, e.getMessage());
-        } else {
-          fail(claimed, e.reason().name(), e.getMessage(), e.failures());
-        }
-        return;
-      } catch (RuntimeException e) {
-        log.error("Doc job {}: rendering failed unexpectedly", job.id(), e);
-        if (!finalAttempt) {
-          retry(claimed, e.toString());
-        } else {
-          fail(claimed, "RENDER_FAILED", "Rendering failed: " + e, List.of());
-        }
-        return;
+    boolean finalAttempt = job.attempts() >= settings.maxAttempts();
+    DocToolkit.Stored stored;
+    try {
+      stored = toolkit.renderAndStore(request, job.caseReference(), finalAttempt);
+    } catch (DocToolkitException e) {
+      if (e.isTransient() && !finalAttempt) {
+        retry(claimed, e.getMessage());
+      } else {
+        fail(claimed, e.reason().name(), e.getMessage(), e.failures());
       }
-      if (!repository.recordResult(job.id(), claimed.leaseOwner(), job.revision(),
-          DocRequestJson.writeResult(stored))) {
-        // Unattached, the upload expires in CDAM on its own.
-        log.info("Doc job {} was superseded or lost its lease while rendering", job.id());
-        repository.releaseSuperseded(job.id(), claimed.leaseOwner());
-        return;
+      return;
+    } catch (RuntimeException e) {
+      log.error("Doc job {}: rendering failed unexpectedly", job.id(), e);
+      if (!finalAttempt) {
+        retry(claimed, e.toString());
+      } else {
+        fail(claimed, "RENDER_FAILED", "Rendering failed: " + e, List.of());
       }
+      return;
     }
     complete(claimed, stored);
   }
 
   /**
-   * Attaches the document to the case, hands it to the service and finishes the job, in one
-   * transaction. If the worker no longer holds the job, the transaction rolls back and the
-   * handler's writes with it. The toolkit deletes nothing: an upload nobody was given either
-   * expires unattached or, if this transaction failed after attaching it, is referred to by
-   * nothing.
+   * Finishes the job, hands the document to the service and attaches it to the case, in one
+   * transaction. Finishing comes first: if the worker no longer holds the job, nothing else
+   * happens, and once it has finished, the job's row stays locked, so no case event supersedes
+   * it before the transaction ends. Anything that fails leaves the upload unattached, so it
+   * expires in CDAM, and the job is rendered again.
    */
-  private void complete(DocJobRepository.Claimed claimed, DocRequestJson.StoredResult stored) {
+  private void complete(DocJobRepository.Claimed claimed, DocToolkit.Stored stored) {
     DocJob job = claimed.job();
     UploadedDoc uploaded = stored.uploaded();
-    Instant requeueAt = job.key().isPresent()
-        && uploaded.failures().stream().anyMatch(failure -> failure.reason().isTransient())
+    Instant requeueAt = uploaded.failures().stream()
+        .anyMatch(failure -> failure.reason().isTransient())
         && claimed.placeholderRetries() < settings.maxPlaceholderRetries()
         ? Instant.now().plus(settings.placeholderRetryDelay()) : null;
     try {
       transactions.executeWithoutResult(status -> {
-        toolkit.attach(stored, job.caseReference());
+        if (!repository.finish(job.id(), claimed.leaseOwner(), job.revision(), requeueAt)) {
+          throw new NotHeld();
+        }
         try {
-          handler.completed(job.withResult(uploaded), uploaded);
+          handler.completed(job, uploaded);
         } catch (RuntimeException e) {
           throw e;
         } catch (Exception e) {
           throw new HandlerFailed(e);
         }
-        boolean finished = job.key().isPresent()
-            ? repository.finishKeyed(job.id(), claimed.leaseOwner(), job.revision().getAsLong(),
-                requeueAt)
-            : repository.deleteHeld(job.id(), claimed.leaseOwner());
-        if (!finished) {
-          throw new NotHeld();
-        }
+        toolkit.attach(stored, job.caseReference());
       });
     } catch (NotHeld notHeld) {
       log.info("Doc job {} was superseded or lost its lease; its result is handed to nobody",
@@ -253,14 +236,14 @@ public final class DocJobWorker implements AutoCloseable {
       return;
     } catch (RuntimeException e) {
       Throwable cause = e instanceof HandlerFailed ? e.getCause() : e;
-      String what = e instanceof DocToolkitException ? "attaching the document" : "the DocJobHandler";
+      boolean attaching = e instanceof DocToolkitException;
+      String what = attaching ? "attaching the document" : "the DocJobHandler";
       log.error("Doc job {}: {} failed", job.id(), what, cause);
       if (job.attempts() < settings.maxAttempts()) {
         retry(claimed, what + " failed: " + cause);
       } else {
-        fail(claimed, e instanceof DocToolkitException ? "UPLOAD_FAILED" : "HANDLER_FAILED",
-            what + " failed " + job.attempts() + " time(s); the document is stored at "
-                + uploaded.document().getUrl() + ". Last failure: " + cause, List.of());
+        fail(claimed, attaching ? "UPLOAD_FAILED" : "HANDLER_FAILED",
+            what + " failed " + job.attempts() + " time(s). Last failure: " + cause, List.of());
       }
       return;
     }
@@ -301,59 +284,13 @@ public final class DocJobWorker implements AutoCloseable {
   private void fail(DocJobRepository.Claimed claimed, String reason, String message,
       List<DocFailure> failures) {
     DocJob job = claimed.job();
-    String documents = DocRequestJson.writeFailures(failures);
-    try {
-      // The failure is recorded and the handler told in one transaction, so the handler sees the
-      // job as it was failed, and a failure is never recorded without the handler being told.
-      transactions.executeWithoutResult(status -> {
-        if (!repository.markFailed(job.id(), claimed.leaseOwner(), job.revision(), reason,
-            message, documents)) {
-          throw new NotHeld();
-        }
-        DocJob failed = repository.find(job.id()).orElseThrow();
-        try {
-          handler.failed(failed);
-        } catch (RuntimeException e) {
-          throw new HandlerFailed(e);
-        } catch (Exception e) {
-          throw new HandlerFailed(e);
-        }
-        if (failed.key().isEmpty()) {
-          repository.deleteFailedOneOff(failed.id());
-        }
-      });
-      log.error("Doc job {} failed ({}): {}", job.id(), reason, message);
-    } catch (NotHeld notHeld) {
+    if (repository.markFailed(job.id(), claimed.leaseOwner(), job.revision(), reason, message,
+        DocRequestJson.writeFailures(failures))) {
+      log.error("Doc job {} for case {} failed ({}): {}", job.id(), job.caseReference(), reason,
+          message);
+    } else {
       // Superseded: the newer request runs instead, and this failure is nobody's concern.
       repository.releaseSuperseded(job.id(), claimed.leaseOwner());
-    } catch (HandlerFailed e) {
-      // Record the failure without the handler, so it is not lost.
-      log.error("Doc job {}: the DocJobHandler's failed() threw", job.id(), e.getCause());
-      if (repository.markFailed(job.id(), claimed.leaseOwner(), job.revision(), reason, message,
-          documents)) {
-        log.error("Doc job {} failed ({}): {}", job.id(), reason, message);
-      }
-    }
-  }
-
-  private void notifyFailed(DocJob job) {
-    try {
-      transactions.executeWithoutResult(status -> {
-        try {
-          handler.failed(job);
-        } catch (RuntimeException e) {
-          throw e;
-        } catch (Exception e) {
-          throw new HandlerFailed(e);
-        }
-        if (job.key().isEmpty()) {
-          repository.deleteFailedOneOff(job.id());
-        }
-      });
-    } catch (RuntimeException e) {
-      // The job stays failed, so the failure is not lost.
-      log.error("Doc job {}: the DocJobHandler's failed() threw", job.id(),
-          e instanceof HandlerFailed ? e.getCause() : e);
     }
   }
 

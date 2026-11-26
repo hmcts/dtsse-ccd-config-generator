@@ -9,8 +9,8 @@ service:
 - **print-ready letters** for bulk print: PDF/X-1a, capped resolution and a blank margin.
 
 It fetches documents from CDAM and stores what it makes there, as your service's system user. A
-document can be made on the spot, queued once, or **kept up to date with its case**: the toolkit
-rebuilds it after every case event and renders it when it changed.
+document is either made on the spot, or **kept up to date with its case**: the toolkit rebuilds
+it after every case event and renders it in the background when it changed.
 
 ## Getting started
 
@@ -90,7 +90,8 @@ PdfRequest.builder("CPC-01 1234")
 
 Top-level documents come before sections, and sections nest. `build()` rejects a request that
 would produce nothing, `unchanged()` parts anywhere but a printed plain join, and a printed plain
-join with placeholders (a letter is sent complete or not at all).
+join with placeholders (a letter is sent complete or not at all) or the confidential marking (it
+prints each part as it is; a printed bundle carries the marking).
 
 ### Parts
 
@@ -156,40 +157,9 @@ Both run on the calling thread. Errors are `DocToolkitException` with `reason()`
 (`INVALID_REQUEST`, `DOCUMENTS_FAILED`, `NOT_CONFIGURED`, `OUTPUT_TOO_LARGE`, `ASSEMBLY_FAILED`,
 `UPLOAD_FAILED`, `IO_FAILURE`), `isTransient()` and `failures()`.
 
-## Background rendering
+## Documents kept up to date
 
-With `ccd.doc-toolkit.jobs.enabled`, a worker renders queued jobs, stores each in CDAM and hands it
-to your service's one `DocJobHandler`:
-
-```java
-@Component
-class Documents implements DocJobHandler {
-  public void completed(DocJob job, UploadedDoc uploaded) { ... }  // may be called again: idempotent
-  public void failed(DocJob job) { ... }                          // job.failure() says why
-}
-```
-
-The worker uploads what it renders unattached, then attaches it to the case and calls the handler
-in one transaction with its own bookkeeping, through the application's transaction manager. If the
-worker no longer holds the job (its lease expired, or a newer revision arrived), the transaction
-rolls back, the handler's writes with it.
-
-The toolkit never deletes a document. What the handler is given is the service's to keep or prune
-through CDAM. An upload nobody was given is left unattached, and CDAM's time to live has dm-store
-delete it; the one exception, a job lost between attaching and committing, leaves a document the
-case data never refers to, which CDAM does not serve.
-
-### One-off documents
-
-```java
-docJobs.submit(request, caseReference);   // queued in the caller's transaction
-```
-
-A one-off job's row is deleted once its handler has it.
-
-### Documents kept up to date
-
-Declare the document; case events do the rest:
+With `ccd.doc-toolkit.jobs.enabled`, declare the document; case events do the rest:
 
 ```java
 @Component
@@ -211,19 +181,41 @@ fails. Its request may hold up to 1 MiB inline; keep documents in CDAM. When it 
 toolkit forgets the case's job: a render in flight is handed to nobody, and versions the service
 already has stay its own.
 
+A worker renders each queued request, stores the PDF in CDAM unattached and hands it to your
+service's one `DocJobHandler`:
+
+```java
+@Component
+class Bundles implements DocJobHandler {
+  public void completed(DocJob job, UploadedDoc uploaded) {
+    versions.append(job.caseReference(), job.key(), job.revision(), uploaded);
+  }
+}
+```
+
+In one transaction, through the application's transaction manager, the worker finishes the job,
+calls the handler and attaches the PDF to the case. Finishing first means a superseded render
+never reaches the handler; once finished, the job's row stays locked, so a case event on that case
+waits for the handler to commit. If the handler or the attach fails, everything rolls back and
+the job is rendered again.
+
+The toolkit never deletes a document. What the handler is given is the service's: keep each
+version, since a reader may have an older one open, refer to them from case data, since CDAM
+serves a document only then, and prune through CDAM if you want to. A render nobody is given is
+never attached, so CDAM's time to live has dm-store delete it.
+
 `docJobs.status(key, caseReference)` says where a document is: `QUEUED` or `IN_PROGRESS` while a
-newer version is on its way, `DONE`, or `FAILED`. Combine it with what the handler stored to show
-"preparing", "updating" or "failed".
+newer version is on its way, `DONE`, or `FAILED` with `failure()`. Combine it with what the handler
+stored to show "preparing", "updating" or "failed". Failures are also logged.
 
 Behaviour:
 
-- One row per case and key. A newer revision replaces a queued request; a burst of events leaves
-  at most one render running and one queued. Renders for a key do not overlap while leases hold.
-- The handler gets `job.revision()`; keep each version, since a reader may have an older one
-  open, and refer to them from case data, since CDAM serves a document only then.
-- Three attempts, 30 seconds then a minute apart, for failures that may pass. A document only
-  temporarily unavailable becomes a placeholder on the last attempt, and the render is re-run 15
-  minutes later, up to three times.
+- One row per case and key, deleted with the case. A newer revision replaces a queued request; a
+  burst of events leaves at most one render running and one queued. Renders for a key do not
+  overlap while leases hold.
+- Three attempts, 30 seconds then a minute apart, for failures that may pass, a failing handler
+  included. A document only temporarily unavailable becomes a placeholder on the last attempt,
+  and the render is re-run 15 minutes later, up to three times.
 - Attempts are counted when a job is claimed, so a render that kills its worker counts; a job
   whose every worker died fails as `CRASHED`. Leases are five minutes, renewed while rendering.
 - A change to the toolkit's rendering bumps `DocRequestJson.RENDERING_VERSION`, which changes
@@ -240,8 +232,8 @@ event. Hooks read the case and write only their own tables.
 
 Jobs live in `bundling.doc_job`, created by the SDK's library migrations (location
 `bundling-db`) after the runtime's `ccd` schema. Each row references its case in `ccd.case_data`
-and is deleted with it; the check is deferred to commit, so a job can be queued in the event that
-creates its case. Earlier migrations created document-bundling's tables; `V0005` drops them.
+and is deleted with it; the check is deferred to commit, so a document can be queued in the event
+that creates its case. Earlier migrations created document-bundling's tables; `V0005` drops them.
 
 ## Local runs and tests
 
