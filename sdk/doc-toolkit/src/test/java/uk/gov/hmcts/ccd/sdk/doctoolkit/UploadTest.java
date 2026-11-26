@@ -91,21 +91,7 @@ class UploadTest {
   }
 
   @Test
-  void aDeletedDocumentIsGoneFromCdam() {
-    PdfRequest request = PdfRequest.builder("Claim").document(DocSource.cdam(source)).build();
-    UploadedDoc uploaded = toolkit.upload(request, CASE_ID);
-    UUID id = cdam.uploads.getFirst().id();
-    assertThat(cdam.get(id)).isNotNull();
-
-    toolkit.delete(uploaded.document());
-
-    assertThat(cdam.get(id)).isNull();
-    assertThat(cdam.deleted).containsExactly(id);
-    assertThat(cdam.get(source)).isNotNull();
-  }
-
-  @Test
-  void aDocumentThatCannotBeAttachedIsDeletedAndTheUploadFails() {
+  void aDocumentThatCannotBeAttachedIsLeftUnattachedToExpireAndTheUploadFails() {
     cdam.failAttaching(new IllegalStateException("CDAM refused the hash token"));
     PdfRequest request = PdfRequest.builder("Claim").document(DocSource.cdam(source)).build();
 
@@ -114,7 +100,8 @@ class UploadTest {
           assertThat(e.reason()).isEqualTo(DocToolkitException.Reason.UPLOAD_FAILED);
           assertThat(e.isTransient()).isTrue();
         });
-    assertThat(cdam.deleted).containsExactly(cdam.uploads.getFirst().id());
+    assertThat(cdam.uploads).hasSize(1);
+    assertThat(cdam.attachments).isEmpty();
     assertNothingLeftBehind(work);
   }
 

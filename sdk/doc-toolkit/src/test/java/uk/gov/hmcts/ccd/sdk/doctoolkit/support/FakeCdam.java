@@ -45,7 +45,6 @@ public final class FakeCdam implements CaseDocumentClientApi {
   public final List<String> fetchedAs = new CopyOnWriteArrayList<>();
   public final List<Upload> uploads = new CopyOnWriteArrayList<>();
   public final List<CaseDocumentsMetadata> attachments = new CopyOnWriteArrayList<>();
-  public final List<UUID> deleted = new CopyOnWriteArrayList<>();
   private volatile RuntimeException attachFailure;
 
   /** Stores a document, returning its id. */
@@ -62,9 +61,17 @@ public final class FakeCdam implements CaseDocumentClientApi {
     return id;
   }
 
-  /** Makes attaching documents to cases fail. */
+  /** Makes attaching documents to cases fail, or with null succeed again. */
   public void failAttaching(RuntimeException failure) {
     this.attachFailure = failure;
+  }
+
+  /** The uploads attached to a case. */
+  public List<UUID> attached() {
+    return attachments.stream()
+        .flatMap(metadata -> metadata.getDocumentHashTokens().stream())
+        .map(token -> UUID.fromString(token.getId()))
+        .toList();
   }
 
   /** What CDAM holds for an id, including uploads. */
@@ -134,8 +141,7 @@ public final class FakeCdam implements CaseDocumentClientApi {
   @Override
   public void deleteDocument(String authorisation, String serviceAuth, UUID documentId,
       boolean permanent) {
-    deleted.add(documentId);
-    documents.remove(documentId);
+    throw new UnsupportedOperationException("The doc toolkit never deletes documents");
   }
 
   @Override

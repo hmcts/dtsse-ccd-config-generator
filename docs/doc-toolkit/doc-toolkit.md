@@ -150,8 +150,6 @@ try (PdfResult result = docToolkit.render(request)) {      // a temporary file; 
 
 UploadedDoc stored = docToolkit.upload(request, caseReference);  // in CDAM, attached to the case
 caseData.setOrderPdf(stored.document());
-
-docToolkit.delete(document);                                     // when the service prunes
 ```
 
 Both run on the calling thread. Errors are `DocToolkitException` with `reason()`
@@ -168,13 +166,18 @@ to your service's one `DocJobHandler`:
 class Documents implements DocJobHandler {
   public void completed(DocJob job, UploadedDoc uploaded) { ... }  // may be called again: idempotent
   public void failed(DocJob job) { ... }                          // job.failure() says why
-  public void removed(DocJob job) { ... }                         // a kept document no longer applies
 }
 ```
 
-The handler runs in one transaction with the worker's own bookkeeping, through the application's
-transaction manager. If the worker no longer holds the job (its lease expired, or a newer revision
-arrived), the transaction rolls back, the handler's writes with it, and the upload is deleted.
+The worker uploads what it renders unattached, then attaches it to the case and calls the handler
+in one transaction with its own bookkeeping, through the application's transaction manager. If the
+worker no longer holds the job (its lease expired, or a newer revision arrived), the transaction
+rolls back, the handler's writes with it.
+
+The toolkit never deletes a document. What the handler is given is the service's to keep or prune
+through CDAM. An upload nobody was given is left unattached, and CDAM's time to live has dm-store
+delete it; the one exception, a job lost between attaching and committing, leaves a document the
+case data never refers to, which CDAM does not serve.
 
 ### One-off documents
 
@@ -204,7 +207,9 @@ service never detects changes, so whatever `build` reads (visibility, folders, t
 Case events are the only trigger: a change made outside an event is not seen.
 
 `build` must be read-only, deterministic and local (no remote calls). If it throws, the event
-fails. Its request may hold up to 1 MiB inline; keep documents in CDAM.
+fails. Its request may hold up to 1 MiB inline; keep documents in CDAM. When it returns empty, the
+toolkit forgets the case's job: a render in flight is handed to nobody, and versions the service
+already has stay its own.
 
 `docJobs.status(key, caseReference)` says where a document is: `QUEUED` or `IN_PROGRESS` while a
 newer version is on its way, `DONE`, or `FAILED`. Combine it with what the handler stored to show
@@ -214,9 +219,8 @@ Behaviour:
 
 - One row per case and key. A newer revision replaces a queued request; a burst of events leaves
   at most one render running and one queued. Renders for a key do not overlap while leases hold.
-- The handler gets `job.revision()`; keep each version. The toolkit never deletes a document it
-  handed over: a reader may have an older one open, and CDAM serves a document only while the case
-  data refers to it.
+- The handler gets `job.revision()`; keep each version, since a reader may have an older one
+  open, and refer to them from case data, since CDAM serves a document only then.
 - Three attempts, 30 seconds then a minute apart, for failures that may pass. A document only
   temporarily unavailable becomes a placeholder on the last attempt, and the render is re-run 15
   minutes later, up to three times.
@@ -235,7 +239,9 @@ event. Hooks read the case and write only their own tables.
 ## Storage
 
 Jobs live in `bundling.doc_job`, created by the SDK's library migrations (location
-`bundling-db`). Earlier migrations created document-bundling's tables; `V0005` drops them.
+`bundling-db`) after the runtime's `ccd` schema. Each row references its case in `ccd.case_data`
+and is deleted with it; the check is deferred to commit, so a job can be queued in the event that
+creates its case. Earlier migrations created document-bundling's tables; `V0005` drops them.
 
 ## Local runs and tests
 

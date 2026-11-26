@@ -91,50 +91,50 @@ public final class CdamDocuments {
   }
 
   /**
-   * Stores {@code file} in CDAM and attaches it to the case.
+   * A document stored in CDAM and not yet attached to a case. CDAM gives it a time to live, so
+   * dm-store deletes it unless it is {@link #attach attached}.
    *
-   * @return the value for a CCD document field
+   * @param document the value for a CCD document field
+   * @param hashToken what CDAM needs to attach it
    */
-  public Document upload(Path file, String fileName, long caseId, String classification) {
+  public record Stored(Document document, String hashToken) {
+  }
+
+  /**
+   * Stores {@code file} in CDAM for the case, unattached.
+   */
+  public Stored store(Path file, String fileName, long caseId, String classification) {
     CaseLocator.CaseType caseType = cases.locate(caseId);
-    String user = systemUser.authorisation();
-    var stored = client.uploadDocuments(user, serviceTokens.generate(),
+    var stored = client.uploadDocuments(systemUser.authorisation(), serviceTokens.generate(),
             new DocumentUploadRequest(classification, caseType.caseTypeId(), caseType.jurisdiction(),
                 List.of(new PdfFile(file, fileName))))
         .getDocuments()
         .getFirst();
-    String url = stored.links.self.href;
-    UUID id = UUID.fromString(url.substring(url.lastIndexOf('/') + 1));
-    try {
-      client.patchDocument(user, serviceTokens.generate(), CaseDocumentsMetadata.builder()
-          .caseId(String.valueOf(caseId))
-          .caseTypeId(caseType.caseTypeId())
-          .jurisdictionId(caseType.jurisdiction())
-          .documentHashTokens(List.of(DocumentHashToken.builder()
-              .id(id.toString())
-              .hashToken(stored.hashToken)
-              .build()))
-          .build());
-    } catch (RuntimeException attachFailed) {
-      // An unattached document is unreachable through the case; don't leave it behind.
-      try {
-        client.deleteDocument(user, serviceTokens.generate(), id, true);
-      } catch (RuntimeException deleteFailed) {
-        attachFailed.addSuppressed(deleteFailed);
-      }
-      throw attachFailed;
-    }
-    return Document.builder()
-        .url(url)
+    return new Stored(Document.builder()
+        .url(stored.links.self.href)
         .binaryUrl(stored.links.binary.href)
         .filename(fileName)
         .uploadTimestamp(LocalDateTime.now())
-        .build();
+        .build(), stored.hashToken);
   }
 
-  /** Deletes a document permanently. */
-  public void delete(UUID documentId) {
-    client.deleteDocument(systemUser.authorisation(), serviceTokens.generate(), documentId, true);
+  /**
+   * Attaches a stored document to its case, which clears its time to live. Attaching it again
+   * to the same case does nothing.
+   */
+  public void attach(Stored stored, long caseId) {
+    CaseLocator.CaseType caseType = cases.locate(caseId);
+    String url = stored.document().getUrl();
+    client.patchDocument(systemUser.authorisation(), serviceTokens.generate(),
+        CaseDocumentsMetadata.builder()
+            .caseId(String.valueOf(caseId))
+            .caseTypeId(caseType.caseTypeId())
+            .jurisdictionId(caseType.jurisdiction())
+            .documentHashTokens(List.of(DocumentHashToken.builder()
+                .id(url.substring(url.lastIndexOf('/') + 1))
+                .hashToken(stored.hashToken())
+                .build()))
+            .build());
   }
 
   private static CdamFetchException failure(UUID documentId, FeignException e) {

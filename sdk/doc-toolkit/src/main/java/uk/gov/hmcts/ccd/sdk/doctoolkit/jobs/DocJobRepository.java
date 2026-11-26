@@ -45,11 +45,6 @@ public class DocJobRepository {
   /** A job a worker has claimed. */
   public record Claimed(DocJob job, int requestVersion, String requestJson, String resultJson,
       int placeholderRetries, String leaseOwner) {
-
-    /** Whether the job removes a kept-up-to-date document rather than rendering one. */
-    public boolean removal() {
-      return requestJson == null;
-    }
   }
 
   /** Queues a one-off job. */
@@ -91,20 +86,14 @@ public class DocJobRepository {
   }
 
   /**
-   * Queues the removal of a kept-up-to-date document the case no longer has. Nothing happens if
-   * the case never had one.
+   * Forgets a kept-up-to-date document the case no longer has. A worker still rendering it finds
+   * the job gone, so its result is handed to nobody.
+   *
+   * @return whether the case had one
    */
-  public boolean queueRemoval(long caseReference, String key, long revision) {
-    return jdbc.update("""
-        update bundling.doc_job
-          set revision = :revision, request = null, fingerprint = null, attempts = 0,
-              placeholder_retries = 0, next_attempt_at = null, result = null,
-              failure_reason = null, failure_message = null, failure_documents = null,
-              state = case when state = 'IN_PROGRESS' then 'IN_PROGRESS' else 'QUEUED' end,
-              updated_at = now()
-        where case_reference = :case and job_key = :key and revision < :revision
-          and fingerprint is not null
-        """, params("case", caseReference, "key", key, "revision", revision)) == 1;
+  public boolean deleteKeyed(long caseReference, String key) {
+    return jdbc.update("delete from bundling.doc_job where case_reference = :case and job_key = :key",
+        params("case", caseReference, "key", key)) == 1;
   }
 
   /** A job, by id. */
@@ -181,7 +170,7 @@ public class DocJobRepository {
         """, params("id", id, "owner", owner, "leaseMillis", lease.toMillis())) == 1;
   }
 
-  /** Stores the uploaded document, so a failing handler can be retried without re-rendering. */
+  /** Stores the uploaded document, so a failing handler is retried without rendering again. */
   public boolean recordResult(UUID id, String owner, OptionalLong revision, String resultJson) {
     return jdbc.update("update bundling.doc_job set result = cast(:result as jsonb),"
         + " updated_at = now() where " + HELD, held(id, owner, revision)
@@ -207,10 +196,10 @@ public class DocJobRepository {
             : OffsetDateTime.ofInstant(requeueAt, ZoneOffset.UTC))) == 1;
   }
 
-  /** Deletes a finished one-off job, or a kept-up-to-date row whose removal was handled. */
-  public boolean deleteHeld(UUID id, String owner, OptionalLong revision) {
+  /** Deletes a finished one-off job. */
+  public boolean deleteHeld(UUID id, String owner) {
     return jdbc.update("delete from bundling.doc_job where " + HELD,
-        held(id, owner, revision)) == 1;
+        held(id, owner, OptionalLong.empty())) == 1;
   }
 
   /**
@@ -280,7 +269,7 @@ public class DocJobRepository {
             DocRequestJson.readFailures(rs.getString("failure_documents"))));
     String result = rs.getString("result");
     Optional<UploadedDoc> uploaded = result == null ? Optional.empty()
-        : Optional.of(DocRequestJson.readResult(result));
+        : Optional.of(DocRequestJson.readResult(result).uploaded());
     long revision = rs.getLong("revision");
     OptionalLong revisionValue = rs.wasNull() ? OptionalLong.empty() : OptionalLong.of(revision);
     return new DocJob(rs.getObject("id", UUID.class), rs.getLong("case_reference"),

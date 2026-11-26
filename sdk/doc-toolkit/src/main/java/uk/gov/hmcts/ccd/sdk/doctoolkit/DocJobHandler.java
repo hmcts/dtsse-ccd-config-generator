@@ -7,8 +7,11 @@ package uk.gov.hmcts.ccd.sdk.doctoolkit;
  * <p>Each call runs in one database transaction with the worker's own bookkeeping, using the
  * application's transaction manager. If the worker turns out not to hold the job any more (its
  * lease expired, or a newer revision of a kept-up-to-date document arrived), the transaction
- * rolls back, the handler's writes with it, and the worker deletes what it uploaded. So a handler
- * only ever commits current results, once per job.
+ * rolls back, the handler's writes with it. So a handler only ever commits current results, once
+ * per job.
+ *
+ * <p>What the handler is given is the service's: the toolkit never deletes it. A service that
+ * prunes old versions deletes them through CDAM itself.
  *
  * <pre>{@code
  * @Component
@@ -18,7 +21,6 @@ package uk.gov.hmcts.ccd.sdk.doctoolkit;
  *         job.revision().getAsLong(), uploaded);
  *   }
  *   public void failed(DocJob job) { ... }
- *   public void removed(DocJob job) { ... }
  * }
  * }</pre>
  */
@@ -34,10 +36,4 @@ public interface DocJobHandler {
    * The job was given up on; {@link DocJob#failure()} says why.
    */
   void failed(DocJob job) throws Exception;
-
-  /**
-   * A kept-up-to-date document's definition no longer gives the case a document. The toolkit
-   * deletes nothing: documents already stored stay the service's.
-   */
-  void removed(DocJob job) throws Exception;
 }

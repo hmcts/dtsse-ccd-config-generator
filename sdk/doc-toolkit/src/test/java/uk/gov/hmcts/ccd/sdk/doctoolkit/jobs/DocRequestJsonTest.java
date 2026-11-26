@@ -180,8 +180,9 @@ class DocRequestJsonTest {
                 List.of("Hearing bundle", "Evidence"), OptionalInt.of(7),
                 DocFailure.Reason.ACCESS_DENIED, "403")));
 
-    assertThat(DocRequestJson.readResult(DocRequestJson.writeResult(uploaded)))
-        .isEqualTo(uploaded);
+    DocRequestJson.StoredResult stored = new DocRequestJson.StoredResult(uploaded, "hash-1");
+
+    assertThat(DocRequestJson.readResult(DocRequestJson.writeResult(stored))).isEqualTo(stored);
   }
 
   @Test

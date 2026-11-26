@@ -120,24 +120,34 @@ public final class DocRequestJson {
     }
   }
 
+  /**
+   * A job's rendered document, uploaded to CDAM and not yet attached to the case.
+   *
+   * @param hashToken what CDAM needs to attach it
+   */
+  public record StoredResult(UploadedDoc uploaded, String hashToken) {
+  }
+
   /** A job's result as stored. */
-  public static String writeResult(UploadedDoc uploaded) {
+  public static String writeResult(StoredResult result) {
+    UploadedDoc uploaded = result.uploaded();
     Document document = uploaded.document();
     return serialise(new ResultJson(document.getUrl(), document.getBinaryUrl(),
         document.getFilename(), document.getCategoryId(),
         document.getUploadTimestamp() == null ? null : document.getUploadTimestamp().toString(),
-        uploaded.pageCount(), failures(uploaded.failures())));
+        uploaded.pageCount(), failures(uploaded.failures()), result.hashToken()));
   }
 
   /** The result a stored form describes. */
-  public static UploadedDoc readResult(String json) {
+  public static StoredResult readResult(String json) {
     ResultJson stored = parse(json, ResultJson.class);
-    return new UploadedDoc(Document.builder().url(stored.url()).binaryUrl(stored.binaryUrl())
+    return new StoredResult(new UploadedDoc(Document.builder().url(stored.url())
+        .binaryUrl(stored.binaryUrl())
         .filename(stored.filename())
         .categoryId(stored.categoryId())
         .uploadTimestamp(stored.uploadTimestamp() == null ? null
             : LocalDateTime.parse(stored.uploadTimestamp()))
-        .build(), stored.pageCount(), failures(stored.failures()));
+        .build(), stored.pageCount(), failures(stored.failures())), stored.hashToken());
   }
 
   /** Documents that could not be included, as stored. */
@@ -322,7 +332,7 @@ public final class DocRequestJson {
   }
 
   record ResultJson(String url, String binaryUrl, String filename, String categoryId,
-      String uploadTimestamp, int pageCount, List<FailureJson> failures) {
+      String uploadTimestamp, int pageCount, List<FailureJson> failures, String hashToken) {
   }
 
   record FailureJson(String id, String title, List<String> sectionPath, Integer page,

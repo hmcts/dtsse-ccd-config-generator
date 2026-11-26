@@ -31,9 +31,4 @@ public class CaseNotesDocumentHandler implements DocJobHandler {
         log.error("The {} document for case {} could not be made: {}", job.key().orElse("one-off"),
             job.caseReference(), job.failure().map(DocJob.Failure::message).orElse(""));
     }
-
-    @Override
-    public void removed(final DocJob job) {
-        log.info("Case {} no longer has a {} document", job.caseReference(), job.key().orElse(""));
-    }
 }

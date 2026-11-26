@@ -15,8 +15,8 @@ import uk.gov.hmcts.ccd.sdk.doctoolkit.jobs.DocRequestJson;
 
 /**
  * Runs every {@link CaseDocDefinition} for the case after each case event, queueing a render when
- * a request changed and a removal when a case no longer has its document. Registered by the
- * auto-configuration when definitions exist.
+ * a request changed and forgetting the job when a case no longer has its document. Registered by
+ * the auto-configuration.
  */
 public final class CaseDocHook implements CaseEventHook {
   private static final Logger log = LoggerFactory.getLogger(CaseDocHook.class);
@@ -47,9 +47,8 @@ public final class CaseDocHook implements CaseEventHook {
       }
       Optional<PdfRequest> request = definition.build(event.caseReference());
       if (request.isEmpty()) {
-        if (repository.queueRemoval(event.caseReference(), definition.key(), event.revision())) {
-          log.info("Case {} no longer has a {}; removal queued", event.caseReference(),
-              definition.key());
+        if (repository.deleteKeyed(event.caseReference(), definition.key())) {
+          log.info("Case {} no longer has a {}", event.caseReference(), definition.key());
         }
         continue;
       }
