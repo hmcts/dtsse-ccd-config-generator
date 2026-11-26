@@ -13,7 +13,8 @@ import uk.gov.hmcts.divorce.bundling.model.CaseBundleDocument;
 
 /**
  * Hearing bundles in this service's own model: recorded as requested in the case event, submitted to the doc
- * toolkit under a key of their own, and completed when the toolkit hands the stored PDF back.
+ * toolkit under a key of their own, and completed when the toolkit hands the stored PDF back, or
+ * marked failed when it cannot be made.
  */
 @Component
 public class BundlePublisher {
@@ -43,6 +44,13 @@ public class BundlePublisher {
         caseBundleRepository.save(caseReference, bundle);
         docJobs.submit(caseReference, KEY_PREFIX + bundle.getId(), request);
         return bundle;
+    }
+
+    /** Marks a requested bundle that could not be made. */
+    public void failed(final long caseReference, final String bundleId) {
+        CaseBundle bundle = caseBundleRepository.find(caseReference, bundleId).orElseThrow();
+        bundle.setStitchStatus("FAILED");
+        caseBundleRepository.update(caseReference, bundle);
     }
 
     /** Completes a requested bundle with the PDF the toolkit stored. */

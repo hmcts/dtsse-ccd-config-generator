@@ -26,7 +26,7 @@ import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
 /**
  * Failure-path variant of {@link CaseworkerCreateBundle}: the bundle refers to a CDAM document
  * that does not exist and fails on missing documents. The event succeeds, as rendering happens
- * later; the job then fails naming the document, nothing is stored, and the bundle stays requested.
+ * later; the job then fails naming the document, nothing is stored, and the bundle is marked failed.
  */
 @Component
 @Slf4j

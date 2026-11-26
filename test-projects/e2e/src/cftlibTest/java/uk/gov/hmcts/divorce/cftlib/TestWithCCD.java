@@ -796,10 +796,10 @@ public class TestWithCCD extends CftlibTest {
             containsString("could not be rendered"),
             containsString(CaseworkerCreateBundleMissingDocument.MISSING_DOCUMENT_TITLE)));
 
-        // Nothing was stored, the bundle stays requested, and the earlier bundle is untouched.
+        // Nothing was stored, the service marked the bundle failed, and the earlier bundle is untouched.
         assertThat(stubDocumentStore.countNamed(bundleFile), equalTo(documentsBefore));
         bundles = caseBundles(user);
-        assertThat(bundles.get(bundles.size() - 1).getStitchStatus(), equalTo("REQUESTED"));
+        assertThat(bundles.get(bundles.size() - 1).getStitchStatus(), equalTo("FAILED"));
         assertThat(bundles.get(0).getStitchStatus(), equalTo("DONE"));
     }
 

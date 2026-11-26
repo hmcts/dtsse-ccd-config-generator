@@ -208,6 +208,11 @@ class Bundles implements DocJobHandler {
   public void completed(DocJob job, UploadedDoc uploaded) {
     versions.append(job.caseReference(), job.key(), job.caseRevision(), uploaded);
   }
+
+  // Optional: a document that cannot be made. Does nothing by default.
+  public void failed(DocJob job, DocJobFailure failure) {
+    orders.markFailed(job.key(), failure.reason());
+  }
 }
 ```
 
@@ -218,6 +223,12 @@ waits for the handler to commit, and the handler may write rows referencing the 
 deadlocking with an event. Finishing first means a render superseded by a newer submit never
 reaches the handler, so versions arrive in the order they were submitted. If the handler or the
 attach fails, everything rolls back and the job is rendered again.
+
+When the toolkit gives up on a document (it failed permanently, every attempt failed, or every
+worker died), it calls `failed` the same way: once, in one transaction holding the case lock, and
+only for the request still current. A one-off document uses it to show that it could not be made;
+a document kept up to date can ignore it and keep its last version. If `failed` throws, the job is
+failed without it and the error logged.
 
 The toolkit never deletes a document. What the handler is given is the service's: keep each
 version, since a reader may have an older one open, refer to them from case data, since CDAM
@@ -230,7 +241,8 @@ Behaviour:
   running and one queued. Renders for a key do not overlap while leases hold.
 - Three attempts, 30 seconds then a minute apart, for failures that may pass: a document only
   temporarily unavailable, a failed upload or attach, or a failing handler. After the last, the
-  failure is logged, the service keeps the version it had, and the next submit tries again.
+  handler's `failed` is called, the service keeps the version it had, and the next submit tries
+  again.
 - Attempts are counted when a job is claimed, so a render that kills its worker counts; a job
   whose every worker died fails as `CRASHED`. Leases are five minutes, renewed while rendering.
 - A change to the toolkit's rendering bumps `DocRequestJson.RENDERING_VERSION`, which changes

@@ -96,19 +96,17 @@ public class DocJobRepository {
             rs.getString("request"), leaseOwner));
   }
 
-  /** Fails jobs whose every attempt's worker died, returning them. */
-  public List<DocJob> failCrashed(int maxAttempts) {
+  /**
+   * Jobs whose every attempt's worker died: still held, at their last attempt, by a lease that
+   * expired. Each is returned as held by that dead worker, so failing it is guarded as usual.
+   */
+  public List<Claimed> crashed(int maxAttempts) {
     return jdbc.query("""
-        update bundling.doc_job
-        set state = 'FAILED', failure_reason = 'CRASHED', failure_documents = '[]'::jsonb,
-            failure_message = 'The job was claimed ' || attempts || ' time(s) and each worker'
-                || ' stopped before finishing it. The render most likely ran out of memory;'
-                || ' see the service logs.',
-            lease_owner = null, lease_expires_at = null, next_attempt_at = null,
-            updated_at = now()
+        select id, case_reference, job_key, case_revision, revision, attempts, lease_owner
+        from bundling.doc_job
         where state = 'IN_PROGRESS' and lease_expires_at <= now() and attempts >= :maxAttempts
-        returning id, case_reference, job_key, case_revision
-        """, params("maxAttempts", maxAttempts), (rs, n) -> map(rs));
+        """, params("maxAttempts", maxAttempts), (rs, n) -> new Claimed(map(rs),
+        rs.getLong("revision"), rs.getInt("attempts"), null, rs.getString("lease_owner")));
   }
 
   /** Extends a held job's lease. */

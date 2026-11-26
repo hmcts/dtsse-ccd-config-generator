@@ -111,9 +111,10 @@ public final class DocJobWorker implements AutoCloseable {
 
   /** Fails crashed jobs, then claims as many as there is room for and runs them. */
   public void poll() {
-    for (DocJob crashed : repository.failCrashed(settings.maxAttempts())) {
-      log.error("Doc job {} for case {} failed: each worker stopped before finishing it; the"
-          + " render most likely ran out of memory", crashed.id(), crashed.caseReference());
+    for (DocJobRepository.Claimed crashed : repository.crashed(settings.maxAttempts())) {
+      fail(crashed, "CRASHED", "The job was claimed " + crashed.attempts() + " time(s) and each"
+          + " worker stopped before finishing it. The render most likely ran out of memory; see"
+          + " the service logs.", List.of());
     }
     int room = settings.maxConcurrentRenders() - inFlight.get();
     if (room <= 0) {
@@ -271,11 +272,39 @@ public final class DocJobWorker implements AutoCloseable {
     }
   }
 
+  /**
+   * Fails the job and tells the service, in one transaction holding the case lock, as completing
+   * does. A handler that throws is logged and the job failed without it.
+   */
   private void fail(DocJobRepository.Claimed claimed, String reason, String message,
       List<DocFailure> failures) {
     DocJob job = claimed.job();
-    if (repository.markFailed(job.id(), claimed.leaseOwner(), claimed.revision(), reason, message,
-        DocRequestJson.writeFailures(failures))) {
+    DocJobFailure failure = new DocJobFailure(reason, message, failures);
+    String documents = DocRequestJson.writeFailures(failures);
+    boolean failed;
+    try {
+      failed = Boolean.TRUE.equals(transactions.execute(status -> {
+        repository.lockCase(job.caseReference());
+        if (!repository.markFailed(job.id(), claimed.leaseOwner(), claimed.revision(), reason,
+            message, documents)) {
+          return false;
+        }
+        try {
+          handler.failed(job, failure);
+        } catch (RuntimeException e) {
+          throw e;
+        } catch (Exception e) {
+          throw new HandlerFailed(e);
+        }
+        return true;
+      }));
+    } catch (RuntimeException e) {
+      log.error("Doc job {}: the DocJobHandler could not be told it failed; failing it without",
+          job.id(), e instanceof HandlerFailed ? e.getCause() : e);
+      failed = repository.markFailed(job.id(), claimed.leaseOwner(), claimed.revision(), reason,
+          message, documents);
+    }
+    if (failed) {
       log.error("Doc job {} for case {} failed ({}): {}", job.id(), job.caseReference(), reason,
           message);
     } else {

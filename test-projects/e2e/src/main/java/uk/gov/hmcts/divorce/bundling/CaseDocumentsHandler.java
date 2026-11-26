@@ -5,13 +5,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocJob;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.DocJobFailure;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocJobHandler;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.UploadedDoc;
 
 /**
  * Receives every document the doc toolkit renders for this service, telling them apart by key: each version of a
  * case's notes document ({@link CaseNotesDocument}), and each hearing bundle a caseworker asked for
- * ({@link CaseworkerCreateBundle}).
+ * ({@link CaseworkerCreateBundle}), and each one that cannot be made.
  */
 @Component
 public class CaseDocumentsHandler implements DocJobHandler {
@@ -34,6 +35,14 @@ public class CaseDocumentsHandler implements DocJobHandler {
                 uploaded);
         } else {
             throw new IllegalStateException("No document is submitted as " + job.key());
+        }
+    }
+
+    /** A hearing bundle that cannot be made is marked failed; the notes document keeps its last version. */
+    @Override
+    public void failed(final DocJob job, final DocJobFailure failure) {
+        if (job.key().startsWith(BundlePublisher.KEY_PREFIX)) {
+            bundlePublisher.failed(job.caseReference(), job.key().substring(BundlePublisher.KEY_PREFIX.length()));
         }
     }
 }

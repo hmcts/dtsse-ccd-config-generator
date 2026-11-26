@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.doctoolkit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.ONE_CASE_TYPE;
 import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.SERVICE_TOKENS;
@@ -58,6 +59,8 @@ class DocJobsTest {
     jdbc.update("delete from bundling.doc_job", Map.of());
     insertCase(CASE);
     jdbc.update("drop table if exists handled", Map.of());
+    jdbc.update("drop table if exists handled_failures", Map.of());
+    jdbc.update("create table handled_failures (n serial, job_key text)", Map.of());
     // Like a service's own table: its rows reference the case.
     jdbc.update("create table handled (n serial, file text, url text, case_revision bigint,"
         + " reference bigint references ccd.case_data (reference) on delete cascade)", Map.of());
@@ -277,9 +280,15 @@ class DocJobsTest {
       assertThat(job.attempts()).isEqualTo(3);
       assertThat(job.failureDocuments()).contains("doc-1", "Outage", "UNAVAILABLE");
     });
-    // The service keeps the version it had; nothing with a placeholder was published.
+    // The service keeps the version it had and is told the newer one failed; nothing with a
+    // placeholder was published.
     assertThat(handled()).containsExactly("one-page.pdf");
     assertThat(cdam.uploads).hasSize(1);
+    assertThat(handler.failed).singleElement().satisfies(failure -> {
+      assertThat(failure.reason()).isEqualTo("DOCUMENTS_FAILED");
+      assertThat(failure.documents()).extracting(DocFailure::title, DocFailure::reason)
+          .containsExactly(tuple("Outage", DocFailure.Reason.UNAVAILABLE));
+    });
   }
 
   @Test
@@ -325,6 +334,7 @@ class DocJobsTest {
     });
     assertThat(handled()).isEmpty();
     assertThat(cdam.attached()).isEmpty();
+    assertThat(handler.failed).extracting(DocJobFailure::reason).containsExactly("HANDLER_FAILED");
   }
 
   @Test
@@ -342,6 +352,12 @@ class DocJobsTest {
     });
     assertThat(handler.completed).isEmpty();
     assertThat(cdam.uploads).isEmpty();
+    assertThat(handler.failed).singleElement().satisfies(failure -> {
+      assertThat(failure.reason()).isEqualTo("DOCUMENTS_FAILED");
+      assertThat(failure.documents()).extracting(DocFailure::title).containsExactly("Gone");
+    });
+    // The failure is recorded in the same transaction as the job's.
+    assertThat(failedKeys()).containsExactly(KEY);
   }
 
   @Test
@@ -357,6 +373,7 @@ class DocJobsTest {
 
     runUntil(() -> state().equals("DONE"));
     assertThat(handled()).containsExactly("Potential_Energy_PDF.pdf");
+    assertThat(handler.failed).isEmpty();
   }
 
   @Test
@@ -373,6 +390,10 @@ class DocJobsTest {
 
     assertThat(state()).isEqualTo("FAILED");
     assertThat(job().orElseThrow().failureReason()).isEqualTo("CRASHED");
+    assertThat(handler.failed).extracting(DocJobFailure::reason).containsExactly("CRASHED");
+    // Another worker's poll finds nothing more to fail.
+    worker.poll();
+    assertThat(handler.failed).hasSize(1);
   }
 
   @Test
@@ -383,6 +404,20 @@ class DocJobsTest {
     runUntil(() -> state().equals("FAILED"));
 
     assertThat(job().orElseThrow().failureReason()).isEqualTo("UNREADABLE_REQUEST");
+    assertThat(handler.failed).extracting(DocJobFailure::reason).containsExactly("UNREADABLE_REQUEST");
+  }
+
+  @Test
+  void aHandlerThatCannotRecordAFailureStillFailsTheJob() {
+    handler.failedThrows = true;
+    submit(PdfRequest.builder("Bundle")
+        .document(PdfPart.builder(DocSource.cdam(cdam.failing(404))).title("Gone").build())
+        .build());
+
+    runUntil(() -> state().equals("FAILED"));
+
+    assertThat(job().orElseThrow().failureReason()).isEqualTo("DOCUMENTS_FAILED");
+    assertThat(failedKeys()).isEmpty();
   }
 
   @Test
@@ -466,6 +501,11 @@ class DocJobsTest {
         + " where reference = :ref returning case_revision", Map.of("ref", CASE), Long.class);
   }
 
+  private List<String> failedKeys() {
+    return jdbc.queryForList("select job_key from handled_failures order by n", Map.of(),
+        String.class);
+  }
+
   /** The file names of the versions the service kept, in order. */
   private List<String> handled() {
     return jdbc.queryForList("select file from handled order by n", Map.of(), String.class);
@@ -484,6 +524,8 @@ class DocJobsTest {
   /** Records calls, and writes each version to a table in the worker's transaction. */
   private final class RecordingHandler implements DocJobHandler {
     final List<Completed> completed = new CopyOnWriteArrayList<>();
+    final List<DocJobFailure> failed = new CopyOnWriteArrayList<>();
+    volatile boolean failedThrows;
     final AtomicInteger failuresBeforeSuccess = new AtomicInteger();
     private volatile CountDownLatch blockEntered;
     private volatile CountDownLatch blockRelease;
@@ -509,6 +551,15 @@ class DocJobsTest {
       if (failuresBeforeSuccess.getAndDecrement() > 0) {
         throw new IllegalStateException("the service's database is down");
       }
+    }
+
+    @Override
+    public void failed(DocJob job, DocJobFailure failure) {
+      jdbc.update("insert into handled_failures (job_key) values (:key)", Map.of("key", job.key()));
+      if (failedThrows) {
+        throw new IllegalStateException("the service's database is down");
+      }
+      failed.add(failure);
     }
   }
 }
