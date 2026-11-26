@@ -25,13 +25,12 @@ import uk.gov.hmcts.ccd.sdk.doctoolkit.PrintOptions;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.Watermark;
 
 /**
- * The outbox's stored form of a request and of a job's result. The public types carry no
- * serialisation annotations: they are mapped to these records, whose shape is
- * {@link #REQUEST_VERSION}. A change to it needs a new version.
+ * The stored form of a submitted request. The public types carry no serialisation annotations:
+ * they are mapped to these records. A change to their shape ships with a migration that truncates
+ * {@code bundling.doc_job}, as stored requests are not kept across formats; cases' kept-up-to-date
+ * documents are submitted again on their next event.
  */
 public final class DocRequestJson {
-  /** The stored format's version. Versions 1 to 4 were earlier formats. */
-  public static final int REQUEST_VERSION = 5;
 
   /**
    * The version of how the toolkit renders a request. It is part of every stored request, so

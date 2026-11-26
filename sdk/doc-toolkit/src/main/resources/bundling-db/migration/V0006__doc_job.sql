@@ -12,7 +12,6 @@ create table bundling.doc_job (
     case_revision       bigint not null,
     -- sha256 of the request as jsonb text.
     fingerprint         bytea not null,
-    request_version     integer not null,
     request             jsonb not null,
     state               varchar(16) not null,
     attempts            integer not null default 0,

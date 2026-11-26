@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -57,8 +58,8 @@ public final class CdamDocuments {
   public Fetched fetch(UUID documentId, Path into, long maxBytes) throws CdamFetchException {
     ResponseEntity<Resource> response;
     try {
-      response = client.getDocumentBinary(
-          systemUser.get(), serviceTokens.generate(), documentId);
+      response = asSystemUser(user -> client.getDocumentBinary(
+          user, serviceTokens.generate(), documentId));
     } catch (FeignException e) {
       throw failure(documentId, e);
     }
@@ -105,9 +106,9 @@ public final class CdamDocuments {
    */
   public Stored store(Path file, String fileName, long caseId, String classification) {
     CaseLocator.CaseType caseType = cases.locate(caseId);
-    var stored = client.uploadDocuments(systemUser.get(), serviceTokens.generate(),
+    var stored = asSystemUser(user -> client.uploadDocuments(user, serviceTokens.generate(),
             new DocumentUploadRequest(classification, caseType.caseTypeId(), caseType.jurisdiction(),
-                List.of(new PdfFile(file, fileName))))
+                List.of(new PdfFile(file, fileName)))))
         .getDocuments()
         .getFirst();
     return new Stored(Document.builder()
@@ -125,7 +126,7 @@ public final class CdamDocuments {
   public void attach(Stored stored, long caseId) {
     CaseLocator.CaseType caseType = cases.locate(caseId);
     String url = stored.document().getUrl();
-    client.patchDocument(systemUser.get(), serviceTokens.generate(),
+    asSystemUser(user -> client.patchDocument(user, serviceTokens.generate(),
         CaseDocumentsMetadata.builder()
             .caseId(String.valueOf(caseId))
             .caseTypeId(caseType.caseTypeId())
@@ -134,7 +135,25 @@ public final class CdamDocuments {
                 .id(url.substring(url.lastIndexOf('/') + 1))
                 .hashToken(stored.hashToken())
                 .build()))
-            .build());
+            .build()));
+  }
+
+  /**
+   * Calls CDAM as the system user. A token CDAM rejects (IDAM may revoke one before it expires) is
+   * dropped and the call tried once more with a fresh one.
+   */
+  private <T> T asSystemUser(Function<String, T> call) {
+    try {
+      return call.apply(systemUser.get());
+    } catch (FeignException e) {
+      if (e.status() != 401) {
+        throw e;
+      }
+      if (systemUser instanceof IdamSystemUser idam) {
+        idam.signOut();
+      }
+      return call.apply(systemUser.get());
+    }
   }
 
   private static CdamFetchException failure(UUID documentId, FeignException e) {

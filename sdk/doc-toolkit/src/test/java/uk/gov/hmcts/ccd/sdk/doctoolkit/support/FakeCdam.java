@@ -46,6 +46,7 @@ public final class FakeCdam implements CaseDocumentClientApi {
   public final List<Upload> uploads = new CopyOnWriteArrayList<>();
   public final List<CaseDocumentsMetadata> attachments = new CopyOnWriteArrayList<>();
   private volatile RuntimeException attachFailure;
+  private volatile boolean rejectNextToken;
 
   /** Stores a document, returning its id. */
   public UUID store(byte[] content, String mediaType, String fileName) {
@@ -59,6 +60,11 @@ public final class FakeCdam implements CaseDocumentClientApi {
     UUID id = UUID.randomUUID();
     failures.put(id, status);
     return id;
+  }
+
+  /** Rejects the next fetch's token as IDAM revoked, as CDAM does: 401. */
+  public void rejectNextToken() {
+    rejectNextToken = true;
   }
 
   /** Makes a failing document answer with this content from now on. */
@@ -89,6 +95,10 @@ public final class FakeCdam implements CaseDocumentClientApi {
   public ResponseEntity<Resource> getDocumentBinary(String authorisation, String serviceAuth,
       UUID documentId) {
     fetchedAs.add(authorisation + " " + serviceAuth);
+    if (rejectNextToken) {
+      rejectNextToken = false;
+      throw error(401);
+    }
     Integer status = failures.get(documentId);
     if (status != null) {
       throw error(status);

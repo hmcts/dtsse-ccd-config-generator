@@ -244,7 +244,8 @@ Behaviour:
   handler's `failed` is called, the service keeps the version it had, and the next submit tries
   again.
 - Attempts are counted when a job is claimed, so a render that kills its worker counts; a job
-  whose every worker died fails as `CRASHED`. Leases are five minutes, renewed while rendering.
+  whose every worker died fails as `CRASHED`. Leases are ten minutes; a render that takes longer
+  is claimed again by another worker, and the slow one's result is refused.
 - A change to the toolkit's rendering bumps `DocRequestJson.RENDERING_VERSION`, which changes
   every request, so each document re-renders on its next submit.
 

@@ -8,7 +8,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
@@ -23,10 +22,10 @@ import uk.gov.hmcts.ccd.sdk.doctoolkit.jobs.DocRequestJson;
  * {@code ccd.doc-toolkit.jobs.worker.enabled} is false, so a service can run its workers in a
  * separate deployment from the instances handling CCD callbacks.
  *
- * <p>Each poll claims what the worker has room for under a lease, renews the lease while
- * rendering, uploads the result and calls the {@link DocJobHandler} in one transaction with the
- * worker's own bookkeeping. A worker that dies mid-job loses its lease, and another worker picks
- * the job up.
+ * <p>Each poll claims what the worker has room for under a ten-minute lease, renders, uploads the
+ * result and calls the {@link DocJobHandler} in one transaction with the worker's own
+ * bookkeeping. A worker that dies mid-job, or takes longer than its lease, loses the job to
+ * another worker; whatever it finishes afterwards is refused, as it no longer holds the job.
  */
 public final class DocJobWorker implements AutoCloseable {
   private static final Logger log = LoggerFactory.getLogger(DocJobWorker.class);
@@ -41,9 +40,9 @@ public final class DocJobWorker implements AutoCloseable {
   public record Settings(Duration pollDelay, int maxConcurrentRenders, Duration lease,
       int maxAttempts, Duration firstRetryDelay, Duration maxRetryDelay) {
 
-    /** One-second polls, two renders at a time, five-minute leases, three attempts. */
+    /** One-second polls, two renders at a time, ten-minute leases, three attempts. */
     public static Settings defaults() {
-      return new Settings(Duration.ofSeconds(1), 2, Duration.ofMinutes(5), 3,
+      return new Settings(Duration.ofSeconds(1), 2, Duration.ofMinutes(10), 3,
           Duration.ofSeconds(30), Duration.ofMinutes(10));
     }
 
@@ -152,15 +151,10 @@ public final class DocJobWorker implements AutoCloseable {
 
   private void run(DocJobRepository.Claimed claimed) {
     DocJob job = claimed.job();
-    // The lease is renewed until the job is finished, handler included, so no other worker
-    // takes it over while this one is still working on it.
-    ScheduledFuture<?> renewal = renewLease(claimed);
     try (MDC.MDCCloseable ignoredJob = MDC.putCloseable("docJobId", job.id().toString());
         MDC.MDCCloseable ignoredCase = MDC.putCloseable("caseReference",
             String.valueOf(job.caseReference()))) {
       runHeld(claimed);
-    } finally {
-      renewal.cancel(false);
     }
   }
 
@@ -244,17 +238,6 @@ public final class DocJobWorker implements AutoCloseable {
     }
     log.info("Doc job {} completed after {} attempt(s): {}", job.id(), claimed.attempts(),
         uploaded.document().getUrl());
-  }
-
-  private ScheduledFuture<?> renewLease(DocJobRepository.Claimed claimed) {
-    long every = Math.max(1, settings.lease().toMillis() / 3);
-    return timers.scheduleAtFixedRate(() -> {
-      try {
-        repository.renewLease(claimed.job().id(), claimed.leaseOwner(), settings.lease());
-      } catch (RuntimeException e) {
-        log.warn("Could not renew the lease on doc job {}", claimed.job().id(), e);
-      }
-    }, every, every, TimeUnit.MILLISECONDS);
   }
 
   private void retry(DocJobRepository.Claimed claimed, String why) {

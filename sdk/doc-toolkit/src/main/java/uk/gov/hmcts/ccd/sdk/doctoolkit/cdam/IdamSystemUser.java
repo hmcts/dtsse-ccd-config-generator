@@ -8,7 +8,7 @@ import uk.gov.hmcts.reform.idam.client.IdamClient;
 
 /**
  * The service's system user, signed in to IDAM with its username and password. The token is reused
- * for half an hour, well inside IDAM's token lifetime.
+ * for half an hour, well inside IDAM's token lifetime, unless CDAM rejects it first.
  */
 public final class IdamSystemUser implements Supplier<String> {
   private static final Duration REUSE = Duration.ofMinutes(30);
@@ -42,5 +42,12 @@ public final class IdamSystemUser implements Supplier<String> {
       signedInAt = now;
     }
     return token;
+  }
+
+  /**
+   * Forgets the token, so the next {@link #get} signs in again; for a token IDAM rejected.
+   */
+  public synchronized void signOut() {
+    token = null;
   }
 }

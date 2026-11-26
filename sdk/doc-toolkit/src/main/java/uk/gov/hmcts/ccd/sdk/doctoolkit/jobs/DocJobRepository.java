@@ -46,15 +46,13 @@ public class DocJobRepository {
   public boolean queue(UUID id, long caseReference, String key, String requestJson) {
     return jdbc.update("""
         insert into bundling.doc_job
-          (id, case_reference, job_key, revision, case_revision, request_version, request,
-           fingerprint, state)
+          (id, case_reference, job_key, revision, case_revision, request, fingerprint, state)
         values (:id, :case, :key, 1,
           (select case_revision from ccd.case_data where reference = :case),
-          :version, cast(:request as jsonb),
+          cast(:request as jsonb),
           sha256(convert_to(cast(:request as jsonb)::text, 'UTF8')), 'QUEUED')
         on conflict (case_reference, job_key) do update
           set revision = doc_job.revision + 1, case_revision = excluded.case_revision,
-              request_version = excluded.request_version,
               request = excluded.request, fingerprint = excluded.fingerprint,
               attempts = 0, next_attempt_at = null,
               failure_reason = null, failure_message = null, failure_documents = null,
@@ -63,7 +61,7 @@ public class DocJobRepository {
           where doc_job.fingerprint is distinct from excluded.fingerprint
              or doc_job.state = 'FAILED'
         """, params("id", id, "case", caseReference, "key", key,
-        "version", DocRequestJson.REQUEST_VERSION, "request", requestJson)) == 1;
+        "request", requestJson)) == 1;
   }
 
   /**
@@ -74,8 +72,7 @@ public class DocJobRepository {
     return jdbc.query("""
         with claimable as (
           select id from bundling.doc_job
-          where request_version = :version
-            and ((state = 'QUEUED' and (next_attempt_at is null or next_attempt_at <= now()))
+          where ((state = 'QUEUED' and (next_attempt_at is null or next_attempt_at <= now()))
                  or (state = 'IN_PROGRESS' and lease_expires_at <= now()
                      and attempts < :maxAttempts))
           order by coalesce(next_attempt_at, submitted_at), id
@@ -91,7 +88,7 @@ public class DocJobRepository {
             job.attempts, job.request::text as request
         """,
         params("limit", limit, "owner", leaseOwner, "leaseMillis", lease.toMillis(),
-            "maxAttempts", maxAttempts, "version", DocRequestJson.REQUEST_VERSION),
+            "maxAttempts", maxAttempts),
         (rs, n) -> new Claimed(map(rs), rs.getLong("revision"), rs.getInt("attempts"),
             rs.getString("request"), leaseOwner));
   }
@@ -107,15 +104,6 @@ public class DocJobRepository {
         where state = 'IN_PROGRESS' and lease_expires_at <= now() and attempts >= :maxAttempts
         """, params("maxAttempts", maxAttempts), (rs, n) -> new Claimed(map(rs),
         rs.getLong("revision"), rs.getInt("attempts"), null, rs.getString("lease_owner")));
-  }
-
-  /** Extends a held job's lease. */
-  public boolean renewLease(UUID id, String owner, Duration lease) {
-    return jdbc.update("""
-        update bundling.doc_job
-        set lease_expires_at = now() + (:leaseMillis * interval '1 millisecond')
-        where id = :id and lease_owner = :owner and state = 'IN_PROGRESS'
-        """, params("id", id, "owner", owner, "leaseMillis", lease.toMillis())) == 1;
   }
 
   /**

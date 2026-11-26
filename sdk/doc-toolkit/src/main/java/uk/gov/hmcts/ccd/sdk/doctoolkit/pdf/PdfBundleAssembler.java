@@ -194,7 +194,7 @@ public final class PdfBundleAssembler {
         final int pageIndex = currentPage;
         GeneratedPages.addEmptySectionPage(document, drawnTitle, fonts);
         currentPage++;
-        log.warn("The expected section '" + item.title() + "' contains no documents;"
+        log.info("The expected section '" + item.title() + "' contains no documents;"
                 + " the standard visible placeholder page was included.");
         finishGeneratedItem(item, drawnTitle, parentOutline, coverIndex, pageIndex);
       }
