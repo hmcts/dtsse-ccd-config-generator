@@ -1,7 +1,7 @@
 -- Each version of a case's notes document, kept up to date by the doc toolkit.
 create table case_notes_documents (
     id          bigserial primary key,
-    reference   bigint not null references ccd.case_data(reference),
+    reference   bigint not null references ccd.case_data(reference) on delete cascade,
     revision    bigint not null,
     url         text not null unique,
     page_count  integer not null,

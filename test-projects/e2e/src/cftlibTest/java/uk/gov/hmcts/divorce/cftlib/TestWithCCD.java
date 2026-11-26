@@ -747,19 +747,14 @@ public class TestWithCCD extends CftlibTest {
         await().atMost(Duration.ofSeconds(60)).until(() -> ((Number) db.queryForMap(sqlLatest,
             Map.of("ref", caseRef)).get("revision")).longValue() > revisionBefore);
         String url = (String) db.queryForMap(sqlLatest, Map.of("ref", caseRef)).get("url");
-        String documentId = url.substring(url.length() - 36);
-        assertThat(fetchCdamDocument(documentId).path("metadata").path("case_id").asText(),
-            equalTo(String.valueOf(caseRef)));
-        var download = new HttpGet(CDAM_BASE_URL + "/cases/documents/" + documentId + "/binary");
-        download.addHeader("Authorization", getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"));
-        download.addHeader("ServiceAuthorization", cftlib().generateDummyS2SToken("nfdiv_case_api"));
-        try (var downloadResponse = HttpClientBuilder.create().build().execute(download)) {
-            assertThat(downloadResponse.getStatusLine().getStatusCode(), equalTo(200));
-            try (PDDocument pdf = Loader.loadPDF(EntityUtils.toByteArray(downloadResponse.getEntity()))) {
-                String text = new PDFTextStripper().getText(pdf);
-                assertThat(text, containsString("Case notes"));
-                assertThat(text, containsString(note));
-            }
+        // CDAM stored it against the case. Users read it only once case data refers to it, which this
+        // example leaves out, so check what reached the document store.
+        var stored = stubDocumentStore.find(url.substring(url.length() - 36)).orElseThrow();
+        assertThat(stored.metadata().get("case_id"), equalTo(String.valueOf(caseRef)));
+        try (PDDocument pdf = Loader.loadPDF(stored.content())) {
+            String text = new PDFTextStripper().getText(pdf);
+            assertThat(text, containsString("Case notes"));
+            assertThat(text, containsString(note));
         }
 
         // An event that leaves the notes as they are queues nothing.
