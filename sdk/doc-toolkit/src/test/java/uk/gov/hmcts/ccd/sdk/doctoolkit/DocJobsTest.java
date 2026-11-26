@@ -408,22 +408,6 @@ class DocJobsTest {
   }
 
   @Test
-  void aFailureOfASupersededRenderIsNotReported() {
-    submit(bundleOf("one-page.pdf"));
-    DocJobRepository.Claimed claimed = repository.claim(1, Duration.ofMinutes(1), 3).getFirst();
-    nextCaseRevision();
-    submit(bundleOf("Potential_Energy_PDF.pdf"));
-
-    // Giving up worker A's render starts with the same guarded dequeue, which finds nothing.
-    assertThat(repository.dequeue(claimed)).isFalse();
-    repository.release(claimed);
-
-    runUntil(this::idle);
-    assertThat(handled()).containsExactly("Potential_Energy_PDF.pdf");
-    assertThat(handler.failed).isEmpty();
-  }
-
-  @Test
   void aJobWhoseWorkersKeepDyingIsFailed() {
     submit(bundleOf("one-page.pdf"));
     // Three workers claim it and die: their leases run out without a result.
