@@ -116,6 +116,18 @@ When the application uses Spring Cloud OpenFeign, its own CDAM client is answere
 
 A document the test did not store is not found. Other requests go to the application's own client. `content(document)` exposes a defensive copy of its bytes, and `caseReference(document)` reports its attachment. This fixture models document storage, not CCD permissions: use a full-stack test to prove download authorisation. The [documents integration test](../sdk/ccd-sdk-test-support/src/test/java/uk/gov/hmcts/ccd/sdk/testing/TestDocumentsIntegrationTest.java) shows this behaviour.
 
+## System events in unit tests
+
+Unit tests of code that calls `SystemEventExecutor` can pass a `TestSystemEventExecutor` instead of a mock. It runs each action immediately with a real `SystemEventExecutionContext` for a case in the given state, rejects a null result as the runtime does, applies any state transition to later calls, and records each result:
+
+```java
+var executor = new TestSystemEventExecutor("PENDING_CASE_ISSUED");
+new IssueCase(executor).issue(reference);
+assertThat(executor.results()).extracting(SystemEventResult::eventId).containsExactly("issueCase");
+```
+
+It does not lock, persist or replay. Integration tests should use the real executor, seeding the case with `events.seed(...)` and asserting on `events.history(reference)`.
+
 ## Existing application context
 
 Use `@CcdSdkPostgresTest` with an existing `@SpringBootTest` context when a test needs the whole application's wiring, including its filters, JSON definition loading and local callback routing. The context must be a servlet web application context, which is the `@SpringBootTest` default. Use `@EnableCcdEventTesting` if that context already supplies a datasource. Both add the typed helper and submission runtime without replacing the application configuration. The SDK's [application-context integration test](../sdk/ccd-sdk-test-support/src/test/java/uk/gov/hmcts/ccd/sdk/testing/CcdEventTestSupportIntegrationTest.java) shows this path.
