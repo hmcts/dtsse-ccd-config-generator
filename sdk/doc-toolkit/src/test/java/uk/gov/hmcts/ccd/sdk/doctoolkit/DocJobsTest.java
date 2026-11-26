@@ -19,6 +19,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,8 +58,9 @@ class DocJobsTest {
     jdbc.update("delete from bundling.doc_job", Map.of());
     insertCase(CASE);
     jdbc.update("drop table if exists handled", Map.of());
-    jdbc.update("create table handled (n serial, file text, url text, case_revision bigint)",
-        Map.of());
+    // Like a service's own table: its rows reference the case.
+    jdbc.update("create table handled (n serial, file text, url text, case_revision bigint,"
+        + " reference bigint references ccd.case_data (reference) on delete cascade)", Map.of());
     toolkit = DocToolkit.builder().tempDirectory(work)
         .cdam(cdam, SERVICE_TOKENS, SYSTEM_USER, ONE_CASE_TYPE).build();
     worker = new DocJobWorker(repository, toolkit, handler, tx, QUICK);
@@ -154,7 +156,7 @@ class DocJobsTest {
   }
 
   @Test
-  void aSubmitDuringTheHandlerWaitsForItThenQueuesTheNextVersion() throws Exception {
+  void anEventDuringTheHandlerWaitsForItThenQueuesTheNextVersion() throws Exception {
     submit(bundleOf("one-page.pdf"));
     CountDownLatch inHandler = new CountDownLatch(1);
     CountDownLatch release = new CountDownLatch(1);
@@ -163,14 +165,29 @@ class DocJobsTest {
     Thread first = new Thread(worker::poll);
     first.start();
     assertThat(inHandler.await(30, TimeUnit.SECONDS)).isTrue();
-    // A submit while the first version's handler is running waits for it to commit.
-    Thread second = new Thread(() -> submit(bundleOf("Potential_Energy_PDF.pdf")));
+    // An event while the first version's handler is running writes the case row, as the runtime
+    // does, then submits, which waits for the handler. The handler then writes a row referencing
+    // the case: its key-share lock does not conflict with the event's, so neither deadlocks.
+    PdfRequest next = bundleOf("Potential_Energy_PDF.pdf");
+    AtomicReference<Throwable> eventFailure = new AtomicReference<>();
+    Thread second = new Thread(() -> {
+      try {
+        tx.executeWithoutResult(status -> {
+          jdbc.update("update ccd.case_data set last_modified = now() where reference = :ref",
+              Map.of("ref", CASE));
+          jobs.submit(CASE, KEY, next);
+        });
+      } catch (RuntimeException e) {
+        eventFailure.set(e);
+      }
+    });
     second.start();
     second.join(300);
     assertThat(second.isAlive()).isTrue();
     release.countDown();
     second.join(30_000);
     first.join();
+    assertThat(eventFailure.get()).isNull();
 
     runUntil(() -> handled().size() == 2);
     assertThat(handled()).containsExactly("one-page.pdf", "Potential_Energy_PDF.pdf");
@@ -479,15 +496,16 @@ class DocJobsTest {
     @Override
     public void completed(DocJob job, UploadedDoc uploaded) throws Exception {
       completed.add(new Completed(job, uploaded));
-      jdbc.update("insert into handled (file, url, case_revision) values (:file, :url, :revision)",
-          Map.of("file", uploaded.document().getFilename(), "url", uploaded.document().getUrl(),
-              "revision", job.caseRevision()));
       CountDownLatch entered = blockEntered;
       if (entered != null) {
         blockEntered = null;
         entered.countDown();
         blockRelease.await(30, TimeUnit.SECONDS);
       }
+      jdbc.update("insert into handled (file, url, case_revision, reference)"
+          + " values (:file, :url, :revision, :reference)",
+          Map.of("file", uploaded.document().getFilename(), "url", uploaded.document().getUrl(),
+              "revision", job.caseRevision(), "reference", job.caseReference()));
       if (failuresBeforeSuccess.getAndDecrement() > 0) {
         throw new IllegalStateException("the service's database is down");
       }

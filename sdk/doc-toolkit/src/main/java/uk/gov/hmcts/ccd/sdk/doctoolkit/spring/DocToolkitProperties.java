@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk.doctoolkit.spring;
 import java.net.URI;
 import java.nio.file.Path;
 import lombok.Data;
+import lombok.ToString;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -26,6 +27,8 @@ public class DocToolkitProperties {
      * The absolute {@code /rs/convert} URL.
      */
     private URI convertEndpoint;
+    // Kept out of toString, so logging the properties does not expose it.
+    @ToString.Exclude
     private String accessKey;
   }
 
