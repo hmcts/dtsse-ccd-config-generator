@@ -43,7 +43,7 @@
 | Empty expected section page | PR1 | `EmptySectionPolicy.INCLUDE_PLACEHOLDER` |
 | PDF passthrough with validation, image conversion | PR1 | |
 | Office conversion through the shared Docmosis service | PR1 | `/rs/convert` |
-| Per-media-type extension model | PR1 | `BundlingExtension`, `DocumentHandler` |
+| Per-media-type extension model | PR1 | Now `PdfConverter` in document-conversion |
 | Typed failures naming documents; no partial bundle | PR1 | `BundleGenerationException` |
 | Limits (documents, bytes, pages) and render permit | PR1 | `BundleLimits`, `max-concurrent-renders` |
 | Structured logging, timings, meters | PR2 | |
