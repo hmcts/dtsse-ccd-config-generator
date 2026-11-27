@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.jackson;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assume.assumeTrue;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -9,9 +10,14 @@ import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.fasterxml.jackson.annotation.JsonValue;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.cfg.PackageVersion;
+import com.fasterxml.jackson.databind.deser.SettableBeanProperty;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.util.NameTransformer;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.List;
 import lombok.Builder;
 import lombok.Getter;
@@ -21,6 +27,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.context.annotation.ImportCandidates;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.http.converter.json.Jackson2ObjectMapperFactoryBean;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.config.CcdJacksonConfiguration;
 import uk.gov.hmcts.ccd.sdk.type.AddressGlobalUK;
@@ -123,8 +130,28 @@ public class UnwrappedPrefixModuleTest {
     new ApplicationContextRunner()
         .withConfiguration(AutoConfigurations.of(CcdJacksonConfiguration.class))
         .withBean("serviceMapper", ObjectMapper.class, () -> JsonMapper.builder().build())
-        .run(context -> assertThat(context.getBean(ObjectMapper.class).getRegisteredModuleIds())
-            .contains(UnwrappedPrefixModule.class.getName()));
+        .withBean("factoryMapper", Jackson2ObjectMapperFactoryBean.class, Jackson2ObjectMapperFactoryBean::new)
+        .run(context -> {
+          assertThat(context.getBean("serviceMapper", ObjectMapper.class).getRegisteredModuleIds())
+              .contains(UnwrappedPrefixModule.class.getName());
+          assertThat(context.getBean("factoryMapper", ObjectMapper.class).getRegisteredModuleIds())
+              .contains(UnwrappedPrefixModule.class.getName());
+        });
+  }
+
+  @Test
+  public void overridesTheMethodJacksonUnwrapsAPropertyWith() throws Exception {
+    assumeTrue(PackageVersion.VERSION.getMajorVersion() > 2 || PackageVersion.VERSION.getMinorVersion() >= 19);
+    Method jackson = SettableBeanProperty.class.getDeclaredMethod("unwrapped", NameTransformer.class);
+    assertThat(Modifier.isPublic(jackson.getModifiers())).isTrue();
+    assertThat(Modifier.isFinal(jackson.getModifiers())).isFalse();
+
+    for (Class<?> wrapper : List.of(UnwrappedPrefixModule.PrefixScopedProperty.class,
+        UnwrappedPrefixModule.PrefixScopedCreatorProperty.class)) {
+      Method override = wrapper.getDeclaredMethod("unwrapped", NameTransformer.class);
+      assertThat(override.getReturnType()).isEqualTo(jackson.getReturnType());
+      assertThat(Modifier.isPublic(override.getModifiers())).isTrue();
+    }
   }
 
   @Test
