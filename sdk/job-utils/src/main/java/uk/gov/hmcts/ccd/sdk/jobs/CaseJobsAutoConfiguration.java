@@ -108,7 +108,8 @@ public class CaseJobsAutoConfiguration {
       runs.forEach((job, runId) -> {
         try {
           runner.run(job, runId);
-        } catch (RuntimeException e) {
+        } catch (Throwable e) {
+          // Anything let out of the scheduled task would cancel it, silently, for good.
           log.error("Could not run {} run {}; trying again in {}", job.name(), runId, pollDelay, e);
         }
       });

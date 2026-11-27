@@ -101,10 +101,10 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import uk.gov.hmcts.divorce.bundling.BundlePublisher;
 import uk.gov.hmcts.divorce.bundling.CaseworkerCreateBundle;
 import uk.gov.hmcts.divorce.bundling.CaseworkerCreateBundleMissingDocument;
-import uk.gov.hmcts.divorce.bundling.DocmosisStubController;
-import uk.gov.hmcts.divorce.bundling.FixtureDocumentResolver;
+import uk.gov.hmcts.ccd.sdk.testing.DocmosisStubController;
 import uk.gov.hmcts.divorce.bundling.model.CaseBundle;
 import uk.gov.hmcts.divorce.callback.CallbackLoggingFilter;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
@@ -655,24 +655,23 @@ public class TestWithCCD extends CftlibTest {
         Map<String, Object> payload = mapper.readValue(responseBody, new TypeReference<>() {});
         @SuppressWarnings("unchecked")
         Map<String, Object> afterSubmit = (Map<String, Object>) payload.get("after_submit_callback_response");
-        assertThat(afterSubmit.get("confirmation_header"), equalTo("Hearing bundle created"));
+        assertThat(afterSubmit.get("confirmation_header"), equalTo("Hearing bundle requested"));
 
-        // The service's own bundle model, built from the SDK's result, is on the case.
-        var c = ccdApi.getCase(getAuthorisation(user), getServiceAuth(), String.valueOf(caseRef));
-        var caseData = mapper.readValue(mapper.writeValueAsString(c.getData()), CaseData.class);
-        assertThat(caseData.getCaseBundles(), hasSize(1));
-        CaseBundle bundle = caseData.getCaseBundles().get(0).getValue();
-        assertThat(bundle.getStitchStatus(), equalTo("DONE"));
+        // The event recorded the bundle as requested; the worker renders it in the background and the
+        // service's handler completes it with the stored PDF.
+        await().atMost(Duration.ofSeconds(60)).until(() -> "DONE".equals(caseBundles(user).get(0).getStitchStatus()));
+        List<CaseBundle> bundles = caseBundles(user);
+        assertThat(bundles, hasSize(1));
+        CaseBundle bundle = bundles.get(0);
         assertThat(bundle.getTitle(), equalTo(CaseworkerCreateBundle.BUNDLE_TITLE));
         assertThat(bundle.getFileName(), equalTo("case-" + caseRef + "-hearing-bundle.pdf"));
         assertThat(bundle.getDocuments(), hasSize(5));
         assertThat(bundle.getDocuments().get(0).getValue().getName(),
             equalTo(CaseworkerCreateBundle.POTENTIAL_ENERGY_TITLE));
-        assertThat(bundle.getDocuments().get(0).getValue().getStartPage(), greaterThan(1));
         String documentUrl = bundle.getStitchedDocument().getUrl();
         assertThat(bundle.getStitchedDocument().getBinaryUrl(), equalTo(documentUrl + "/binary"));
 
-        // The consumer uploaded through the real embedded CDAM and attached the document to the
+        // The toolkit uploaded through the real embedded CDAM and attached the document to the
         // case (case_id PATCHed onto the dm-store record), so it is not TTL-disposed.
         String documentId = documentUrl.substring(documentUrl.length() - 36);
         var storedDocument = stubDocumentStore.find(documentId).orElseThrow(
@@ -701,8 +700,8 @@ public class TestWithCCD extends CftlibTest {
                     CaseworkerCreateBundle.FLYING_PIG_TITLE,
                     // The office document went through the app's Docmosis stub.
                     "Stubbed Docmosis conversion of wordDocument2.docx",
-                    // The MP3 is a generated link page, never fetched.
-                    CaseworkerCreateBundle.HEARING_RECORDING_TITLE, "Media type: audio/mpeg",
+                    // The recording is a page the service wrote in HTML.
+                    CaseworkerCreateBundle.HEARING_RECORDING_TITLE, "Audio recording, 42 minutes.",
                     CaseworkerCreateBundle.HEARING_RECORDING_NOTE, CaseworkerCreateBundle.HEARING_RECORDING_URL,
                     // The expected-but-empty section renders the standard visible placeholder.
                     "There are no documents in this section.")) {
@@ -728,36 +727,86 @@ public class TestWithCCD extends CftlibTest {
         }
     }
 
+    @Order(36)
+    @Test
+    public void caseNotesDocumentFollowsEachNoteAddedThroughCcd() throws Exception {
+        String note = "Notes document check " + UUID.randomUUID();
+        var request = prepareEventRequest("TEST_CASE_WORKER_USER@mailinator.com", "caseworker-add-note",
+            Map.of("note", note));
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+        long revision = db.queryForObject("SELECT case_revision FROM ccd.case_data WHERE reference = :ref",
+            Map.of("ref", caseRef), Long.class);
+
+        // The event submitted the changed notes at its revision; the worker renders and stores them and hands them
+        // over with that revision.
+        String sqlAtRevision = "SELECT url FROM case_notes_documents WHERE reference = :ref AND case_revision = :revision";
+        Map<String, Object> atRevision = Map.of("ref", caseRef, "revision", revision);
+        await().atMost(Duration.ofSeconds(60)).until(() -> !db.queryForList(sqlAtRevision, atRevision).isEmpty());
+        String url = db.queryForObject(sqlAtRevision, atRevision, String.class);
+        // CDAM stored it against the case. Users read it only once case data refers to it, which this
+        // example leaves out, so check what reached the document store.
+        var stored = stubDocumentStore.find(url.substring(url.length() - 36)).orElseThrow();
+        assertThat(stored.metadata().get("case_id"), equalTo(String.valueOf(caseRef)));
+        try (PDDocument pdf = Loader.loadPDF(stored.content())) {
+            String text = new PDFTextStripper().getText(pdf);
+            assertThat(text, containsString("Case notes"));
+            assertThat(text, containsString(note));
+        }
+
+        // An event that leaves the notes as they are queues nothing.
+        int versions = db.queryForObject("SELECT count(*) FROM case_notes_documents WHERE reference = :ref",
+            Map.of("ref", caseRef), Integer.class);
+        var unchanged = prepareEventRequest("TEST_CASE_WORKER_USER@mailinator.com",
+            CaseworkerCreateBundle.CASEWORKER_CREATE_BUNDLE, Map.of());
+        assertThat(HttpClientBuilder.create().build().execute(unchanged).getStatusLine().getStatusCode(),
+            equalTo(201));
+        Thread.sleep(3000);
+        assertThat(db.queryForObject("SELECT count(*) FROM case_notes_documents WHERE reference = :ref",
+            Map.of("ref", caseRef), Integer.class), equalTo(versions));
+    }
+
     @Order(39)
     @Test
     public void createBundleWithMissingDocumentSurfacesErrorAndPublishesNothing() throws Exception {
         String user = "TEST_CASE_WORKER_USER@mailinator.com";
         String sqlCountByCase = "SELECT count(*) FROM case_bundles WHERE reference = :ref";
         Integer before = db.queryForObject(sqlCountByCase, Map.of("ref", caseRef), Integer.class);
-        int documentsBefore = stubDocumentStore.size();
+        String bundleFile = "case-" + caseRef + "-hearing-bundle.pdf";
+        // Only hearing bundles: notes documents render in the background while this runs.
+        long documentsBefore = stubDocumentStore.countNamed(bundleFile);
 
         var request = prepareEventRequest(
             user, CaseworkerCreateBundleMissingDocument.CASEWORKER_CREATE_BUNDLE_MISSING_DOC, Map.of());
         var response = HttpClientBuilder.create().build().execute(request);
         var responseBody = EntityUtils.toString(response.getEntity());
-        assertThat("bundle event should be rejected: " + responseBody,
-            response.getStatusLine().getStatusCode(), equalTo(422));
-        Map<String, Object> payload = mapper.readValue(responseBody, new TypeReference<>() {});
-        @SuppressWarnings("unchecked")
-        List<String> callbackErrors = (List<String>) payload.get("callbackErrors");
-        assertThat("the error should name the missing document and the typed reason",
-            callbackErrors, hasItem(allOf(
-                containsString("DOCUMENT_NOT_FOUND"),
-                containsString(CaseworkerCreateBundleMissingDocument.MISSING_DOCUMENT_ID),
-                containsString(FixtureDocumentResolver.PROVIDER))));
+        // The event succeeds: it only records the bundle and submits it.
+        assertThat("bundle event should succeed: " + responseBody,
+            response.getStatusLine().getStatusCode(), equalTo(201));
+        assertThat(before, greaterThan(0));
+        List<CaseBundle> bundles = caseBundles(user);
+        assertThat(bundles, hasSize(before + 1));
+        CaseBundle requested = bundles.get(bundles.size() - 1);
 
-        // Nothing was uploaded or recorded, and the earlier bundle is untouched.
-        assertThat(stubDocumentStore.size(), equalTo(documentsBefore));
-        assertThat(db.queryForObject(sqlCountByCase, Map.of("ref", caseRef), Integer.class), equalTo(before));
+        // The render then fails on the document CDAM cannot return: the service's handler is told, and
+        // marks the bundle failed; nothing is left queued.
+        await().atMost(Duration.ofSeconds(60)).until(() -> {
+            List<CaseBundle> now = caseBundles(user);
+            return "FAILED".equals(now.get(now.size() - 1).getStitchStatus());
+        });
+        assertThat(db.queryForObject("SELECT count(*) FROM bundling.doc_job WHERE case_reference = :ref AND job_key = :key",
+            Map.of("ref", caseRef, "key", BundlePublisher.KEY_PREFIX + requested.getId()), Integer.class), equalTo(0));
+
+        // Nothing was stored, and the earlier bundle is untouched.
+        assertThat(stubDocumentStore.countNamed(bundleFile), equalTo(documentsBefore));
+        assertThat(caseBundles(user).get(0).getStitchStatus(), equalTo("DONE"));
+    }
+
+    private List<CaseBundle> caseBundles(String user) throws Exception {
         var c = ccdApi.getCase(getAuthorisation(user), getServiceAuth(), String.valueOf(caseRef));
         var caseData = mapper.readValue(mapper.writeValueAsString(c.getData()), CaseData.class);
-        assertThat(caseData.getCaseBundles(), hasSize(before));
-        assertThat(before, greaterThan(0));
+        return caseData.getCaseBundles() == null ? List.of()
+            : caseData.getCaseBundles().stream().map(ListValue::getValue).toList();
     }
 
     private static List<String> collectBookmarkTitles(PDOutlineNode node) {

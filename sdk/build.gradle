@@ -26,7 +26,14 @@ def checkMigrationImmutability = tasks.register('checkMigrationImmutability') {
             standardOutput = stdout
         }
 
+        // A migration moved to another module with identical content and the same classpath
+        // location is unchanged as far as Flyway is concerned: same location, same checksum.
+        def unchangedMove = ~/^R100\t\S+?\/src\/main\/resources\/(\S+)\t\S+?\/src\/main\/resources\/(\S+)$/
         def changedExistingMigrations = stdout.toString('UTF-8').readLines().findAll { it.trim() }
+            .findAll { line ->
+                def move = line =~ unchangedMove
+                !(move.matches() && move.group(1) == move.group(2))
+            }
 
         if (!changedExistingMigrations.isEmpty()) {
             throw new GradleException(

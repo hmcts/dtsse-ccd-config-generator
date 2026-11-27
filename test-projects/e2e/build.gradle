@@ -6,7 +6,7 @@ plugins {
   id 'io.spring.dependency-management' version '1.1.7'
   id 'jacoco'
   id 'hmcts.ccd.sdk'
-  id 'com.github.hmcts.rse-cft-lib' version '0.19.2569'
+  id 'com.github.hmcts.rse-cft-lib' version '0.19.2526'
 }
 
 group = 'uk.gov.hmcts'
@@ -95,11 +95,12 @@ dependencies {
   implementation 'com.github.hmcts:service-auth-provider-java-client:6.1.2'
   testImplementation 'com.github.hmcts:ccd-data-migration-support'
   implementation 'com.github.hmcts:task-management'
+  implementation 'com.github.hmcts:doc-toolkit'
   implementation 'com.github.hmcts:job-utils'
-  implementation 'com.github.hmcts:document-bundling'
-  // Same PDFBox version as document-bundling: the Docmosis stub controller generates PDFs with it
-  // and the cftlibTest suite asserts semantically on stitched output.
-  implementation 'org.apache.pdfbox:pdfbox:3.0.8'
+  // The SDK's Docmosis stub, so local runs and the cftlib suite convert office documents
+  // without the shared service.
+  cftlibImplementation 'com.github.hmcts:ccd-sdk-test-support'
+  cftlibTestImplementation 'com.github.hmcts:ccd-sdk-test-support'
 
   implementation 'com.github.ben-manes.caffeine:caffeine:3.3.1'
   implementation 'com.google.guava:guava:33.7.2-jre'
@@ -128,7 +129,7 @@ dependencies {
   cftlibTestImplementation 'org.junit.platform:junit-platform-console'
   cftlibTestImplementation 'jakarta.jms:jakarta.jms-api:3.1.0'
   cftlibTestImplementation 'com.github.hmcts:task-management'
-  cftlibTestImplementation 'com.github.hmcts:document-bundling'
+  cftlibTestImplementation 'com.github.hmcts:doc-toolkit'
   cftlibTestImplementation 'org.apache.pdfbox:pdfbox:3.0.8'
 }
 
