@@ -20,8 +20,8 @@ import java.util.regex.Pattern;
 /**
  * Answers the platform identity calls an application makes while handling an event, from the
  * actors test support registers, and passes every other request to the application's own client:
- * IDAM user info for the caller's token, an S2S lease, role assignments (none) and the caller's
- * case roles from CCD (none).
+ * IDAM user info for the caller's token, an IDAM sign-in (the default test user's token, as for a
+ * system user), an S2S lease, role assignments (none) and the caller's case roles from CCD (none).
  */
 final class TestIdentityClient implements Client {
 
@@ -43,6 +43,11 @@ final class TestIdentityClient implements Client {
     boolean get = request.httpMethod() == Request.HttpMethod.GET;
     if (get && path.endsWith("/o/userinfo")) {
       return userInfo(request);
+    }
+    if (request.httpMethod() == Request.HttpMethod.POST && path.endsWith("/o/token")) {
+      return respond(request, 200, "application/json", JSON.writeValueAsString(Map.of(
+          "access_token", TestIdamService.DEFAULT_TOKEN.substring("Bearer ".length()),
+          "token_type", "Bearer", "expires_in", 28800)));
     }
     if (request.httpMethod() == Request.HttpMethod.POST && path.endsWith("/lease")) {
       return respond(request, 200, "text/plain", serviceToken());

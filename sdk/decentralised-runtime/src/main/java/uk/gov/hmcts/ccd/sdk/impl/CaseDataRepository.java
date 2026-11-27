@@ -118,6 +118,15 @@ class CaseDataRepository {
 
   @SneakyThrows
   long upsertCase(DecentralisedCaseEvent event, Optional<JsonNode> dataUpdate) {
+    return upsert(event, dataUpdate).id();
+  }
+
+  /** The case row an upsert wrote: its id and the revision it now has. */
+  record Upserted(long id, long revision) {
+  }
+
+  /** Writes the case row, returning its id and the revision the write gave it. */
+  Upserted upsert(DecentralisedCaseEvent event, Optional<JsonNode> dataUpdate) {
     final String sql = """
         insert into ccd.case_data (
             last_modified,
@@ -185,7 +194,7 @@ class CaseDataRepository {
                    (case_data.supplementary_data || :enforced_supplementary_data::jsonb)
                  and case_data.security_classification is not distinct from excluded.security_classification
                )
-            returning id;
+            returning id, case_revision;
         """;
 
     Map<String, Object> params = new HashMap<>();
@@ -203,7 +212,8 @@ class CaseDataRepository {
         serialiseEnforcedSupplementaryData(event.getCaseDetails().getCaseTypeId()));
 
     try {
-      return ndb.queryForObject(sql, params, Long.class);
+      return ndb.queryForObject(sql, params,
+          (rs, row) -> new Upserted(rs.getLong("id"), rs.getLong("case_revision")));
     } catch (EmptyResultDataAccessException e) {
       try {
         logConcurrentUpdate(event);

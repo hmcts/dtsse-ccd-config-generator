@@ -73,6 +73,11 @@ public class StubDocumentStore {
         return documents.size();
     }
 
+    /** The stored documents with this file name. */
+    public long countNamed(final String fileName) {
+        return documents.values().stream().filter(document -> fileName.equals(document.fileName())).count();
+    }
+
     public Optional<StoredDocument> find(final String id) {
         try {
             return Optional.ofNullable(documents.get(UUID.fromString(id)));
