@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import uk.gov.hmcts.ccd.sdk.SystemEventExecutionResult;
 import uk.gov.hmcts.ccd.sdk.SystemEventExecutor;
 import uk.gov.hmcts.ccd.sdk.SystemEventResult;
 
@@ -35,19 +36,23 @@ public class CaseJobRunner {
   }
 
   /**
-   * Carries the run on, unless another instance holds it or it has finished or failed. Returns when
-   * it finishes, fails, is taken over, or {@link #stop} is called.
+   * Carries the run on, unless another instance holds it or it has finished. Returns when it
+   * finishes, a case fails, it is taken over, or {@link #stop} is called.
    */
   public void run(CaseJob job, String runId) {
+    if (stopping) {
+      return;
+    }
     jdbc.update("""
         insert into job_utils.case_job_run (job_name, run_id) values (:job, :run)
         on conflict do nothing
         """, Map.of("job", job.name(), "run", runId));
     List<Held> claimed = jdbc.query("""
         update job_utils.case_job_run
-           set lease_token = gen_random_uuid(), lease_until = now() + :lease * interval '1 second'
-         where job_name = :job and run_id = :run and finished_at is null and failed_at is null
-           and (lease_until is null or lease_until < now())
+           set lease_token = gen_random_uuid(),
+               lease_until = clock_timestamp() + :lease * interval '1 second'
+         where job_name = :job and run_id = :run and finished_at is null
+           and (lease_until is null or lease_until < clock_timestamp())
         returning lease_token, last_reference
         """, Map.of("job", job.name(), "run", runId, "lease", lease.toSeconds()),
         (rs, row) -> new Held(job, runId, rs.getObject("lease_token", UUID.class),
@@ -89,11 +94,13 @@ public class CaseJobRunner {
         } catch (NotHeld e) {
           log.warn("{} run {} was taken over by another instance", held.job.name(), held.runId);
           return;
-        } catch (RuntimeException e) {
-          log.error("{} run {} failed at case {}; it stops here, and a new run id runs the job"
-              + " again", held.job.name(), held.runId, reference, e);
-          end(held, "failed_at = now(), failed_reference = :case, failure = :failure",
-              Map.of("case", reference, "failure", e.toString()));
+        } catch (RuntimeException | Error e) {
+          // Nothing for this case was committed. The run carries on from it at the next try, so a
+          // passing failure costs a minute and a lasting one is retried until the job is fixed.
+          log.error("{} run {} failed at case {}; it carries on from there at the next try",
+              held.job.name(), held.runId, reference, e);
+          end(held, "lease_until = null, failed_at = now(), failed_reference = :case,"
+              + " failure = :failure", Map.of("case", reference, "failure", describe(e)));
           return;
         }
         after = reference;
@@ -103,26 +110,22 @@ public class CaseJobRunner {
   }
 
   private void apply(Held held, long reference) {
-    // A case deleted since its batch was read, such as by retention, is passed over.
-    if (!exists(reference)) {
-      record(held, reference, false);
-      return;
-    }
     // The same each time this run applies the job to this case. Recording the case as done with its
     // event already stops it being done twice; the key makes sure of it.
     UUID idempotencyKey = UUID.nameUUIDFromBytes(
         ("job-utils:" + held.job.name() + ":" + held.runId + ":" + reference)
             .getBytes(StandardCharsets.UTF_8));
+    SystemEventExecutionResult result;
     try {
       // Everything here is in the event's transaction: the job's writes, the event and the case
       // recorded as done commit together. Recording checks this instance still holds the run, and
       // locks the run until the event commits, so an instance that lost it commits nothing.
-      systemEvents.execute(reference, idempotencyKey, context -> {
+      result = systemEvents.execute(reference, idempotencyKey, context -> {
         if (!held.job.apply(new CaseMetadata(context.caseReference(), context.caseTypeId(),
             context.currentState())).wasApplied()) {
           throw new Skipped();
         }
-        record(held, reference, true);
+        record(held, reference, 1, 0);
         return SystemEventResult.withoutStateTransition(held.job.name(), held.job.name(),
             "Run " + held.runId);
       });
@@ -130,31 +133,52 @@ public class CaseJobRunner {
       if (thrown(e, NotHeld.class)) {
         throw new NotHeld();
       }
-      // Deleted after the check above but before the event locked it: passed over too.
-      if (!thrown(e, Skipped.class) && exists(reference)) {
+      // A case deleted since its batch was read, such as by retention, is passed over.
+      if (!thrown(e, Skipped.class) && exists(reference, e)) {
         throw e;
       }
       // Nothing was committed, so if this instance stops before recording the skip, deciding
       // again is harmless.
-      record(held, reference, false);
+      record(held, reference, 0, 1);
+      return;
+    }
+    if (result.outcome() == SystemEventExecutionResult.Outcome.REPLAYED) {
+      // Done before, and counted then: only the position moves on.
+      record(held, reference, 0, 0);
     }
   }
 
-  private boolean exists(long reference) {
-    return !jdbc.queryForList("select 1 from ccd.case_data where reference = :case",
-        Map.of("case", reference), Integer.class).isEmpty();
+  /** Whether the case exists; a failure to find out is added to the case's own failure. */
+  private boolean exists(long reference, RuntimeException failure) {
+    try {
+      return !jdbc.queryForList("select 1 from ccd.case_data where reference = :case",
+          Map.of("case", reference), Integer.class).isEmpty();
+    } catch (RuntimeException e) {
+      failure.addSuppressed(e);
+      return true;
+    }
+  }
+
+  /** The failure and each cause, for the run's row. */
+  private static String describe(Throwable e) {
+    StringBuilder description = new StringBuilder(String.valueOf(e));
+    for (Throwable cause = e.getCause(); cause != null && cause != e; cause = cause.getCause()) {
+      description.append("; caused by ").append(cause);
+    }
+    return description.toString();
   }
 
   /** Records the case as done and renews the lease, if this instance still holds the run. */
-  private void record(Held held, long reference, boolean applied) {
+  private void record(Held held, long reference, int applied, int skipped) {
+    // clock_timestamp(), not now(): inside an event's transaction now() is when the case began.
     int recorded = jdbc.update("""
         update job_utils.case_job_run
            set last_reference = greatest(last_reference, :case),
-               lease_until = now() + :lease * interval '1 second',
-               applied = applied + :applied, skipped = skipped + 1 - :applied
+               lease_until = clock_timestamp() + :lease * interval '1 second',
+               applied = applied + :applied, skipped = skipped + :skipped
          where job_name = :job and run_id = :run and lease_token = :token
         """, Map.of("case", reference, "lease", lease.toSeconds(), "job", held.job.name(),
-        "run", held.runId, "token", held.token, "applied", applied ? 1 : 0));
+        "run", held.runId, "token", held.token, "applied", applied, "skipped", skipped));
     if (recorded != 1) {
       throw new NotHeld();
     }
