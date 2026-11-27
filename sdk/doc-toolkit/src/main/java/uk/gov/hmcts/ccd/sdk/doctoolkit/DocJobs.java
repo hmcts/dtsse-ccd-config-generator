@@ -50,12 +50,14 @@ public final class DocJobs {
    * row. The case lock orders submissions, and the queued job rolls back with the event.
    * The worker passes the event's revision to the handler as {@link DocJob#caseRevision()}.
    *
+   * @return whether this queued a render: false when the request is the same as the one last
+   *     handed to the service or the one already pending, so the document needs nothing doing
    * @throws IllegalArgumentException if the request holds a local file, which a worker elsewhere
    *     cannot read; use {@link DocSource#bytes} or CDAM
    * @throws IllegalStateException if the request is over 10 MiB; put large content in CDAM
    * @throws org.springframework.dao.DataIntegrityViolationException if the case does not exist
    */
-  public void submit(long caseReference, String key, PdfRequest request) {
+  public boolean submit(long caseReference, String key, PdfRequest request) {
     Validate.requireNonBlank(key, "key");
     String json = DocRequestJson.write(Validate.requireNonNull(request, "request"));
     int size = json.getBytes(StandardCharsets.UTF_8).length;
@@ -64,8 +66,10 @@ public final class DocJobs {
           + " is " + size + " bytes, over " + MAX_REQUEST_BYTES
           + ": put large content in CDAM rather than inline");
     }
-    if (repository.submit(caseReference, key, json)) {
+    boolean queued = repository.submit(caseReference, key, json);
+    if (queued) {
       log.info("Case {} {} changed; render queued", caseReference, key);
     }
+    return queued;
   }
 }

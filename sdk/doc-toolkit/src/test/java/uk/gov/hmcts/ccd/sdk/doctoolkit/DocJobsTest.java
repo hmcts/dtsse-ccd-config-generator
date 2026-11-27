@@ -128,11 +128,14 @@ class DocJobsTest {
 
   @Test
   void anUnchangedRequestQueuesNothing() {
-    submit(bundleOf("one-page.pdf"));
+    assertThat(submit(bundleOf("one-page.pdf"))).isTrue();
+    // The same as the request pending.
+    assertThat(submit(bundleOf("one-page.pdf"))).isFalse();
     runUntil(this::idle);
 
-    submit(bundleOf("one-page.pdf"));
-    submit(bundleOf("one-page.pdf"));
+    // The same as the document handed over.
+    assertThat(submit(bundleOf("one-page.pdf"))).isFalse();
+    assertThat(submit(bundleOf("one-page.pdf"))).isFalse();
 
     assertThat(pending()).isEmpty();
     worker.poll();
@@ -523,8 +526,8 @@ class DocJobsTest {
   }
 
   /** Submits as a case event would, in its own transaction. */
-  private void submit(PdfRequest request) {
-    tx.executeWithoutResult(status -> jobs.submit(CASE, KEY, request));
+  private boolean submit(PdfRequest request) {
+    return Boolean.TRUE.equals(tx.execute(status -> jobs.submit(CASE, KEY, request)));
   }
 
   private record PendingRow(long caseRevision, int attempts, boolean leased) {
