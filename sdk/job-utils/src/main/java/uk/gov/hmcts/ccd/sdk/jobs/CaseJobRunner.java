@@ -9,7 +9,6 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import uk.gov.hmcts.ccd.sdk.SystemEventExecutionResult;
 import uk.gov.hmcts.ccd.sdk.SystemEventExecutor;
 import uk.gov.hmcts.ccd.sdk.SystemEventResult;
 
@@ -109,16 +108,16 @@ public class CaseJobRunner {
       record(held, reference, false);
       return;
     }
-    // The same each time this run applies the job to this case, so the event happens once.
+    // The same each time this run applies the job to this case. Recording the case as done with its
+    // event already stops it being done twice; the key makes sure of it.
     UUID idempotencyKey = UUID.nameUUIDFromBytes(
         ("job-utils:" + held.job.name() + ":" + held.runId + ":" + reference)
             .getBytes(StandardCharsets.UTF_8));
-    SystemEventExecutionResult result;
     try {
       // Everything here is in the event's transaction: the job's writes, the event and the case
       // recorded as done commit together. Recording checks this instance still holds the run, and
       // locks the run until the event commits, so an instance that lost it commits nothing.
-      result = systemEvents.execute(reference, idempotencyKey, context -> {
+      systemEvents.execute(reference, idempotencyKey, context -> {
         if (!held.job.apply(new CaseMetadata(context.caseReference(), context.caseTypeId(),
             context.currentState())).wasApplied()) {
           throw new Skipped();
@@ -138,11 +137,6 @@ public class CaseJobRunner {
       // Nothing was committed, so if this instance stops before recording the skip, deciding
       // again is harmless.
       record(held, reference, false);
-      return;
-    }
-    if (result.outcome() == SystemEventExecutionResult.Outcome.REPLAYED) {
-      // The event committed earlier, so the case was recorded as done with it.
-      record(held, reference, true);
     }
   }
 
