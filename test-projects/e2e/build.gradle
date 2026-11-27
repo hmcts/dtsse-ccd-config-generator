@@ -96,6 +96,7 @@ dependencies {
   testImplementation 'com.github.hmcts:ccd-data-migration-support'
   implementation 'com.github.hmcts:task-management'
   implementation 'com.github.hmcts:doc-toolkit'
+  implementation 'com.github.hmcts:job-utils'
   // The SDK's Docmosis stub, so local runs and the cftlib suite convert office documents
   // without the shared service.
   cftlibImplementation 'com.github.hmcts:ccd-sdk-test-support'
