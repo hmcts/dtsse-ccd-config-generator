@@ -83,7 +83,11 @@ reason printed on it. The result lists it in `missingDocuments()`: the document 
 technical `code` and `detail`, and the placeholder's start page. The outcome is
 `COMPLETED_WITH_WARNINGS` with a `DOCUMENT_MISSING` warning per document. Request-level problems
 (limits, an unregistered provider, an invalid request, an office document with no Docmosis
-configured) still fail the render.
+configured) still fail the render. So does a document the service may not read
+(`ResolutionFailureReason.ACCESS_DENIED`, failing as `DOCUMENT_ACCESS_DENIED`) or a provider
+rejecting the service's own credentials (`CREDENTIALS_REJECTED`, e.g. a CDAM 401): bundling runs
+as a system process, so these are faults to fix, never placeholders. A durable job retries
+`CREDENTIALS_REJECTED` in case a token expired, but not `DOCUMENT_ACCESS_DENIED`.
 
 A source that is only temporarily unavailable (a timeout, a 5xx, a Docmosis outage) should not
 end up as a placeholder if a retry would fetch it. `render(request, context, RenderAttempt.RETRYABLE)`

@@ -11,8 +11,11 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
@@ -23,6 +26,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeAll;
@@ -54,10 +58,16 @@ import uk.gov.hmcts.ccd.sdk.bundling.api.BundleStage;
 import uk.gov.hmcts.ccd.sdk.bundling.api.BundleWarning;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentFailure;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentReference;
+import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResolver;
 import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResult;
 import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocument;
+import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocumentPolicy;
 import uk.gov.hmcts.ccd.sdk.bundling.api.MissingDocumentReason;
 import uk.gov.hmcts.ccd.sdk.bundling.api.RenderAttempt;
+import uk.gov.hmcts.ccd.sdk.bundling.api.ResolutionFailure;
+import uk.gov.hmcts.ccd.sdk.bundling.api.ResolutionFailureReason;
+import uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocument;
+import uk.gov.hmcts.ccd.sdk.bundling.api.ResolvedDocuments;
 import uk.gov.hmcts.ccd.sdk.config.DecentralisedFlywayAutoConfiguration;
 
 @Testcontainers
@@ -591,6 +601,126 @@ class BundleJobOutboxIntegrationTest {
 
     assertThat(renderer.attempts).containsExactly(RenderAttempt.RETRYABLE, RenderAttempt.FINAL);
     assertThat(job(id).state()).isEqualTo(BundleJobState.COMPLETED);
+  }
+
+  @Test
+  void aDocumentTheServiceMayNotReadFailsTheJobKeepingThePreviousBundleAndIsNotReRun() {
+    String key = "case-7:bundle";
+    AtomicReference<ResolutionFailureReason> refusal = new AtomicReference<>();
+    List<String> completed = new CopyOnWriteArrayList<>();
+    BundleJobWorker worker = new BundleJobWorker(repository,
+        BundleRenderer.builder().resolver(refusingResolver(refusal)).tempDirectory(tempDir).build(),
+        placeholderSelector(), (job, jobContext, request, result) -> {
+          completed.add(job.externalId().toString());
+          return Map.of();
+        },
+        new BundleJobRetryPolicy(2, Duration.ofMillis(1), 2.0, Duration.ofMillis(2), Duration.ofMinutes(15), 2),
+        List.of(), Runnable::run, 5, 5, Duration.ofMinutes(5));
+    UUID published = service.submitCoalesced(key, Map.of(), CONTEXT).externalId();
+    worker.poll();
+    assertThat(job(published).state()).isEqualTo(BundleJobState.COMPLETED);
+
+    // A 401 is retried in case the token expired mid-request, then fails the job.
+    refusal.set(ResolutionFailureReason.CREDENTIALS_REJECTED);
+    UUID unauthorised = service.submitCoalesced(key, Map.of(), CONTEXT).externalId();
+    worker.poll();
+    assertThat(job(unauthorised).state()).isEqualTo(BundleJobState.QUEUED);
+    await().atMost(Duration.ofSeconds(5)).until(() -> {
+      worker.poll();
+      return job(unauthorised).state().terminal();
+    });
+    assertRefused(key, unauthorised, BundleErrorCode.CREDENTIALS_REJECTED, published);
+
+    // A 403 fails the job on its first attempt.
+    refusal.set(ResolutionFailureReason.ACCESS_DENIED);
+    UUID forbidden = service.submitCoalesced(key, Map.of(), CONTEXT).externalId();
+    worker.poll();
+    assertThat(job(forbidden).attempts()).isEqualTo(1);
+    assertRefused(key, forbidden, BundleErrorCode.DOCUMENT_ACCESS_DENIED, published);
+    assertThat(completed).containsExactly(published.toString());
+  }
+
+  private static void assertRefused(String key, UUID id, BundleErrorCode code, UUID published) {
+    BundleJob failed = job(id);
+    assertThat(failed.state()).isEqualTo(BundleJobState.FAILED);
+    assertThat(failed.failure().orElseThrow().code()).isEqualTo(code);
+    assertThat(failed.failure().orElseThrow().documentFailures()).extracting(DocumentFailure::documentId)
+        .containsExactly("doc-refused");
+    assertThat(service.findBundleForJob(id)).isEmpty();
+    assertThat(service.findLatestBundle(key).orElseThrow().jobId()).as("the previous bundle stays current")
+        .isEqualTo(published);
+    assertThat(jdbc.queryForObject("select count(*) from bundling.bundle_job where coalesce_key = :key "
+        + "and state = 'QUEUED'", Map.of("key", key), Integer.class)).as("no re-run is queued").isZero();
+  }
+
+  private static BundleDocumentSelector placeholderSelector() {
+    return context -> BundleRequest.builder().externalId(context.externalId())
+        .title("Selected at execution").fileName("selected.pdf")
+        .missingDocuments(MissingDocumentPolicy.PLACEHOLDER)
+        .root(BundleSection.builder("Case file").document(document("doc-kept"))
+            .document(document("doc-refused")).document(document("doc-also-kept")).build())
+        .build();
+  }
+
+  // Serves a one-page PDF for every reference, except doc-refused while a refusal is set.
+  private static DocumentResolver refusingResolver(AtomicReference<ResolutionFailureReason> refusal) {
+    byte[] pdf;
+    try (InputStream in = BundleJobOutboxIntegrationTest.class
+        .getResourceAsStream("/fixtures/em-stitching/one-page.pdf")) {
+      pdf = in.readAllBytes();
+    } catch (java.io.IOException e) {
+      throw new java.io.UncheckedIOException(e);
+    }
+    return new DocumentResolver() {
+      @Override
+      public String provider() {
+        return "case-documents";
+      }
+
+      @Override
+      public ResolvedDocuments resolveAll(List<DocumentReference> references,
+          BundleExecutionContext context) {
+        Map<DocumentReference, ResolvedDocument> resolved = new LinkedHashMap<>();
+        Map<DocumentReference, ResolutionFailure> failed = new LinkedHashMap<>();
+        for (DocumentReference reference : references) {
+          if (reference.id().equals("doc-refused") && refusal.get() != null) {
+            failed.put(reference, new ResolutionFailure(refusal.get(), "refused"));
+          } else {
+            resolved.put(reference, new ResolvedDocument() {
+              @Override
+              public InputStream content() {
+                return new ByteArrayInputStream(pdf);
+              }
+
+              @Override
+              public String mediaType() {
+                return "application/pdf";
+              }
+
+              @Override
+              public String fileName() {
+                return reference.id() + ".pdf";
+              }
+
+              @Override
+              public OptionalLong contentLength() {
+                return OptionalLong.of(pdf.length);
+              }
+
+              @Override
+              public Optional<String> checksum() {
+                return Optional.empty();
+              }
+
+              @Override
+              public void close() {
+              }
+            });
+          }
+        }
+        return new ResolvedDocuments(resolved, failed);
+      }
+    };
   }
 
   private BundleJob queued(String coalesceKey) {

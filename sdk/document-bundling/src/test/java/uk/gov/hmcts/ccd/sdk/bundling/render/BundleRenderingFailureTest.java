@@ -104,7 +104,7 @@ class BundleRenderingFailureTest {
     BundleGenerationException failure = expectFailure(
         request(doc("d1", "Fine", "good"), doc("d2", "Missing", "missing"), doc("d3", "Denied", "denied"),
             doc("d4", "Flaky", "flaky")),
-        BundleErrorCode.DOCUMENT_RESOLUTION_FAILED, BundleStage.RESOLVE);
+        BundleErrorCode.DOCUMENT_ACCESS_DENIED, BundleStage.RESOLVE);
 
     assertThat(failure.documentFailures()).extracting(DocumentFailure::documentId).containsExactly("d2", "d3", "d4");
     assertThat(failure.documentFailures()).extracting(DocumentFailure::code)
