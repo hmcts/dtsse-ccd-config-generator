@@ -29,6 +29,7 @@ import uk.gov.hmcts.ccd.sdk.doctoolkit.DocToolkitException;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfRequest;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfResult;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.UploadedDoc;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.cdam.CdamSystemUserTokenProvider;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.convert.testsupport.Fixtures;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.convert.testsupport.StubDocmosis;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.docmosis.DocmosisRenderService;
@@ -140,6 +141,24 @@ class DocToolkitAutoConfigurationTest {
             assertThat(result.pageCount()).isEqualTo(1);
           }
           assertThat(cdam.fetchedAs).containsExactly("Bearer system-user:secret Bearer service");
+        });
+  }
+
+  @Test
+  void cdamCanUseTheApplicationsOwnSystemUserToken() {
+    FakeCdam cdam = new FakeCdam();
+    UUID id = cdam.store(fixture("one-page.pdf"), "application/pdf", "one-page.pdf");
+    runner.withBean(CaseDocumentClientApi.class, () -> cdam)
+        .withBean(AuthTokenGenerator.class, () -> () -> "Bearer service")
+        .withBean(JdbcTemplate.class,
+            () -> new JdbcTemplate(new DriverManagerDataSource("jdbc:unused")))
+        .withBean(CdamSystemUserTokenProvider.class, () -> () -> "Bearer application-user")
+        .run(context -> {
+          try (PdfResult result = context.getBean(DocToolkit.class)
+              .render(single(DocSource.cdam(id)))) {
+            assertThat(result.pageCount()).isEqualTo(1);
+          }
+          assertThat(cdam.fetchedAs).containsExactly("Bearer application-user Bearer service");
         });
   }
 
