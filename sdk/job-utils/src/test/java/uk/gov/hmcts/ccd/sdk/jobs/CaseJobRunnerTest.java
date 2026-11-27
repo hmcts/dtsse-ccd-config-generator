@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.LongConsumer;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeAll;
@@ -19,6 +20,7 @@ import org.springframework.core.env.SystemEnvironmentPropertySource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -138,12 +140,44 @@ class CaseJobRunnerTest {
     runner.run(new Job(checkLock), "1");
     runner.run(new Job(checkLock) {
       @Override
-      public boolean lockCase() {
-        return false;
+      public ApplyIn applyIn() {
+        return ApplyIn.TRANSACTION;
       }
     }, "2");
 
     assertThat(locked).containsExactly(true, true, true, false, false, false);
+  }
+
+  @Test
+  void aJobThatRunsSystemEventsIsAppliedOutsideATransactionWithAKeyForEachCaseAndRun() {
+    List<Boolean> inTransaction = new ArrayList<>();
+    List<UUID> keys = new ArrayList<>();
+    class OwnTransactions extends Job {
+      OwnTransactions() {
+        super(reference -> inTransaction.add(TransactionSynchronizationManager.isActualTransactionActive()));
+      }
+
+      @Override
+      public ApplyIn applyIn() {
+        return ApplyIn.NO_TRANSACTION;
+      }
+
+      @Override
+      public CaseJobOutcome apply(CaseMetadata metadata) {
+        keys.add(metadata.idempotencyKey());
+        return super.apply(metadata);
+      }
+    }
+
+    runner.run(new OwnTransactions(), "1");
+    jdbc.update("truncate job_utils.case_job_run", Map.of());
+    runner.run(new OwnTransactions(), "1");
+    runner.run(new OwnTransactions(), "2");
+
+    assertThat(inTransaction).containsOnly(false).hasSize(9);
+    // Applied again in the same run, a case gets the same key; in another run, a new one.
+    assertThat(keys.subList(0, 3)).doesNotHaveDuplicates().isEqualTo(keys.subList(3, 6));
+    assertThat(keys.subList(6, 9)).doesNotContainAnyElementsOf(keys.subList(0, 3));
   }
 
   @Test

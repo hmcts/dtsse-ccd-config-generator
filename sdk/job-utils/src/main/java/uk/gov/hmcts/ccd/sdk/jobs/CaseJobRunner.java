@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.jobs;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
@@ -83,7 +84,11 @@ public class CaseJobRunner {
           break;
         }
         try {
-          tx.executeWithoutResult(status -> apply(held, reference));
+          if (held.job.applyIn() == CaseJob.ApplyIn.NO_TRANSACTION) {
+            apply(held, reference);
+          } else {
+            tx.executeWithoutResult(status -> apply(held, reference));
+          }
         } catch (NotHeld e) {
           log.warn("{} run {} was taken over by another instance", held.job.name(), held.runId);
           return;
@@ -101,12 +106,16 @@ public class CaseJobRunner {
   }
 
   private void apply(Held held, long reference) {
+    boolean lock = held.job.applyIn() == CaseJob.ApplyIn.LOCKED_TRANSACTION;
+    UUID idempotencyKey = UUID.nameUUIDFromBytes(
+        ("job-utils:" + held.job.name() + ":" + held.runId + ":" + reference)
+            .getBytes(StandardCharsets.UTF_8));
     List<CaseMetadata> found = jdbc.query("""
         select reference, case_type_id, state, case_revision from ccd.case_data
          where reference = :case
-        """ + (held.job.lockCase() ? " for update" : ""), Map.of("case", reference),
+        """ + (lock ? " for update" : ""), Map.of("case", reference),
         (rs, row) -> new CaseMetadata(rs.getLong("reference"), rs.getString("case_type_id"),
-            rs.getString("state"), rs.getLong("case_revision")));
+            rs.getString("state"), rs.getLong("case_revision"), idempotencyKey));
     // A case deleted since its batch was read is passed over.
     boolean applied = !found.isEmpty() && held.job.apply(found.getFirst()).wasApplied();
     int recorded = jdbc.update("""
