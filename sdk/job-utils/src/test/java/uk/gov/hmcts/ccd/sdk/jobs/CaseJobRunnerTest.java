@@ -139,14 +139,33 @@ class CaseJobRunnerTest {
   }
 
   @Test
-  void aRunTakenOverByAnotherInstanceStops() {
+  void anotherInstanceCannotTakeTheRunWhileACaseIsBeingDone() {
+    List<Boolean> takenOver = new ArrayList<>();
     runner.run(new Job(reference -> {
-      if (reference == 1) {
+      try (var other = dataSource.getConnection(); var statement = other.createStatement()) {
+        statement.execute("set lock_timeout = '100ms'");
+        statement.execute("update job_utils.case_job_run set lease_token = gen_random_uuid()");
+        takenOver.add(true);
+      } catch (SQLException e) {
+        takenOver.add(false);
+      }
+    }), "1");
+
+    assertThat(takenOver).containsOnly(false);
+    assertThat(done()).containsExactly(1L, 3L);
+  }
+
+  @Test
+  void anInstanceThatLostTheRunCommitsNothingForTheCaseItWasOn() {
+    runner.run(new Job(reference -> {
+      if (reference == 3) {
         jdbc.getJdbcTemplate().execute("update job_utils.case_job_run set lease_token = gen_random_uuid()");
       }
     }), "1");
 
+    // Case 3's note, event and its recording as done were rolled back together.
     assertThat(done()).containsExactly(1L);
+    assertThat(jdbc.queryForList("select reference from events", Map.of(), Long.class)).containsExactly(1L);
   }
 
   @Test

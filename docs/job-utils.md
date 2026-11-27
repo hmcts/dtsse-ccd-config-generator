@@ -37,8 +37,9 @@ CCD_JOBS_RUN_BACKFILL_CASE_BUNDLES: "2026-11-27"
 - The application needs a system user (`ccd.decentralised-runtime.system-user.id`) to run a job.
 - One instance runs a run at a time, on a background thread. Every minute each instance tries to
   pick up a run that is not finished, so one whose instance went away is carried on by another.
-  Each case's event has an idempotency key for the run and case, so a case done again after an
-  instance stopped is not changed twice.
+  A case is recorded as done in its event's transaction, so the job's writes, the event and the
+  record commit together, and only while the instance holds the run: one that has lost it commits
+  nothing. Each event also has an idempotency key for the run and case.
 - Cases of the job's case types are taken in reference order. Cases created during a run are
   included only if their reference is after the case the run has reached.
 - The run counts the cases applied and skipped, and logs them when it finishes.
