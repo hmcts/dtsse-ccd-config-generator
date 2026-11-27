@@ -36,9 +36,14 @@ ccd:
         max-concurrent-renders: 2
 ```
 
-The toolkit signs the system user in through the service's `IdamClient` and reuses the token for
-half an hour. CDAM also needs the service's `CaseDocumentClientApi` and `AuthTokenGenerator`
-beans; without them, or without `system-user`, CDAM documents fail as `NOT_CONFIGURED`.
+By default, the toolkit signs the configured system user in through the service's `IdamClient`
+and reuses the token for half an hour. A service can provide a
+`CdamSystemUserTokenProvider` bean from `uk.gov.hmcts.ccd.sdk.doctoolkit.cdam` to reuse its own
+login. The bean returns the full `Bearer …` header and takes precedence over the `system-user`
+settings.
+
+CDAM also requires `CaseDocumentClientApi`, `AuthTokenGenerator` and `JdbcTemplate` beans.
+CDAM documents fail as `NOT_CONFIGURED` if these beans or a system-user login are unavailable.
 
 ## Requests
 

@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.doctoolkit.spring;
 
 import java.nio.file.Path;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -8,6 +9,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.DocToolkit;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.cdam.CdamSystemUserTokenProvider;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.cdam.IdamSystemUser;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.cdam.JdbcCaseLocator;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.docmosis.DocmosisConnection;
@@ -24,10 +26,8 @@ import uk.gov.hmcts.reform.idam.client.IdamClient;
  *   <li>Office formats are converted through Docmosis when
  *       {@code ccd.doc-toolkit.docmosis.convert-endpoint} and {@code access-key} are set, or
  *       through the application's own {@link DocmosisRenderService} bean.</li>
- *   <li>CDAM documents are fetched, and results uploaded, as the IDAM user in
- *       {@code ccd.doc-toolkit.system-user.username} and {@code password}, when they are set and
- *       the application has a {@link CaseDocumentClientApi}, an {@link AuthTokenGenerator} and an
- *       {@link IdamClient}.</li>
+ *   <li>CDAM documents are fetched, and results uploaded, using the application's
+ *       {@link CdamSystemUserTokenProvider} or the configured IDAM system user.</li>
  * </ul>
  */
 @AutoConfiguration
@@ -40,6 +40,7 @@ public class DocToolkitAutoConfiguration {
       ObjectProvider<DocmosisRenderService> docmosis,
       ObjectProvider<CaseDocumentClientApi> cdam,
       ObjectProvider<AuthTokenGenerator> serviceTokens,
+      ObjectProvider<CdamSystemUserTokenProvider> systemUser,
       ObjectProvider<IdamClient> idam,
       ObjectProvider<JdbcTemplate> jdbc) {
     Path temp = properties.getTempDirectory() != null
@@ -59,15 +60,25 @@ public class DocToolkitAutoConfiguration {
     }
     CaseDocumentClientApi client = cdam.getIfAvailable();
     AuthTokenGenerator tokens = serviceTokens.getIfAvailable();
-    DocToolkitProperties.SystemUser user = properties.getSystemUser();
-    IdamClient idamClient = idam.getIfAvailable();
     JdbcTemplate database = jdbc.getIfAvailable();
-    if (client != null && tokens != null && idamClient != null && database != null
-        && user.getUsername() != null && !user.getUsername().isBlank()) {
-      builder.cdam(client, tokens,
-          new IdamSystemUser(idamClient, user.getUsername(), user.getPassword()),
-          new JdbcCaseLocator(database));
+    if (client != null && tokens != null && database != null) {
+      Supplier<String> provider = systemUser.getIfAvailable();
+      if (provider == null) {
+        provider = configuredSystemUser(properties.getSystemUser(), idam);
+      }
+      if (provider != null) {
+        builder.cdam(client, tokens, provider, new JdbcCaseLocator(database));
+      }
     }
     return builder.build();
+  }
+
+  private static IdamSystemUser configuredSystemUser(
+      DocToolkitProperties.SystemUser user, ObjectProvider<IdamClient> idam) {
+    if (user.getUsername() == null || user.getUsername().isBlank()) {
+      return null;
+    }
+    IdamClient client = idam.getIfAvailable();
+    return client == null ? null : new IdamSystemUser(client, user.getUsername(), user.getPassword());
   }
 }
