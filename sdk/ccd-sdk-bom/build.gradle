@@ -14,6 +14,7 @@ dependencies {
         api project(':doc-toolkit')
         api project(':docweave')
         api project(':bank-holidays')
+        api project(':job-utils')
     }
 }
 
