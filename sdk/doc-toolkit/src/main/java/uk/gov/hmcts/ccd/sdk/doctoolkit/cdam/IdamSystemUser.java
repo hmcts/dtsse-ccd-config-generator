@@ -3,14 +3,13 @@ package uk.gov.hmcts.ccd.sdk.doctoolkit.cdam;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.function.Supplier;
 import uk.gov.hmcts.reform.idam.client.IdamClient;
 
 /**
  * The service's system user, signed in to IDAM with its username and password. The token is reused
  * for half an hour, well inside IDAM's token lifetime, unless CDAM rejects it first.
  */
-public final class IdamSystemUser implements Supplier<String> {
+public final class IdamSystemUser implements CdamSystemUserTokenProvider {
   private static final Duration REUSE = Duration.ofMinutes(30);
 
   private final IdamClient idam;
@@ -49,5 +48,12 @@ public final class IdamSystemUser implements Supplier<String> {
    */
   public synchronized void signOut() {
     token = null;
+  }
+
+  @Override
+  public synchronized void invalidate(String rejectedToken) {
+    if (rejectedToken.equals(token)) {
+      signOut();
+    }
   }
 }

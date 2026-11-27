@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,6 +30,7 @@ import uk.gov.hmcts.ccd.sdk.doctoolkit.DocToolkitException;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfRequest;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfResult;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.UploadedDoc;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.cdam.CdamSystemUserTokenProvider;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.convert.testsupport.Fixtures;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.convert.testsupport.StubDocmosis;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.docmosis.DocmosisRenderService;
@@ -140,6 +142,40 @@ class DocToolkitAutoConfigurationTest {
             assertThat(result.pageCount()).isEqualTo(1);
           }
           assertThat(cdam.fetchedAs).containsExactly("Bearer system-user:secret Bearer service");
+        });
+  }
+
+  @Test
+  void theApplicationsSystemUserCanReplaceTheIdamClientAndRefreshARejectedToken() {
+    FakeCdam cdam = new FakeCdam();
+    UUID id = cdam.store(fixture("one-page.pdf"), "application/pdf", "one-page.pdf");
+    cdam.rejectNextToken();
+    AtomicReference<String> token = new AtomicReference<>("Bearer initial");
+    AtomicReference<String> rejected = new AtomicReference<>();
+    runner.withBean(CaseDocumentClientApi.class, () -> cdam)
+        .withBean(AuthTokenGenerator.class, () -> () -> "Bearer service")
+        .withBean(JdbcTemplate.class,
+            () -> new JdbcTemplate(new DriverManagerDataSource("jdbc:unused")))
+        .withBean(CdamSystemUserTokenProvider.class, () -> new CdamSystemUserTokenProvider() {
+          @Override
+          public String get() {
+            return token.get();
+          }
+
+          @Override
+          public void invalidate(String rejectedToken) {
+            rejected.set(rejectedToken);
+            token.set("Bearer refreshed");
+          }
+        })
+        .run(context -> {
+          try (PdfResult result = context.getBean(DocToolkit.class)
+              .render(single(DocSource.cdam(id)))) {
+            assertThat(result.pageCount()).isEqualTo(1);
+          }
+          assertThat(rejected.get()).isEqualTo("Bearer initial");
+          assertThat(cdam.fetchedAs).containsExactly(
+              "Bearer initial Bearer service", "Bearer refreshed Bearer service");
         });
   }
 
