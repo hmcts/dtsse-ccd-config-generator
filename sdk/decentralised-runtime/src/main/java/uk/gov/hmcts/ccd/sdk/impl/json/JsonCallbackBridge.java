@@ -5,8 +5,11 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectReader;
 import jakarta.servlet.http.HttpServletRequest;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URI;
@@ -30,9 +33,11 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.core.MethodParameter;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpOutputMessage;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -41,6 +46,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
@@ -64,6 +70,7 @@ public class JsonCallbackBridge {
   private final ApplicationContext applicationContext;
   private final ObjectMapper mapper;
   private final ObjectMapper requestMapper;
+  private final ObjectReader responseReader;
   private final HttpClient httpClient;
   private final Map<String, List<HandlerMethod>> routes;
   private final String localCallbackPlaceholder;
@@ -81,6 +88,9 @@ public class JsonCallbackBridge {
     this.requestMapper = mapper.copy()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
         .setSerializationInclusion(JsonInclude.Include.ALWAYS);
+    // A callback's decimals are kept as it wrote them, rather than rounded to the nearest double.
+    this.responseReader = mapper.readerFor(Object.class)
+        .with(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
     this.externalCallbackTimeout = externalCallbackTimeout(environment);
     // Application Gateway rejects the h2c upgrade attempted by the default client for HTTP URLs.
     this.httpClient = HttpClient.newBuilder()
@@ -181,9 +191,9 @@ public class JsonCallbackBridge {
       Object result = method.invoke(bean, args);
       if (result instanceof ResponseEntity<?> response) {
         assertSuccessfulResponse(callbackUrl, response.getStatusCode());
-        return response.getBody();
+        return asSentOverHttp(callbackUrl, response.getBody());
       }
-      return result;
+      return asSentOverHttp(callbackUrl, result);
     } catch (IllegalAccessException e) {
       throw new IllegalStateException("Unable to invoke JSON callback " + callbackUrl, e);
     } catch (InvocationTargetException e) {
@@ -195,6 +205,45 @@ public class JsonCallbackBridge {
         throw error;
       }
       throw new IllegalStateException("JSON callback failed " + callbackUrl, target);
+    }
+  }
+
+  /**
+   * Returns a local callback's response as CCD would read it had the callback been called over HTTP.
+   *
+   * <p>Over HTTP the application's own Spring MVC message converters write the response, so its ObjectMapper
+   * settings, such as leaving out empty values, decide which fields CCD receives and stores. Converting the
+   * returned object with this bridge's mapper instead would store values the application never sends. So the
+   * response is written with the converter Spring MVC would pick, and read back as an external callback's is.
+   * Without Spring MVC's handler adapter, such as in a focused test, the response is used as it was returned.
+   */
+  private Object asSentOverHttp(String callbackUrl, Object body) {
+    if (body == null) {
+      return null;
+    }
+    RequestMappingHandlerAdapter adapter = applicationContext.getBeanProvider(RequestMappingHandlerAdapter.class)
+        .getIfUnique();
+    if (adapter == null) {
+      return body;
+    }
+    for (HttpMessageConverter<?> converter : adapter.getMessageConverters()) {
+      if (converter.canWrite(body.getClass(), MediaType.APPLICATION_JSON)) {
+        return written(callbackUrl, body, converter);
+      }
+    }
+    throw new IllegalStateException("No HTTP message converter can write the response of JSON callback "
+        + callbackUrl);
+  }
+
+  @SuppressWarnings("unchecked")
+  private Object written(String callbackUrl, Object body, HttpMessageConverter<?> converter) {
+    BufferedOutputMessage message = new BufferedOutputMessage();
+    try {
+      ((HttpMessageConverter<Object>) converter).write(body, MediaType.APPLICATION_JSON, message);
+      byte[] json = message.body.toByteArray();
+      return json.length == 0 ? null : responseReader.readValue(json);
+    } catch (IOException e) {
+      throw new IllegalStateException("Unable to read the response of JSON callback " + callbackUrl, e);
     }
   }
 
@@ -347,7 +396,7 @@ public class JsonCallbackBridge {
       );
       assertSuccessfulResponse(callbackUrl, HttpStatusCode.valueOf(response.statusCode()));
       String body = response.body();
-      return body == null || body.isBlank() ? null : mapper.readValue(body, Object.class);
+      return body == null || body.isBlank() ? null : responseReader.readValue(body);
     } catch (HttpTimeoutException e) {
       log.warn("External JSON callback timed out after {}: {}", externalCallbackTimeout, callbackUrl);
       throw new IllegalStateException("External JSON callback timed out " + callbackUrl, e);
@@ -507,5 +556,20 @@ public class JsonCallbackBridge {
   }
 
   private record Placeholder(String name, String path) {
+  }
+
+  private static final class BufferedOutputMessage implements HttpOutputMessage {
+    private final HttpHeaders headers = new HttpHeaders();
+    private final ByteArrayOutputStream body = new ByteArrayOutputStream();
+
+    @Override
+    public OutputStream getBody() {
+      return body;
+    }
+
+    @Override
+    public HttpHeaders getHeaders() {
+      return headers;
+    }
   }
 }
