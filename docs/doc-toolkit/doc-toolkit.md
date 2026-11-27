@@ -169,7 +169,9 @@ docJobs.submit(caseReference, "case-bundle", request);
 A case has one document per key. A submitted request is compared, by fingerprint, with the one last
 handed to the service: the same request does nothing (and cancels any newer one still pending),
 and a different one is queued, replacing any pending request. A request that could not be made is
-never recorded as handed over, so submitting it again retries it. So the usual way to keep a
+never recorded as handed over, so submitting it again retries it. `submit` returns whether it
+queued a render, so a caller such as a one-off job can tell an up-to-date document from one that
+needed doing. So the usual way to keep a
 document up to date is to submit it after every case event, from a `CaseEventHook`, without
 working out what changed:
 

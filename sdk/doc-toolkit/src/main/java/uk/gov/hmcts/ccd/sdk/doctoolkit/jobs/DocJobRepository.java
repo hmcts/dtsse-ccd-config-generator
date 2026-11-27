@@ -47,7 +47,8 @@ public class DocJobRepository {
    * A row a worker holds stays held: the worker's result is refused, and the newer request runs
    * once it lets go.
    *
-   * @return whether a render is now queued for it
+   * @return whether this queued a render: false when the request is the one last handed over or
+   *     the one already pending
    */
   public boolean submit(long caseReference, String key, String requestJson) {
     MapSqlParameterSource params = params("case", caseReference, "key", key,
