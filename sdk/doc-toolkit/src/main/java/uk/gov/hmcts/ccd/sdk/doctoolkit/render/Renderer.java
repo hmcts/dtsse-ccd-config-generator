@@ -283,9 +283,7 @@ public final class Renderer {
       case DocSource.Cdam document -> {
         if (cdam == null) {
           throw new DocToolkitException(Reason.NOT_CONFIGURED, document.name() + " is a CDAM"
-              + " document, and CDAM is not configured: the toolkit needs the service's"
-              + " CaseDocumentClientApi, AuthTokenGenerator and IdamClient beans, and"
-              + " ccd.doc-toolkit.system-user.",
+              + " document. Configure the CDAM client, service token and system-user login.",
               false, null);
         }
         try {

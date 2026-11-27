@@ -143,15 +143,14 @@ public final class CdamDocuments {
    * dropped and the call tried once more with a fresh one.
    */
   private <T> T asSystemUser(Function<String, T> call) {
-    String token = systemUser.get();
     try {
-      return call.apply(token);
+      return call.apply(systemUser.get());
     } catch (FeignException e) {
       if (e.status() != 401) {
         throw e;
       }
-      if (systemUser instanceof CdamSystemUserTokenProvider provider) {
-        provider.invalidate(token);
+      if (systemUser instanceof IdamSystemUser idam) {
+        idam.signOut();
       }
       return call.apply(systemUser.get());
     }

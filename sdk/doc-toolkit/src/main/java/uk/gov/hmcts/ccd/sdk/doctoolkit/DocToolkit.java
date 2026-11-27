@@ -105,8 +105,8 @@ public final class DocToolkit {
   private void requireCdam() {
     if (cdam == null) {
       throw new DocToolkitException(DocToolkitException.Reason.NOT_CONFIGURED,
-          "Uploading needs CDAM: the service's CaseDocumentClientApi, AuthTokenGenerator and"
-              + " IdamClient beans, and ccd.doc-toolkit.system-user.", false, null);
+          "Uploading needs CDAM: configure its client, service token and system-user login.",
+          false, null);
     }
   }
 

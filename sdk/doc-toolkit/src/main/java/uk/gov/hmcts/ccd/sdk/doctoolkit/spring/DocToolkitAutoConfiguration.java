@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.doctoolkit.spring;
 
 import java.nio.file.Path;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -61,8 +62,10 @@ public class DocToolkitAutoConfiguration {
     AuthTokenGenerator tokens = serviceTokens.getIfAvailable();
     JdbcTemplate database = jdbc.getIfAvailable();
     if (client != null && tokens != null && database != null) {
-      CdamSystemUserTokenProvider provider = systemUser.getIfAvailable(
-          () -> configuredSystemUser(properties.getSystemUser(), idam));
+      Supplier<String> provider = systemUser.getIfAvailable();
+      if (provider == null) {
+        provider = configuredSystemUser(properties.getSystemUser(), idam);
+      }
       if (provider != null) {
         builder.cdam(client, tokens, provider, new JdbcCaseLocator(database));
       }
@@ -70,7 +73,7 @@ public class DocToolkitAutoConfiguration {
     return builder.build();
   }
 
-  private static CdamSystemUserTokenProvider configuredSystemUser(
+  private static IdamSystemUser configuredSystemUser(
       DocToolkitProperties.SystemUser user, ObjectProvider<IdamClient> idam) {
     if (user.getUsername() == null || user.getUsername().isBlank()) {
       return null;
