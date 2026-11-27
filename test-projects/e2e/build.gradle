@@ -95,6 +95,7 @@ dependencies {
   implementation 'com.github.hmcts:service-auth-provider-java-client:6.1.2'
   testImplementation 'com.github.hmcts:ccd-data-migration-support'
   implementation 'com.github.hmcts:task-management'
+  implementation 'com.github.hmcts:job-utils'
   implementation 'com.github.hmcts:document-bundling'
   // Same PDFBox version as document-bundling: the Docmosis stub controller generates PDFs with it
   // and the cftlibTest suite asserts semantically on stitched output.
