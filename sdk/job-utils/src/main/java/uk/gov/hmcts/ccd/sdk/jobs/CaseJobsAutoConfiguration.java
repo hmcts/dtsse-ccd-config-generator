@@ -27,9 +27,9 @@ import uk.gov.hmcts.ccd.sdk.SystemEventExecutor;
  * checking every minute for a run another instance has dropped.
  */
 @AutoConfiguration(afterName = {
-    "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration",
-    "org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration",
-    "org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration"})
+    "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration",
+    "org.springframework.boot.jdbc.autoconfigure.DataSourceTransactionManagerAutoConfiguration",
+    "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration"})
 @ConditionalOnBean(DataSource.class)
 public class CaseJobsAutoConfiguration {
 
