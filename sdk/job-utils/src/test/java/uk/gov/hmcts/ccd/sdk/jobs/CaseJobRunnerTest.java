@@ -139,6 +139,9 @@ class CaseJobRunnerTest {
     runner.run(job, "1");
 
     assertThat(done()).containsExactly(1L, 3L);
+    // Replayed cases move the run on without being counted again, so it finishes.
+    assertThat(jdbc.queryForMap("select applied, finished_at is not null as finished from job_utils.case_job_run",
+        Map.of())).containsEntry("applied", 0L).containsEntry("finished", true);
   }
 
   @Test
@@ -178,18 +181,54 @@ class CaseJobRunnerTest {
   }
 
   @Test
-  void aFailedRunStopsAtTheCaseThatFailedAndIsNotRetried() {
-    Job failing = new Job(reference -> {
-      if (reference == 3) {
-        throw new IllegalStateException("no");
+  void aFailedCaseIsTriedAgainAtTheNextTryAndTheRunCarriesOnFromIt() {
+    List<Long> attempts = new ArrayList<>();
+    Job failingOnce = new Job(reference -> {
+      attempts.add(reference);
+      if (reference == 3 && attempts.stream().filter(r -> r == 3).count() == 1) {
+        throw new IllegalStateException("lock timeout", new IllegalArgumentException("underneath"));
       }
     });
-    runner.run(failing, "1");
-    runner.run(new Job(reference -> { }), "1");
+    runner.run(failingOnce, "1");
 
     assertThat(done()).containsExactly(1L);
-    assertThat(jdbc.queryForObject("select failed_reference from job_utils.case_job_run", Map.of(),
-        Long.class)).isEqualTo(3L);
+    assertThat(jdbc.queryForObject("select failure from job_utils.case_job_run", Map.of(), String.class))
+        .contains("lock timeout").contains("caused by").contains("underneath");
+
+    runner.run(failingOnce, "1");
+    assertThat(done()).containsExactly(1L, 3L);
+    assertThat(attempts).containsExactly(1L, 2L, 3L, 3L);
+    assertThat(jdbc.queryForObject("select finished_at is not null from job_utils.case_job_run", Map.of(),
+        Boolean.class)).isTrue();
+  }
+
+  @Test
+  void aStoppedRunnerClaimsNothing() {
+    runner.stop();
+    runner.run(new Job(reference -> { }), "1");
+
+    assertThat(jdbc.queryForObject("select count(*) from job_utils.case_job_run", Map.of(), Integer.class))
+        .isZero();
+  }
+
+  @Test
+  void anErrorDoesNotStopAnInstanceTrying() throws Exception {
+    List<Long> attempts = new ArrayList<>();
+    CaseJobsAutoConfiguration.CaseJobs jobs = new CaseJobsAutoConfiguration.CaseJobs(this::runner,
+        Map.of(new Job(reference -> {
+          attempts.add(reference);
+          if (attempts.size() == 1) {
+            throw new AssertionError("an Error, not an exception");
+          }
+        }), "1"), Duration.ofMillis(50));
+    jobs.start();
+    long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();
+    while (done().size() < 2 && System.nanoTime() < deadline) {
+      Thread.sleep(50);
+    }
+    jobs.stop();
+
+    assertThat(done()).containsExactly(1L, 3L);
   }
 
   @Test

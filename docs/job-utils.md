@@ -43,6 +43,8 @@ CCD_JOBS_RUN_BACKFILL_CASE_BUNDLES: "2026-11-27"
 - Cases of the job's case types are taken in reference order. Cases created during a run are
   included only if their reference is after the case the run has reached.
 - The run counts the cases applied and skipped, and logs them when it finishes.
-- If `apply` throws, the run stops at that case and is not retried; the failure is logged and kept
-  in `job_utils.case_job_run`. Fix the job and set a new run id.
+- If a case fails, nothing for it is committed and the run lets go; the next try, within a minute,
+  carries on from that case. A passing failure, such as a lock timeout, costs a minute; a lasting
+  one is retried each minute, and logged, until the job is fixed and deployed, when the run carries
+  on where it stopped. The last failure is kept in `job_utils.case_job_run`.
 - The `job_utils` schema is migrated with the SDK's other library schemas.
