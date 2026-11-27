@@ -130,6 +130,7 @@ subprojects.each { subproject ->
                 task.dependsOn gradle.includedBuild('sdk').task(':task-management:jar')
                 task.dependsOn gradle.includedBuild('sdk').task(':doc-toolkit:jar')
                 task.dependsOn gradle.includedBuild('sdk').task(':bank-holidays:jar')
+                task.dependsOn gradle.includedBuild('sdk').task(':job-utils:jar')
             }
         }
     }
