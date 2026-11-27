@@ -8,6 +8,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.LongConsumer;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeAll;
@@ -24,6 +27,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import uk.gov.hmcts.ccd.sdk.SystemEventAction;
+import uk.gov.hmcts.ccd.sdk.SystemEventExecutionResult;
 import uk.gov.hmcts.ccd.sdk.SystemEventExecutor;
 import uk.gov.hmcts.ccd.sdk.config.DecentralisedFlywayAutoConfiguration;
 
@@ -96,6 +101,27 @@ class CaseJobRunnerTest {
   }
 
   @Test
+  void aCaseDeletedJustBeforeItsEventIsPassedOver() {
+    // Retention deletes case 1 after the runner checks it exists but before its event locks it.
+    SystemEventExecutor deletingFirst = new LockingSystemEvents(jdbc,
+        new TransactionTemplate(new DataSourceTransactionManager(dataSource))) {
+      @Override
+      public SystemEventExecutionResult execute(long caseReference, UUID idempotencyKey, SystemEventAction action) {
+        if (caseReference == 1) {
+          jdbc.update("delete from ccd.case_data where reference = 1", Map.of());
+        }
+        return super.execute(caseReference, idempotencyKey, action);
+      }
+    };
+    new CaseJobRunner(new NamedParameterJdbcTemplate(dataSource), deletingFirst, Duration.ofMinutes(5), 2)
+        .run(new Job(reference -> { }), "1");
+
+    assertThat(done()).containsExactly(3L);
+    assertThat(jdbc.queryForMap("select applied, skipped, failed_at from job_utils.case_job_run", Map.of()))
+        .containsEntry("applied", 1L).containsEntry("skipped", 2L).containsEntry("failed_at", null);
+  }
+
+  @Test
   void aNewRunIdRunsTheJobAgain() {
     Job job = new Job(reference -> { });
     runner.run(job, "1");
@@ -139,23 +165,6 @@ class CaseJobRunnerTest {
   }
 
   @Test
-  void anotherInstanceCannotTakeTheRunWhileACaseIsBeingDone() {
-    List<Boolean> takenOver = new ArrayList<>();
-    runner.run(new Job(reference -> {
-      try (var other = dataSource.getConnection(); var statement = other.createStatement()) {
-        statement.execute("set lock_timeout = '100ms'");
-        statement.execute("update job_utils.case_job_run set lease_token = gen_random_uuid()");
-        takenOver.add(true);
-      } catch (SQLException e) {
-        takenOver.add(false);
-      }
-    }), "1");
-
-    assertThat(takenOver).containsOnly(false);
-    assertThat(done()).containsExactly(1L, 3L);
-  }
-
-  @Test
   void anInstanceThatLostTheRunCommitsNothingForTheCaseItWasOn() {
     runner.run(new Job(reference -> {
       if (reference == 3) {
@@ -181,6 +190,43 @@ class CaseJobRunnerTest {
     assertThat(done()).containsExactly(1L);
     assertThat(jdbc.queryForObject("select failed_reference from job_utils.case_job_run", Map.of(),
         Long.class)).isEqualTo(3L);
+  }
+
+  @Test
+  void anApplicationStoppedAndStartedAgainCarriesItsRunsOn() throws Exception {
+    CountDownLatch onFirstCase = new CountDownLatch(1);
+    CountDownLatch stopping = new CountDownLatch(1);
+    CaseJobsAutoConfiguration.CaseJobs jobs = new CaseJobsAutoConfiguration.CaseJobs(this::runner,
+        Map.of(new Job(reference -> {
+          if (reference == 1) {
+            onFirstCase.countDown();
+            await(stopping);
+          }
+        }), "1"), Duration.ofMillis(50));
+
+    jobs.start();
+    await(onFirstCase);
+    Thread stop = new Thread(jobs::stop);
+    stop.start();
+    stopping.countDown();
+    stop.join();
+    assertThat(done()).containsExactly(1L);
+
+    jobs.start();
+    long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();
+    while (done().size() < 2 && System.nanoTime() < deadline) {
+      Thread.sleep(50);
+    }
+    jobs.stop();
+    assertThat(done()).containsExactly(1L, 3L);
+  }
+
+  private static void await(CountDownLatch latch) {
+    try {
+      assertThat(latch.await(20, TimeUnit.SECONDS)).isTrue();
+    } catch (InterruptedException e) {
+      throw new IllegalStateException(e);
+    }
   }
 
   @Test

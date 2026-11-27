@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
@@ -37,16 +38,16 @@ public class CaseJobsAutoConfiguration {
       ObjectProvider<SystemEventExecutor> systemEvents) {
     Map<CaseJob, String> runs = runs(jobs.orderedStream().toList(), environment);
     if (runs.isEmpty()) {
-      return new CaseJobs(null, runs, Duration.ofMinutes(1));
+      return new CaseJobs(() -> null, runs, Duration.ofMinutes(1));
     }
     SystemEventExecutor executor = systemEvents.getIfAvailable(() -> {
       throw new IllegalStateException("Case jobs run as system events, so running "
           + runs.keySet().iterator().next().name() + " needs a system user:"
           + " set ccd.decentralised-runtime.system-user.id");
     });
-    CaseJobRunner runner = new CaseJobRunner(new NamedParameterJdbcTemplate(dataSource), executor,
-        Duration.ofMinutes(5), 500);
-    return new CaseJobs(runner, runs, Duration.ofMinutes(1));
+    NamedParameterJdbcTemplate jdbc = new NamedParameterJdbcTemplate(dataSource);
+    return new CaseJobs(() -> new CaseJobRunner(jdbc, executor, Duration.ofMinutes(5), 500), runs,
+        Duration.ofMinutes(1));
   }
 
   private static Map<CaseJob, String> runs(List<CaseJob> jobs, Environment environment) {
@@ -74,13 +75,14 @@ public class CaseJobsAutoConfiguration {
   public static final class CaseJobs implements SmartLifecycle {
     private static final Logger log = LoggerFactory.getLogger(CaseJobs.class);
 
-    private final CaseJobRunner runner;
+    private final Supplier<CaseJobRunner> runners;
     private final Map<CaseJob, String> runs;
     private final Duration pollDelay;
     private ScheduledExecutorService executor;
+    private CaseJobRunner runner;
 
-    CaseJobs(CaseJobRunner runner, Map<CaseJob, String> runs, Duration pollDelay) {
-      this.runner = runner;
+    CaseJobs(Supplier<CaseJobRunner> runners, Map<CaseJob, String> runs, Duration pollDelay) {
+      this.runners = runners;
       this.runs = runs;
       this.pollDelay = pollDelay;
     }
@@ -90,15 +92,19 @@ public class CaseJobsAutoConfiguration {
       if (runs.isEmpty()) {
         return;
       }
+      // A stopped runner stays stopped, so each start has a new one.
+      CaseJobRunner started = runners.get();
+      runner = started;
       executor = Executors.newSingleThreadScheduledExecutor(task -> {
         Thread thread = new Thread(task, "case-jobs");
         thread.setDaemon(true);
         return thread;
       });
-      executor.scheduleWithFixedDelay(this::runAll, 0, pollDelay.toMillis(), TimeUnit.MILLISECONDS);
+      executor.scheduleWithFixedDelay(() -> runAll(started), 0, pollDelay.toMillis(),
+          TimeUnit.MILLISECONDS);
     }
 
-    private void runAll() {
+    private void runAll(CaseJobRunner runner) {
       runs.forEach((job, runId) -> {
         try {
           runner.run(job, runId);

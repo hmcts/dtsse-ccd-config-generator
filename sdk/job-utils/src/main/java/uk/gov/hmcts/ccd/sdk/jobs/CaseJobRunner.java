@@ -105,8 +105,7 @@ public class CaseJobRunner {
 
   private void apply(Held held, long reference) {
     // A case deleted since its batch was read, such as by retention, is passed over.
-    if (jdbc.queryForList("select 1 from ccd.case_data where reference = :case",
-        Map.of("case", reference), Integer.class).isEmpty()) {
+    if (!exists(reference)) {
       record(held, reference, false);
       return;
     }
@@ -117,9 +116,9 @@ public class CaseJobRunner {
     SystemEventExecutionResult result;
     try {
       // Everything here is in the event's transaction: the job's writes, the event and the case
-      // recorded as done commit together, and only while this instance holds the run.
+      // recorded as done commit together. Recording checks this instance still holds the run, and
+      // locks the run until the event commits, so an instance that lost it commits nothing.
       result = systemEvents.execute(reference, idempotencyKey, context -> {
-        lockRun(held);
         if (!held.job.apply(new CaseMetadata(context.caseReference(), context.caseTypeId(),
             context.currentState())).wasApplied()) {
           throw new Skipped();
@@ -132,7 +131,8 @@ public class CaseJobRunner {
       if (thrown(e, NotHeld.class)) {
         throw new NotHeld();
       }
-      if (!thrown(e, Skipped.class)) {
+      // Deleted after the check above but before the event locked it: passed over too.
+      if (!thrown(e, Skipped.class) && exists(reference)) {
         throw e;
       }
       // Nothing was committed, so if this instance stops before recording the skip, deciding
@@ -146,15 +146,9 @@ public class CaseJobRunner {
     }
   }
 
-  /** Locks the run's row, so the case is recorded only by the instance holding the run. */
-  private void lockRun(Held held) {
-    if (jdbc.queryForList("""
-        select 1 from job_utils.case_job_run
-         where job_name = :job and run_id = :run and lease_token = :token for update
-        """, Map.of("job", held.job.name(), "run", held.runId, "token", held.token),
-        Integer.class).isEmpty()) {
-      throw new NotHeld();
-    }
+  private boolean exists(long reference) {
+    return !jdbc.queryForList("select 1 from ccd.case_data where reference = :case",
+        Map.of("case", reference), Integer.class).isEmpty();
   }
 
   /** Records the case as done and renews the lease, if this instance still holds the run. */
