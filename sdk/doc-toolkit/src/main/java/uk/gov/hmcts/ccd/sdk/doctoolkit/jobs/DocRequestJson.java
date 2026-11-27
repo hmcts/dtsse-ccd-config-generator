@@ -24,10 +24,7 @@ import uk.gov.hmcts.ccd.sdk.doctoolkit.PrintOptions;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.Watermark;
 
 /**
- * The stored form of a submitted request. The public types carry no serialisation annotations:
- * they are mapped to these records. A change to their shape ships with a migration that truncates
- * {@code bundling.doc_job}, as stored requests are not kept across formats; cases' kept-up-to-date
- * documents are submitted again on their next event.
+ * Maps submitted requests to stored JSON records so the public types need no serialisation annotations.
  */
 public final class DocRequestJson {
 

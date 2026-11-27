@@ -3,7 +3,8 @@ package uk.gov.hmcts.ccd.sdk.doctoolkit;
 import java.util.Objects;
 
 /**
- * How {@link DocumentConverter#toPrintReadyPdf} lays out and encodes its output.
+ * How {@link uk.gov.hmcts.ccd.sdk.doctoolkit.convert.DocumentConverter#toPrintReadyPdf}
+ * lays out and encodes its output.
  *
  * <p>Every source page is rendered to an image at {@code resolutionDpi} and placed, scaled to
  * fit and centred, inside the printable area: the page less {@code marginMillimetres} on every

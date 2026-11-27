@@ -8,8 +8,6 @@ import static uk.gov.hmcts.divorce.divorcecase.model.access.Permissions.CREATE_R
 
 import java.time.LocalDate;
 import java.util.UUID;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
@@ -29,7 +27,6 @@ import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
  * later; the job then fails naming the document, nothing is stored, and the bundle is marked failed.
  */
 @Component
-@Slf4j
 public class CaseworkerCreateBundleMissingDocument implements CCDConfig<CaseData, State, UserRole> {
 
     public static final String CASEWORKER_CREATE_BUNDLE_MISSING_DOC = "caseworker-create-bundle-missing-doc";
@@ -37,9 +34,6 @@ public class CaseworkerCreateBundleMissingDocument implements CCDConfig<CaseData
     // A CDAM document id that was never stored.
     public static final String MISSING_DOCUMENT_ID = "6a1f2b0e-0000-4000-8000-00000000dead";
     public static final String MISSING_DOCUMENT_TITLE = "Order that no longer exists";
-
-    @Autowired
-    private BundlePublisher bundlePublisher;
 
     @Override
     public void configureDecentralised(final DecentralisedConfigBuilder<CaseData, State, UserRole> configBuilder) {
@@ -53,8 +47,13 @@ public class CaseworkerCreateBundleMissingDocument implements CCDConfig<CaseData
     }
 
     private SubmitResponse<State> submit(EventPayload<CaseData, State> payload) {
-        final long reference = payload.caseReference();
-        PdfRequest request = PdfRequest.builder("Hearing bundle")
+        return SubmitResponse.<State>builder()
+            .confirmationHeader("Hearing bundle requested")
+            .build();
+    }
+
+    static PdfRequest buildRequest(final long reference) {
+        return PdfRequest.builder("Hearing bundle")
             .fileName("case-" + reference + "-hearing-bundle.pdf")
             .document(PdfPart.builder(DocSource.cdam(UUID.fromString(MISSING_DOCUMENT_ID)))
                 .title(MISSING_DOCUMENT_TITLE)
@@ -62,11 +61,6 @@ public class CaseworkerCreateBundleMissingDocument implements CCDConfig<CaseData
                 .build())
             // Without this the missing document would get a placeholder page instead.
             .missingDocuments(MissingDocuments.FAIL)
-            .build();
-        var bundle = bundlePublisher.request(reference, request);
-        log.info("Hearing bundle {} requested for case {}", bundle.getId(), reference);
-        return SubmitResponse.<State>builder()
-            .confirmationHeader("Hearing bundle requested")
             .build();
     }
 }

@@ -191,8 +191,8 @@ public final class DocJobWorker implements AutoCloseable {
    * Takes the job off the queue, records what the service is given, hands it the document and
    * attaches it to the case, in one transaction holding the case lock, so no case event runs on the
    * case meanwhile. Dequeuing comes first: if the worker no longer holds the job at the revision it
-   * rendered, nothing else happens. Anything that fails rolls back, leaving the upload unattached to
-   * expire in CDAM, and the job is rendered again.
+   * rendered, nothing else happens. A failure rolls back the database writes. If CDAM attached
+   * the upload before the transaction rolled back, it remains attached.
    */
   private void complete(DocJobRepository.Claimed claimed, DocToolkit.Stored stored) {
     DocJob job = claimed.job();

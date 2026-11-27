@@ -8,8 +8,6 @@ import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.SUPER_USER;
 import static uk.gov.hmcts.divorce.divorcecase.model.access.Permissions.CREATE_READ_UPDATE;
 
 import java.time.LocalDate;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
@@ -34,7 +32,6 @@ import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
  * a placeholder page.
  */
 @Component
-@Slf4j
 public class CaseworkerCreateBundle implements CCDConfig<CaseData, State, UserRole> {
 
     public static final String CASEWORKER_CREATE_BUNDLE = "caseworker-create-bundle";
@@ -52,9 +49,6 @@ public class CaseworkerCreateBundle implements CCDConfig<CaseData, State, UserRo
         "https://media.example.net/recordings/hearing-day-2.mp3";
     public static final String HEARING_RECORDING_NOTE = "Playback requires case access";
 
-    @Autowired
-    private BundlePublisher bundlePublisher;
-
     @Override
     public void configureDecentralised(final DecentralisedConfigBuilder<CaseData, State, UserRole> configBuilder) {
         configBuilder
@@ -67,9 +61,6 @@ public class CaseworkerCreateBundle implements CCDConfig<CaseData, State, UserRo
     }
 
     private SubmitResponse<State> submit(EventPayload<CaseData, State> payload) {
-        final long reference = payload.caseReference();
-        var bundle = bundlePublisher.request(reference, buildRequest(reference));
-        log.info("Hearing bundle {} requested for case {}", bundle.getId(), reference);
         return SubmitResponse.<State>builder()
             .confirmationHeader("Hearing bundle requested")
             .confirmationBody("It will appear on the case once it has been made")

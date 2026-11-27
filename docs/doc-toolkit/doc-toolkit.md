@@ -191,9 +191,9 @@ docJobs.submit(caseReference, "order-" + order.getId(), orderRequest);
 It is never superseded, and submitting it again does nothing; the handler tells documents apart
 by `job.key()`.
 
-Submit inside the case event's transaction, building the request from the case there: the case
-lock puts submissions in the order the case changed, and nothing is queued if the event rolls
-back. The toolkit records the case's revision at that point and hands it back as
+Submit from a `CaseEventHook`, after the event writes the case row and before it commits.
+The case lock orders submissions, and rolling back the event also rolls back the queued job.
+The toolkit records the event's case revision and hands it back as
 `job.caseRevision()`: the document shows the case as it was at that revision, and stays accurate
 until a later event changes the request. It only increases, so it orders a document's versions.
 
@@ -224,8 +224,9 @@ queue, records what the service is given, calls the handler and attaches the PDF
 Holding the case lock means an event on that case waits for the handler to commit, and the handler
 may write rows referencing the case without deadlocking with an event. Taking the job off the queue
 is guarded by the case revision and request rendered and the worker's lease token, so a render
-superseded by a newer submit never reaches the handler, and versions arrive in the order they were submitted. If
-the handler or the attach fails, everything rolls back and the job is rendered again.
+superseded by a newer submit never reaches the handler, and versions arrive in the order they were
+submitted. If the handler or the attach fails, the database transaction rolls back. If CDAM
+attached the PDF but its response was lost, the PDF remains attached and a retry can attach a second copy.
 
 When the toolkit gives up on a document (it failed permanently, every attempt failed, or every
 worker died), it calls `failed` the same way: once, in one transaction holding the case lock, and
@@ -236,8 +237,8 @@ too long for the case lock, the job is left for another worker once its lease ex
 
 The toolkit never deletes a document. What the handler is given is the service's: keep each
 version, since a reader may have an older one open, refer to them from case data, since CDAM
-serves a document only then, and prune through CDAM if you want to. A render nobody is given is
-never attached, so CDAM's time to live has dm-store delete it.
+serves a document only then, and prune through CDAM if you want to. Unattached uploads expire
+under CDAM's time to live.
 
 Behaviour:
 
@@ -259,8 +260,8 @@ Two tables, created by the SDK's library migrations (location `bundling-db`) aft
 `ccd` schema: `bundling.doc_job` holds work not yet done, a row deleted once its document is handed
 over or given up on, and `bundling.doc_rendered` the fingerprint last handed to the service for
 each case and key. Rows reference their case in `ccd.case_data` and are deleted with it. Requests
-are stored as `jsonb` in one format; a change to it ships with a migration that truncates
-`bundling.doc_job`. A case event's hooks run after its case row is written, so a document can
+are stored as `jsonb`. If a worker cannot read a queued request, it calls `failed` with
+`UNREADABLE_REQUEST`. A case event's hooks run after its case row is written, so a document can
 be submitted in the event that creates its case. Earlier migrations created document-bundling's tables; `V0005` drops them.
 
 ## Local runs and tests

@@ -46,10 +46,9 @@ public final class DocJobs {
    * made once, such as an order, is submitted under a key of its own, such as
    * {@code "order-" + orderId}.
    *
-   * <p>Submit from inside the case event's transaction (a {@code CaseEventHook}), building the
-   * request from the case there: the case lock then puts submissions in the order the case
-   * changed, and nothing is queued if the event rolls back. The case's revision in that
-   * transaction is recorded with the request and handed back as {@link DocJob#caseRevision()}.
+   * <p>Build and submit the request in a {@code CaseEventHook}, after the event writes the case
+   * row. The case lock orders submissions, and the queued job rolls back with the event.
+   * The worker passes the event's revision to the handler as {@link DocJob#caseRevision()}.
    *
    * @throws IllegalArgumentException if the request holds a local file, which a worker elsewhere
    *     cannot read; use {@link DocSource#bytes} or CDAM
