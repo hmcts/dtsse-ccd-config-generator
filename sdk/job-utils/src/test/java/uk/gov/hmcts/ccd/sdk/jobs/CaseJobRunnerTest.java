@@ -2,12 +2,12 @@ package uk.gov.hmcts.ccd.sdk.jobs;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.sql.SQLException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.function.LongConsumer;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeAll;
@@ -20,11 +20,11 @@ import org.springframework.core.env.SystemEnvironmentPropertySource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import uk.gov.hmcts.ccd.sdk.SystemEventExecutor;
 import uk.gov.hmcts.ccd.sdk.config.DecentralisedFlywayAutoConfiguration;
 
 @Testcontainers
@@ -36,7 +36,8 @@ class CaseJobRunnerTest {
   private static DataSource dataSource;
   private static NamedParameterJdbcTemplate jdbc;
 
-  private final TransactionTemplate tx = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
+  private final LockingSystemEvents systemEvents = new LockingSystemEvents(jdbc,
+      new TransactionTemplate(new DataSourceTransactionManager(dataSource)));
   private final CaseJobRunner runner = runner();
 
   @BeforeAll
@@ -56,6 +57,8 @@ class CaseJobRunnerTest {
     jdbc.update("truncate job_utils.case_job_run", Map.of());
     jdbc.update("drop table if exists done", Map.of());
     jdbc.update("create table done (reference bigint, state text)", Map.of());
+    jdbc.update("drop table if exists events", Map.of());
+    jdbc.update("create table events (reference bigint, event_id text, summary text)", Map.of());
     insertCase(3, "PCS", "Open");
     insertCase(1, "PCS", "Open");
     insertCase(2, "PCS", "Closed");
@@ -63,16 +66,33 @@ class CaseJobRunnerTest {
   }
 
   @Test
-  void aRunDoesTheJobOnceToEachCaseOfItsCaseTypes() {
+  void aRunDoesTheJobOnceToEachCaseOfItsCaseTypesEachInAnEventOfItsOwn() {
     Job job = new Job(reference -> { });
     runner.run(job, "1");
     runner.run(job, "1");
 
-    assertThat(done()).containsExactly(1L, 2L, 3L);
-    assertThat(jdbc.queryForList("select state from done", Map.of(), String.class))
-        .containsExactly("Open", "Closed", "Open");
+    assertThat(done()).containsExactly(1L, 3L);
+    assertThat(jdbc.queryForList("select reference || ' ' || event_id || ' ' || summary from events",
+        Map.of(), String.class)).containsExactly("1 mark-cases Run 1", "3 mark-cases Run 1");
     assertThat(jdbc.queryForMap("select applied, skipped from job_utils.case_job_run", Map.of()))
         .containsEntry("applied", 2L).containsEntry("skipped", 1L);
+  }
+
+  @Test
+  void aSkippedCaseIsLeftAsItWasWithNoEvent() {
+    runner.run(new Job(reference -> { }), "1");
+
+    // The job wrote to case 2, which is closed, before skipping it.
+    assertThat(done()).doesNotContain(2L);
+    assertThat(jdbc.queryForList("select reference from events", Map.of(), Long.class)).doesNotContain(2L);
+  }
+
+  @Test
+  void theJobReadsAndWritesWithTheCaseLocked() {
+    List<Boolean> locked = new ArrayList<>();
+    runner.run(new Job(reference -> locked.add(lockedElsewhere(reference))), "1");
+
+    assertThat(locked).containsExactly(true, true, true);
   }
 
   @Test
@@ -81,7 +101,18 @@ class CaseJobRunnerTest {
     runner.run(job, "1");
     runner.run(job, "2");
 
-    assertThat(done()).containsExactly(1L, 2L, 3L, 1L, 2L, 3L);
+    assertThat(done()).containsExactly(1L, 3L, 1L, 3L);
+  }
+
+  @Test
+  void aCaseDoneAgainInTheSameRunIsNotChangedTwice() {
+    Job job = new Job(reference -> { });
+    runner.run(job, "1");
+    // As if the instance stopped after each case's event but before recording it as done.
+    jdbc.update("truncate job_utils.case_job_run", Map.of());
+    runner.run(job, "1");
+
+    assertThat(done()).containsExactly(1L, 3L);
   }
 
   @Test
@@ -90,7 +121,7 @@ class CaseJobRunnerTest {
     assertThat(done()).containsExactly(1L);
 
     runner().run(new Job(reference -> { }), "1");
-    assertThat(done()).containsExactly(1L, 2L, 3L);
+    assertThat(done()).containsExactly(1L, 3L);
   }
 
   @Test
@@ -104,13 +135,13 @@ class CaseJobRunnerTest {
     }), "1");
 
     assertThat(doneByOther).isEmpty();
-    assertThat(done()).containsExactly(1L, 2L, 3L);
+    assertThat(done()).containsExactly(1L, 3L);
   }
 
   @Test
-  void aRunTakenOverByAnotherInstanceRollsBackItsCaseAndStops() {
+  void aRunTakenOverByAnotherInstanceStops() {
     runner.run(new Job(reference -> {
-      if (reference == 2) {
+      if (reference == 1) {
         jdbc.getJdbcTemplate().execute("update job_utils.case_job_run set lease_token = gen_random_uuid()");
       }
     }), "1");
@@ -121,7 +152,7 @@ class CaseJobRunnerTest {
   @Test
   void aFailedRunStopsAtTheCaseThatFailedAndIsNotRetried() {
     Job failing = new Job(reference -> {
-      if (reference == 2) {
+      if (reference == 3) {
         throw new IllegalStateException("no");
       }
     });
@@ -130,54 +161,7 @@ class CaseJobRunnerTest {
 
     assertThat(done()).containsExactly(1L);
     assertThat(jdbc.queryForObject("select failed_reference from job_utils.case_job_run", Map.of(),
-        Long.class)).isEqualTo(2L);
-  }
-
-  @Test
-  void theJobRunsWithTheCaseLockedUnlessItOnlyReads() {
-    List<Boolean> locked = new ArrayList<>();
-    LongConsumer checkLock = reference -> locked.add(lockedElsewhere(reference));
-    runner.run(new Job(checkLock), "1");
-    runner.run(new Job(checkLock) {
-      @Override
-      public ApplyIn applyIn() {
-        return ApplyIn.TRANSACTION;
-      }
-    }, "2");
-
-    assertThat(locked).containsExactly(true, true, true, false, false, false);
-  }
-
-  @Test
-  void aJobThatRunsSystemEventsIsAppliedOutsideATransactionWithAKeyForEachCaseAndRun() {
-    List<Boolean> inTransaction = new ArrayList<>();
-    List<UUID> keys = new ArrayList<>();
-    class OwnTransactions extends Job {
-      OwnTransactions() {
-        super(reference -> inTransaction.add(TransactionSynchronizationManager.isActualTransactionActive()));
-      }
-
-      @Override
-      public ApplyIn applyIn() {
-        return ApplyIn.NO_TRANSACTION;
-      }
-
-      @Override
-      public CaseJobOutcome apply(CaseMetadata metadata) {
-        keys.add(metadata.idempotencyKey());
-        return super.apply(metadata);
-      }
-    }
-
-    runner.run(new OwnTransactions(), "1");
-    jdbc.update("truncate job_utils.case_job_run", Map.of());
-    runner.run(new OwnTransactions(), "1");
-    runner.run(new OwnTransactions(), "2");
-
-    assertThat(inTransaction).containsOnly(false).hasSize(9);
-    // Applied again in the same run, a case gets the same key; in another run, a new one.
-    assertThat(keys.subList(0, 3)).doesNotHaveDuplicates().isEqualTo(keys.subList(3, 6));
-    assertThat(keys.subList(6, 9)).doesNotContainAnyElementsOf(keys.subList(0, 3));
+        Long.class)).isEqualTo(3L);
   }
 
   @Test
@@ -186,9 +170,9 @@ class CaseJobRunnerTest {
         .withConfiguration(AutoConfigurations.of(CaseJobsAutoConfiguration.class))
         .withInitializer(context -> context.getEnvironment().getPropertySources().addFirst(
             new SystemEnvironmentPropertySource("systemEnvironment",
-                Map.of("CCD_JOBS_RUN_MARK_CASES", "2026-11-27")))
-        )
+                Map.of("CCD_JOBS_RUN_MARK_CASES", "2026-11-27"))))
         .withBean(DataSource.class, () -> dataSource)
+        .withBean(SystemEventExecutor.class, () -> systemEvents)
         .withBean("marks", CaseJob.class, () -> new Job(reference -> { }))
         .withBean("unset", CaseJob.class, () -> new Job(reference -> { }) {
           @Override
@@ -198,13 +182,24 @@ class CaseJobRunnerTest {
         })
         .run(context -> {
           long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();
-          while (done().size() < 3 && System.nanoTime() < deadline) {
+          while (done().size() < 2 && System.nanoTime() < deadline) {
             Thread.sleep(50);
           }
-          assertThat(done()).containsExactly(1L, 2L, 3L);
+          assertThat(done()).containsExactly(1L, 3L);
           assertThat(jdbc.queryForList("select job_name from job_utils.case_job_run", Map.of(),
               String.class)).containsExactly("mark-cases");
         });
+  }
+
+  @Test
+  void aJobCannotRunWithoutASystemUser() {
+    new ApplicationContextRunner()
+        .withConfiguration(AutoConfigurations.of(CaseJobsAutoConfiguration.class))
+        .withPropertyValues("ccd.jobs.run.mark-cases=1")
+        .withBean(DataSource.class, () -> dataSource)
+        .withBean(CaseJob.class, () -> new Job(reference -> { }))
+        .run(context -> assertThat(context).hasFailed().getFailure()
+            .rootCause().hasMessageContaining("ccd.decentralised-runtime.system-user.id"));
   }
 
   @Test
@@ -222,10 +217,13 @@ class CaseJobRunnerTest {
   }
 
   private CaseJobRunner runner() {
-    return new CaseJobRunner(new NamedParameterJdbcTemplate(dataSource), tx, Duration.ofMinutes(5), 2);
+    return new CaseJobRunner(new NamedParameterJdbcTemplate(dataSource), systemEvents, Duration.ofMinutes(5), 2);
   }
 
-  /** Records each case it is applied to, in the job's transaction, then does {@code also}. */
+  /**
+   * Records each case it is applied to, in the case's event, then does {@code also}; skips closed cases, after
+   * recording them.
+   */
   private static class Job implements CaseJob {
     private final LongConsumer also;
 
@@ -257,7 +255,7 @@ class CaseJobRunnerTest {
       statement.execute("set lock_timeout = '100ms'");
       statement.execute("select reference from ccd.case_data where reference = " + reference + " for update");
       return false;
-    } catch (java.sql.SQLException e) {
+    } catch (SQLException e) {
       return true;
     }
   }

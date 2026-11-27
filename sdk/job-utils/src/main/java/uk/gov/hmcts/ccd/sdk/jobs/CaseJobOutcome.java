@@ -13,12 +13,12 @@ public final class CaseJobOutcome {
     this.applied = applied;
   }
 
-  /** The job did its work to the case. */
+  /** The job changed the case: its system event is kept. */
   public static CaseJobOutcome applied() {
     return APPLIED;
   }
 
-  /** The case needed nothing doing. */
+  /** The case needed nothing doing: its system event is rolled back, with anything written. */
   public static CaseJobOutcome skipped() {
     return SKIPPED;
   }

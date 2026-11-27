@@ -19,13 +19,11 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
+import uk.gov.hmcts.ccd.sdk.SystemEventExecutor;
 
 /**
- * Runs each {@link CaseJob} bean whose {@code ccd.jobs.run.<name>} is set, checking every minute
- * for a run another instance has dropped.
+ * Runs each {@link CaseJob} bean whose {@code ccd.jobs.run.<name>} is set, as system events,
+ * checking every minute for a run another instance has dropped.
  */
 @AutoConfiguration(afterName = {
     "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration",
@@ -36,24 +34,30 @@ public class CaseJobsAutoConfiguration {
 
   @Bean
   CaseJobs caseJobs(ObjectProvider<CaseJob> jobs, Environment environment, DataSource dataSource,
-      ObjectProvider<PlatformTransactionManager> transactionManagers) {
-    // The application's transaction manager, so a job's JPA writes and its checkpoint commit together.
-    PlatformTransactionManager transactionManager = transactionManagers.getIfAvailable(
-        () -> new DataSourceTransactionManager(dataSource));
-    CaseJobRunner runner = new CaseJobRunner(new NamedParameterJdbcTemplate(dataSource),
-        new TransactionTemplate(transactionManager), Duration.ofMinutes(5), 500);
-    return new CaseJobs(runner, runs(jobs.orderedStream().toList(), environment),
-        Duration.ofMinutes(1));
+      ObjectProvider<SystemEventExecutor> systemEvents) {
+    Map<CaseJob, String> runs = runs(jobs.orderedStream().toList(), environment);
+    if (runs.isEmpty()) {
+      return new CaseJobs(null, runs, Duration.ofMinutes(1));
+    }
+    SystemEventExecutor executor = systemEvents.getIfAvailable(() -> {
+      throw new IllegalStateException("Case jobs run as system events, so running "
+          + runs.keySet().iterator().next().name() + " needs a system user:"
+          + " set ccd.decentralised-runtime.system-user.id");
+    });
+    CaseJobRunner runner = new CaseJobRunner(new NamedParameterJdbcTemplate(dataSource), executor,
+        Duration.ofMinutes(5), 500);
+    return new CaseJobs(runner, runs, Duration.ofMinutes(1));
   }
 
   private static Map<CaseJob, String> runs(List<CaseJob> jobs, Environment environment) {
-    Pattern names = Pattern.compile("[a-z0-9]+(-[a-z0-9]+)*");
+    // A system event's name is at most 30 characters.
+    Pattern names = Pattern.compile("(?=.{1,30}$)[a-z0-9]+(-[a-z0-9]+)*");
     var seen = new HashSet<String>();
     var runs = new LinkedHashMap<CaseJob, String>();
     for (CaseJob job : jobs) {
       if (!names.matcher(job.name()).matches() || !seen.add(job.name())) {
-        throw new IllegalStateException("Case job name '" + job.name() + "' must be unique and"
-            + " only lower case letters, digits and hyphens");
+        throw new IllegalStateException("Case job name '" + job.name() + "' must be unique, and"
+            + " up to 30 lower case letters, digits and hyphens");
       }
       if (job.caseTypes().isEmpty()) {
         throw new IllegalStateException("Case job " + job.name() + " names no case types");

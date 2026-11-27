@@ -18,7 +18,7 @@ import uk.gov.hmcts.divorce.jobs.NoteEveryCase;
 
 /**
  * The application starts with CCD_JOBS_RUN_NOTE_EVERY_CASE set, as an environment's flux values set it, over cases
- * that already exist, and the job notes each case of its type once, in an event of its own.
+ * that already exist, and the job notes each case of its type once, in a system event of its own.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @ContextConfiguration(initializers = CaseJobSpringBootTest.RunIdInEnvironment.class)
@@ -48,9 +48,10 @@ class CaseJobSpringBootTest {
         .containsExactly(1700000000000001L, 1700000000000002L);
     assertThat(db.queryForList("select cd.reference from ccd.case_event ce join ccd.case_data cd"
         + " on cd.id = ce.case_data_id where ce.event_id = :event order by cd.reference",
-        Map.of("event", NoteEveryCase.EVENT_ID), Long.class))
+        Map.of("event", "note-every-case"), Long.class))
         .containsExactly(1700000000000001L, 1700000000000002L);
-    assertThat(finished()).containsEntry("applied", 2L).containsEntry("skipped", 0L);
+    // The withdrawn case, which the job skips, has no note and no event.
+    assertThat(finished()).containsEntry("applied", 2L).containsEntry("skipped", 1L);
   }
 
   private Map<String, Object> finished() {

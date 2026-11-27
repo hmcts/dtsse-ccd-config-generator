@@ -9,10 +9,11 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.transaction.support.TransactionTemplate;
+import uk.gov.hmcts.ccd.sdk.SystemEventExecutor;
+import uk.gov.hmcts.ccd.sdk.SystemEventResult;
 
 /**
- * Takes a case job's runs through its cases, in reference order, one transaction per case. A run is
+ * Takes a case job's runs through its cases, in reference order, one system event per case. A run is
  * held by one instance at a time, through a lease renewed with each case; a run whose instance has
  * gone is carried on from its last case by the next instance to try it once the lease expires.
  */
@@ -20,15 +21,15 @@ public class CaseJobRunner {
   private static final Logger log = LoggerFactory.getLogger(CaseJobRunner.class);
 
   private final NamedParameterJdbcTemplate jdbc;
-  private final TransactionTemplate tx;
+  private final SystemEventExecutor systemEvents;
   private final Duration lease;
   private final int batchSize;
   private volatile boolean stopping;
 
-  public CaseJobRunner(NamedParameterJdbcTemplate jdbc, TransactionTemplate tx, Duration lease,
-      int batchSize) {
+  public CaseJobRunner(NamedParameterJdbcTemplate jdbc, SystemEventExecutor systemEvents,
+      Duration lease, int batchSize) {
     this.jdbc = jdbc;
-    this.tx = tx;
+    this.systemEvents = systemEvents;
     this.lease = lease;
     this.batchSize = batchSize;
   }
@@ -84,11 +85,7 @@ public class CaseJobRunner {
           break;
         }
         try {
-          if (held.job.applyIn() == CaseJob.ApplyIn.NO_TRANSACTION) {
-            apply(held, reference);
-          } else {
-            tx.executeWithoutResult(status -> apply(held, reference));
-          }
+          apply(held, reference);
         } catch (NotHeld e) {
           log.warn("{} run {} was taken over by another instance", held.job.name(), held.runId);
           return;
@@ -106,18 +103,31 @@ public class CaseJobRunner {
   }
 
   private void apply(Held held, long reference) {
-    boolean lock = held.job.applyIn() == CaseJob.ApplyIn.LOCKED_TRANSACTION;
-    UUID idempotencyKey = UUID.nameUUIDFromBytes(
-        ("job-utils:" + held.job.name() + ":" + held.runId + ":" + reference)
-            .getBytes(StandardCharsets.UTF_8));
-    List<CaseMetadata> found = jdbc.query("""
-        select reference, case_type_id, state, case_revision from ccd.case_data
-         where reference = :case
-        """ + (lock ? " for update" : ""), Map.of("case", reference),
-        (rs, row) -> new CaseMetadata(rs.getLong("reference"), rs.getString("case_type_id"),
-            rs.getString("state"), rs.getLong("case_revision"), idempotencyKey));
-    // A case deleted since its batch was read is passed over.
-    boolean applied = !found.isEmpty() && held.job.apply(found.getFirst()).wasApplied();
+    boolean applied = false;
+    // A case deleted since its batch was read, such as by retention, is passed over.
+    if (!jdbc.queryForList("select 1 from ccd.case_data where reference = :case",
+        Map.of("case", reference), Integer.class).isEmpty()) {
+      // The same each time this run applies the job to this case, so the event happens once even if
+      // this instance stops before recording the case as done.
+      UUID idempotencyKey = UUID.nameUUIDFromBytes(
+          ("job-utils:" + held.job.name() + ":" + held.runId + ":" + reference)
+              .getBytes(StandardCharsets.UTF_8));
+      try {
+        systemEvents.execute(reference, idempotencyKey, context -> {
+          if (!held.job.apply(new CaseMetadata(context.caseReference(), context.caseTypeId(),
+              context.currentState())).wasApplied()) {
+            throw new Skipped();
+          }
+          return SystemEventResult.withoutStateTransition(held.job.name(), held.job.name(),
+              "Run " + held.runId);
+        });
+        applied = true;
+      } catch (RuntimeException e) {
+        if (!skipped(e)) {
+          throw e;
+        }
+      }
+    }
     int recorded = jdbc.update("""
         update job_utils.case_job_run
            set last_reference = :case, lease_until = now() + :lease * interval '1 second',
@@ -130,6 +140,15 @@ public class CaseJobRunner {
     }
   }
 
+  private static boolean skipped(Throwable e) {
+    for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+      if (cause instanceof Skipped) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private void end(Held held, String set, Map<String, Object> values) {
     var params = new HashMap<String, Object>(values);
     params.putAll(Map.of("job", held.job.name(), "run", held.runId, "token", held.token));
@@ -140,9 +159,16 @@ public class CaseJobRunner {
   private record Held(CaseJob job, String runId, UUID token, long after) {
   }
 
-  /** The run's lease has passed to another instance, so this case's work is rolled back. */
+  /** The run's lease has passed to another instance, which carries it on. */
   private static final class NotHeld extends RuntimeException {
     NotHeld() {
+      super(null, null, false, false);
+    }
+  }
+
+  /** Rolls back the system event of a case the job skipped. */
+  private static final class Skipped extends RuntimeException {
+    Skipped() {
       super(null, null, false, false);
     }
   }
