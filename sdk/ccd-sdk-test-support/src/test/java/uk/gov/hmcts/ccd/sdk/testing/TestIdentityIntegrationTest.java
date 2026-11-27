@@ -20,6 +20,7 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.context.annotation.Import;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import uk.gov.hmcts.reform.authorisation.ServiceAuthorisationApi;
@@ -55,6 +56,15 @@ class TestIdentityIntegrationTest {
   }
 
   @Test
+  void idamSignsASystemUserInAsTheDefaultTestUser() {
+    Map<String, Object> token = idam.signIn(Map.of("grant_type", "password",
+        "username", "system@example.com", "password", "secret"));
+
+    assertThat(token).containsEntry("token_type", "Bearer");
+    assertThat("Bearer " + token.get("access_token")).isEqualTo(TestIdamService.DEFAULT_TOKEN);
+  }
+
+  @Test
   void idamRejectsATokenNoActorWasRegisteredFor() {
     assertThatThrownBy(() -> idam.userInfo("Bearer unknown")).isInstanceOf(FeignException.Unauthorized.class);
   }
@@ -87,6 +97,9 @@ class TestIdentityIntegrationTest {
   interface Idam {
     @GetMapping("/o/userinfo")
     Map<String, Object> userInfo(@RequestHeader("Authorization") String authorisation);
+
+    @PostMapping(value = "/o/token", consumes = "application/x-www-form-urlencoded")
+    Map<String, Object> signIn(Map<String, ?> form);
   }
 
   @FeignClient(name = "am", url = "http://am.invalid")

@@ -218,6 +218,21 @@ The SDK wraps every case event inside a database transaction covering:
 
 The common transaction ordering lives in [`CaseEventTransactionCoordinator`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/CaseEventTransactionCoordinator.java) and is used by both CCD submissions and [local system events](./system-events.md). If a concurrent update to `ccd.case_data` is detected, a `409 CONFLICT` is returned and the transaction rolls back, aligning behaviour with CCD.
 
+### Case event hooks
+
+A `CaseEventHook` bean runs inside every locally saved event, system events included, once the case row is written and before the event's audit snapshot is taken. It gets a `CaseEventContext`: the case reference, case type, jurisdiction, event id, audit record id and the case's new revision, which increases with every event.
+
+```java
+@Component
+class CaseSummaryHook implements CaseEventHook {
+    public void afterCaseEvent(CaseEventContext event) {
+        summaries.queue(event.caseReference(), event.revision());
+    }
+}
+```
+
+A hook runs in the event's transaction under the case lock, so what it writes commits only if the event does. A hook that throws fails the event. Hooks read the case and write only their own tables; changing the case belongs in the submit handler. Replayed (idempotent) submissions do not run hooks. The [doc toolkit](./doc-toolkit/doc-toolkit.md) uses a hook to keep documents up to date with their case.
+
 ### After the commit
 
 A submit handler can register work to run once its event has committed, before the response is returned, with `afterCommit(Runnable)`. Nothing runs if the event does not commit.

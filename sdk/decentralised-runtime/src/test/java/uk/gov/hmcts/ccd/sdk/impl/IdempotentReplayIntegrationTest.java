@@ -133,6 +133,19 @@ class IdempotentReplayIntegrationTest {
     assertThat(persisted.get("data")).isEqualTo("{}");
   }
 
+  @Test
+  void upsertReturnsTheRevisionItGaveTheCase() {
+    seedCaseData(STALE_NOOP_CASE_ID + 100, STALE_NOOP_CASE_REFERENCE + 100, 3, 7);
+
+    CaseDataRepository.Upserted upserted = repository.upsert(
+        buildEvent(STALE_NOOP_CASE_REFERENCE + 100, "UnknownCaseType"), Optional.empty());
+
+    assertThat(upserted.id()).isEqualTo(STALE_NOOP_CASE_ID + 100);
+    assertThat(upserted.revision()).isEqualTo(8L);
+    assertThat(jdbc.queryForObject("select case_revision from ccd.case_data where reference = :ref",
+        Map.of("ref", STALE_NOOP_CASE_REFERENCE + 100), Long.class)).isEqualTo(8L);
+  }
+
   @ParameterizedTest
   @EnumSource(MetadataChange.class)
   void staleVersionIsRejectedWhenMetadataWouldChange(MetadataChange change) {

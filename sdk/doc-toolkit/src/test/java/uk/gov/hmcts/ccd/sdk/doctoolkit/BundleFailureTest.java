@@ -1,0 +1,249 @@
+package uk.gov.hmcts.ccd.sdk.doctoolkit;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
+import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.ONE_CASE_TYPE;
+import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.SERVICE_TOKENS;
+import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.SYSTEM_USER;
+import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.assertNothingLeftBehind;
+import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.bundle;
+import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.fixture;
+import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.load;
+import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.outline;
+import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.text;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.DocFailure.Reason;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.convert.testsupport.Fixtures;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.convert.testsupport.StubDocmosis;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.docmosis.DocmosisRenderException;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.support.FakeCdam;
+
+class BundleFailureTest {
+  private static final String DOCX =
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+  @TempDir
+  private Path work;
+  @TempDir
+  private Path sources;
+
+  private final FakeCdam cdam = new FakeCdam();
+  private DocToolkit toolkit;
+  private UUID present;
+
+  @BeforeEach
+  void setUp() {
+    toolkit = toolkit(null);
+    present = cdam.store(fixture("one-page.pdf"), "application/pdf", "present.pdf");
+  }
+
+  private DocToolkit toolkit(StubDocmosis docmosis) {
+    DocToolkit.Builder builder = DocToolkit.builder().tempDirectory(work)
+        .cdam(cdam, SERVICE_TOKENS, SYSTEM_USER, ONE_CASE_TYPE);
+    if (docmosis != null) {
+      builder.docmosis(docmosis);
+    }
+    return builder.build();
+  }
+
+  @Test
+  void documentsThatCannotBeFetchedAreReplacedByPagesSayingWhy() throws Exception {
+    PdfRequest request = bundle("Bundle")
+        .section(PdfSection.builder("Evidence")
+            .document(PdfPart.builder(DocSource.cdam(present)).title("Present").build())
+            .document(PdfPart.builder(DocSource.cdam(cdam.failing(404))).title("Deleted").build())
+            .document(PdfPart.builder(DocSource.cdam(cdam.failing(403))).title("Forbidden").build())
+            .build())
+        .build();
+
+    try (PdfResult result = toolkit.render(request); PDDocument document = load(result)) {
+      assertThat(result.failures()).extracting(DocFailure::title, DocFailure::reason).containsExactly(
+          tuple("Deleted", Reason.NOT_FOUND), tuple("Forbidden", Reason.ACCESS_DENIED));
+      assertThat(text(document)).contains(Reason.NOT_FOUND.message(),
+          Reason.ACCESS_DENIED.message());
+      assertThat(outline(document)).contains("Present", "Deleted (missing)", "Forbidden (missing)");
+    }
+    assertNothingLeftBehind(work);
+  }
+
+  @Test
+  void aDocumentOnlyTemporarilyUnavailableFailsTheRenderSoItCanBeTriedAgain() {
+    PdfRequest request = bundle("Bundle")
+        .section(PdfSection.builder("Evidence")
+            .document(PdfPart.builder(DocSource.cdam(present)).title("Present").build())
+            .document(PdfPart.builder(DocSource.cdam(cdam.failing(404))).title("Deleted").build())
+            .document(PdfPart.builder(DocSource.cdam(cdam.failing(503))).title("Outage").build())
+            .build())
+        .build();
+
+    assertThatThrownBy(() -> toolkit.render(request))
+        .isInstanceOfSatisfying(DocToolkitException.class, e -> {
+          assertThat(e.reason()).isEqualTo(DocToolkitException.Reason.DOCUMENTS_FAILED);
+          assertThat(e.isTransient()).isTrue();
+          assertThat(e.failures()).extracting(DocFailure::title)
+              .containsExactly("Deleted", "Outage");
+        });
+    assertNothingLeftBehind(work);
+  }
+
+  @Test
+  void aMissingDocumentsFailureSaysWhichPartItWasAndWhereItsPlaceholderIs() throws Exception {
+    PdfRequest request = bundle("Hearing bundle")
+        .document(PdfPart.builder(DocSource.cdam(present)).title("Cover letter").build())
+        .section(PdfSection.builder("Evidence")
+            .document(PdfPart.builder(DocSource.cdam(present)).title("Expert report").build())
+            .section(PdfSection.builder("Statements")
+                .document(PdfPart.builder(DocSource.cdam(present)).title("Claimant").build())
+                .document(PdfPart.builder(DocSource.cdam(cdam.failing(404))).id("statement-42")
+                    .title("Witness statement").build())
+                .build())
+            .build())
+        .build();
+
+    try (PdfResult result = toolkit.render(request); PDDocument document = load(result)) {
+      assertThat(result.failures()).singleElement().satisfies(failure -> {
+        assertThat(failure.id()).contains("statement-42");
+        assertThat(failure.title()).isEqualTo("Witness statement");
+        assertThat(failure.sectionPath())
+            .containsExactly("Hearing bundle", "Evidence", "Statements");
+        assertThat(failure.reason()).isEqualTo(Reason.NOT_FOUND);
+        assertThat(failure.page()).isPresent();
+      });
+      int page = result.failures().getFirst().page().getAsInt();
+      List<Integer> placeholderPages = new ArrayList<>();
+      for (int i = 1; i <= document.getNumberOfPages(); i++) {
+        if (text(document, i).contains("This document is missing from the bundle")) {
+          placeholderPages.add(i);
+        }
+      }
+      assertThat(placeholderPages).containsExactly(page);
+      assertThat(text(document, page)).contains(Reason.NOT_FOUND.message());
+    }
+  }
+
+  @Test
+  void documentsThatCannotBeConvertedAreReplacedByPagesSayingWhy() throws Exception {
+    Path encrypted = Fixtures.encryptedPdf(sources);
+    Path zip = Fixtures.zip(sources);
+    PdfRequest request = bundle("Bundle")
+        .document(PdfPart.builder(DocSource.file(encrypted)).title("Encrypted").build())
+        .document(PdfPart.builder(DocSource.file(zip, "statement.pdf", "application/pdf"))
+            .title("Not a PDF").build())
+        .document(PdfPart.builder(DocSource.file(zip)).title("Archive").build())
+        .build();
+
+    try (PdfResult result = toolkit.render(request)) {
+      assertThat(result.failures()).extracting(DocFailure::title, DocFailure::reason).containsExactly(
+          tuple("Encrypted", Reason.UNREADABLE), tuple("Not a PDF", Reason.UNREADABLE),
+          tuple("Archive", Reason.UNSUPPORTED_FORMAT));
+      assertThat(result.failures()).allSatisfy(failure -> assertThat(failure.detail()).isNotBlank());
+    }
+  }
+
+  @Test
+  void aDocmosisOutageIsUnavailableAndARejectionIsAConversionFailure() throws Exception {
+    Path word = Files.write(sources.resolve("statement.docx"), fixture("wordDocument2.docx"));
+    PdfRequest request = bundle("Bundle")
+        .document(DocSource.file(word, "statement.docx", DOCX))
+        .build();
+
+    assertThatThrownBy(() -> toolkit(StubDocmosis.failing(
+        new DocmosisRenderException("Docmosis returned 503", true))).render(request))
+        .isInstanceOfSatisfying(DocToolkitException.class, e -> {
+          assertThat(e.isTransient()).isTrue();
+          assertThat(e.failures()).extracting(DocFailure::reason)
+              .containsExactly(Reason.UNAVAILABLE);
+        });
+    try (PdfResult result = toolkit(StubDocmosis.failing(
+        new DocmosisRenderException("Docmosis returned 400", false))).render(request)) {
+      assertThat(result.failures()).extracting(DocFailure::reason)
+          .containsExactly(Reason.CONVERSION_FAILED);
+    }
+  }
+
+  @Test
+  void aBundleOfOnlyMissingDocumentsStillRenders() throws Exception {
+    PdfRequest request = bundle("Bundle")
+        .document(PdfPart.builder(DocSource.cdam(cdam.failing(404))).title("Gone").build())
+        .build();
+
+    try (PdfResult result = toolkit.render(request); PDDocument document = load(result)) {
+      assertThat(result.failures()).hasSize(1);
+      assertThat(text(document)).contains("This document is missing from the bundle");
+    }
+  }
+
+  @Test
+  void theFailPolicyFailsTheBundleListingEveryMissingDocument() {
+    PdfRequest request = bundle("Bundle")
+        .document(PdfPart.builder(DocSource.cdam(present)).title("Present").build())
+        .document(PdfPart.builder(DocSource.cdam(cdam.failing(503))).title("Outage").build())
+        .document(PdfPart.builder(DocSource.cdam(cdam.failing(404))).title("Gone").build())
+        .missingDocuments(MissingDocuments.FAIL)
+        .build();
+
+    assertThatThrownBy(() -> toolkit.render(request))
+        .isInstanceOfSatisfying(DocToolkitException.class, e -> {
+          assertThat(e.reason()).isEqualTo(DocToolkitException.Reason.DOCUMENTS_FAILED);
+          assertThat(e.failures()).extracting(DocFailure::title).containsExactly("Outage", "Gone");
+          // One permanent failure means retrying will not help.
+          assertThat(e.isTransient()).isFalse();
+          assertThat(e.getMessage()).contains("Outage (UNAVAILABLE)", "Gone (NOT_FOUND)");
+        });
+    assertNothingLeftBehind(work);
+  }
+
+  @Test
+  void anOfficeDocumentWithoutDocmosisGetsAPlaceholderPageInABundleThatAllowsThem() throws Exception {
+    Path word = Files.write(sources.resolve("statement.docx"), fixture("wordDocument2.docx"));
+    PdfRequest request = bundle("Bundle")
+        .document(DocSource.file(word, "statement.docx", DOCX))
+        .build();
+
+    try (PdfResult result = toolkit.render(request)) {
+      assertThat(result.failures()).singleElement().satisfies(failure -> {
+        assertThat(failure.title()).isEqualTo("statement.docx");
+        assertThat(failure.reason()).isEqualTo(DocFailure.Reason.UNSUPPORTED_FORMAT);
+        assertThat(failure.detail()).contains("ccd.doc-toolkit.docmosis.convert-endpoint");
+      });
+    }
+  }
+
+  @Test
+  void anOfficeDocumentWithoutDocmosisFailsTheBundle() throws Exception {
+    Path word = Files.write(sources.resolve("statement.docx"), fixture("wordDocument2.docx"));
+    PdfRequest request = bundle("Bundle")
+        .document(DocSource.file(word, "statement.docx", DOCX))
+        .missingDocuments(MissingDocuments.FAIL)
+        .build();
+
+    assertThatThrownBy(() -> toolkit.render(request))
+        .isInstanceOfSatisfying(DocToolkitException.class, e -> {
+          assertThat(e.reason()).isEqualTo(DocToolkitException.Reason.NOT_CONFIGURED);
+          assertThat(e.getMessage()).contains("ccd.doc-toolkit.docmosis.convert-endpoint");
+        });
+    assertNothingLeftBehind(work);
+  }
+
+  @Test
+  void aCdamDocumentWithoutCdamFailsTheBundle() {
+    DocToolkit withoutCdam = DocToolkit.builder().tempDirectory(work).build();
+    PdfRequest request = bundle("Bundle").document(DocSource.cdam(present)).build();
+
+    assertThatThrownBy(() -> withoutCdam.render(request))
+        .isInstanceOfSatisfying(DocToolkitException.class, e -> {
+          assertThat(e.reason()).isEqualTo(DocToolkitException.Reason.NOT_CONFIGURED);
+          assertThat(e.getMessage()).contains("ccd.doc-toolkit.system-user");
+        });
+  }
+}

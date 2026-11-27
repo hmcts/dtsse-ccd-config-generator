@@ -21,6 +21,8 @@ dependencies {
         transitive = false
     }
     implementation 'com.github.hmcts:service-auth-provider-java-client:6.1.2'
+    // DocmosisStubController answers conversions with generated PDFs.
+    implementation 'org.apache.pdfbox:pdfbox:3.0.8'
     compileOnly 'io.github.openfeign:feign-core:13.18'
     compileOnly 'org.springframework.security:spring-security-oauth2-client'
     testImplementation 'com.github.hmcts:ccd-case-document-am-client:2.0.0'

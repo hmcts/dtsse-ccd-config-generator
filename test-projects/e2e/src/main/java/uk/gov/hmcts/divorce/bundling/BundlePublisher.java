@@ -1,100 +1,84 @@
 package uk.gov.hmcts.divorce.bundling;
 
-import java.io.IOException;
-import java.io.InputStream;
+import static uk.gov.hmcts.divorce.bundling.CaseworkerCreateBundle.CASEWORKER_CREATE_BUNDLE;
+import static uk.gov.hmcts.divorce.bundling.CaseworkerCreateBundleMissingDocument.CASEWORKER_CREATE_BUNDLE_MISSING_DOC;
+
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundleRequest;
-import uk.gov.hmcts.ccd.sdk.bundling.api.BundleResult;
-import uk.gov.hmcts.ccd.sdk.bundling.api.DocumentResult;
-import uk.gov.hmcts.ccd.sdk.type.Document;
+import uk.gov.hmcts.ccd.sdk.CaseEventContext;
+import uk.gov.hmcts.ccd.sdk.CaseEventHook;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.DocJobs;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfRequest;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.UploadedDoc;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.divorce.bundling.model.CaseBundle;
 import uk.gov.hmcts.divorce.bundling.model.CaseBundleDocument;
-import uk.gov.hmcts.divorce.idam.IdamService;
-import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
-import uk.gov.hmcts.reform.ccd.document.am.feign.CaseDocumentClientApi;
-import uk.gov.hmcts.reform.ccd.document.am.model.CaseDocumentsMetadata;
-import uk.gov.hmcts.reform.ccd.document.am.model.DocumentHashToken;
-import uk.gov.hmcts.reform.ccd.document.am.model.DocumentUploadRequest;
-import uk.gov.hmcts.reform.ccd.document.am.model.UploadResponse;
-import uk.gov.hmcts.reform.ccd.document.am.util.InMemoryMultipartFile;
+import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
 
 /**
- * The consumer's side of a bundle: the SDK returns the finished PDF, and this service uploads it
- * to CDAM, attaches it to the case (a decentralised submit handler never routes the document
- * through case-data submission, so nothing else would) and records its own {@link CaseBundle}.
+ * Hearing bundles in this service's own model: recorded as requested in the case event, submitted to the doc
+ * toolkit under a key of their own, and completed when the toolkit hands the stored PDF back, or
+ * marked failed when it cannot be made.
  */
 @Component
-public class BundlePublisher {
+@Slf4j
+public class BundlePublisher implements CaseEventHook {
 
-    static final String JURISDICTION = "DIVORCE";
-    static final String CASE_TYPE = "E2E";
-
-    @Autowired
-    private CaseDocumentClientApi caseDocumentClient;
-
-    @Autowired
-    private IdamService idamService;
-
-    @Autowired
-    private AuthTokenGenerator authTokenGenerator;
+    /** Each hearing bundle is submitted as this plus its id, so it is never superseded by another. */
+    public static final String KEY_PREFIX = "hearing-bundle-";
 
     @Autowired
     private CaseBundleRepository caseBundleRepository;
 
-    public CaseBundle publish(final long caseReference, final BundleRequest request, final BundleResult result) {
-        Document stitched = upload(caseReference, result);
+    @Autowired
+    private DocJobs docJobs;
+
+    @Override
+    public void afterCaseEvent(final CaseEventContext event) {
+        if (!NoFaultDivorce.getCaseType().equals(event.caseType())) {
+            return;
+        }
+        final long reference = event.caseReference();
+        if (CASEWORKER_CREATE_BUNDLE.equals(event.eventId())) {
+            request(reference, CaseworkerCreateBundle.buildRequest(reference));
+        } else if (CASEWORKER_CREATE_BUNDLE_MISSING_DOC.equals(event.eventId())) {
+            request(reference, CaseworkerCreateBundleMissingDocument.buildRequest(reference));
+        }
+    }
+
+    private void request(final long caseReference, final PdfRequest request) {
         CaseBundle bundle = CaseBundle.builder()
-            .id(request.externalId().toString())
+            .id(UUID.randomUUID().toString())
             .title(request.title())
-            .fileName(result.artifact().fileName())
-            .stitchedDocument(stitched)
-            .pageCount(result.pageCount())
-            .stitchStatus("DONE")
-            .documents(request.allDocuments().stream()
-                .map(document -> new ListValue<>(document.id(), CaseBundleDocument.builder()
-                    .name(document.title())
-                    .startPage(placement(result, document.id()).startPage())
-                    .pageCount(placement(result, document.id()).pageCount())
-                    .build()))
+            .fileName(request.fileName())
+            .stitchStatus("REQUESTED")
+            .documents(request.allParts().stream()
+                .map(document -> new ListValue<>(UUID.randomUUID().toString(),
+                    CaseBundleDocument.builder().name(document.title()).build()))
                 .toList())
             .dateAndTime(LocalDateTime.now())
             .build();
         caseBundleRepository.save(caseReference, bundle);
-        return bundle;
+        docJobs.submit(caseReference, KEY_PREFIX + bundle.getId(), request);
+        log.info("Hearing bundle {} requested for case {}", bundle.getId(), caseReference);
     }
 
-    private Document upload(final long caseReference, final BundleResult result) {
-        byte[] content;
-        try (InputStream in = result.artifact().open()) {
-            content = in.readAllBytes();
-        } catch (IOException e) {
-            throw new IllegalStateException("Could not read the rendered bundle", e);
-        }
-        String userToken = idamService.retrieveSystemUpdateUserDetails().getAuthToken();
-        String serviceToken = authTokenGenerator.generate();
-        UploadResponse response = caseDocumentClient.uploadDocuments(userToken, serviceToken,
-            new DocumentUploadRequest("PUBLIC", CASE_TYPE, JURISDICTION, List.of(new InMemoryMultipartFile(
-                "files", result.artifact().fileName(), result.artifact().mediaType(), content))));
-        var uploaded = response.getDocuments().get(0);
-        String selfLink = uploaded.links.self.href;
-        caseDocumentClient.patchDocument(userToken, serviceToken, new CaseDocumentsMetadata(
-            String.valueOf(caseReference), CASE_TYPE, JURISDICTION,
-            List.of(new DocumentHashToken(selfLink.substring(selfLink.lastIndexOf('/') + 1), uploaded.hashToken))));
-        return Document.builder()
-            .url(selfLink)
-            .binaryUrl(uploaded.links.binary.href)
-            .filename(result.artifact().fileName())
-            .build();
+    /** Marks a requested bundle that could not be made. */
+    public void failed(final long caseReference, final String bundleId) {
+        CaseBundle bundle = caseBundleRepository.find(caseReference, bundleId).orElseThrow();
+        bundle.setStitchStatus("FAILED");
+        caseBundleRepository.update(caseReference, bundle);
     }
 
-    private static DocumentResult placement(final BundleResult result, final String documentId) {
-        return result.documents().stream()
-            .filter(document -> document.documentId().equals(documentId))
-            .findFirst()
-            .orElseThrow();
+    /** Completes a requested bundle with the PDF the toolkit stored. */
+    public void completed(final long caseReference, final String bundleId, final UploadedDoc uploaded) {
+        CaseBundle bundle = caseBundleRepository.find(caseReference, bundleId).orElseThrow();
+        bundle.setStitchedDocument(uploaded.document());
+        bundle.setPageCount(uploaded.pageCount());
+        bundle.setStitchStatus("DONE");
+        caseBundleRepository.update(caseReference, bundle);
     }
 }

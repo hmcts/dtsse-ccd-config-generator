@@ -3,6 +3,7 @@ package uk.gov.hmcts.divorce.bundling;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -25,6 +26,25 @@ public class CaseBundleRepository {
             db.update(
                 "insert into case_bundles(reference, bundle_id, bundle)"
                     + " values (:reference, :bundleId, :bundle::jsonb)",
+                new MapSqlParameterSource()
+                    .addValue("reference", caseReference)
+                    .addValue("bundleId", bundle.getId())
+                    .addValue("bundle", mapper.writeValueAsString(bundle))
+            );
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Could not serialise bundle " + bundle.getId(), e);
+        }
+    }
+
+    public Optional<CaseBundle> find(final long caseReference, final String bundleId) {
+        return findByCase(caseReference).stream().map(ListValue::getValue)
+            .filter(bundle -> bundle.getId().equals(bundleId)).findFirst();
+    }
+
+    public void update(final long caseReference, final CaseBundle bundle) {
+        try {
+            db.update(
+                "update case_bundles set bundle = :bundle::jsonb where reference = :reference and bundle_id = :bundleId",
                 new MapSqlParameterSource()
                     .addValue("reference", caseReference)
                     .addValue("bundleId", bundle.getId())
