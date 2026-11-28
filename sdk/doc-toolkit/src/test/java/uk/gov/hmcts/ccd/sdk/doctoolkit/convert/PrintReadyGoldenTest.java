@@ -1,22 +1,26 @@
 package uk.gov.hmcts.ccd.sdk.doctoolkit.convert;
 
-import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfStandard;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.PrintColour;
-import uk.gov.hmcts.ccd.sdk.doctoolkit.PrintOptions;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Stream;
+import javax.imageio.ImageIO;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.rendering.PDFRenderer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.PdfStandard;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.PrintColour;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.PrintOptions;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.convert.testsupport.Fixtures;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.convert.testsupport.Goldens;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.convert.testsupport.PrintFacts;
@@ -116,6 +120,45 @@ class PrintReadyGoldenTest {
       assertThat(pdf.warnings()).isEmpty();
       PrintRequirements.assertPrintReady(pdf.file(), scenario.options());
       Goldens.verify(scenario.name(), pdf.file());
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(PrintColour.class)
+  void aJpegPrintsLikeTheSamePixelsInALosslessPngAtLessThanHalfTheSize(PrintColour colour)
+      throws Exception {
+    Path jpg = Fixtures.real(work, "flying-pig.jpg");
+    Path png = work.resolve("same-photo.png");
+    ImageIO.write(ImageIO.read(jpg.toFile()), "png", png.toFile());
+    var converter = DocumentConverter.builder().tempDirectory(work).build();
+    var options = PrintOptions.builder().colour(colour).build();
+    var jpegSource = ConversionSource.of(jpg, "photo.jpg", "image/jpeg");
+    var pngSource = ConversionSource.of(png, "photo.png", "image/png");
+    try (var photo = converter.toPrintReadyPdf(jpegSource, options);
+         var reference = converter.toPrintReadyPdf(pngSource, options);
+         var actual = Loader.loadPDF(photo.file().toFile());
+         var expected = Loader.loadPDF(reference.file().toFile())) {
+      assertThat(Files.size(photo.file())).isLessThan(Files.size(reference.file()) / 2);
+      BufferedImage rendered = new PDFRenderer(actual).renderImageWithDPI(0, 150);
+      BufferedImage lossless = new PDFRenderer(expected).renderImageWithDPI(0, 150);
+      assertThat(rendered.getWidth()).isEqualTo(lossless.getWidth());
+      assertThat(rendered.getHeight()).isEqualTo(lossless.getHeight());
+      long[] error = new long[3];
+      for (int y = 0; y < rendered.getHeight(); y++) {
+        for (int x = 0; x < rendered.getWidth(); x++) {
+          int pixel = rendered.getRGB(x, y);
+          int target = lossless.getRGB(x, y);
+          for (int channel = 0; channel < 3; channel++) {
+            error[channel] += Math.abs((pixel & 255) - (target & 255));
+            pixel >>= 8;
+            target >>= 8;
+          }
+        }
+      }
+      for (long total : error) {
+        assertThat((double) total / (rendered.getWidth() * rendered.getHeight()))
+            .as("mean difference on each colour channel, in 8-bit levels").isLessThan(2.0);
+      }
     }
   }
 

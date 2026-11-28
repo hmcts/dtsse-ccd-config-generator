@@ -4,12 +4,20 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferByte;
+import java.awt.image.Raster;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import javax.imageio.IIOImage;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.MemoryCacheImageOutputStream;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.io.MemoryUsageSetting;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -51,12 +59,13 @@ final class PrintRenderer {
   }
 
   /** Lays out each frame of an image file; returns the page count. */
-  int renderImage(Path image, String title, Path output) throws IOException {
+  int renderImage(ConversionSource source, String title, Path output) throws IOException {
     try (PDDocument out = newDocument()) {
-      ImageFrames.read(image,
+      boolean jpeg = "image/jpeg".equals(source.mediaType());
+      ImageFrames.read(source.file(),
           (width, height) -> place(width, height, true).subsamplingFor(width, height),
           (frame, fullWidth, fullHeight) ->
-              addPage(out, frame, place(fullWidth, fullHeight, true)));
+              addPage(out, frame, place(fullWidth, fullHeight, true), jpeg));
       return save(out, title, output);
     }
   }
@@ -86,7 +95,7 @@ final class PrintRenderer {
         }
         BufferedImage rendered =
             renderer.renderImage(i, scale, ImageType.RGB, RenderDestination.PRINT);
-        addPage(out, rendered, placement);
+        addPage(out, rendered, placement, false);
       }
       return save(out, title, output);
     }
@@ -138,10 +147,10 @@ final class PrintRenderer {
         Math.max(1, (int) Math.floor(placedHeight / POINTS_PER_INCH * dpi)));
   }
 
-  private void addPage(PDDocument out, BufferedImage source, Placement placement)
+  private void addPage(PDDocument out, BufferedImage source, Placement placement, boolean jpeg)
       throws IOException {
     BufferedImage prepared = prepare(source, placement);
-    Encoded encoded = encode(out, prepared);
+    Encoded encoded = encode(out, prepared, jpeg);
     PDPage page = new PDPage(new PDRectangle(pageBox.getWidth(), pageBox.getHeight()));
     page.setTrimBox(new PDRectangle(pageBox.getWidth(), pageBox.getHeight()));
     out.addPage(page);
@@ -210,14 +219,14 @@ final class PrintRenderer {
   }
 
   /**
-   * Separates an opaque RGB image into DeviceCMYK or DeviceGray samples, Flate-compressed. The
+   * Separates an opaque RGB image into DeviceCMYK or DeviceGray samples. The
    * CMYK separation is the neutral formula: K carries the darkness common to all channels, so
    * black and grey print on the black plate alone.
    */
   private record Encoded(PDImageXObject image, String sha256) {
   }
 
-  private Encoded encode(PDDocument out, BufferedImage image) throws IOException {
+  private Encoded encode(PDDocument out, BufferedImage image, boolean jpeg) throws IOException {
     int width = image.getWidth();
     int height = image.getHeight();
     boolean cmyk = options.colour() == PrintColour.CMYK;
@@ -243,6 +252,15 @@ final class PrintRenderer {
       }
     }
     PDStream stream = new PDStream(out, new ByteArrayInputStream(samples), COSName.FLATE_DECODE);
+    if (jpeg) {
+      byte[] compressed = jpeg(samples, width, height, components);
+      if (compressed.length < stream.getCOSObject().getLength()) {
+        try (var raw = stream.getCOSObject().createRawOutputStream()) {
+          raw.write(compressed);
+        }
+        stream.getCOSObject().setItem(COSName.FILTER, COSName.DCT_DECODE);
+      }
+    }
     PDImageXObject encoded = new PDImageXObject(stream, null);
     encoded.setWidth(width);
     encoded.setHeight(height);
@@ -250,6 +268,26 @@ final class PrintRenderer {
     PDColorSpace colorSpace = cmyk ? PDDeviceCMYK.INSTANCE : PDDeviceGray.INSTANCE;
     encoded.setColorSpace(colorSpace);
     return new Encoded(encoded, sha256(samples));
+  }
+
+  /** Encode the existing printer separations directly, without another colour conversion. */
+  private static byte[] jpeg(byte[] samples, int width, int height, int components)
+      throws IOException {
+    int[] bands = components == 4 ? new int[]{0, 1, 2, 3} : new int[]{0};
+    Raster raster = Raster.createInterleavedRaster(new DataBufferByte(samples, samples.length),
+        width, height, width * components, components, bands, null);
+    ImageWriter writer = ImageIO.getImageWritersByFormatName("JPEG").next();
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+    try (var output = new MemoryCacheImageOutputStream(bytes)) {
+      writer.setOutput(output);
+      ImageWriteParam params = writer.getDefaultWriteParam();
+      params.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+      params.setCompressionQuality(0.85f);
+      writer.write(null, new IIOImage(raster, null, null), params);
+    } finally {
+      writer.dispose();
+    }
+    return bytes.toByteArray();
   }
 
   private static String sha256(byte[] samples) {

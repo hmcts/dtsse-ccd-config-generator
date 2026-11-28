@@ -8,15 +8,24 @@ import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.load;
 import static uk.gov.hmcts.ccd.sdk.doctoolkit.support.ToolkitFixtures.text;
 
 import com.sun.net.httpserver.HttpServer;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.graphics.image.JPEGFactory;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.convert.testsupport.Fixtures;
+import uk.gov.hmcts.ccd.sdk.doctoolkit.convert.testsupport.SendLetterReplay;
 import uk.gov.hmcts.ccd.sdk.doctoolkit.convert.testsupport.StubDocmosis;
 
 class DocConversionTest {
@@ -88,6 +97,42 @@ class DocConversionTest {
       assertThat(text(document, 3)).isBlank();
       assertThat(document.getDocumentInformation().getTitle())
           .isEqualTo("CPC-01 1234-5678-9012-3456");
+    }
+  }
+
+  @Test
+  void anExistingPhotoPdfKeepsItsJpegBytesAndDuplexPositionInThePrintPack() throws Exception {
+    byte[] photo = fixture("flying-pig.jpg");
+    var evidence = new ByteArrayOutputStream();
+    try (var pdf = new PDDocument()) {
+      var page = new PDPage(PDRectangle.A4);
+      pdf.addPage(page);
+      try (var content = new PDPageContentStream(pdf, page)) {
+        content.drawImage(JPEGFactory.createFromStream(pdf, new ByteArrayInputStream(photo)),
+            60, 60, 450, 600);
+      }
+      pdf.save(evidence);
+    }
+    var request = PdfRequest.builder("Claim pack")
+        .document(PdfPart.builder(DocSource.bytes(Fixtures.pdfSaying("Address"),
+            "cover.pdf")).unchanged().build())
+        .document(PdfPart.builder(DocSource.bytes(evidence.toByteArray(),
+            "evidence.pdf")).unchanged().build())
+        .print(PrintOptions.builder().maxOutputBytes(photo.length + 32_768L).build())
+        .build();
+    try (PdfResult pack = toolkit.render(request); PDDocument pdf = load(pack)) {
+      assertThat(pack.pageCount()).isEqualTo(4);
+      assertThat(text(pdf, 1)).contains("Address");
+      assertThat(pdf.getPage(1).hasContents()).isFalse();
+      assertThat(pdf.getPage(3).hasContents()).isFalse();
+      var resources = pdf.getPage(2).getResources();
+      var name = resources.getXObjectNames().iterator().next();
+      var image = (PDImageXObject) resources.getXObject(name);
+      try (var raw = image.getCOSObject().createRawInputStream()) {
+        assertThat(raw.readAllBytes()).isEqualTo(photo);
+      }
+      byte[] bytes = Files.readAllBytes(pack.file());
+      assertThat(SendLetterReplay.uploadedBytes(List.of(bytes))).isEqualTo(bytes);
     }
   }
 

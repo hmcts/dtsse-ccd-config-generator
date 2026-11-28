@@ -110,7 +110,9 @@ public final class DocumentConverter {
           work.resolve("attempt-1")));
       List<ConversionWarning> warnings = new ArrayList<>(letter.warnings());
       long threshold = options.greyscaleThresholdBytes();
-      if (options.colour() == PrintColour.CMYK && threshold > 0 && letter.size() > threshold) {
+      boolean hasConvertedParts = parts.stream().anyMatch(PrintPart.Convert.class::isInstance);
+      if (hasConvertedParts && options.colour() == PrintColour.CMYK && threshold > 0
+          && letter.size() > threshold) {
         final long cmykSize = letter.size();
         warnings = new ArrayList<>();
         PrintOptions grey = options.toBuilder().colour(PrintColour.GRAYSCALE).build();
@@ -128,10 +130,11 @@ public final class DocumentConverter {
         Files.deleteIfExists(intermediate);
       }
       if (options.maxOutputBytes() > 0 && letter.size() > options.maxOutputBytes()) {
+        String colour = letter.options().colour() == PrintColour.GRAYSCALE ? "greyscale" : "CMYK";
+        String limit = options.maxOutputBytes() + " byte limit";
         throw new ConversionException(Reason.OUTPUT_TOO_LARGE,
             title + " is " + letter.size() + " bytes as a print-ready PDF, above the "
-                + options.maxOutputBytes() + " byte limit even in " + (letter.options().colour()
-                == PrintColour.GRAYSCALE ? "greyscale" : "CMYK") + ".");
+                + limit + (hasConvertedParts ? " even in " + colour : "") + ".");
       }
       ConvertedPdf result =
           new ConvertedPdf(letter.file(), work, letter.pages(), letter.mediaType(), warnings);

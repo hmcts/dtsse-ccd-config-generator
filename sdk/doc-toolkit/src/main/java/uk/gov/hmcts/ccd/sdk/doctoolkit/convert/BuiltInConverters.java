@@ -72,7 +72,7 @@ final class BuiltInConverters {
     public int renderForPrint(ConversionSource source, PrintRenderer renderer, String title,
         Path work, Path output) throws ConversionException {
       try {
-        return renderer.renderImage(source.file(), title, output);
+        return renderer.renderImage(source, title, output);
       } catch (IOException e) {
         throw new ConversionException(Reason.INVALID_CONTENT,
             source.fileName() + ": the image could not be decoded", e);

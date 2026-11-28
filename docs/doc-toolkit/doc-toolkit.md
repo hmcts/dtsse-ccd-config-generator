@@ -149,6 +149,11 @@ turned, even page counts, a 20 MiB limit and greyscale above 80% of it; change a
 `toBuilder()`. A printed plain join prints each part on its own sheets, `unchanged()` parts as they
 are; a printed bundle is assembled, then printed whole.
 
+For a pack that requires existing PDFs to retain their layout, mark each such PDF part
+`unchanged()`. Embedded JPEGs retain their original compressed bytes and text stays selectable.
+The margin, resolution and colour settings apply to converted parts. The SDK omits the
+whole-letter PDF/X identification when the pack includes an unchanged part.
+
 ## Making a document now
 
 ```java

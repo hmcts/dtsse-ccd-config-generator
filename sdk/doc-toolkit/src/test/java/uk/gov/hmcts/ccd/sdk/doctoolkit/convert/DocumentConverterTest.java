@@ -355,6 +355,27 @@ class DocumentConverterTest {
   }
 
   @Test
+  void aPackOfUnchangedPdfsEnforcesTheCapWithoutReportingAGreyscaleRetry() throws Exception {
+    Path source = Files.write(inputs.resolve("original.pdf"), Fixtures.pdfSaying("Address"));
+    var parts = List.of(PrintPart.asIs(source, "original"));
+    var options = PrintOptions.builder().maxOutputBytes(0).build();
+    long bytes;
+    try (var letter = converter.toPrintReadyLetter("Pack", parts, options)) {
+      bytes = Files.size(letter.file());
+    }
+    try (var letter = converter.toPrintReadyLetter("Pack", parts,
+        options.toBuilder().maxOutputBytes(bytes).build())) {
+      assertThat(letter.warnings()).extracting(ConversionWarning::code)
+          .containsExactly(Code.STANDARD_NOT_CLAIMED);
+    }
+    var failure = catchThrowableOfType(ConversionException.class,
+        () -> converter.toPrintReadyLetter("Pack", parts,
+            options.toBuilder().maxOutputBytes(bytes - 1).build()));
+    assertThat(failure.reason()).isEqualTo(Reason.OUTPUT_TOO_LARGE);
+    assertThat(workDirectories()).isEmpty();
+  }
+
+  @Test
   void colourDropsToGreyscaleNearTheSizeLimitAndFailsAboveIt() throws Exception {
     Path photo = Fixtures.largePhoto(inputs);
     ConversionSource source = ConversionSource.of(photo, "large-photo.jpg", "image/jpeg");
